@@ -1331,6 +1331,14 @@ export default function ContratosListaPage() {
                       {p.unificadaEmId && (
                         <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={`Unificada na proposta #${p.unificadaEmId}`}>Unificada</span>
                       )}
+                      {p.clientMeta?.cancelamentoSolicitado && (
+                        <span
+                          className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                          title={`Cancelamento solicitado por ${p.clientMeta.cancelamentoSolicitado.por}: ${p.clientMeta.cancelamentoSolicitado.motivo || ""}`}
+                        >
+                          Cancel. solicitado
+                        </span>
+                      )}
                       {p.isPaused && (
                         <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">Pend.</span>
                       )}
