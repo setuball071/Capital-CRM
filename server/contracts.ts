@@ -817,6 +817,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       if (status && status !== current.status && (current.clientMeta as any)?.dataCip) {
         metaChanges = { ...(metaChanges || {}), dataCip: null };
       }
+      // Operacional agiu sobre a proposta (mudou status) → resolve a solicitação de cancelamento
+      // do corretor, seja aprovando (CANCELADA/PERDIDA) ou seguindo o fluxo normal.
+      if (status && status !== current.status && (current.clientMeta as any)?.cancelamentoSolicitado) {
+        metaChanges = { ...(metaChanges || {}), cancelamentoSolicitado: null };
+      }
       if (saldoInformadoInput !== undefined && saldoInformadoInput !== null && String(saldoInformadoInput) !== "") {
         metaChanges = { ...(metaChanges || {}), saldoDevedor: String(saldoInformadoInput) };
       }
@@ -1100,14 +1105,27 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       if (!target) target = req.body?.fallbackStatus || null;
       if (!target) return res.status(400).json({ message: "Não foi possível identificar a fase de retorno" });
 
+      // Corretor solicitando cancelamento: mesmo fluxo de devolução ao operacional,
+      // mas sinaliza no clientMeta para o operacional decidir (cancela ou não).
+      const cancelRequest = !!req.body?.cancelRequest;
+
       const regMeta = (current.clientMeta as Record<string, any>) || {};
+      const regMetaPatch: Record<string, any> = {};
+      if (target !== current.status && regMeta.dataCip) regMetaPatch.dataCip = null;
+      if (cancelRequest) {
+        regMetaPatch.cancelamentoSolicitado = {
+          motivo: req.body?.notes || "",
+          por: user.name || user.email || "corretor",
+          em: new Date().toISOString(),
+        };
+      }
+
       const [updated] = await db
         .update(proposals)
         .set({
           status: target,
           updatedAt: new Date(),
-          // Mudou de fase → zera a data CIP (contador só vale aguardando o retorno)
-          ...(target !== current.status && regMeta.dataCip ? { clientMeta: { ...regMeta, dataCip: null } } : {}),
+          ...(Object.keys(regMetaPatch).length ? { clientMeta: { ...regMeta, ...regMetaPatch } } : {}),
         })
         .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
         .returning();
@@ -1117,7 +1135,9 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         fromStatus: current.status,
         toStatus: target,
         action: "RESOLUCAO",
-        notes: req.body?.notes || "Pendência regularizada",
+        notes: cancelRequest
+          ? `🚫 Corretor solicitou CANCELAMENTO: ${req.body?.notes || "sem observação"}`
+          : (req.body?.notes || "Pendência regularizada"),
         performedBy: user.id,
       });
 
@@ -1184,11 +1204,14 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         .where(and(inArray(proposals.id, okIds), eq(proposals.tenantId, tenantId)));
 
       for (const r of rows) {
-        // Mudou de fase → zera a data CIP da proposta (clientMeta é por-linha)
+        // Mudou de fase → zera a data CIP e resolve solicitação de cancelamento (clientMeta é por-linha)
         const cm = (r.clientMeta as Record<string, any>) || {};
-        if (r.status !== status && cm.dataCip) {
+        const cmPatch: Record<string, any> = {};
+        if (r.status !== status && cm.dataCip) cmPatch.dataCip = null;
+        if (r.status !== status && cm.cancelamentoSolicitado) cmPatch.cancelamentoSolicitado = null;
+        if (Object.keys(cmPatch).length) {
           await db.update(proposals)
-            .set({ clientMeta: { ...cm, dataCip: null } })
+            .set({ clientMeta: { ...cm, ...cmPatch } })
             .where(and(eq(proposals.id, r.id), eq(proposals.tenantId, tenantId)));
         }
         await db.insert(proposalHistory).values({

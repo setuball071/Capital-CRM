@@ -403,6 +403,24 @@ export default function ContratosDetalhePage() {
     onError: (e: any) => toast({ title: "Falha ao regularizar", description: e.message, variant: "destructive" }),
   });
 
+  // Corretor solicita cancelamento — mesmo fluxo de devolução ao operacional, porém
+  // sinalizado no clientMeta para o operacional decidir (cancela ou não).
+  const [showCancelRequest, setShowCancelRequest] = useState(false);
+  const requestCancelMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/contracts/proposals/${proposalId}/regularize`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ notes: regularizeNote.trim(), cancelRequest: true }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || `HTTP ${res.status}`);
+    },
+    onSuccess: () => {
+      invalidate(); setRegularizeNote(""); setShowCancelRequest(false);
+      toast({ title: "Solicitação de cancelamento enviada ao operacional" });
+    },
+    onError: (e: any) => toast({ title: "Falha ao solicitar cancelamento", description: e.message, variant: "destructive" }),
+  });
+
   // Excluir proposta — somente master (super-admin)
   const isSuperMaster = !!user?.isMaster;
   // Edição total (item 3): super-admin (isMaster) e Administrador (role master)
@@ -692,6 +710,24 @@ export default function ContratosDetalhePage() {
         </div>
       </div>
 
+      {/* Banner: corretor solicitou cancelamento — operacional decide */}
+      {proposal.clientMeta?.cancelamentoSolicitado && (
+        <div className="rounded-md border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20 p-3 text-sm text-red-700 dark:text-red-300 space-y-0.5">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Cancelamento solicitado por {proposal.clientMeta.cancelamentoSolicitado.por}
+          </div>
+          {proposal.clientMeta.cancelamentoSolicitado.motivo && (
+            <p className="text-red-700/90 dark:text-red-300/90">
+              "{proposal.clientMeta.cancelamentoSolicitado.motivo}"
+            </p>
+          )}
+          <p className="text-xs text-red-700/70 dark:text-red-300/70">
+            Decida em "Ações Operacionais": altere o status para Cancelada/Perdida para aprovar, ou avance normalmente para recusar.
+          </p>
+        </div>
+      )}
+
       {/* Banner: parcela absorvida numa unificação */}
       {proposal.unificadaEmId && (
         <div className="rounded-md border border-purple-200 bg-purple-50 dark:border-purple-900/40 dark:bg-purple-950/20 p-3 text-sm text-purple-700 dark:text-purple-300">
@@ -724,7 +760,20 @@ export default function ContratosDetalhePage() {
                 rows={2}
                 className="resize-none bg-background"
               />
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                {isVendedor && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10"
+                    disabled={!regularizeNote.trim() || requestCancelMutation.isPending}
+                    onClick={() => setShowCancelRequest(true)}
+                    title="Envia ao operacional a solicitação de cancelamento — o operacional decide"
+                  >
+                    <X className="h-4 w-4" />
+                    Cancelar a proposta
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
@@ -1275,6 +1324,30 @@ export default function ContratosDetalhePage() {
               onClick={() => transferMutation.mutate()}
             >
               {transferMutation.isPending ? "Transferindo..." : "Transferir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo: Confirmar solicitação de cancelamento (corretor) */}
+      <Dialog open={showCancelRequest} onOpenChange={setShowCancelRequest}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Solicitar cancelamento</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            A proposta volta para o operacional sinalizada como <strong>cancelamento solicitado pelo corretor</strong>,
+            com a observação escrita acima. O operacional decide se cancela ou não — a proposta não é cancelada automaticamente.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowCancelRequest(false)}>Voltar</Button>
+            <Button
+              className="bg-destructive hover:bg-destructive/90 text-white gap-1.5"
+              disabled={requestCancelMutation.isPending}
+              onClick={() => requestCancelMutation.mutate()}
+            >
+              <X className="h-4 w-4" />
+              {requestCancelMutation.isPending ? "Enviando..." : "Confirmar solicitação"}
             </Button>
           </DialogFooter>
         </DialogContent>
