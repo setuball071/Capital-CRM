@@ -15,10 +15,10 @@
   --text:#f2f2f2;--muted:#8c8c8c;--radius:8px;
   --shadow:0 1px 4px rgba(0,0,0,.4);
 }
-/* Light theme — matches CRM :root vars */
+/* Light theme — matches CRM :root vars (accent = roxo Capital Go) */
 [data-theme="light"]{
   --bg:#fafafa;--surface:#ffffff;--surface2:#f1f4f9;--border:#e2e5ec;
-  --accent:#3b82f6;--accent-rgb:59,130,246;
+  --accent:#7c3aed;--accent-rgb:124,58,237;
   --green:#16a34a;--yellow:#d97706;--red:#dc2626;--blue:#0284c7;
   --text:#050c1a;--muted:#6b7280;--radius:8px;
   --shadow:0 1px 3px rgba(0,0,0,.08);
@@ -268,7 +268,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       </div>
     </div>
     <div class="kpi-grid kpi-grid-4" id="cm-kpis"></div>
-    <div id="cm-bar-sel" style="display:none;align-items:center;justify-content:space-between;gap:12px;background:var(--accent);color:#fff;padding:10px 16px;border-radius:8px;margin:10px 0"></div>
+    <div id="cm-bar-sel" style="display:none;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid rgba(var(--accent-rgb),.4);border-left:4px solid var(--accent);color:var(--text);padding:10px 16px;border-radius:8px;margin:10px 0;box-shadow:var(--shadow)"></div>
     <div class="table-wrap">
       <table>
         <thead><tr>
@@ -343,7 +343,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <div class="kpi-row" id="prod-kpis" style="margin:16px 0;display:flex;gap:12px;flex-wrap:wrap"></div>
 
     <!-- Barra de selecionados -->
-    <div id="prod-bar-sel" style="display:none;align-items:center;justify-content:space-between;gap:12px;background:var(--accent);color:#fff;padding:10px 16px;border-radius:8px;margin:10px 0"></div>
+    <div id="prod-bar-sel" style="display:none;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid rgba(var(--accent-rgb),.4);border-left:4px solid var(--accent);color:var(--text);padding:10px 16px;border-radius:8px;margin:10px 0;box-shadow:var(--shadow)"></div>
 
     <!-- Tabela -->
     <div style="overflow-x:auto">
@@ -1606,7 +1606,7 @@ function atualizarBarraSelecionados(){
   const vendCount=Object.keys(porVend).length;
   bar.style.display='flex';
   bar.innerHTML=`
-    <div><b>${chks.length}</b> contrato${chks.length>1?'s':''} de <b>${vendCount}</b> consultor${vendCount>1?'es':''} • Total: <b>${fmtBRL(total)}</b></div>
+    <div><b>${chks.length}</b> contrato${chks.length>1?'s':''} de <b>${vendCount}</b> consultor${vendCount>1?'es':''} • Total: <b class="v-accent">${fmtBRL(total)}</b></div>
     <button class="btn btn-primary" onclick="abrirModalPagamento()">💰 Gerar Pagamento</button>`;
 }
 window.atualizarBarraSelecionados=atualizarBarraSelecionados;
@@ -2151,12 +2151,12 @@ function atualizarBarraProducao(){
   chks.forEach(ch=>{total+=parseFloat(ch.dataset.vf||0);});
   bar.style.display='flex';
   bar.innerHTML=`
-    <div><b>${chks.length}</b> contrato${chks.length>1?'s':''} selecionado${chks.length>1?'s':''} • Total: <b>${fmtBRL(total)}</b></div>
+    <div><b>${chks.length}</b> contrato${chks.length>1?'s':''} selecionado${chks.length>1?'s':''} • Total: <b class="v-accent">${fmtBRL(total)}</b></div>
     <div style="display:flex;gap:8px">
-      <button class="btn" style="background:#fff;color:var(--green);font-weight:600" onclick="marcarRecebido(true)">✔ Marcar Recebido</button>
-      <button class="btn btn-ghost" style="color:#fff;border:1px solid #fff" onclick="marcarRecebido(false)">Desfazer Recebido</button>
-      <button class="btn" style="background:#fff;color:var(--accent);font-weight:600" onclick="marcarParaPagamento()">📌 Marcar para Pagamento</button>
-      <button class="btn btn-ghost" style="color:#fff;border:1px solid #fff" onclick="desmarcarSelecionadosProd()">↩ Desmarcar</button>
+      <button class="btn btn-green btn-sm" onclick="marcarRecebido(true)">✔ Marcar Recebido</button>
+      <button class="btn btn-ghost btn-sm" onclick="marcarRecebido(false)">↩ Desfazer Recebido</button>
+      <button class="btn btn-primary btn-sm" onclick="marcarParaPagamento()">📌 Marcar para Pagamento</button>
+      <button class="btn btn-ghost btn-sm" onclick="desmarcarSelecionadosProd()">✕ Desmarcar</button>
     </div>`;
 }
 async function marcarRecebido(recebido){
