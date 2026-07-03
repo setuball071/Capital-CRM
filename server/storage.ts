@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, and, or, inArray, sql, ilike, gte, lte, isNotNull } from "drizzle-orm";
+import { eq, and, or, inArray, sql, ilike, gte, lte, isNotNull, asc } from "drizzle-orm";
 
 // Neon connection caching is enabled by default for better connection handling
 
@@ -2756,6 +2756,8 @@ export class DbStorage implements IStorage {
         eq(salesLeads.campaignId, campaignId),
         sql`${salesLeads.id} NOT IN (SELECT lead_id FROM sales_lead_assignments WHERE campaign_id = ${campaignId})`
       ))
+      // Ordem de importação (id serial) — preserva a ordenação da planilha
+      .orderBy(asc(salesLeads.id))
       .limit(limit);
   }
   

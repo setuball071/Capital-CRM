@@ -14453,41 +14453,57 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         let totalDistributed = 0;
         const results: { userId: number; quantidade: number }[] = [];
 
-        // Process each distribution
-        for (const dist of distributions) {
-          const { userId, quantidade } = dist;
+        // Distribuição em RODÍZIO (round-robin): busca todos os leads de uma vez
+        // (na ordem de importação) e intercala entre os vendedores selecionados.
+        // Assim, com a lista ordenada do maior para o menor, todos recebem uma
+        // mistura equilibrada — o último não fica só com os menores.
+        const validDists = distributions.filter(
+          (d: any) => d.userId && d.quantidade && d.quantidade >= 1,
+        );
+        const todosLeads = await storage.getUnassignedLeads(
+          campaignId,
+          totalRequested,
+        );
 
-          if (!userId || !quantidade || quantidade < 1) {
-            continue;
+        const restante = new Map<number, number>(
+          validDists.map((d: any) => [d.userId, d.quantidade]),
+        );
+        const porUser = new Map<number, any[]>();
+        let li = 0;
+        while (li < todosLeads.length) {
+          let atribuiuNaRodada = false;
+          for (const d of validDists) {
+            if (li >= todosLeads.length) break;
+            if ((restante.get(d.userId) || 0) <= 0) continue;
+            const lead = todosLeads[li++];
+            if (!porUser.has(d.userId)) porUser.set(d.userId, []);
+            porUser.get(d.userId)!.push(lead);
+            restante.set(d.userId, (restante.get(d.userId) || 0) - 1);
+            atribuiuNaRodada = true;
           }
+          if (!atribuiuNaRodada) break; // todas as cotas preenchidas
+        }
 
-          // Get unassigned leads
-          const leadsDisponiveis = await storage.getUnassignedLeads(
-            campaignId,
-            quantidade,
-          );
-
-          if (leadsDisponiveis.length === 0) {
-            break; // No more leads to distribute
-          }
+        for (const d of validDists) {
+          const leadsDoUser = porUser.get(d.userId) || [];
+          if (!leadsDoUser.length) continue;
 
           // Get current max ordem_fila for this user/campaign
-          let ordemFila = await storage.getMaxOrdemFila(userId, campaignId);
+          let ordemFila = await storage.getMaxOrdemFila(d.userId, campaignId);
 
-          // Create assignments
-          for (const lead of leadsDisponiveis) {
+          for (const lead of leadsDoUser) {
             ordemFila++;
             await storage.createSalesLeadAssignment({
               leadId: lead.id,
-              userId,
+              userId: d.userId,
               campaignId,
               status: "novo",
               ordemFila,
             });
           }
 
-          totalDistributed += leadsDisponiveis.length;
-          results.push({ userId, quantidade: leadsDisponiveis.length });
+          totalDistributed += leadsDoUser.length;
+          results.push({ userId: d.userId, quantidade: leadsDoUser.length });
         }
 
         // Update campaign counters
