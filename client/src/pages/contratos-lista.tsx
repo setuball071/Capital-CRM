@@ -123,6 +123,7 @@ const COLOR_OPTIONS = Object.keys(PHASE_COLORS);
 const PRODUCT_LABEL: Record<string, string> = {
   NOVO: "Novo",
   PORTABILIDADE: "Portabilidade",
+  REFIN_PORTABILIDADE: "Refin de Port.",
   REFINANCIAMENTO: "Refinanciamento",
   CARTAO: "Cartão",
 };

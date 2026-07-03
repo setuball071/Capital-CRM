@@ -731,6 +731,62 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           performedBy: user.id,
         });
 
+        // Refin de Portabilidade (bancos que pagam saldo e troco separados, ex. Paraná):
+        // quando a linha veio com tabela de refin selecionada e troco > 0, cria uma
+        // proposta IRMÃ só do troco, vinculada à port — cada uma segue seu próprio
+        // ciclo (status, PAGO, ADE), pois o banco libera saldo e refin em datas diferentes.
+        const rp = item.refinDePort;
+        const trocoNum = rp ? parseFloat(String(rp.troco || 0)) : 0;
+        if (rp && rp.tableId && trocoNum > 0) {
+          const metaBase = (clientMeta as Record<string, any>) || {};
+          const [refinProp] = await db
+            .insert(proposals)
+            .values({
+              tenantId,
+              clientName,
+              clientCpf,
+              clientMatricula: clientMatricula || null,
+              clientConvenio: clientConvenio || null,
+              bank: bank || null,
+              product: "REFIN_PORTABILIDADE",
+              tableId: null,
+              contractValue: String(trocoNum),
+              installmentValue: null,
+              term: rp.novoPrazo ? parseInt(String(rp.novoPrazo)) : (term ? parseInt(term) : null),
+              ade: null,
+              commissionPercentage: rp.commissionPercentage != null && rp.commissionPercentage !== ""
+                ? String(rp.commissionPercentage) : null,
+              corretorCommissionPercentage: rp.corretorCommissionPercentage != null && rp.corretorCommissionPercentage !== ""
+                ? String(rp.corretorCommissionPercentage) : null,
+              clientMeta: {
+                ...metaBase,
+                tipoContrato: "REFIN_PORTABILIDADE",
+                tabelaFinanceiroId: rp.tableId,
+                tabelaNome: rp.tabelaNome || null,
+                refinDePortDe: proposal.id,
+              },
+              parceiroId: parceiroId ? parseInt(parceiroId) : null,
+              status: "CADASTRADA",
+              isPaused: false,
+              vendorId,
+              createdBy: user.id,
+            })
+            .returning();
+
+          await db.insert(proposalHistory).values({
+            proposalId: refinProp.id,
+            toStatus: "CADASTRADA",
+            action: "AVANCO",
+            notes: `Criada automaticamente — Refin de Portabilidade (troco) da proposta #${proposal.id}`,
+            performedBy: user.id,
+          });
+
+          // Vínculo de volta na port
+          await db.update(proposals)
+            .set({ clientMeta: { ...metaBase, refinPropostaId: refinProp.id } })
+            .where(eq(proposals.id, proposal.id));
+        }
+
         created.push(proposal);
       }
 

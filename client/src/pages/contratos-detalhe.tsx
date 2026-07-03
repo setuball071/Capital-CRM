@@ -205,7 +205,7 @@ export default function ContratosDetalhePage() {
     const corretores = financeiroConfig?.dados?.corretores ?? [];
     const cor = corretores.find((c: any) => c._crmId === proposal.vendorId);
     const grupo = cor ? grupos.find((g: any) => g.id === cor.grupoId) : null;
-    const tipoMap: Record<string, string> = { NOVO: "Novo", PORTABILIDADE: "Portabilidade", PORTABILIDADE_REFIN: "Portabilidade", REFINANCIAMENTO: "Refinanciamento", COMPRA_DIVIDA: "Compra de Dívida", CARTAO: "Cartão" };
+    const tipoMap: Record<string, string> = { NOVO: "Novo", PORTABILIDADE: "Portabilidade", PORTABILIDADE_REFIN: "Portabilidade", REFIN_PORTABILIDADE: "Refin de Portabilidade", REFINANCIAMENTO: "Refinanciamento", COMPRA_DIVIDA: "Compra de Dívida", CARTAO: "Cartão" };
     const tipoProd = tipoMap[proposal.product as string] || null;
     const repassePerc = (() => {
       if (!grupo) return 0;
@@ -728,6 +728,25 @@ export default function ContratosDetalhePage() {
         </div>
       )}
 
+      {/* Banner: vínculo port ↔ refin de portabilidade (bancos que pagam saldo e troco separados) */}
+      {proposal.clientMeta?.refinDePortDe && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 p-3 text-sm text-blue-700 dark:text-blue-300">
+          Esta proposta é o <strong>Refin de Portabilidade (troco)</strong> da portabilidade{" "}
+          <button className="underline font-medium" onClick={() => setLocation(`/contratos/${proposal.clientMeta.refinDePortDe}`)}>
+            #{proposal.clientMeta.refinDePortDe}
+          </button>
+          . Saldo e troco são pagos separadamente pelo banco.
+        </div>
+      )}
+      {proposal.clientMeta?.refinPropostaId && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 p-3 text-sm text-blue-700 dark:text-blue-300">
+          O troco desta portabilidade é pago em proposta separada:{" "}
+          <button className="underline font-medium" onClick={() => setLocation(`/contratos/${proposal.clientMeta.refinPropostaId}`)}>
+            #{proposal.clientMeta.refinPropostaId} (Refin de Portabilidade)
+          </button>
+        </div>
+      )}
+
       {/* Banner: parcela absorvida numa unificação */}
       {proposal.unificadaEmId && (
         <div className="rounded-md border border-purple-200 bg-purple-50 dark:border-purple-900/40 dark:bg-purple-950/20 p-3 text-sm text-purple-700 dark:text-purple-300">
@@ -883,7 +902,7 @@ export default function ContratosDetalhePage() {
           <CardTitle className="text-base flex items-center gap-2"><CreditCard className="h-4 w-4" /> Operação</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-          {renderField({ fieldKey: "produto", label: "Produto", value: proposal.product, copyable: false })}
+          {renderField({ fieldKey: "produto", label: "Produto", value: proposal.product === "REFIN_PORTABILIDADE" ? "REFIN DE PORTABILIDADE" : proposal.product, copyable: false })}
           {/* Banco — edição via select (bancos disponíveis para o tipo de operação) */}
           <div className="group min-w-0">
             <p className="text-xs text-muted-foreground">Banco</p>

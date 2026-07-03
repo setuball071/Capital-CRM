@@ -242,6 +242,8 @@ interface PortabilidadeContrato {
   troco: string;
   novoPrazo: string;
   tableId?: string;
+  // Bancos que pagam saldo e troco separados (ex. Paraná): tabela do refin do troco
+  tableRefinId?: string;
 }
 
 interface SimulacaoPort {
@@ -395,6 +397,7 @@ export default function ContratosPropostaPage() {
   // Banco/tabela "para todos os contratos" (aplicação em massa; cada linha pode sobrescrever individualmente)
   const [globalBancoDestino, setGlobalBancoDestino] = useState("");
   const [globalTableId,      setGlobalTableId]      = useState("");
+  const [globalTableRefinId, setGlobalTableRefinId] = useState("");
   const [simPortFile,  setSimPortFile]  = useState<File | null>(null);
   const [simPortData,  setSimPortData]  = useState<SimulacaoPort | null>(null);
   const simPortRef = useRef<HTMLInputElement>(null);
@@ -780,6 +783,19 @@ export default function ContratosPropostaPage() {
   /** Lista de bancos disponíveis dentro das tabelas filtradas */
   const banks: string[] = Array.from(new Set(tabelasDoTipo.map((t: any) => t.banco))).filter(Boolean).sort();
 
+  /** Tabelas "Refin de Portabilidade" de um banco — só bancos que pagam saldo e troco
+   *  separados (ex. Paraná) têm tabelas desse tipo; para os demais retorna vazio e
+   *  NADA muda no fluxo atual. */
+  function refinPortTabelas(banco: string | undefined): any[] {
+    if (!banco) return [];
+    const conv = selectedConvenio?.id || "";
+    return financeiroTabelas.filter((t: any) =>
+      t.tipo === "Refin de Portabilidade" &&
+      t.banco === banco &&
+      (!t.convenio || t.convenio.toUpperCase() === conv.toUpperCase())
+    );
+  }
+
   // ── Form ────────────────────────────────────────────────────────────────────
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -1080,7 +1096,27 @@ export default function ContratosPropostaPage() {
         const tabela = c.tableId
           ? financeiroTabelas.find((t: any) => String(t.id) === c.tableId)
           : null;
+        // Banco que paga saldo/troco separados: dados p/ o backend criar a proposta
+        // irmã de Refin de Portabilidade (troco), vinculada a esta port
+        const tabelaRefin = c.tableRefinId
+          ? financeiroTabelas.find((t: any) => String(t.id) === c.tableRefinId)
+          : null;
+        const trocoNum = parseFloat(String(c.troco || "0").replace(",", ".")) || 0;
+        const refinDePort = tabelaRefin && trocoNum > 0
+          ? {
+              tableId: c.tableRefinId,
+              tabelaNome: tabelaRefin.nome,
+              troco: trocoNum,
+              novoPrazo: c.novoPrazo || null,
+              commissionPercentage: tabelaRefin.pctEmpresa != null ? tabelaRefin.pctEmpresa / 100 : null,
+              corretorCommissionPercentage: (() => {
+                const r = getMyRepasseGrupo("Refin de Portabilidade");
+                return r > 0 ? r / 100 : null;
+              })(),
+            }
+          : undefined;
         return {
+          ...(refinDePort ? { refinDePort } : {}),
           clientName:      v.clientName,
           clientCpf:       v.clientCpf.replace(/\D/g, ""),
           clientMatricula: v.clientMatricula || null,
@@ -3582,7 +3618,7 @@ export default function ContratosPropostaPage() {
                       <select
                         className="w-32 border rounded px-1.5 py-1 text-xs bg-background"
                         value={globalBancoDestino}
-                        onChange={(e) => { setGlobalBancoDestino(e.target.value); setGlobalTableId(""); }}
+                        onChange={(e) => { setGlobalBancoDestino(e.target.value); setGlobalTableId(""); setGlobalTableRefinId(""); }}
                       >
                         <option value="">— banco —</option>
                         {Array.from(new Set(
@@ -3616,14 +3652,33 @@ export default function ContratosPropostaPage() {
                           ))}
                       </select>
                     </div>
+                    {refinPortTabelas(globalBancoDestino).length > 0 && (
+                      <div>
+                        <p className="text-[11px] text-muted-foreground mb-1">Tabela Troco (para todos)</p>
+                        <select
+                          className="w-32 border rounded px-1.5 py-1 text-xs bg-background"
+                          value={globalTableRefinId}
+                          onChange={(e) => setGlobalTableRefinId(e.target.value)}
+                        >
+                          <option value="">— refin troco —</option>
+                          {refinPortTabelas(globalBancoDestino).map((t: any) => (
+                            <option key={String(t.id)} value={String(t.id)}>{t.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <Button
                       size="sm" variant="outline" type="button"
                       disabled={!globalBancoDestino && !globalTableId}
-                      onClick={() => setPortContratos((prev) => prev.map((c) => ({
-                        ...c,
-                        ...(globalBancoDestino ? { bancoDestino: globalBancoDestino } : {}),
-                        ...(globalTableId ? { tableId: globalTableId } : {}),
-                      })))}
+                      onClick={() => {
+                        const refins = refinPortTabelas(globalBancoDestino);
+                        const autoRefin = globalTableRefinId || (refins.length === 1 ? String(refins[0].id) : "");
+                        setPortContratos((prev) => prev.map((c) => ({
+                          ...c,
+                          ...(globalBancoDestino ? { bancoDestino: globalBancoDestino, tableRefinId: autoRefin } : {}),
+                          ...(globalTableId ? { tableId: globalTableId } : {}),
+                        })));
+                      }}
                     >
                       Aplicar a todos os contratos
                     </Button>
@@ -3646,6 +3701,7 @@ export default function ContratosPropostaPage() {
                       <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Banco Dest.</th>
                       <th className="text-right py-2 pr-2 font-medium text-muted-foreground">N. Prazo</th>
                       <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Tabela</th>
+                      <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Tabela Troco</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -3696,8 +3752,12 @@ export default function ContratosPropostaPage() {
                             className="w-28 border rounded px-1.5 py-0.5 text-xs bg-background"
                             value={c.bancoDestino}
                             onChange={(e) => {
-                              updatePortContrato(c.uid, "bancoDestino", e.target.value);
+                              const banco = e.target.value;
+                              const refins = refinPortTabelas(banco);
+                              updatePortContrato(c.uid, "bancoDestino", banco);
                               updatePortContrato(c.uid, "tableId", "");
+                              // Banco que paga saldo/troco separado: já puxa a tabela do refin (auto quando só há uma)
+                              updatePortContrato(c.uid, "tableRefinId", refins.length === 1 ? String(refins[0].id) : "");
                             }}
                           >
                             <option value="">— banco —</option>
@@ -3736,6 +3796,25 @@ export default function ContratosPropostaPage() {
                               ))}
                           </select>
                         </td>
+                        <td className="py-1.5 pr-2">
+                          {(() => {
+                            const refins = refinPortTabelas(c.bancoDestino);
+                            if (!refins.length) return <span className="text-muted-foreground">—</span>;
+                            return (
+                              <select
+                                className="w-28 border rounded px-1.5 py-0.5 text-xs bg-background"
+                                value={c.tableRefinId || ""}
+                                onChange={(e) => updatePortContrato(c.uid, "tableRefinId", e.target.value)}
+                                title="Tabela do refin do troco — este banco paga saldo e troco separados; gera proposta de Refin de Portabilidade vinculada"
+                              >
+                                <option value="">— refin troco —</option>
+                                {refins.map((t: any) => (
+                                  <option key={String(t.id)} value={String(t.id)}>{t.nome}</option>
+                                ))}
+                              </select>
+                            );
+                          })()}
+                        </td>
                         <td className="py-1.5">
                           <Button size="icon" variant="ghost" className="h-6 w-6" type="button"
                             onClick={() => setPortContratos((prev) => prev.filter((x) => x.uid !== c.uid))}>
@@ -3771,6 +3850,17 @@ export default function ContratosPropostaPage() {
               const semTabela = portContratos.filter((c) => !c.tableId);
               if (semTabela.length > 0) {
                 toast({ title: `Selecione a tabela em todos os contratos (${semTabela.length} sem tabela)`, variant: "destructive" });
+                return;
+              }
+              // Bancos que pagam saldo/troco separados (têm tabela Refin de Portabilidade):
+              // linha com troco > 0 exige a "Tabela Troco"
+              const semRefin = portContratos.filter((c) =>
+                refinPortTabelas(c.bancoDestino).length > 0 &&
+                (parseFloat(String(c.troco || "0").replace(",", ".")) || 0) > 0 &&
+                !c.tableRefinId
+              );
+              if (semRefin.length > 0) {
+                toast({ title: `Este banco paga o troco separado — selecione a "Tabela Troco" (${semRefin.length} contrato(s) sem ela)`, variant: "destructive" });
                 return;
               }
               setStep("conferencia");
