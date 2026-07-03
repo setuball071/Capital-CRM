@@ -376,6 +376,9 @@ app.use((req, res, next) => {
           await migDb.execute(migSql`
             ALTER TABLE proposals ADD COLUMN IF NOT EXISTS valor_pre_unificacao DECIMAL(12,2)
           `);
+          // Acompanhamento operacional: última consulta do contrato no banco
+          await migDb.execute(migSql`ALTER TABLE proposals ADD COLUMN IF NOT EXISTS ultima_consulta TIMESTAMP`);
+          await migDb.execute(migSql`ALTER TABLE proposals ADD COLUMN IF NOT EXISTS ultima_consulta_por VARCHAR(255)`);
           // Material de apoio: suporte a arquivo enviado (Storage) além de link
           await migDb.execute(migSql`ALTER TABLE materials ADD COLUMN IF NOT EXISTS storage_key TEXT`);
           await migDb.execute(migSql`ALTER TABLE materials ADD COLUMN IF NOT EXISTS file_name TEXT`);

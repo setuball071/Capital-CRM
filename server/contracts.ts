@@ -262,6 +262,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           updatedAt: proposals.updatedAt,
           paidAt: proposals.paidAt,
           unificadaEmId: proposals.unificadaEmId,
+          ultimaConsulta: proposals.ultimaConsulta,
+          ultimaConsultaPor: proposals.ultimaConsultaPor,
         })
         .from(proposals)
         .leftJoin(users, eq(proposals.vendorId, users.id))
@@ -1145,6 +1147,49 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     } catch (e: any) {
       console.error("POST /api/contracts/proposals/:id/regularize error:", e);
       return res.status(500).json({ message: "Erro ao regularizar pendência" });
+    }
+  });
+
+  // Registrar consulta do contrato no banco (acompanhamento operacional).
+  // Não muda status nem updatedAt — só marca quando/por quem foi consultado,
+  // com observação obrigatória gravada no histórico ("como está no banco").
+  app.post("/api/contracts/proposals/:id/consulta", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      if (!user.isMaster && !["master", "operacional", "coordenacao"].includes(user.role || "")) {
+        return res.status(403).json({ message: "Sem permissão para registrar consulta" });
+      }
+      const notes = String(req.body?.notes || "").trim();
+      if (!notes) return res.status(400).json({ message: "Informe como está o contrato no banco" });
+
+      const [current] = await db
+        .select({ id: proposals.id, status: proposals.status })
+        .from(proposals)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
+        .limit(1);
+      if (!current) return res.status(404).json({ message: "Proposta não encontrada" });
+
+      const agora = new Date();
+      await db
+        .update(proposals)
+        .set({ ultimaConsulta: agora, ultimaConsultaPor: user.name || user.email || null } as any)
+        .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)));
+
+      await db.insert(proposalHistory).values({
+        proposalId: id,
+        fromStatus: current.status,
+        toStatus: current.status,
+        action: "CONSULTA",
+        notes: `Consulta no banco: ${notes}`,
+        performedBy: user.id,
+      });
+
+      return res.json({ ok: true, ultimaConsulta: agora.toISOString() });
+    } catch (e: any) {
+      console.error("POST /api/contracts/proposals/:id/consulta error:", e);
+      return res.status(500).json({ message: "Erro ao registrar consulta" });
     }
   });
 
