@@ -4133,6 +4133,19 @@ window.addEventListener('message',function(e){
     if(_inicializado)setModule(e.data.tab);
     else _pendingModule=e.data.tab;
   }
+  if(e.data.type==='CAPITAL_CRM_PALETTE'&&e.data.palette){
+    // Herda a paleta efetiva do CRM (tema do tenant/white-label) — inline em :root
+    // vence os blocos [data-theme], e o pai reenvia a cada troca de tema.
+    const p=e.data.palette,r=document.documentElement.style;
+    if(p.accent)r.setProperty('--accent',p.accent);
+    if(p.accentRgb)r.setProperty('--accent-rgb',p.accentRgb);
+    if(p.bg)r.setProperty('--bg',p.bg);
+    if(p.surface)r.setProperty('--surface',p.surface);
+    if(p.surface2)r.setProperty('--surface2',p.surface2);
+    if(p.border)r.setProperty('--border',p.border);
+    if(p.text)r.setProperty('--text',p.text);
+    if(p.muted)r.setProperty('--muted',p.muted);
+  }
   if(e.data.type==='CAPITAL_CRM_ROLE'){
     const isMaster=e.data.isMaster;
     _isMasterUser=!!isMaster;
