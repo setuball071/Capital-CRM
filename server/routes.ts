@@ -22647,6 +22647,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         posicaoRankingGeral,
         posicaoRankingCartao,
         totalVendedores,
+        _debugRanking: {
+          userId,
+          rankMemberIds,
+          scoped: rankMemberIds.length > 0,
+          vendedores: geralSorted.map((r: any) => ({
+            userId: parseInt(r.user_id as string),
+            prodGeral: parseFloat(r.prod_geral as string),
+            prodCartao: parseFloat(r.prod_cartao as string),
+          })),
+        },
       });
     } catch (error) {
       console.error("Error in dashboard-vendedor API:", error);
