@@ -275,3 +275,9 @@
 .animate-bell-glow {
   animation: bell-glow 2s ease-in-out infinite;
 }
+
+/* Capital Go — barra de acento roxa à esquerda do item de menu ativo (assinatura do design) */
+[data-sidebar="menu-button"][data-active="true"] {
+  box-shadow: inset 3px 0 0 0 hsl(var(--sidebar-primary));
+  font-weight: 600;
+}
