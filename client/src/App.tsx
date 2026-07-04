@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
+import { HeaderCpfSearch } from "@/components/header-cpf-search";
 import { TenantThemeProvider } from "@/components/tenant-theme-provider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -366,6 +367,7 @@ function Router() {
                 </button>
               ))}
             </div>
+            <HeaderCpfSearch />
             <div className="flex items-center gap-1">
               <a
                 href={`https://capitalgo-whats.replit.app?crm_user_id=${user?.id || ''}`}
