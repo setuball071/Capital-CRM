@@ -1000,9 +1000,11 @@ export default function VendasConsulta() {
           <p className="text-muted-foreground">Busque dados completos de clientes por CPF ou Matrícula</p>
         </div>
 
-        <Card className="border-2 border-dashed">
+        <Card className="rounded-xl shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <Search className="h-16 w-16 text-muted-foreground mb-4" />
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: "var(--cg-purple-soft)" }}>
+              <Search className="h-8 w-8" style={{ color: "var(--cg-purple)" }} />
+            </div>
             <h2 className="text-xl font-semibold mb-2">Buscar Cliente</h2>
             <p className="text-muted-foreground text-center mb-6 max-w-md">
               Busque por CPF, Matrícula ou Telefone para consultar dados completos, contratos e margens disponíveis.
