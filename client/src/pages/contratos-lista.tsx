@@ -1140,7 +1140,7 @@ export default function ContratosListaPage() {
           <button
             onClick={() => setFilterStatus("all")}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              filterStatus === "all" ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-muted/80"
+              filterStatus === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
             }`}
           >
             Todos ({proposals.length})
