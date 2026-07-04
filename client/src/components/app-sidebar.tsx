@@ -313,9 +313,13 @@ export function AppSidebar() {
               data-testid="sidebar-logo-image"
             />
           ) : (
-            <span className="text-lg font-semibold text-foreground text-center">
-              {tenant?.name || "GoldCard"}
-            </span>
+            <img
+              src={theme === "dark" ? "/capital-go-white.png" : "/capital-go-gradient.png"}
+              alt={tenant?.name || "Capital Go"}
+              className="max-w-full object-contain"
+              style={{ maxHeight: `${Math.max(logoHeight, 30)}px`, display: "block" }}
+              data-testid="sidebar-logo-fallback"
+            />
           )}
         </div>
       </SidebarHeader>
