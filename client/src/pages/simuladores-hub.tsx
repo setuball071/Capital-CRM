@@ -6,6 +6,7 @@ import SimCriadorProposta from "@/pages/sim-criador-proposta";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
+import { MatIcon } from "@/components/mat-icon";
 
 // Escuta postMessage do iframe do Simulador de Portabilidade e redireciona para o Criador de Proposta nativo
 function IframeBridge() {
@@ -42,74 +43,14 @@ function IframeThemeSync({
   return null;
 }
 
+// Ícones Material Symbols do design (Simuladores.dc.html → TAB_DEFS)
 const TABS = [
-  {
-    id: "proposta",
-    label: "Criador de Proposta",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-        <polyline points="10 9 9 9 8 9"/>
-      </svg>
-    ),
-  },
-  {
-    id: "portabilidade",
-    label: "Simulador de Portabilidade",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="17 1 21 5 17 9"/>
-        <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-        <polyline points="7 23 3 19 7 15"/>
-        <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-      </svg>
-    ),
-  },
-  {
-    id: "compra",
-    label: "Simulador de Compra",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-      </svg>
-    ),
-  },
-  {
-    id: "amortizacao",
-    label: "Amortização",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-      </svg>
-    ),
-  },
-  {
-    id: "renda-fixa",
-    label: "Renda Fixa",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
-        <polyline points="16 7 22 7 22 13"/>
-      </svg>
-    ),
-  },
-  {
-    id: "contracheque",
-    label: "Contracheque",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-        <polyline points="10 9 9 9 8 9"/>
-      </svg>
-    ),
-  },
+  { id: "proposta", label: "Criador de Proposta", icon: "description" },
+  { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt" },
+  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart" },
+  { id: "amortizacao", label: "Amortização", icon: "trending_down" },
+  { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up" },
+  { id: "contracheque", label: "Contracheque", icon: "description" },
 ];
 
 export default function SimuladoresHub() {
@@ -151,17 +92,14 @@ export default function SimuladoresHub() {
       <IframeBridge />
       <IframeThemeSync portabilidadeRef={portabilidadeRef} contrachequeRef={contrachequeRef} />
       <div className="flex flex-col h-full w-full overflow-hidden">
-        {/* ── TABS BAR ── */}
+        {/* ── SUB-TAB STRIP (Simuladores.dc.html) ── */}
         <div
-          className="flex items-center border-b shrink-0 overflow-x-auto"
+          className="flex items-center border-b shrink-0 overflow-x-auto bg-sidebar"
           style={{
-            background: "hsl(var(--background))",
             borderColor: "hsl(var(--border))",
-            boxShadow: "0 1px 0 hsl(var(--border)), 0 2px 8px rgba(0,0,0,.04)",
-            height: 48,
-            paddingLeft: 16,
-            paddingRight: 16,
-            gap: 2,
+            paddingLeft: 24,
+            paddingRight: 24,
+            gap: 4,
           }}
         >
           {TABS.map((tab) => {
@@ -172,32 +110,28 @@ export default function SimuladoresHub() {
                 onClick={() => setActiveTab(tab.id)}
                 style={{
                   fontFamily: "Inter, -apple-system, sans-serif",
-                  fontSize: 13,
-                  fontWeight: isActive ? 600 : 500,
-                  color: isActive ? "#7C3AED" : "hsl(var(--muted-foreground))",
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  color: isActive ? "#6C2BD9" : "hsl(var(--muted-foreground))",
                   background: "none",
                   border: "none",
-                  borderBottom: isActive ? "2px solid #7C3AED" : "2px solid transparent",
-                  padding: "0 14px",
-                  height: "100%",
+                  borderBottom: isActive ? "2px solid #6C2BD9" : "2px solid transparent",
+                  padding: "10px 16px",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  gap: 7,
+                  gap: 6,
                   whiteSpace: "nowrap",
                   transition: "color .15s, border-color .15s",
-                  position: "relative",
-                  top: 1,
-                  opacity: isActive ? 1 : 0.7,
                 }}
                 onMouseEnter={(e) => {
-                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = "#7C3AED";
+                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = "#6C2BD9";
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = "";
                 }}
               >
-                <span style={{ opacity: isActive ? 1 : 0.6 }}>{tab.icon}</span>
+                <MatIcon name={tab.icon} size={16} />
                 {tab.label}
               </button>
             );
