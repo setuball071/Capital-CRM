@@ -25,6 +25,7 @@ import {
   Plus, Pencil, Trash2, Save, SkipForward, Target, History, AlertCircle, AlertTriangle, Info
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ArrowLeftRight } from "lucide-react";
 import { PhoneClientSearch } from "@/components/PhoneClientSearch";
 
 const TIPOS_CONTATO_CONSULTA = ["ligacao", "whatsapp", "outro"] as const;
@@ -280,6 +281,12 @@ export default function VendasConsulta() {
   const [agendamentoData, setAgendamentoData] = useState("");
   const [agendamentoNota, setAgendamentoNota] = useState("");
   const [showObsDialog, setShowObsDialog] = useState(false);
+
+  // ─── Simular portabilidade (modal do design Capital Go) ──────────────────
+  const [simPortOpen, setSimPortOpen] = useState(false);
+  const [simPortBanco, setSimPortBanco] = useState("");
+  const [simPortPrazo, setSimPortPrazo] = useState("84");
+  const [simPortTaxa, setSimPortTaxa] = useState("1,80");
 
   // ─── Dados Bancários manual (Maranhão) ───────────────────────────────────
   const [editandoBancario, setEditandoBancario] = useState(false);
@@ -1406,22 +1413,17 @@ export default function VendasConsulta() {
                       </div>
                     );
                   })()}
-                </CardContent>
-              </Card>
-
-              {/* ── Banner: Parcelas Fora de Folha ── */}
-              {(() => {
-                return null;
-              })()}
+                {/* ── Dados bancários no MESMO card, separados por linha fina (design) ── */}
+                <div className="h-px bg-border my-4" />
 
               {(() => {
                 const convenioRawBanco = (consultaData.vinculos?.[0]?.convenio || consultaData.clienteBase?.convenio || "").toUpperCase();
                 const isMaranhaoBanco = convenioRawBanco === "ESTADUAL - MA";
                 const pessoaIdBanco = consultaData.pessoaId;
                 return (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
+                <div>
+                  <div className="pb-3">
+                    <div className="text-base font-semibold flex items-center gap-2">
                       <Landmark className="h-4 w-4" />
                       Dados Bancários
                       {isMaranhaoBanco && pessoaIdBanco && !editandoBancario && (
@@ -1440,9 +1442,9 @@ export default function VendasConsulta() {
                           <Pencil className="h-3 w-3" /> Editar
                         </Button>
                       )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                    </div>
+                  </div>
+                  <div>
                     {isMaranhaoBanco && editandoBancario ? (
                       <div className="space-y-3">
                         <div className="grid grid-cols-1 gap-3">
@@ -1527,10 +1529,12 @@ export default function VendasConsulta() {
                         </div>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
                 );
               })()}
+                </CardContent>
+              </Card>
 
               <Card>
                 <CardHeader className="pb-3">
@@ -1864,6 +1868,23 @@ export default function VendasConsulta() {
                       <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">SIAPE</Badge>
                     )}
                     {(() => {
+                      // Botão "Simular portabilidade (n)" — habilita ao marcar contratos (design)
+                      const usaSiape = !!(siapeParcelas && siapeParcelas.length > 0);
+                      const selCount = usaSiape ? siapeSelecionados.size : contratosSelecionados.size;
+                      return (
+                        <Button
+                          size="sm"
+                          className="ml-auto h-8 gap-1.5"
+                          disabled={selCount === 0}
+                          onClick={() => setSimPortOpen(true)}
+                          data-testid="button-simular-portabilidade"
+                        >
+                          <ArrowLeftRight className="h-3.5 w-3.5" />
+                          Simular portabilidade ({selCount})
+                        </Button>
+                      );
+                    })()}
+                    {(() => {
                       const convenioRawC = (consultaData.vinculos?.[0]?.convenio || consultaData.clienteBase?.convenio || "").toUpperCase();
                       const isMaranhaoC = convenioRawC === "ESTADUAL - MA";
                       const pessoaIdC = consultaData.pessoaId;
@@ -1871,7 +1892,7 @@ export default function VendasConsulta() {
                       return (
                         <Button
                           variant="outline" size="sm"
-                          className="ml-auto h-7 px-2 text-xs gap-1"
+                          className="h-7 px-2 text-xs gap-1"
                           onClick={() => setAdicionandoContrato(true)}
                         >
                           <Plus className="h-3 w-3" /> Adicionar
@@ -2225,6 +2246,111 @@ export default function VendasConsulta() {
       </Dialog>
 
       {/* Modal Painel de Contato */}
+      {/* ── Modal Simular Portabilidade (Perfil do Cliente.dc.html) ────────── */}
+      <Dialog open={simPortOpen} onOpenChange={setSimPortOpen}>
+        <DialogContent className="max-w-[560px] rounded-2xl p-7">
+          {(() => {
+            const usaSiape = !!(siapeParcelas && siapeParcelas.length > 0);
+            let totalSaldo = 0;
+            let parcelaAtual = 0;
+            let selCount = 0;
+            if (usaSiape) {
+              siapeSelecionados.forEach((idx) => {
+                const p = siapeParcelas![idx];
+                if (!p) return;
+                selCount++;
+                parcelaAtual += p.valor || 0;
+                const tx = parseFloat(taxasSiape[String(idx)] || "0") || 0;
+                const saldo = tx > 0 ? calcularSaldoDevedorPrice(p.valor, tx, p.prazo_restante) ?? 0 : 0;
+                totalSaldo += saldo;
+              });
+            } else if (consultaData?.contratos) {
+              contratosSelecionados.forEach((idx) => {
+                const c = consultaData.contratos[idx];
+                if (!c) return;
+                selCount++;
+                const vp = parseCurrency(c.valor_parcela || c.valorParcela);
+                parcelaAtual += vp;
+                const tx = parseFloat(taxasContratos[idx] || "0") || 0;
+                const pr = parseInt(String(c.parcelas_restantes || c.parcelasRestantes || 0)) || 0;
+                const saldoCalc = tx > 0 ? calcularSaldoDevedorPrice(vp, tx, pr) : null;
+                totalSaldo += saldoCalc !== null ? saldoCalc : parseCurrency(c.saldo_devedor || c.saldoDevedor);
+              });
+            }
+            const prazoNum = parseInt(simPortPrazo, 10) || 1;
+            const taxaNum = (parseFloat((simPortTaxa || "0").replace(",", ".")) || 0) / 100;
+            const pmt = totalSaldo > 0
+              ? (taxaNum > 0 ? (totalSaldo * taxaNum) / (1 - Math.pow(1 + taxaNum, -prazoNum)) : totalSaldo / prazoNum)
+              : 0;
+            const economia = parcelaAtual - pmt;
+            const fieldLabel = "text-[11.5px] font-semibold text-muted-foreground mb-1";
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="text-[19px] font-bold">Simular portabilidade</DialogTitle>
+                  <DialogDescription className="text-[11.5px]">
+                    {selCount} contrato(s) selecionado(s) · {consultaData?.clienteBase?.nome || ""}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid grid-cols-2 gap-4 mb-1">
+                  <div>
+                    <p className={fieldLabel}>Banco de destino</p>
+                    <Select value={simPortBanco} onValueChange={setSimPortBanco}>
+                      <SelectTrigger className="h-[42px] rounded-lg"><SelectValue placeholder="Selecione o banco" /></SelectTrigger>
+                      <SelectContent>
+                        {["BRB", "INTER", "CAIXA", "C6 BANK", "SAFRA"].map((b) => (
+                          <SelectItem key={b} value={b}>{b}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <p className={fieldLabel}>Prazo (meses)</p>
+                    <Input className="h-[42px] rounded-lg" value={simPortPrazo} onChange={(e) => setSimPortPrazo(e.target.value)} inputMode="numeric" />
+                  </div>
+                  <div>
+                    <p className={fieldLabel}>Taxa (% a.m.)</p>
+                    <Input className="h-[42px] rounded-lg" value={simPortTaxa} onChange={(e) => setSimPortTaxa(e.target.value)} inputMode="decimal" />
+                  </div>
+                  <div>
+                    <p className={fieldLabel}>Valor total financiado</p>
+                    <div className="h-[42px] flex items-center rounded-lg border border-border px-3 text-sm font-bold bg-muted/50">
+                      {formatCurrency(totalSaldo)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-6 rounded-xl border border-border bg-muted/50 px-5 py-4 mb-2">
+                  <div>
+                    <p className={fieldLabel}>Nova parcela estimada</p>
+                    <p className="text-[22px] font-bold">{formatCurrency(pmt || 0)}</p>
+                  </div>
+                  <div>
+                    <p className={fieldLabel}>Economia mensal</p>
+                    <p className="text-[22px] font-bold" style={{ color: economia >= 0 ? "#0F8A46" : "#C62828" }}>
+                      {(economia >= 0 ? "+ " : "- ") + formatCurrency(Math.abs(economia || 0))}
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" className="h-[42px]" onClick={() => setSimPortOpen(false)}>Cancelar</Button>
+                  <Button
+                    className="h-[42px]"
+                    onClick={() => {
+                      const resumo = `Portabilidade — ${consultaData?.clienteBase?.nome || ""}\n${selCount} contrato(s) · Saldo total ${formatCurrency(totalSaldo)}\nBanco destino: ${simPortBanco || "-"} · Prazo ${simPortPrazo}m · Taxa ${simPortTaxa}% a.m.\nNova parcela: ${formatCurrency(pmt || 0)} · Economia mensal: ${formatCurrency(economia || 0)}`;
+                      navigator.clipboard?.writeText(resumo).catch(() => {});
+                      toast({ title: "Cotação salva", description: "Resumo copiado para a área de transferência." });
+                      setSimPortOpen(false);
+                    }}
+                  >
+                    Salvar cotação
+                  </Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={contatosModalOpen} onOpenChange={setContatosModalOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
