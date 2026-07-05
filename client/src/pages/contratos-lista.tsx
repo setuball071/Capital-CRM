@@ -62,59 +62,62 @@ function consultaBadgeCls(hours: number): string {
 
 // ─── Paleta compartilhada entre badges e caixas de fase ──────────────────────
 
+// Tons EXATOS do design (Contratos.dc.html → toneColors): success/warning/info/danger
 const BADGE_COLORS: Record<string, string> = {
-  zinc:   "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  blue:   "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  violet: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
-  orange: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
-  red:    "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-  yellow: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
-  green:  "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-  rose:   "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+  zinc:   "bg-[#F9FAFB] text-[#6B7280] dark:bg-white/5 dark:text-[#9C97AE]",
+  blue:   "bg-[#E8F1FD] text-[#1E5FB5] dark:bg-[rgba(30,136,229,0.16)] dark:text-[#60A5FA]",
+  violet: "bg-[#F2EBFC] text-[#6C2BD9] dark:bg-[rgba(108,43,217,0.28)] dark:text-[#C79CF7]",
+  orange: "bg-[#FEF6E0] text-[#9a6a00] dark:bg-[rgba(249,168,37,0.14)] dark:text-[#FBBF24]",
+  red:    "bg-[#FDECEC] text-[#C62828] dark:bg-[rgba(229,57,53,0.16)] dark:text-[#F87171]",
+  yellow: "bg-[#FEF6E0] text-[#9a6a00] dark:bg-[rgba(249,168,37,0.14)] dark:text-[#FBBF24]",
+  green:  "bg-[#E7F9EE] text-[#0F8A46] dark:bg-[rgba(0,200,83,0.14)] dark:text-[#4ADE80]",
+  rose:   "bg-[#FDECEC] text-[#C62828] dark:bg-[rgba(229,57,53,0.16)] dark:text-[#F87171]",
 };
 
+// Caixas de KPI com os tons exatos do design: fundo + borda tingidos, número e
+// label na cor do tom, "Contratos"/valor em neutro (Contratos.dc.html → statusCards)
 const PHASE_COLORS: Record<string, {
   box: string; activeBox: string; count: string; label: string; swatch: string;
 }> = {
   zinc:   {
-    box:       "bg-zinc-50 border-zinc-200 dark:bg-zinc-900/60 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500",
-    activeBox: "bg-zinc-100 border-zinc-500 dark:bg-zinc-800 dark:border-zinc-400 ring-2 ring-zinc-400/40",
-    count: "text-zinc-900 dark:text-zinc-50", label: "text-zinc-600 dark:text-zinc-400", swatch: "bg-zinc-400",
+    box:       "bg-[#F9FAFB] border-[#E5E7EB] dark:bg-white/5 dark:border-white/10",
+    activeBox: "bg-[#F9FAFB] border-[#E5E7EB] dark:bg-white/5 dark:border-white/10 ring-2 ring-current",
+    count: "text-[#6B7280] dark:text-[#9C97AE]", label: "text-[#6B7280] dark:text-[#9C97AE]", swatch: "bg-zinc-400",
   },
   blue:   {
-    box:       "bg-blue-50 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600",
-    activeBox: "bg-blue-100 border-blue-500 dark:bg-blue-900/60 dark:border-blue-500 ring-2 ring-blue-400/40",
-    count: "text-blue-900 dark:text-blue-50", label: "text-blue-600 dark:text-blue-400", swatch: "bg-blue-500",
+    box:       "bg-[#E8F1FD] border-[#BFDAF9] dark:bg-[rgba(30,136,229,0.16)] dark:border-[rgba(30,136,229,0.32)]",
+    activeBox: "bg-[#E8F1FD] border-[#BFDAF9] dark:bg-[rgba(30,136,229,0.16)] dark:border-[rgba(30,136,229,0.32)] ring-2 ring-current",
+    count: "text-[#1E5FB5] dark:text-[#60A5FA]", label: "text-[#1E5FB5] dark:text-[#60A5FA]", swatch: "bg-blue-500",
   },
   violet: {
-    box:       "bg-violet-50 border-violet-200 dark:bg-violet-950/40 dark:border-violet-800 hover:border-violet-400 dark:hover:border-violet-600",
-    activeBox: "bg-violet-100 border-violet-500 dark:bg-violet-900/60 dark:border-violet-500 ring-2 ring-violet-400/40",
-    count: "text-violet-900 dark:text-violet-50", label: "text-violet-600 dark:text-violet-400", swatch: "bg-violet-500",
+    box:       "bg-[#F2EBFC] border-[#E3D2FA] dark:bg-[rgba(108,43,217,0.28)] dark:border-[rgba(108,43,217,0.45)]",
+    activeBox: "bg-[#F2EBFC] border-[#E3D2FA] dark:bg-[rgba(108,43,217,0.28)] dark:border-[rgba(108,43,217,0.45)] ring-2 ring-current",
+    count: "text-[#6C2BD9] dark:text-[#C79CF7]", label: "text-[#6C2BD9] dark:text-[#C79CF7]", swatch: "bg-violet-500",
   },
   orange: {
-    box:       "bg-orange-50 border-orange-200 dark:bg-orange-950/40 dark:border-orange-800 hover:border-orange-400 dark:hover:border-orange-600",
-    activeBox: "bg-orange-100 border-orange-500 dark:bg-orange-900/60 dark:border-orange-500 ring-2 ring-orange-400/40",
-    count: "text-orange-900 dark:text-orange-50", label: "text-orange-600 dark:text-orange-400", swatch: "bg-orange-500",
+    box:       "bg-[#FEF6E0] border-[#F5E1A4] dark:bg-[rgba(249,168,37,0.14)] dark:border-[rgba(249,168,37,0.30)]",
+    activeBox: "bg-[#FEF6E0] border-[#F5E1A4] dark:bg-[rgba(249,168,37,0.14)] dark:border-[rgba(249,168,37,0.30)] ring-2 ring-current",
+    count: "text-[#9a6a00] dark:text-[#FBBF24]", label: "text-[#9a6a00] dark:text-[#FBBF24]", swatch: "bg-orange-500",
   },
   red:    {
-    box:       "bg-red-50 border-red-200 dark:bg-red-950/40 dark:border-red-800 hover:border-red-400 dark:hover:border-red-600",
-    activeBox: "bg-red-100 border-red-500 dark:bg-red-900/60 dark:border-red-500 ring-2 ring-red-400/40",
-    count: "text-red-900 dark:text-red-50", label: "text-red-600 dark:text-red-400", swatch: "bg-red-500",
+    box:       "bg-[#FDECEC] border-[#F6C6C6] dark:bg-[rgba(229,57,53,0.16)] dark:border-[rgba(229,57,53,0.32)]",
+    activeBox: "bg-[#FDECEC] border-[#F6C6C6] dark:bg-[rgba(229,57,53,0.16)] dark:border-[rgba(229,57,53,0.32)] ring-2 ring-current",
+    count: "text-[#C62828] dark:text-[#F87171]", label: "text-[#C62828] dark:text-[#F87171]", swatch: "bg-red-500",
   },
   yellow: {
-    box:       "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/40 dark:border-yellow-800 hover:border-yellow-400 dark:hover:border-yellow-600",
-    activeBox: "bg-yellow-100 border-yellow-500 dark:bg-yellow-900/60 dark:border-yellow-500 ring-2 ring-yellow-400/40",
-    count: "text-yellow-900 dark:text-yellow-50", label: "text-yellow-700 dark:text-yellow-400", swatch: "bg-yellow-400",
+    box:       "bg-[#FEF6E0] border-[#F5E1A4] dark:bg-[rgba(249,168,37,0.14)] dark:border-[rgba(249,168,37,0.30)]",
+    activeBox: "bg-[#FEF6E0] border-[#F5E1A4] dark:bg-[rgba(249,168,37,0.14)] dark:border-[rgba(249,168,37,0.30)] ring-2 ring-current",
+    count: "text-[#9a6a00] dark:text-[#FBBF24]", label: "text-[#9a6a00] dark:text-[#FBBF24]", swatch: "bg-yellow-400",
   },
   green:  {
-    box:       "bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-800 hover:border-green-400 dark:hover:border-green-600",
-    activeBox: "bg-green-100 border-green-500 dark:bg-green-900/60 dark:border-green-500 ring-2 ring-green-400/40",
-    count: "text-green-900 dark:text-green-50", label: "text-green-600 dark:text-green-400", swatch: "bg-green-500",
+    box:       "bg-[#E7F9EE] border-[#BFEAD1] dark:bg-[rgba(0,200,83,0.14)] dark:border-[rgba(0,200,83,0.30)]",
+    activeBox: "bg-[#E7F9EE] border-[#BFEAD1] dark:bg-[rgba(0,200,83,0.14)] dark:border-[rgba(0,200,83,0.30)] ring-2 ring-current",
+    count: "text-[#0F8A46] dark:text-[#4ADE80]", label: "text-[#0F8A46] dark:text-[#4ADE80]", swatch: "bg-green-500",
   },
   rose:   {
-    box:       "bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800 hover:border-rose-400 dark:hover:border-rose-600",
-    activeBox: "bg-rose-100 border-rose-500 dark:bg-rose-900/60 dark:border-rose-500 ring-2 ring-rose-400/40",
-    count: "text-rose-900 dark:text-rose-50", label: "text-rose-600 dark:text-rose-400", swatch: "bg-rose-500",
+    box:       "bg-[#FDECEC] border-[#F6C6C6] dark:bg-[rgba(229,57,53,0.16)] dark:border-[rgba(229,57,53,0.32)]",
+    activeBox: "bg-[#FDECEC] border-[#F6C6C6] dark:bg-[rgba(229,57,53,0.16)] dark:border-[rgba(229,57,53,0.32)] ring-2 ring-current",
+    count: "text-[#C62828] dark:text-[#F87171]", label: "text-[#C62828] dark:text-[#F87171]", swatch: "bg-rose-500",
   },
 };
 
@@ -213,7 +216,7 @@ function StatusBadge({
 }) {
   const cfg = configMap[status] ?? { label: status, className: BADGE_COLORS.zinc };
   return (
-    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${cfg.className}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cfg.className}`}>
       {cfg.label}
     </span>
   );
@@ -1011,7 +1014,7 @@ export default function ContratosListaPage() {
   const sortHead = (key: string, label: string, cls = "") => (
     // Na caixa CIP a ordenação é fixa (por urgência) → cabeçalho não clicável
     <TableHead
-      className={`select-none ${isCipBox ? "" : "cursor-pointer hover:text-foreground"} ${cls}`}
+      className={`select-none text-[11px] font-bold tracking-[0.04em] uppercase ${isCipBox ? "" : "cursor-pointer hover:text-foreground"} ${cls}`}
       onClick={isCipBox ? undefined : () => toggleSort(key)}
     >
       <span className={`inline-flex items-center gap-0.5 ${cls.includes("text-right") ? "justify-end w-full" : ""}`}>
@@ -1053,8 +1056,8 @@ export default function ContratosListaPage() {
       {/* ── Cabeçalho ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold">Contratos</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-[-0.01em]">Contratos</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
             {viewMode === "operacional" ? "Todas as propostas" : "Minhas propostas"}
           </p>
         </div>
@@ -1107,7 +1110,7 @@ export default function ContratosListaPage() {
 
       {/* ── Caixas de fases ───────────────────────────────────────────────── */}
       {phases.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {phases.map((phase) => {
             const clr = PHASE_COLORS[phase.color] ?? PHASE_COLORS.blue;
             const isActive = activePhase === phase.id;
@@ -1117,15 +1120,15 @@ export default function ContratosListaPage() {
                 key={phase.id}
                 type="button"
                 onClick={() => setActivePhase(isActive ? null : phase.id)}
-                className={`rounded-lg border-2 p-3 text-left transition-all ${isActive ? clr.activeBox : clr.box}`}
+                className={`rounded-[10px] border px-3.5 py-2.5 text-left transition-all ${isActive ? clr.activeBox : clr.box}`}
               >
-                <span className={`block text-2xl font-bold leading-none ${clr.count}`}>{count}</span>
-                <span className={`block text-xs font-medium mt-1.5 leading-tight ${clr.label}`}>{phase.name}</span>
-                <span className={`block text-[10px] mt-0.5 opacity-60 ${clr.label}`}>Contrato{count !== 1 ? "s" : ""}</span>
+                <span className={`block text-xl font-bold leading-none ${clr.count}`}>{count}</span>
+                <span className={`block text-[12.5px] font-semibold mt-1 leading-tight ${clr.label}`}>{phase.name}</span>
+                <span className="block text-[11px] mt-1 text-muted-foreground">Contrato{count !== 1 ? "s" : ""}</span>
                 {phaseShowsSum(phase) && (
-                  <span className={`block text-xs font-semibold mt-1 ${clr.count}`}>
+                  <span className="block text-[12.5px] font-bold mt-0.5 text-foreground">
                     {fmtBRL(prodForPhase(phase))}
-                    {phase.statuses.includes("PAGO") && <span className={`text-[9px] font-normal ml-1 opacity-60 ${clr.label}`}>no mês</span>}
+                    {phase.statuses.includes("PAGO") && <span className="text-[10px] font-normal ml-1 text-muted-foreground">no mês</span>}
                   </span>
                 )}
               </button>
@@ -1139,8 +1142,10 @@ export default function ContratosListaPage() {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setFilterStatus("all")}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              filterStatus === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+            className={`rounded-[9px] px-4 py-2 text-[13px] font-semibold whitespace-nowrap border transition-colors ${
+              filterStatus === "all"
+                ? "bg-foreground text-background border-foreground"
+                : "bg-muted/50 text-foreground/80 border-border hover:bg-muted"
             }`}
           >
             Todos ({proposals.length})
@@ -1149,13 +1154,14 @@ export default function ContratosListaPage() {
             const count = countByStatus[s.key] || 0;
             if (count === 0) return null;
             const isActive = filterStatus === s.key;
-            const badgeCls = BADGE_COLORS[s.color] ?? BADGE_COLORS.zinc;
             return (
               <button
                 key={s.key}
                 onClick={() => setFilterStatus(isActive ? "all" : s.key)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${badgeCls} ${
-                  isActive ? "ring-2 ring-current ring-offset-1" : "opacity-80 hover:opacity-100"
+                className={`rounded-[9px] px-4 py-2 text-[13px] font-semibold whitespace-nowrap border transition-colors ${
+                  isActive
+                    ? "bg-foreground text-background border-foreground"
+                    : "bg-muted/50 text-foreground/80 border-border hover:bg-muted"
                 }`}
               >
                 {s.label} {count}
@@ -1175,21 +1181,22 @@ export default function ContratosListaPage() {
         </div>
       )}
 
-      {/* ── Busca + filtro de produto ──────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[200px]">
+      {/* ── Card da tabela: busca + filtro de produto + tabela (design) ────── */}
+      <section className="rounded-2xl border border-border bg-card px-6 pt-5 pb-3 space-y-4">
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[260px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome, CPF, banco, ADE, corretor..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-[38px] rounded-[9px] bg-muted/50 text-[13.5px]"
             data-testid="input-search"
           />
         </div>
         <Select value={filterProduct} onValueChange={setFilterProduct}>
-          <SelectTrigger className="w-44" data-testid="select-filter-product">
-            <SelectValue placeholder="Produto" />
+          <SelectTrigger className="w-[180px] h-[38px] rounded-[9px] text-[13.5px]" data-testid="select-filter-product">
+            <SelectValue placeholder="Todos os produtos" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os produtos</SelectItem>
@@ -1265,20 +1272,18 @@ export default function ContratosListaPage() {
           {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 rounded-md bg-muted animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center gap-3">
-            <Filter className="h-10 w-10 text-muted-foreground" />
-            <p className="font-medium">Nenhuma proposta encontrada</p>
-            <p className="text-sm text-muted-foreground">
-              {canCreate ? "Clique em Nova Proposta para começar." : "Aguarde novas propostas."}
-            </p>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+          <Filter className="h-10 w-10 text-muted-foreground" />
+          <p className="font-medium">Nenhuma proposta encontrada</p>
+          <p className="text-sm text-muted-foreground">
+            {canCreate ? "Clique em Nova Proposta para começar." : "Aguarde novas propostas."}
+          </p>
+        </div>
       ) : (
-        <div className="rounded-md border border-border overflow-hidden">
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50">
+              <TableRow className="hover:bg-transparent">
                 {showSelectCol && (
                   <TableHead className="w-10">
                     <Checkbox
@@ -1472,6 +1477,7 @@ export default function ContratosListaPage() {
           Mostrando {filtered.length} de {proposals.length} propostas
         </p>
       )}
+      </section>
 
       {/* ── Diálogo de ação rápida (status+observação / ADE / observação) ──── */}
       <Dialog open={!!quick} onOpenChange={(v) => { if (!v) { setQuick(null); setQuickValue(""); } }}>
