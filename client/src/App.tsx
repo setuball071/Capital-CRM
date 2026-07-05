@@ -349,7 +349,6 @@ function Router() {
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               {[
                 { key: "tabelas", label: "Tabelas", Icon: Table, onClick: () => navigate("/financeiro/tabelas") },
-                { key: "nova-proposta", label: "Nova Proposta", Icon: PlusCircle, onClick: () => navigate("/contratos/nova") },
                 { key: "criativos", label: "Criativos", Icon: Smartphone, onClick: () => handleAtalho("criativos") },
                 { key: "tutoriais", label: "Tutoriais", Icon: GraduationCap, onClick: () => handleAtalho("tutoriais") },
               ].map((s) => (
@@ -382,6 +381,17 @@ function Router() {
                 <MessageCircle className="h-3.5 w-3.5" />
                 Meu WhatsApp
               </a>
+              <button
+                onClick={() => navigate("/contratos/nova")}
+                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-sm font-semibold text-white transition-colors"
+                style={{ background: "#6C2BD9" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#4B1FA6"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#6C2BD9"; }}
+                data-testid="header-nova-proposta"
+              >
+                <PlusCircle className="h-4 w-4" />
+                <span className="hidden sm:inline">Nova proposta</span>
+              </button>
               <NotificationBell />
             </div>
           </header>

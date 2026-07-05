@@ -442,18 +442,30 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={toggleTheme}
-              className="w-full text-sidebar-foreground/70 hover:text-sidebar-foreground"
-              data-testid="button-theme-toggle"
-            >
-              {theme === "dark" ? (
-                <Sun className="h-4 w-4" />
-              ) : (
-                <Moon className="h-4 w-4" />
-              )}
-              <span>{theme === "dark" ? "Modo claro" : "Modo escuro"}</span>
-            </SidebarMenuButton>
+            <div className="px-1 pb-1 group-data-[collapsible=icon]:hidden">
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-sidebar-accent/60 border border-sidebar-border">
+                <button
+                  onClick={() => { if (theme === "dark") toggleTheme(); }}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium transition-colors",
+                    theme !== "dark" ? "bg-sidebar text-sidebar-foreground shadow-sm" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                  )}
+                  data-testid="button-theme-light"
+                >
+                  <Sun className="h-3.5 w-3.5" /> Claro
+                </button>
+                <button
+                  onClick={() => { if (theme !== "dark") toggleTheme(); }}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium transition-colors",
+                    theme === "dark" ? "bg-sidebar text-sidebar-foreground shadow-sm" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                  )}
+                  data-testid="button-theme-dark"
+                >
+                  <Moon className="h-3.5 w-3.5" /> Escuro
+                </button>
+              </div>
+            </div>
           </SidebarMenuItem>
           {user.isMaster && (
             <SidebarMenuItem>
