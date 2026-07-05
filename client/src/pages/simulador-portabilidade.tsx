@@ -632,12 +632,12 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .btn-sim-left { background: linear-gradient(90deg, #6C2BD9 0%, #1E88E5 100%); color: #fff; }
         .sim-wrap .btn-sim-right { background: linear-gradient(90deg, #1E88E5 0%, #0d47a1 100%); color: #fff; }
         .sim-wrap .sim-section { border-top: 1px solid hsl(var(--border)); padding: 24px 28px; background: hsl(var(--muted)); }
-        .sim-wrap .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: hsl(var(--muted-foreground)); margin-bottom: 16px; }
+        .sim-wrap .section-title { font-size: 16px; font-weight: 700; color: hsl(var(--foreground)); margin-bottom: 16px; }
         .sim-wrap .prazos-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
         .sim-wrap .prazos-col-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
         .sim-wrap .col-left-label { color: #6C2BD9; }
         .sim-wrap .col-right-label { color: #1E88E5; }
-        .sim-wrap .prazos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 10px; }
+        .sim-wrap .prazos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px,1fr)); gap: 10px; }
         .sim-wrap .pc { background: hsl(var(--card)); border: 1.5px solid hsl(var(--border)); border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: all .15s; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
         .sim-wrap .pc:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(108,43,217,.12); border-color: #6C2BD9; }
         .sim-wrap .pc.al { border-color: #6C2BD9; background: rgba(108,43,217,.06); box-shadow: 0 0 0 3px rgba(108,43,217,.12); }
