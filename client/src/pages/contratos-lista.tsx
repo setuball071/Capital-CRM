@@ -1100,11 +1100,6 @@ export default function ContratosListaPage() {
               <Settings className="h-4 w-4" />Fases
             </Button>
           )}
-          {canCreate && (
-            <Button onClick={() => setLocation("/contratos/nova")} data-testid="button-new-proposal">
-              <Plus className="h-4 w-4 mr-2" />Nova Proposta
-            </Button>
-          )}
         </div>
       </div>
 
