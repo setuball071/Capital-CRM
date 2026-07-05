@@ -92,7 +92,7 @@ import PrivacidadePage from "@/pages/privacidade";
 import AdminAssinaturasPage from "@/pages/admin-assinaturas";
 import MinhaAssinaturaPage from "@/pages/minha-assinatura";
 import HubBetaPage from "@/pages/hub-beta";
-import { Loader2, BarChart3, Settings, MessageCircle } from "lucide-react";
+import { Loader2, BarChart3, Settings } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
 import { NotificationBell } from "@/components/notification-bell";
 
@@ -369,19 +369,6 @@ function Router() {
                   {s.label}
                 </button>
               ))}
-              <a
-                href={`https://capitalgo-whats.replit.app?crm_user_id=${user?.id || ''}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
-                style={{ color: "#25D366", fontFamily: "Inter, sans-serif" }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(37,211,102,0.07)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-                data-testid="header-shortcut-whatsapp"
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                Meu WhatsApp
-              </a>
               <button
                 onClick={() => navigate("/contratos/nova")}
                 className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-sm font-semibold text-white transition-colors"

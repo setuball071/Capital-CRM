@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Target, Clock, CheckCircle2, CalendarDays, Trophy, Info, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/components/theme-provider";
 
 interface VendedorRanking {
   userId: number;
@@ -34,18 +35,36 @@ interface GestorDashboardData {
   mesAno: string;
 }
 
-// ── Paleta EXATA do arquivo de design (PALETTE.light do Dashboard.dc.html) ─────
-const t = {
-  page: "#F3F4F6",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderStrong: "#D1D5DB",
-  textStrong: "#121212",
-  textBody: "#333333",
-  textMuted: "#6B7280",
-  subtleBg: "#F9FAFB",
-  trackBg: "#E5E7EB",
+// ── Paletas EXATAS do arquivo de design (PALETTE do Dashboard.dc.html) ────────
+const PALETTE = {
+  light: {
+    page: "#F3F4F6",
+    cardBg: "#FFFFFF",
+    border: "#E5E7EB",
+    borderStrong: "#D1D5DB",
+    textStrong: "#121212",
+    textBody: "#333333",
+    textMuted: "#6B7280",
+    subtleBg: "#F9FAFB",
+    trackBg: "#E5E7EB",
+    badgeBrandBg: "#F2EBFC",
+    badgeBrandText: "#6C2BD9",
+  },
+  dark: {
+    page: "#121016",
+    cardBg: "#1E1B29",
+    border: "rgba(255,255,255,0.08)",
+    borderStrong: "rgba(255,255,255,0.16)",
+    textStrong: "#FFFFFF",
+    textBody: "#D6D3E0",
+    textMuted: "#9C97AE",
+    subtleBg: "rgba(255,255,255,0.04)",
+    trackBg: "rgba(255,255,255,0.10)",
+    badgeBrandBg: "rgba(108,43,217,0.28)",
+    badgeBrandText: "#C79CF7",
+  },
 };
+type Palette = typeof PALETTE.light;
 const PURPLE = "#6C2BD9";
 const BLUE = "#1E88E5";
 const GRAY = "#9CA3AF";
@@ -75,7 +94,7 @@ function periodoLabel(mesAno: string): string {
 }
 
 // ── Meta da equipe ────────────────────────────────────────────────────────────
-function MetaCard({ e, periodo }: { e: GestorDashboardData["equipe"]; periodo: string }) {
+function MetaCard({ e, periodo, t }: { e: GestorDashboardData["equipe"]; periodo: string; t: Palette }) {
   const pctMeta = e.meta > 0 ? Math.round((e.efetivado / e.meta) * 100) : 0;
   const faltam = Math.max(0, e.meta - e.efetivado);
   const somaProd = e.novo + e.portabilidade + e.cartao;
@@ -153,7 +172,7 @@ function MetaCard({ e, periodo }: { e: GestorDashboardData["equipe"]; periodo: s
 }
 
 // ── Ranking dos corretores ────────────────────────────────────────────────────
-function RankingRow({ v }: { v: VendedorRanking }) {
+function RankingRow({ v, t }: { v: VendedorRanking; t: Palette }) {
   const pct = v.percentual || 0;
   const isFirst = v.posicao === 1;
 
@@ -180,7 +199,7 @@ function RankingRow({ v }: { v: VendedorRanking }) {
   );
 }
 
-function RankingCard({ data }: { data: GestorDashboardData }) {
+function RankingCard({ data, t }: { data: GestorDashboardData; t: Palette }) {
   const legenda = data.statusEmAndamento?.length
     ? `Em aberto conta propostas em ${data.statusEmAndamento.join(", ")}, ainda não efetivadas.`
     : "Em aberto conta propostas em Aguardando envio CIP, Aguardando retorno CIP, Em Andamento, ainda não efetivadas.";
@@ -193,7 +212,7 @@ function RankingCard({ data }: { data: GestorDashboardData }) {
           <Trophy size={22} color={PURPLE} />
           <span style={{ fontSize: 17, fontWeight: 700, color: t.textStrong }}>Ranking dos corretores</span>
         </div>
-        <span style={{ display: "inline-flex", alignItems: "center", padding: "5px 12px", borderRadius: 999, background: "#F2EBFC", color: PURPLE, fontSize: 12.5, fontWeight: 600 }}>{data.ranking.length} corretores</span>
+        <span style={{ display: "inline-flex", alignItems: "center", padding: "5px 12px", borderRadius: 999, background: t.badgeBrandBg, color: t.badgeBrandText, fontSize: 12.5, fontWeight: 600 }}>{data.ranking.length} corretores</span>
       </div>
 
       <div style={{ fontSize: 12.5, color: t.textMuted, background: t.subtleBg, borderRadius: 8, padding: "10px 14px", margin: "10px 0 8px", display: "flex", alignItems: "flex-start", gap: 6 }}>
@@ -214,7 +233,7 @@ function RankingCard({ data }: { data: GestorDashboardData }) {
           {data.ranking.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: t.textMuted, fontSize: 14, borderTop: `1px solid ${t.border}` }}>Nenhum contrato efetivado neste período.</div>
           ) : (
-            data.ranking.map((v) => <RankingRow key={v.userId} v={v} />)
+            data.ranking.map((v) => <RankingRow key={v.userId} v={v} t={t} />)
           )}
         </div>
       </div>
@@ -223,6 +242,8 @@ function RankingCard({ data }: { data: GestorDashboardData }) {
 }
 
 function GestorDashboard() {
+  const { theme } = useTheme();
+  const t = PALETTE[theme === "dark" ? "dark" : "light"];
   const { data, isLoading, error } = useQuery<GestorDashboardData>({
     queryKey: ["/api/dashboard-gestor"],
     retry: 3,
@@ -247,8 +268,8 @@ function GestorDashboard() {
   return (
     <div style={{ padding: "28px 32px 60px", background: t.page, minHeight: "100%", display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT, color: t.textStrong }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');`}</style>
-      <MetaCard e={data.equipe} periodo={periodo} />
-      <RankingCard data={data} />
+      <MetaCard e={data.equipe} periodo={periodo} t={t} />
+      <RankingCard data={data} t={t} />
     </div>
   );
 }
