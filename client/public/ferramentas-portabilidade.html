@@ -531,9 +531,9 @@ table.pv-table tfoot td{font-weight:600;background:#f7f7f7;font-size:12px;border
 #tab-sim-content .box{
     background:#FFFFFF;
     border:1px solid #E5E7EB;
-    border-radius:14px;
-    padding:22px 26px;
-    margin-bottom:18px;
+    border-radius:12px;
+    padding:24px;
+    margin-bottom:20px;
     box-shadow: 0 2px 8px rgba(108, 43, 217, 0.08);
   }
 #tab-sim-content .row{
@@ -2674,7 +2674,8 @@ function extrairContratos(texto, items) {
     const rubrica = mRub[1].trim();
     if (!/EMPREST/i.test(rubrica)) return null;                 // só empréstimos consignados
     if (/CARTAO|MENSALIDADE|SINDICAL/i.test(rubrica)) return null; // ignora cartão/sindicato
-    const mParc = /(\d{1,3})\/(\d{1,4})(?=\s+R\$)/.exec(line);  // parcela N/N logo antes do R$
+    const mParc = /(\d{1,3})\/(\d{1,4})(?=\s+R\$)/.exec(line)  // N/N antes do R$ (pdf.js)
+              || /R\$\s*[\d.,]+\s+(\d{1,3})\/(\d{1,4})/.exec(line); // N/N após R$ (fallback)
     const mVal  = /R\$\s*([\d.,]+)/.exec(line);
     const mCon  = /^(\S+)\s+\d{5}\s*-/.exec(line);
     const pa = mParc ? parseInt(mParc[1], 10) : 0;
@@ -2711,7 +2712,7 @@ function extrairContratos(texto, items) {
   const RE_PARCELA  = /^(\d+)\/(\d+)$/;
   const RE_DATA     = /^\d{2}\/\d{2}\/\d{4}/;
   const RE_MMYYYY   = /^\d{2}\/\d{4}$/;
-  const RE_CONTRATO = /^[\d\-/]+$/;
+  const RE_CONTRATO = /^[\da-fA-F\-/]+$/;
   const RE_SKIP     = /CARTAO CREDITO|CARTAO BENEFICIO|AMORT CARTAO/i;
 
   const S = {IDLE:0,RUB:1,SEQ:2,PRIOR:3,DATA:4,VALOR:5,PARCELA:6,INICIO:7,FIM:8};
@@ -2762,7 +2763,7 @@ function extrairContratos(texto, items) {
 
   // ── FALLBACK: texto concatenado (outros formatos de extrato) ───────
   if (results.length === 0) {
-    const RE_LINHA = /([\d\-/]+)\s+\d{5}\s*-\s*(.+?)\s+\d+\s+\d+\s+\d{2}\/\d{2}\/\d{4}\s+[\d:]+\s+(\d+)\/(\d+)\s+R\$\s*([\d.,]+)\s+\d{2}\/\d{4}\s+\d{2}\/\d{4}/g;
+    const RE_LINHA = /([\da-fA-F\-/]+)\s+\d{5}\s*-\s*(.+?)\s+\d+\s+\d+\s+\d{2}\/\d{2}\/\d{4}\s+[\d:]+\s+(\d+)\/(\d+)\s+R\$\s*([\d.,]+)\s+\d{2}\/\d{4}\s+\d{2}\/\d{4}/g;
     let m;
     while ((m = RE_LINHA.exec(texto)) !== null) {
       const rub = m[2].trim();
