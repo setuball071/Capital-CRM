@@ -1,7 +1,7 @@
 import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, RefreshCw, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, GitBranch, PlusCircle, BookMarked, Wrench, Moon, Sun, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard, KeyRound } from "lucide-react";
 
 import { useLocation } from "wouter";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -327,6 +327,9 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
+              <div className="px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
+                Geral
+              </div>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
@@ -353,14 +356,24 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              {filteredSections.map((section) => {
+              {(() => {
+                let ultimoGrupo = "";
+                return filteredSections.map((section) => {
                 const sectionKey = getSectionKey(section.title);
                 const isOpen = openSections[sectionKey] ?? false;
                 const hasActiveItem = section.items.some(item => location === item.url);
+                const grupoSuper = /Administra|Gest|Financ/i.test(section.title) ? "GESTÃO" : "OPERAÇÃO";
+                const mostrarGrupo = grupoSuper !== ultimoGrupo;
+                ultimoGrupo = grupoSuper;
 
                 return (
+                  <Fragment key={section.title}>
+                  {mostrarGrupo && (
+                    <div className="px-2 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
+                      {grupoSuper}
+                    </div>
+                  )}
                   <Collapsible
-                    key={section.title}
                     open={isOpen}
                     onOpenChange={() => toggleSection(section.title)}
                   >
@@ -432,8 +445,10 @@ export function AppSidebar() {
                       </div>
                     </SidebarMenuItem>
                   </Collapsible>
+                  </Fragment>
                 );
-              })}
+                });
+              })()}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
