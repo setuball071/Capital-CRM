@@ -1,4 +1,4 @@
-import { Calculator, Users, FileText, Table, LogOut, Home, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, ChevronDown, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, RefreshCw, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, GitBranch, PlusCircle, BookMarked, Wrench, Moon, Sun, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard, KeyRound } from "lucide-react";
+import { Users, FileText, Table, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, BookMarked, Wrench, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard, KeyRound } from "lucide-react";
 
 import { useLocation } from "wouter";
 import { useState, useEffect, useRef, Fragment } from "react";
@@ -23,6 +23,89 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ROLE_LABELS, type UserRole, type ModuleName } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { MatIcon } from "@/components/mat-icon";
+
+// Ícones Material Symbols Rounded — nomes das seções conforme o design (.dc.html)
+const MS_SECTION: Record<string, string> = {
+  "Operacional": "settings_suggest",
+  "Vendas": "trending_up",
+  "Referências": "hub",
+  "Desenvolvimento": "code",
+  "Base de Clientes": "groups",
+  "Administração": "admin_panel_settings",
+  "Gestão Comercial": "work",
+  "Financeiro": "payments",
+};
+
+// Itens: os de Vendas vêm do design; demais seguem o mesmo vocabulário Material
+const MS_ITEM: Record<string, string> = {
+  // Vendas (exato do design)
+  "Pipeline": "view_kanban",
+  "Consulta Individual": "person_search",
+  "Lista Manual": "list_alt",
+  "Tags": "sell",
+  "Agenda": "calendar_month",
+  "Campanhas": "campaign",
+  "Gestão Pipeline": "leaderboard",
+  "Minha Carteira": "account_balance_wallet",
+  // Operacional
+  "Minhas Propostas": "description",
+  "Solicitar Boleto": "receipt_long",
+  "Nota Promissória": "edit_document",
+  "Configurações": "settings",
+  // Referências
+  "Convênios": "handshake",
+  "Bancos": "account_balance",
+  "Tabelas de Coeficientes": "table_chart",
+  "Roteiros Bancários": "map",
+  "Material de Apoio": "folder_open",
+  // Desenvolvimento
+  "Profiler DISC": "psychology",
+  "Feedbacks": "rate_review",
+  "Fundamentos": "menu_book",
+  "Roleplay IA": "forum",
+  "Abordagem IA": "auto_awesome",
+  "Perfis da Equipe": "groups",
+  "Criador de Criativos IA": "brush",
+  // Base de Clientes
+  "Dashboard": "monitoring",
+  "Importar Base": "database",
+  "Nomenclaturas": "sell",
+  "Filtros de Base": "filter_alt",
+  "Consulta Cliente": "person_search",
+  "Enriquecer Base": "auto_awesome",
+  "Importar Higienizados": "cleaning_services",
+  "Dados Complementares": "post_add",
+  "Observações por CPF": "sticky_note_2",
+  // Administração
+  "Assinaturas": "credit_card",
+  "Minha Assinatura": "credit_card",
+  "Admin Pedidos": "verified_user",
+  "Ambientes": "apartment",
+  "Identidade Visual": "palette",
+  "Config. Preços": "attach_money",
+  "Config. Dados": "database",
+  "Usuários": "person",
+  "Funcionários": "badge",
+  "Config. Prompts IA": "tune",
+  "Central de Atualizações": "notifications",
+  "Regras de Carteira": "shield",
+  "API Keys Externas": "key",
+  // Gestão Comercial
+  "Dashboard da Empresa": "monitoring",
+  "Equipes": "groups",
+  "Metas Mensais": "flag",
+  "Importar Produção": "upload",
+  "Histórico Importações": "history",
+  "Metas & Níveis": "military_tech",
+  "Regulamento": "gavel",
+  "Relatórios": "bar_chart",
+  // Financeiro
+  "Pagamentos": "receipt_long",
+  "Produção": "bar_chart",
+  "Proventos e Descontos": "account_balance_wallet",
+  "Tabelas": "table_chart",
+};
 
 interface MenuSection {
   title: string;
@@ -297,18 +380,19 @@ export function AppSidebar() {
     <>
       {sidebarBgStyle}
       <Sidebar className="border-r border-border">
-      <SidebarHeader className="border-b border-border">
-        <div 
-          className="w-full flex items-center justify-center px-3 py-4"
-          style={{ minHeight: `${Math.max(logoHeight + 16, 48)}px` }}
+      <SidebarHeader>
+        {/* Logo: 52px, alinhada à esquerda — padding 24/20/18 (design) */}
+        <div
+          className="w-full flex items-center justify-start"
+          style={{ padding: "24px 20px 18px" }}
           data-testid="sidebar-logo-container"
         >
           {!logoFailed && logoUrl ? (
-            <img 
-              src={logoUrl} 
-              alt={tenant?.name || "Logo"} 
+            <img
+              src={logoUrl}
+              alt={tenant?.name || "Logo"}
               className={cn("max-w-full object-contain", theme === "dark" && "brightness-0 invert")}
-              style={{ maxHeight: `${logoHeight}px`, display: 'block' }}
+              style={{ height: 52, display: 'block' }}
               onError={() => setLogoFailed(true)}
               data-testid="sidebar-logo-image"
             />
@@ -317,7 +401,7 @@ export function AppSidebar() {
               src={theme === "dark" ? "/capital-go-white.png" : "/capital-go-gradient.png"}
               alt={tenant?.name || "Capital Go"}
               className="max-w-full object-contain"
-              style={{ maxHeight: `${Math.max(logoHeight, 30)}px`, display: "block" }}
+              style={{ height: 52, display: "block" }}
               data-testid="sidebar-logo-fallback"
             />
           )}
@@ -327,8 +411,8 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              <div className="px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
-                Geral
+              <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground group-data-[collapsible=icon]:hidden" style={{ padding: "6px 12px 6px" }}>
+                GERAL
               </div>
               <SidebarMenuItem>
                 <SidebarMenuButton
@@ -336,8 +420,8 @@ export function AppSidebar() {
                   isActive={location === homeUrl || location === "/dashboard-vendedor" || location === "/dashboard"}
                   data-testid="sidebar-home"
                 >
-                  <button onClick={() => setLocation(homeUrl)} className="w-full">
-                    <Home className="h-4 w-4" />
+                  <button onClick={() => setLocation(homeUrl)} className="w-full text-[14.5px]">
+                    <MatIcon name="home" />
                     <span>Home</span>
                   </button>
                 </SidebarMenuButton>
@@ -349,8 +433,8 @@ export function AppSidebar() {
                     isActive={location === "/simuladores"}
                     data-testid="sidebar-simuladores"
                   >
-                    <button onClick={() => setLocation("/simuladores")} className="w-full">
-                      <Calculator className="h-4 w-4" />
+                    <button onClick={() => setLocation("/simuladores")} className="w-full text-[14.5px]">
+                      <MatIcon name="calculate" />
                       <span>Simuladores</span>
                     </button>
                   </SidebarMenuButton>
@@ -369,7 +453,7 @@ export function AppSidebar() {
                 return (
                   <Fragment key={section.title}>
                   {mostrarGrupo && (
-                    <div className="px-2 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 group-data-[collapsible=icon]:hidden">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground group-data-[collapsible=icon]:hidden" style={{ padding: "14px 12px 6px" }}>
                       {grupoSuper}
                     </div>
                   )}
@@ -378,38 +462,37 @@ export function AppSidebar() {
                     onOpenChange={() => toggleSection(section.title)}
                   >
                     <SidebarMenuItem>
-                      <div className={cn(
-                        "transition-all duration-200 rounded-md",
-                        isOpen && "border-l-2 border-primary"
-                      )}>
+                      <div className="rounded-md">
                         <CollapsibleTrigger asChild>
                           <SidebarMenuButton
+                            isActive={hasActiveItem}
                             className={cn(
-                              "w-full justify-between transition-all duration-200 text-foreground",
-                              isOpen ? "font-semibold" : "font-normal"
+                              "w-full justify-between text-[14.5px]",
+                              hasActiveItem ? "font-semibold" : "font-medium"
                             )}
-                            style={isOpen ? { backgroundColor: 'rgba(108, 43, 217, 0.08)' } : undefined}
                             data-testid={`sidebar-section-${sectionKey}`}
                           >
                             <div className="flex items-center gap-2">
-                              <section.icon className="h-4 w-4" />
+                              <MatIcon name={MS_SECTION[section.title] ?? "folder"} className={hasActiveItem ? undefined : "text-muted-foreground"} />
                               <span>{section.title}</span>
                             </div>
                             <div className="flex items-center gap-1">
                               {section.title === "Desenvolvimento" && (feedbackUnread?.count || 0) > 0 && (
                                 <span className="h-2 w-2 rounded-full bg-destructive" data-testid="badge-desenvolvimento-unread" />
                               )}
-                              <ChevronDown 
+                              <MatIcon
+                                name="expand_more"
+                                size={18}
                                 className={cn(
-                                  "h-4 w-4 transition-transform duration-200",
-                                  isOpen ? "rotate-180 text-primary" : "text-foreground/40"
-                                )} 
+                                  "text-muted-foreground transition-transform duration-200",
+                                  isOpen && "rotate-180"
+                                )}
                               />
                             </div>
                           </SidebarMenuButton>
                         </CollapsibleTrigger>
                         <CollapsibleContent className="transition-all duration-200">
-                          <SidebarMenu className="ml-4 mt-1 border-l border-border pl-2">
+                          <SidebarMenu className="mt-0.5">
                             {section.items.map((item) => {
                               const isActive = location === item.url;
                               return (
@@ -420,10 +503,10 @@ export function AppSidebar() {
                                     data-testid={`sidebar-${item.url.replace(/\//g, '-').slice(1) || "home"}`}
                                   >
                                     <button onClick={() => setLocation(item.url)} className={cn(
-                                      "w-full",
-                                      isActive && "font-medium"
+                                      "w-full pl-7 text-sm",
+                                      isActive ? "font-semibold" : "font-normal"
                                     )}>
-                                      <item.icon className="h-4 w-4" />
+                                      <MatIcon name={MS_ITEM[item.title] ?? "chevron_right"} size={18} className={isActive ? undefined : "text-muted-foreground"} />
                                       <span className="flex-1">{item.title}</span>
                                       {item.url === "/desenvolvimento/feedbacks" && (feedbackUnread?.count || 0) > 0 && (
                                         <Badge variant="destructive" className="ml-auto h-5 min-w-5 px-1.5 text-[10px] font-bold" data-testid="badge-feedbacks-unread">
@@ -454,30 +537,32 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
             <div className="px-1 pb-1 group-data-[collapsible=icon]:hidden">
-              <div className="flex items-center gap-1 p-1 rounded-lg bg-sidebar-accent/60 border border-sidebar-border">
+              <div className="flex items-center gap-1 p-1 rounded-[10px] bg-muted/60 border border-sidebar-border">
                 <button
                   onClick={() => { if (theme === "dark") toggleTheme(); }}
                   className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium transition-colors",
-                    theme !== "dark" ? "bg-sidebar text-sidebar-foreground shadow-sm" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                    "flex-1 flex items-center justify-center gap-1.5 rounded-[7px] text-[13px] font-semibold transition-colors",
+                    theme !== "dark" ? "bg-sidebar text-sidebar-foreground shadow-sm" : "text-muted-foreground hover:text-sidebar-foreground"
                   )}
+                  style={{ padding: "7px 0" }}
                   data-testid="button-theme-light"
                 >
-                  <Sun className="h-3.5 w-3.5" /> Claro
+                  <MatIcon name="light_mode" size={16} /> Claro
                 </button>
                 <button
                   onClick={() => { if (theme !== "dark") toggleTheme(); }}
                   className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium transition-colors",
-                    theme === "dark" ? "bg-sidebar text-sidebar-foreground shadow-sm" : "text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                    "flex-1 flex items-center justify-center gap-1.5 rounded-[7px] text-[13px] font-semibold transition-colors",
+                    theme === "dark" ? "bg-sidebar text-sidebar-foreground shadow-sm" : "text-muted-foreground hover:text-sidebar-foreground"
                   )}
+                  style={{ padding: "7px 0" }}
                   data-testid="button-theme-dark"
                 >
-                  <Moon className="h-3.5 w-3.5" /> Escuro
+                  <MatIcon name="dark_mode" size={16} /> Escuro
                 </button>
               </div>
             </div>
@@ -502,14 +587,14 @@ export function AppSidebar() {
               isActive={location === "/profile"}
               data-testid="sidebar-profile"
             >
-              <button onClick={() => setLocation("/profile")} className="w-full">
-                <Avatar className="h-6 w-6">
-                  <AvatarFallback className="text-xs">
+              <button onClick={() => setLocation("/profile")} className="w-full !h-auto py-1.5">
+                <Avatar className="h-[34px] w-[34px]">
+                  <AvatarFallback className="text-xs font-semibold text-white" style={{ background: "var(--grad-go)" }}>
                     {getInitials(user.name)}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex flex-col items-start text-left">
-                  <span className="text-sm font-medium">{user.name}</span>
+                <div className="flex flex-col items-start text-left min-w-0">
+                  <span className="text-[13px] font-semibold truncate w-full">{user.name}</span>
                   <span className="text-xs text-muted-foreground">
                     {ROLE_LABELS[userRole]}
                   </span>
@@ -519,8 +604,8 @@ export function AppSidebar() {
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild data-testid="button-logout">
-              <button onClick={handleLogout} className="w-full text-destructive">
-                <LogOut className="h-4 w-4" />
+              <button onClick={handleLogout} className="w-full text-[14px] font-medium" style={{ color: "#E53935" }}>
+                <MatIcon name="logout" size={19} />
                 <span>Sair</span>
               </button>
             </SidebarMenuButton>

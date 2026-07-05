@@ -41,7 +41,7 @@ export function HeaderBreadcrumb() {
     <div className="hidden lg:flex items-center gap-1.5 text-sm min-w-0" data-testid="header-breadcrumb">
       <span className="text-muted-foreground shrink-0">{secao}</span>
       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-      <span className="font-semibold text-foreground truncate">{pagina}</span>
+      <span className="font-bold text-foreground truncate">{pagina}</span>
     </div>
   );
 }

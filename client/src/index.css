@@ -76,30 +76,31 @@
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .03);
   --elevate-2: rgba(255,255,255, .06);
-  --background: 240 10% 8%;
-  --foreground: 0 0% 95%;
-  --border: 240 6% 20%;
-  --card: 240 8% 12%;
-  --card-foreground: 0 0% 95%;
-  --card-border: 240 6% 20%;
-  --sidebar: 240 10% 10%;
-  --sidebar-foreground: 0 0% 90%;
-  --sidebar-muted-foreground: 0 0% 65%;
-  --sidebar-border: 240 6% 18%;
+  /* Paleta dark EXATA do design Capital Go: page #121016, sidebar/header #181521, card #1E1B29 */
+  --background: 260 16% 7%;
+  --foreground: 0 0% 100%;
+  --border: 253 15% 18%;
+  --card: 253 21% 13%;
+  --card-foreground: 0 0% 100%;
+  --card-border: 253 15% 18%;
+  --sidebar: 255 22% 11%;
+  --sidebar-foreground: 255 14% 85%;
+  --sidebar-muted-foreground: 253 12% 64%;
+  --sidebar-border: 253 15% 18%;
   --sidebar-primary: 262 70% 55%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 262 70% 20%;
-  --sidebar-accent-foreground: 262 70% 85%;
+  --sidebar-accent: 268 52% 22%;
+  --sidebar-accent-foreground: 268 85% 79%;
   --sidebar-ring: 262 70% 55%;
-  --popover: 240 8% 12%;
-  --popover-foreground: 0 0% 95%;
-  --popover-border: 240 6% 20%;
+  --popover: 253 21% 13%;
+  --popover-foreground: 0 0% 100%;
+  --popover-border: 253 15% 18%;
   --primary: 262 70% 55%;
   --primary-foreground: 0 0% 100%;
   --secondary: 240 6% 18%;
   --secondary-foreground: 0 0% 85%;
-  --muted: 240 6% 18%;
-  --muted-foreground: 0 0% 55%;
+  --muted: 253 15% 16%;
+  --muted-foreground: 253 12% 64%;
   --accent: 262 70% 20%;
   --accent-foreground: 262 70% 85%;
   --destructive: 0 62% 50%;
@@ -317,3 +318,11 @@
 .cg-h2{font:var(--fw-semibold) var(--fs-h2)/var(--lh-snug) var(--font-sans);color:var(--cg-text-strong);}
 .cg-h3{font:var(--fw-semibold) var(--fs-h3)/var(--lh-snug) var(--font-sans);color:var(--cg-text-strong);}
 .cg-eyebrow{font:var(--fw-semibold) var(--fs-caption)/1 var(--font-sans);letter-spacing:var(--ls-wide);text-transform:uppercase;color:var(--cg-purple);}
+
+/* ── Shell Capital Go (design .dc.html) ─────────────────────────────────── */
+/* Ícones Material Symbols Rounded — mesmo set do design */
+.cg-icon{font-family:'Material Symbols Rounded';font-weight:400;font-style:normal;line-height:1;letter-spacing:normal;text-transform:none;white-space:nowrap;direction:ltr;-webkit-font-smoothing:antialiased;}
+/* Scrollbar fina roxa do design */
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-thumb{background:rgba(108,43,217,0.25);border-radius:8px;}
+::-webkit-scrollbar-track{background:transparent;}

@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { HeaderCpfSearch } from "@/components/header-cpf-search";
 import { HeaderBreadcrumb } from "@/components/header-breadcrumb";
+import { MatIcon } from "@/components/mat-icon";
 import { TenantThemeProvider } from "@/components/tenant-theme-provider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -91,7 +92,7 @@ import PrivacidadePage from "@/pages/privacidade";
 import AdminAssinaturasPage from "@/pages/admin-assinaturas";
 import MinhaAssinaturaPage from "@/pages/minha-assinatura";
 import HubBetaPage from "@/pages/hub-beta";
-import { Loader2, BarChart3, Smartphone, Settings, GraduationCap, MessageCircle, Table, PlusCircle } from "lucide-react";
+import { Loader2, BarChart3, Settings, MessageCircle } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
 import { NotificationBell } from "@/components/notification-bell";
 
@@ -320,7 +321,7 @@ function Router() {
   }
 
   const sidebarStyle = {
-    "--sidebar-width": "16rem",
+    "--sidebar-width": "260px",
     "--sidebar-width-icon": "3rem",
   };
 
@@ -345,28 +346,26 @@ function Router() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between gap-2 p-2 border-b">
-            <div className="flex items-center gap-3 min-w-0">
+          <header className="flex items-center justify-between gap-5 h-16 px-6 border-b bg-sidebar shrink-0">
+            <div className="flex items-center gap-[18px] min-w-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               <HeaderBreadcrumb />
             </div>
             <HeaderCpfSearch />
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               {[
-                { key: "tabelas", label: "Tabelas", Icon: Table, onClick: () => navigate("/financeiro/tabelas") },
-                { key: "criativos", label: "Criativos", Icon: Smartphone, onClick: () => handleAtalho("criativos") },
-                { key: "tutoriais", label: "Tutoriais", Icon: GraduationCap, onClick: () => handleAtalho("tutoriais") },
+                { key: "tabelas", label: "Tabelas", icon: "table_chart", onClick: () => navigate("/financeiro/tabelas") },
+                { key: "criativos", label: "Criativos", icon: "palette", onClick: () => handleAtalho("criativos") },
+                { key: "tutoriais", label: "Tutoriais", icon: "school", onClick: () => handleAtalho("tutoriais") },
               ].map((s) => (
                 <button
                   key={s.key}
                   onClick={s.onClick}
-                  className="hidden lg:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
-                  style={{ color: "#6B7280", fontFamily: "Inter, sans-serif" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = "#6C2BD9"; e.currentTarget.style.backgroundColor = "rgba(108,43,217,0.07)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = "#6B7280"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                  className="hidden lg:inline-flex items-center gap-1.5 px-3 py-2 text-[13.5px] font-semibold rounded-lg text-foreground/80 hover:bg-accent transition-colors"
+                  style={{ fontFamily: "Inter, sans-serif" }}
                   data-testid={`header-shortcut-${s.key}`}
                 >
-                  <s.Icon className="h-3.5 w-3.5" />
+                  <MatIcon name={s.icon} size={18} />
                   {s.label}
                 </button>
               ))}
@@ -391,7 +390,7 @@ function Router() {
                 onMouseLeave={(e) => { e.currentTarget.style.background = "#6C2BD9"; }}
                 data-testid="header-nova-proposta"
               >
-                <PlusCircle className="h-4 w-4" />
+                <MatIcon name="add" size={17} />
                 <span className="hidden sm:inline">Nova proposta</span>
               </button>
               <NotificationBell />
