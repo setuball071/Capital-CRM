@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { HeaderCpfSearch } from "@/components/header-cpf-search";
+import { HeaderBreadcrumb } from "@/components/header-breadcrumb";
 import { TenantThemeProvider } from "@/components/tenant-theme-provider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -345,8 +346,12 @@ function Router() {
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between gap-2 p-2 border-b">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-3 min-w-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <HeaderBreadcrumb />
+            </div>
+            <HeaderCpfSearch />
+            <div className="flex items-center gap-1">
               {[
                 { key: "tabelas", label: "Tabelas", Icon: Table, onClick: () => navigate("/financeiro/tabelas") },
                 { key: "criativos", label: "Criativos", Icon: Smartphone, onClick: () => handleAtalho("criativos") },
@@ -355,7 +360,7 @@ function Router() {
                 <button
                   key={s.key}
                   onClick={s.onClick}
-                  className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
+                  className="hidden lg:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
                   style={{ color: "#6B7280", fontFamily: "Inter, sans-serif" }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "#6C2BD9"; e.currentTarget.style.backgroundColor = "rgba(108,43,217,0.07)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = "#6B7280"; e.currentTarget.style.backgroundColor = "transparent"; }}
@@ -365,9 +370,6 @@ function Router() {
                   {s.label}
                 </button>
               ))}
-            </div>
-            <HeaderCpfSearch />
-            <div className="flex items-center gap-1">
               <a
                 href={`https://capitalgo-whats.replit.app?crm_user_id=${user?.id || ''}`}
                 target="_blank"
