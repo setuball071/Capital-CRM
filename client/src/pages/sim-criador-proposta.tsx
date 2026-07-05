@@ -389,11 +389,11 @@ export default function SimCriadorProposta() {
 
   return (
     <div className="flex flex-col h-full overflow-auto bg-background">
-      <div className="w-full max-w-3xl mx-auto px-4 py-6 pb-16 space-y-5">
+      <div className="w-full max-w-[1100px] px-8 py-6 pb-16 space-y-[18px]">
 
         {/* ── Dados do cliente ── */}
         <section>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#6C2BD9] mb-3.5">
             Dados do cliente
           </p>
           <div className="rounded-xl border border-border bg-card p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -438,7 +438,7 @@ export default function SimCriadorProposta() {
 
         {/* ── Contratos atuais ── */}
         <section>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#6C2BD9] mb-3.5">
             Contratos atuais do cliente
           </p>
           <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -501,7 +501,7 @@ export default function SimCriadorProposta() {
 
         {/* ── Nova proposta ── */}
         <section>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#6C2BD9] mb-3.5">
             Nova proposta
           </p>
           <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -567,7 +567,7 @@ export default function SimCriadorProposta() {
 
         {/* ── Corretor ── */}
         <section>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#6C2BD9] mb-3.5">
             Corretor
           </p>
           <div className="rounded-xl border border-border bg-card p-4 space-y-3">
@@ -612,13 +612,13 @@ export default function SimCriadorProposta() {
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={gerar}
-            className="h-10 px-6 rounded-lg bg-primary text-primary-foreground font-semibold text-[13px] hover:bg-primary/90 transition-colors shadow-sm"
+            className="h-11 px-6 rounded-lg bg-primary text-primary-foreground font-semibold text-[13.5px] hover:bg-primary/90 transition-colors shadow-sm"
           >
             Gerar proposta
           </button>
           <button
             onClick={limpar}
-            className="h-10 px-6 rounded-lg border border-border bg-background text-foreground font-medium text-[13px] hover:bg-muted/50 transition-colors"
+            className="h-11 px-6 rounded-lg border border-border bg-background text-foreground font-medium text-[13.5px] hover:bg-muted/50 transition-colors"
           >
             Limpar tudo
           </button>
