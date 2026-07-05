@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Target, Clock, TrendingUp, TrendingDown, CalendarDays, Trophy, Users, Info, Loader2 } from "lucide-react";
+import { Target, Clock, CheckCircle2, CalendarDays, Trophy, Info, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 interface VendedorRanking {
@@ -34,19 +34,30 @@ interface GestorDashboardData {
   mesAno: string;
 }
 
-// ── Tokens de marca (Capital Go) ──────────────────────────────────────────────
-const CG = {
-  purple: "#6C2BD9", blue: "#1E88E5", pink: "#E91E63", green: "#00C853", greenText: "#0A7A3B",
-  warning: "#F9A825", black: "#121212", gray800: "#333333", gray500: "#6B7280", gray400: "#9CA3AF",
-  gray200: "#E5E7EB", gray100: "#F3F4F6", gray50: "#F9FAFB", border: "#E5E7EB", muted: "#6B7280",
-  purpleSoft: "#F2EBFC",
+// ── Paleta EXATA do arquivo de design (PALETTE.light do Dashboard.dc.html) ─────
+const t = {
+  page: "#F3F4F6",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderStrong: "#D1D5DB",
+  textStrong: "#121212",
+  textBody: "#333333",
+  textMuted: "#6B7280",
+  subtleBg: "#F9FAFB",
+  trackBg: "#E5E7EB",
 };
+const PURPLE = "#6C2BD9";
+const BLUE = "#1E88E5";
+const GRAY = "#9CA3AF";
+const GREEN = "#00C853";
+const AMBER = "#F9A825";
+const DANGER = "#E53935";
 const GRAD_CTA = "linear-gradient(90deg,#6C2BD9 0%,#1E88E5 100%)";
 const GRAD_GO = "linear-gradient(90deg,#A855F7 0%,#E91E63 100%)";
-const SHADOW = "0 1px 2px rgba(16,24,40,.06)";
 const FONT = "'Inter', system-ui, sans-serif";
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const num = { fontVariantNumeric: "tabular-nums" as const };
+const GRID_COLS = "32px 2fr 1.4fr 1fr 1fr 60px";
 
 function fmtCent(v: number): string {
   return "R$ " + (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -63,141 +74,151 @@ function periodoLabel(mesAno: string): string {
   return `${MESES[idx] || ""} ${yy || ""}`.trim();
 }
 
+// ── Meta da equipe ────────────────────────────────────────────────────────────
 function MetaCard({ e, periodo }: { e: GestorDashboardData["equipe"]; periodo: string }) {
   const pctMeta = e.meta > 0 ? Math.round((e.efetivado / e.meta) * 100) : 0;
   const faltam = Math.max(0, e.meta - e.efetivado);
   const somaProd = e.novo + e.portabilidade + e.cartao;
   const share = (v: number) => (somaProd > 0 ? Math.round((v / somaProd) * 100) : 0);
   const produtos = [
-    { nome: "Contrato novo", valor: e.novo, cor: CG.purple },
-    { nome: "Portabilidade", valor: e.portabilidade, cor: CG.blue },
-    { nome: "Cartão", valor: e.cartao, cor: CG.pink },
+    { nome: "Contrato novo", valor: e.novo, cor: PURPLE },
+    { nome: "Portabilidade", valor: e.portabilidade, cor: BLUE },
+    { nome: "Cartão", valor: e.cartao, cor: GRAY },
   ];
   const up = e.deltaPercentual >= 0;
 
-  return (
-    <div style={{ background: "#fff", border: `1px solid ${CG.border}`, borderRadius: 16, boxShadow: SHADOW, overflow: "hidden" }}>
-      <div style={{ padding: "26px 30px", display: "flex", flexDirection: "column", gap: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Target size={20} color={CG.purple} />
-            <span style={{ fontSize: 17, fontWeight: 700, color: CG.black }}>Meta da equipe</span>
-          </div>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 32, padding: "0 14px", borderRadius: 999, background: CG.gray100, color: CG.gray800, fontSize: 13, fontWeight: 600 }}>
-            <CalendarDays size={16} color={CG.muted} />{periodo}
-          </span>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 32, alignItems: "center" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", color: CG.muted }}>EFETIVADO NO MÊS</span>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 42, fontWeight: 700, color: CG.black, letterSpacing: "-0.02em", ...num }}>{fmtCent(e.efetivado)}</span>
-              {e.deltaPercentual !== 0 && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 14, fontWeight: 700, color: up ? CG.green : CG.pink }}>
-                  {up ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
-                  {Math.abs(e.deltaPercentual).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
-                </span>
-              )}
-            </div>
-            <span style={{ fontSize: 14, color: CG.muted }}>Meta do mês: <b style={{ color: CG.gray800, ...num }}>{fmtCent(e.meta)}</b></span>
-          </div>
-          <div style={{ width: 1, height: 64, background: CG.border }} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", color: CG.warning }}>
-              <Clock size={16} />EM ANDAMENTO
-            </span>
-            <span style={{ fontSize: 38, fontWeight: 700, color: CG.warning, letterSpacing: "-0.02em", ...num }}>{fmtCent(e.emAndamento)}</span>
-            <span style={{ fontSize: 14, color: CG.muted }}>{e.propostasEmAberto} propostas em aberto, aguardando efetivação</span>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: CG.gray800 }}><b style={{ color: CG.purple, fontSize: 16 }}>{pctMeta}%</b> da meta atingida</span>
-            <span style={{ fontSize: 14, color: CG.muted }}>faltam <b style={{ color: CG.gray800, ...num }}>{fmtCent(faltam)}</b></span>
-          </div>
-          <div style={{ position: "relative", height: 16, borderRadius: 999, background: CG.gray200, overflow: "hidden" }}>
-            <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: `${Math.min(pctMeta, 100)}%`, borderRadius: 999, background: GRAD_CTA }} />
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-          {produtos.map((p) => (
-            <div key={p.nome} style={{ border: `1px solid ${CG.border}`, borderRadius: 12, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: CG.gray800 }}>{p.nome}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: p.cor }}>{share(p.valor)}%</span>
-              </div>
-              <span style={{ fontSize: 21, fontWeight: 700, color: CG.black, ...num }}>{fmtInt(p.valor)}</span>
-              <div style={{ height: 6, borderRadius: 999, background: CG.gray100 }}>
-                <div style={{ width: `${share(p.valor)}%`, height: "100%", borderRadius: 999, background: p.cor }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function medalStyle(pos: number): { bg: string; color: string } | null {
-  if (pos === 1) return { bg: "#F4C64A", color: "#6B4E00" };
-  if (pos === 2) return { bg: "#CBD1D8", color: "#3B4252" };
-  if (pos === 3) return { bg: "#E6B486", color: "#6B3B14" };
-  return null;
-}
-
-function RankingRow({ v }: { v: VendedorRanking }) {
-  const top3 = v.posicao <= 3;
-  const medal = medalStyle(v.posicao);
-  const pct = v.percentual || 0;
-  const rowBg = v.posicao === 1 ? "linear-gradient(100deg, #FEF8E7 0%, #fff 40%)" : "#fff";
-  const barFill = top3 ? CG.green : CG.purple;
+  const kpiLabel = { fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", color: t.textMuted, marginBottom: 8, display: "flex", alignItems: "center", gap: 5 } as const;
+  const kpiValue = { fontSize: 30, fontWeight: 700, color: t.textStrong } as const;
+  const kpiHelper = { fontSize: 13, color: t.textMuted, marginTop: 4 } as const;
+  const progressLabel = { fontSize: 13, fontWeight: 600, color: t.textBody } as const;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 30px", borderBottom: `1px solid ${CG.border}`, background: rowBg }}>
-      <span style={{ width: 34, display: "flex", justifyContent: "center" }}>
-        {medal ? (
-          <span style={{ width: 30, height: 30, borderRadius: "50%", background: medal.bg, color: medal.color, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>{v.posicao}</span>
-        ) : (
-          <span style={{ fontWeight: 700, fontSize: 15, color: CG.gray400 }}>{v.posicao}</span>
-        )}
-      </span>
-      <div style={{ width: 44, height: 44, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: GRAD_GO, color: "#fff", fontWeight: 600, fontSize: 15, flexShrink: 0 }}>
-        {getInitials(v.nome)}
-      </div>
-      <div style={{ flex: 1, minWidth: 160 }}>
-        <div style={{ fontSize: 15.5, fontWeight: top3 ? 700 : 600, color: CG.black }}>{v.nome}</div>
-        <div style={{ fontSize: 12, color: CG.muted }}>Novo {fmtInt(v.novo)} · Port. {fmtInt(v.portabilidade)} · Cartão {fmtInt(v.cartao)}</div>
-      </div>
-      <div style={{ width: 210, display: "flex", flexDirection: "column", gap: 5 }}>
-        <div style={{ height: 8, borderRadius: 999, background: CG.gray100 }}>
-          <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", borderRadius: 999, background: barFill }} />
+    <section style={{ background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: 16, padding: "26px 28px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Target size={22} color={PURPLE} />
+          <span style={{ fontSize: 17, fontWeight: 700, color: t.textStrong }}>Meta da equipe</span>
         </div>
-        <span style={{ fontSize: 12, color: CG.muted }}>
-          <b style={{ color: top3 ? CG.greenText : CG.gray800 }}>{pct}%</b> de {fmtInt(v.meta)}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 999, border: `1px solid ${t.borderStrong}`, fontSize: 13.5, fontWeight: 600, color: t.textBody }}>
+          <CalendarDays size={16} />{periodo}
         </span>
       </div>
-      <span style={{ width: 128, textAlign: "right", fontSize: 14, color: CG.warning, fontWeight: 600, ...num }}>{fmtInt(v.emAndamento)}</span>
-      <span style={{ width: 140, textAlign: "right", fontWeight: 700, fontSize: 18, color: top3 ? CG.black : CG.gray800, ...num }}>{fmtInt(v.efetivado)}</span>
-      <span style={{ width: 46, textAlign: "right", fontSize: 14, fontWeight: 600, color: CG.gray800 }}>{v.contratos}</span>
+
+      <div style={{ display: "flex", gap: 48, flexWrap: "wrap", marginBottom: 20 }}>
+        <div>
+          <div style={kpiLabel}><CheckCircle2 size={14} /> EFETIVADO NO MÊS</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <div style={{ ...kpiValue, ...num }}>{fmtCent(e.efetivado)}</div>
+            {e.deltaPercentual !== 0 && (
+              <div style={{ fontSize: 14, fontWeight: 700, color: up ? GREEN : DANGER }}>
+                {up ? "↗" : "↘"} {Math.abs(e.deltaPercentual).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+              </div>
+            )}
+          </div>
+          <div style={kpiHelper}>Meta do mês: {fmtCent(e.meta)}</div>
+        </div>
+        <div>
+          <div style={kpiLabel}><Clock size={14} /> EM ANDAMENTO</div>
+          <div style={{ ...kpiValue, color: AMBER, ...num }}>{fmtCent(e.emAndamento)}</div>
+          <div style={kpiHelper}>{e.propostasEmAberto} propostas em aberto, aguardando efetivação</div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={progressLabel}>{pctMeta}% da meta atingida</span>
+          <span style={progressLabel}>faltam {fmtCent(faltam)}</span>
+        </div>
+        <div style={{ height: 8, borderRadius: 999, background: t.trackBg, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${Math.min(pctMeta, 100)}%`, borderRadius: 999, background: GRAD_CTA }} />
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+        {produtos.map((p) => (
+          <div key={p.nome} style={{ background: t.subtleBg, border: `1px solid ${t.border}`, borderRadius: 12, padding: "16px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: t.textBody }}>{p.nome}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: p.cor }}>{share(p.valor)}%</span>
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: t.textStrong, marginBottom: 10, ...num }}>{fmtInt(p.valor)}</div>
+            <div style={{ height: 6, borderRadius: 999, background: t.trackBg, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${share(p.valor)}%`, borderRadius: 999, background: p.cor }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Ranking dos corretores ────────────────────────────────────────────────────
+function RankingRow({ v }: { v: VendedorRanking }) {
+  const pct = v.percentual || 0;
+  const isFirst = v.posicao === 1;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: GRID_COLS, alignItems: "center", gap: 16, padding: "14px 4px", borderTop: `1px solid ${t.border}` }}>
+      <div style={{ width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, background: isFirst ? "#FEF6E0" : t.subtleBg, color: isFirst ? "#9a6a00" : t.textMuted }}>{v.posicao}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+        <div style={{ width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: GRAD_GO, color: "#fff", fontWeight: 600, fontSize: 13, flexShrink: 0 }}>{getInitials(v.nome)}</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 600, color: t.textStrong, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.nome}</div>
+          <div style={{ fontSize: 12, color: t.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Novo {fmtInt(v.novo)} · Port. {fmtInt(v.portabilidade)} · Cartão {fmtInt(v.cartao)}</div>
+        </div>
+      </div>
+      <div>
+        <div style={{ height: 5, borderRadius: 999, background: t.trackBg, overflow: "hidden", marginBottom: 4 }}>
+          <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, borderRadius: 999, background: pct > 0 ? GREEN : t.trackBg }} />
+        </div>
+        <div style={{ fontSize: 12, color: t.textMuted }}>{pct}% de {fmtInt(v.meta)}</div>
+      </div>
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: AMBER, textAlign: "right", ...num }}>{fmtInt(v.emAndamento)}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: t.textStrong, textAlign: "right", ...num }}>{fmtInt(v.efetivado)}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: t.textBody, textAlign: "right" }}>{v.contratos}</div>
     </div>
   );
 }
 
-function ColHead() {
-  const base = { fontSize: 11.5, fontWeight: 700 as const, letterSpacing: "0.05em", color: CG.muted };
+function RankingCard({ data }: { data: GestorDashboardData }) {
+  const legenda = data.statusEmAndamento?.length
+    ? `Em aberto conta propostas em ${data.statusEmAndamento.join(", ")}, ainda não efetivadas.`
+    : "Em aberto conta propostas em Aguardando envio CIP, Aguardando retorno CIP, Em Andamento, ainda não efetivadas.";
+  const headBase = { fontSize: 11.5, fontWeight: 700 as const, letterSpacing: "0.04em", color: t.textMuted };
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 30px", borderBottom: `1px solid ${CG.border}` }}>
-      <span style={{ width: 34, textAlign: "center", ...base }}>#</span>
-      <span style={{ width: 44 }} />
-      <span style={{ flex: 1, minWidth: 160, ...base }}>CORRETOR</span>
-      <span style={{ width: 210, ...base }}>% DA META</span>
-      <span style={{ width: 128, textAlign: "right", ...base }}>EM ABERTO</span>
-      <span style={{ width: 140, textAlign: "right", ...base }}>EFETIVADO</span>
-      <span style={{ width: 46, textAlign: "right", ...base }}>CTTS</span>
-    </div>
+    <section style={{ background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: 16, padding: "26px 28px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Trophy size={22} color={PURPLE} />
+          <span style={{ fontSize: 17, fontWeight: 700, color: t.textStrong }}>Ranking dos corretores</span>
+        </div>
+        <span style={{ display: "inline-flex", alignItems: "center", padding: "5px 12px", borderRadius: 999, background: "#F2EBFC", color: PURPLE, fontSize: 12.5, fontWeight: 600 }}>{data.ranking.length} corretores</span>
+      </div>
+
+      <div style={{ fontSize: 12.5, color: t.textMuted, background: t.subtleBg, borderRadius: 8, padding: "10px 14px", margin: "10px 0 8px", display: "flex", alignItems: "flex-start", gap: 6 }}>
+        <Info size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>{legenda}</span>
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth: 760 }}>
+          <div style={{ display: "grid", gridTemplateColumns: GRID_COLS, gap: 16, padding: "10px 4px 8px" }}>
+            <div style={headBase}>#</div>
+            <div style={headBase}>CORRETOR</div>
+            <div style={headBase}>% DA META</div>
+            <div style={{ ...headBase, textAlign: "right" }}>EM ABERTO</div>
+            <div style={{ ...headBase, textAlign: "right" }}>EFETIVADO</div>
+            <div style={{ ...headBase, textAlign: "right" }}>CTTS</div>
+          </div>
+          {data.ranking.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", color: t.textMuted, fontSize: 14, borderTop: `1px solid ${t.border}` }}>Nenhum contrato efetivado neste período.</div>
+          ) : (
+            data.ranking.map((v) => <RankingRow key={v.userId} v={v} />)
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -209,57 +230,25 @@ function GestorDashboard() {
   });
 
   if (isLoading) {
-    return <div style={{ display: "flex", justifyContent: "center", padding: 64 }}><Loader2 className="h-8 w-8 animate-spin" color={CG.purple} /></div>;
+    return <div style={{ display: "flex", justifyContent: "center", padding: 64 }}><Loader2 className="h-8 w-8 animate-spin" color={PURPLE} /></div>;
   }
   if (error) {
     return (
       <div style={{ textAlign: "center", padding: 64, fontFamily: FONT }}>
-        <div style={{ color: CG.pink, fontWeight: 600 }}>Erro ao carregar dashboard</div>
-        <div style={{ fontSize: 14, color: CG.muted, marginTop: 4 }}>{error instanceof Error ? error.message : "Erro desconhecido"}</div>
+        <div style={{ color: DANGER, fontWeight: 600 }}>Erro ao carregar dashboard</div>
+        <div style={{ fontSize: 14, color: t.textMuted, marginTop: 4 }}>{error instanceof Error ? error.message : "Erro desconhecido"}</div>
       </div>
     );
   }
   if (!data) return null;
 
   const periodo = periodoLabel(data.mesAno);
-  const legenda = data.statusEmAndamento?.length
-    ? `conta propostas em ${data.statusEmAndamento.join(", ")}, ainda não efetivadas.`
-    : "conta propostas em andamento, ainda não efetivadas.";
 
   return (
-    <div style={{ padding: 24, background: CG.gray100, minHeight: "100%" }}>
+    <div style={{ padding: "28px 32px 60px", background: t.page, minHeight: "100%", display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT, color: t.textStrong }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');`}</style>
-      <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 24, fontFamily: FONT, color: CG.black }}>
-        <MetaCard e={data.equipe} periodo={periodo} />
-
-        <div style={{ background: "#fff", border: `1px solid ${CG.border}`, borderRadius: 16, boxShadow: SHADOW, overflow: "hidden" }}>
-          <div style={{ padding: "22px 30px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${CG.border}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Trophy size={24} color={CG.purple} />
-              <span style={{ fontSize: 19, fontWeight: 700, color: CG.black }}>Ranking dos corretores</span>
-            </div>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, padding: "0 12px", borderRadius: 999, background: CG.purpleSoft, color: CG.purple, fontSize: 13, fontWeight: 600 }}>
-              <Users size={16} />{data.ranking.length} corretores
-            </span>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: CG.muted, padding: "12px 30px", background: CG.gray50, borderBottom: `1px solid ${CG.border}` }}>
-            <Info size={16} />
-            <span><b style={{ color: CG.gray800 }}>Em aberto</b> {legenda}</span>
-          </div>
-
-          <div style={{ overflowX: "auto" }}>
-            <div style={{ minWidth: 900 }}>
-              <ColHead />
-              {data.ranking.length === 0 ? (
-                <div style={{ padding: 40, textAlign: "center", color: CG.muted, fontSize: 14 }}>Nenhum contrato efetivado neste período.</div>
-              ) : (
-                data.ranking.map((v) => <RankingRow key={v.userId} v={v} />)
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      <MetaCard e={data.equipe} periodo={periodo} />
+      <RankingCard data={data} />
     </div>
   );
 }
