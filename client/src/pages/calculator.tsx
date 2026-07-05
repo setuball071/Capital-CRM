@@ -1107,7 +1107,7 @@ export default function CalculatorPage() {
                     <>
                       <div className="flex items-center gap-2 mb-4">
                         <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent to-border" />
-                        <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground px-2 flex items-center gap-1.5">
+                        <h2 className="text-xs font-bold uppercase tracking-[0.05em] text-primary px-2 flex items-center gap-1.5">
                           <Sparkles className="h-3 w-3 text-primary" />
                           Oportunidade pro Cliente
                         </h2>
@@ -1115,7 +1115,7 @@ export default function CalculatorPage() {
                       </div>
 
                       {/* DESTAQUE PRINCIPAL: muda conforme o modo */}
-                      <Card className="mb-4 overflow-hidden border-0 shadow-xl" style={{ background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)" }}>
+                      <Card className="mb-4 overflow-hidden border-0 shadow-xl rounded-[14px]" style={{ background: "linear-gradient(135deg, #6C2BD9 0%, #1E88E5 100%)" }}>
                         <CardContent className="p-6 text-center text-white">
                           {isModoReducao ? (
                             <>
