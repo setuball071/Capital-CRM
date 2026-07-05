@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react";
 // Rota → [Seção, Página] no padrão do design Capital Go ("Financeiro › Tabelas").
 const MAP: Record<string, [string, string]> = {
   "/": ["Geral", "Home"],
-  "/dashboard": ["Gestão", "Dashboard da Empresa"],
+  "/dashboard": ["Vendas", "Visão geral"],
   "/dashboard-vendedor": ["Geral", "Meu Painel"],
   "/simuladores": ["Geral", "Simuladores"],
   "/contratos": ["Operacional", "Minhas Propostas"],

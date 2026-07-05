@@ -81,7 +81,7 @@ function MetaCard({ e, periodo }: { e: GestorDashboardData["equipe"]; periodo: s
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Target size={20} color={CG.purple} />
-            <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: CG.purple }}>META DA EQUIPE</span>
+            <span style={{ fontSize: 17, fontWeight: 700, color: CG.black }}>Meta da equipe</span>
           </div>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 32, padding: "0 14px", borderRadius: 999, background: CG.gray100, color: CG.gray800, fontSize: 13, fontWeight: 600 }}>
             <CalendarDays size={16} color={CG.muted} />{periodo}
@@ -227,9 +227,9 @@ function GestorDashboard() {
     : "conta propostas em andamento, ainda não efetivadas.";
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", padding: 24, background: "#E9EAEE", minHeight: "100%" }}>
+    <div style={{ padding: 24, background: CG.gray100, minHeight: "100%" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');`}</style>
-      <div style={{ width: "100%", maxWidth: 1120, background: CG.gray100, borderRadius: 18, padding: 28, display: "flex", flexDirection: "column", gap: 24, boxShadow: SHADOW, fontFamily: FONT, color: CG.black }}>
+      <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 24, fontFamily: FONT, color: CG.black }}>
         <MetaCard e={data.equipe} periodo={periodo} />
 
         <div style={{ background: "#fff", border: `1px solid ${CG.border}`, borderRadius: 16, boxShadow: SHADOW, overflow: "hidden" }}>
