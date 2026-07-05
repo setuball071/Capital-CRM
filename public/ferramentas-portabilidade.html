@@ -1714,41 +1714,53 @@ body { background: #F8F8FC !important; color: #111827 !important; }
 
   <!-- MODAL REGRAS DOS BANCOS -->
   <div id="modalRegras" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;">
-    <div style="background:#fff;border-radius:16px;padding:28px;width:min(95vw,920px);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <div style="background:#fff;border-radius:16px;padding:28px;width:min(98vw,1080px);max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h3 style="margin:0;color:#6C2BD9;">⚙️ Regras dos Bancos — Portabilidade com Refim</h3>
         <button onclick="fecharModalRegras()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6B7280;">✕</button>
       </div>
+      <!-- Legenda -->
+      <div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#4C1D95;line-height:1.7;">
+        <b>Legenda das colunas:</b><br>
+        <b>Entrada Mín %</b> — porcentagem mínima do saldo devedor como entrada para o refim &nbsp;·&nbsp;
+        <b>Taxa Refim %</b> — taxa a.m. do refinanciamento &nbsp;·&nbsp;
+        <b>Saldo Mín</b> — saldo devedor mínimo aceito &nbsp;·&nbsp;
+        <b>Troco Mín</b> — troco líquido mínimo exigido pelo banco<br>
+        <b>Pagas p/ Portar</b> — nº mínimo de parcelas já pagas no contrato de origem para que este banco aceite a portabilidade (0 = aceita qualquer contrato) &nbsp;·&nbsp;
+        <b>Pagas p/ Remunerar</b> — nº mínimo de parcelas pagas para que o banco remunere o corretor (0 = remunera sempre) &nbsp;·&nbsp;
+        <b>Une Neg.</b> — banco aceita unir saldo de vários contratos para cobrir margem negativa
+      </div>
       <div style="overflow-x:auto;">
-      <table style="width:100%;min-width:820px;">
+      <table style="width:100%;min-width:900px;border-collapse:collapse;">
         <thead>
-          <tr>
-            <th style="text-align:left;padding:8px;">Banco</th>
-            <th style="text-align:center;padding:8px;">Entrada Mín (%)</th>
-            <th style="text-align:center;padding:8px;">Taxa Refim (%)</th>
-            <th style="text-align:center;padding:8px;">Saldo Mín (R$)</th>
-            <th style="text-align:center;padding:8px;">Troco Mín (R$)</th>
-            <th style="text-align:center;padding:8px;" title="Pagas mínimas para aceitar a portabilidade">Porta c/ (pagas)</th>
-            <th style="text-align:center;padding:8px;" title="Pagas mínimas para remunerar o corretor">Rem. c/ (pagas)</th>
-            <th style="text-align:center;padding:8px;" title="Aceita unir saldos de contratos para cobrir margem negativa">Une neg.?</th>
-            <th style="width:70px;"></th>
+          <tr style="background:#F9FAFB;">
+            <th style="text-align:left;padding:8px 10px;font-size:12px;border-bottom:2px solid #E5E7EB;">Banco</th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;">Entrada<br><span style="font-weight:400;color:#6B7280;">Mín (%)</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;">Taxa<br><span style="font-weight:400;color:#6B7280;">Refim (%)</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;">Saldo<br><span style="font-weight:400;color:#6B7280;">Mín (R$)</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;">Troco<br><span style="font-weight:400;color:#6B7280;">Mín (R$)</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#EDE9FE;" title="Nº mínimo de parcelas PAGAS para portar (0 = aceita qualquer)">Pagas p/<br><span style="font-weight:400;color:#6C2BD9;">Portar</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#EDE9FE;" title="Nº mínimo de parcelas PAGAS para o banco remunerar (0 = remunera sempre)">Pagas p/<br><span style="font-weight:400;color:#6C2BD9;">Remunerar</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;" title="Une saldos negativos de vários contratos para cobrir margem">Une<br><span style="font-weight:400;color:#6B7280;">Neg.</span></th>
+            <th style="width:60px;border-bottom:2px solid #E5E7EB;"></th>
           </tr>
         </thead>
         <tbody id="tbRegras"></tbody>
       </table>
       </div>
-      <div style="margin-top:16px;padding-top:16px;border-top:1px solid #E5E7EB;">
-        <h4 style="margin:0 0 10px;font-size:13px;color:#374151;">+ Adicionar Banco</h4>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Nome</label><input id="novoRegBanco" placeholder="Ex: Bradesco" style="width:110px;"></div>
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Entrada Mín (%)</label><input id="novoRegEntrada" placeholder="1,35" style="width:80px;"></div>
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Taxa Refim (%)</label><input id="novoRegRefim" placeholder="1,65" style="width:80px;"></div>
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Saldo Mín (R$)</label><input id="novoRegSaldoMin" placeholder="0" style="width:80px;"></div>
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Troco Mín (R$)</label><input id="novoRegMinTroco" placeholder="250" style="width:70px;"></div>
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Porta c/ (pagas)</label><input id="novoRegPagasPortar" placeholder="0" style="width:70px;" type="number" min="0"></div>
-          <div><label style="font-size:11px;display:block;margin-bottom:3px;">Rem. c/ (pagas)</label><input id="novoRegPagasRem" placeholder="12" style="width:70px;" type="number" min="0"></div>
-          <div style="align-self:flex-end;padding-bottom:6px;"><label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input id="novoRegUneNeg" type="checkbox"> Une neg.?</label></div>
-          <button onclick="addRegra()" style="padding:8px 16px;background:#6C2BD9;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Adicionar</button>
+      <!-- Adicionar banco -->
+      <div style="margin-top:16px;padding:16px;border-top:1px solid #E5E7EB;background:#FAFAFA;border-radius:8px;">
+        <h4 style="margin:0 0 12px;font-size:13px;color:#374151;">+ Adicionar Banco</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;align-items:end;">
+          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Nome</label><input id="novoRegBanco" placeholder="Ex: Bradesco" style="width:100%;"></div>
+          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Entrada Mín (%)</label><input id="novoRegEntrada" placeholder="1,35" style="width:100%;"></div>
+          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Taxa Refim (%)</label><input id="novoRegRefim" placeholder="1,65" style="width:100%;"></div>
+          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Saldo Mín (R$)</label><input id="novoRegSaldoMin" placeholder="0" style="width:100%;"></div>
+          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Troco Mín (R$)</label><input id="novoRegMinTroco" placeholder="250" style="width:100%;"></div>
+          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;color:#6C2BD9;">Pagas p/ Portar</label><input id="novoRegPagasPortar" placeholder="0" style="width:100%;" type="number" min="0"></div>
+          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;color:#6C2BD9;">Pagas p/ Remunerar</label><input id="novoRegPagasRem" placeholder="12" style="width:100%;" type="number" min="0"></div>
+          <div style="display:flex;align-items:center;gap:6px;padding-bottom:2px;"><input id="novoRegUneNeg" type="checkbox"><label style="font-size:11px;font-weight:600;cursor:pointer;" onclick="document.getElementById('novoRegUneNeg').click()">Une Neg.?</label></div>
+          <div style="padding-bottom:2px;"><button onclick="addRegra()" style="width:100%;padding:9px;background:#6C2BD9;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">Adicionar</button></div>
         </div>
       </div>
     </div>
@@ -6504,8 +6516,8 @@ function renderTbRegras() {
         <td colspan="9" style="padding:6px 8px;">
           <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;">
             <div><label style="font-size:10px;display:block;">Banco Origem</label><input id="excBanco-${i}" placeholder="Ex: Caixa" style="width:100px;font-size:11px;"></div>
-            <div><label style="font-size:10px;display:block;">Porta c/ (pagas)</label><input id="excPortar-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
-            <div><label style="font-size:10px;display:block;">Rem. c/ (pagas)</label><input id="excRem-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
+            <div><label style="font-size:10px;display:block;color:#6C2BD9;font-weight:600;">Pagas p/ Portar</label><input id="excPortar-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
+            <div><label style="font-size:10px;display:block;color:#6C2BD9;font-weight:600;">Pagas p/ Remunerar</label><input id="excRem-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
             <button onclick="adicionarExcecao(${i})" style="padding:4px 10px;background:#6C2BD9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">+ Adicionar</button>
             <button onclick="document.getElementById('exc-add-${i}').style.display='none'" style="padding:4px 8px;background:#E5E7EB;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Cancelar</button>
           </div>
