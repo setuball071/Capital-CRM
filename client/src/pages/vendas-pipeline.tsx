@@ -86,20 +86,21 @@ interface LeadInteractionHistory {
   userName: string;
 }
 
+// Tags das colunas com as cores EXATAS do design (Pipeline.dc.html → COLUMN_DEFS)
 const MARKER_COLORS: Record<LeadMarker, string> = {
-  NOVO: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  EM_ATENDIMENTO: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  INTERESSADO: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
-  AGUARDANDO_RETORNO: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-  PROPOSTA_ENVIADA: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
-  VENDIDO: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  NAO_ATENDE: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200",
-  TELEFONE_INVALIDO: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  ENGANO: "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200",
-  SEM_INTERESSE: "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200",
-  RETORNAR_DEPOIS: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  TRANSFERIR: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
-  RECUSADO: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  NOVO: "bg-[#E8F1FD] text-[#1E5FB5] dark:bg-[rgba(30,136,229,0.16)] dark:text-[#60A5FA]",
+  EM_ATENDIMENTO: "bg-[#FEF6E0] text-[#9a6a00] dark:bg-[rgba(249,168,37,0.14)] dark:text-[#FBBF24]",
+  INTERESSADO: "bg-[#F2EBFC] text-[#6C2BD9] dark:bg-[rgba(108,43,217,0.28)] dark:text-[#C79CF7]",
+  AGUARDANDO_RETORNO: "bg-[#FDEEE0] text-[#C2660A] dark:bg-[rgba(194,102,10,0.16)] dark:text-[#FBBF24]",
+  PROPOSTA_ENVIADA: "bg-[#E8F1FD] text-[#1E5FB5] dark:bg-[rgba(30,136,229,0.16)] dark:text-[#60A5FA]",
+  VENDIDO: "bg-[#E7F9EE] text-[#0F8A46] dark:bg-[rgba(0,200,83,0.14)] dark:text-[#4ADE80]",
+  NAO_ATENDE: "bg-[#F9FAFB] text-[#6B7280] dark:bg-white/5 dark:text-[#9C97AE]",
+  TELEFONE_INVALIDO: "bg-[#FDECEC] text-[#C62828] dark:bg-[rgba(229,57,53,0.16)] dark:text-[#F87171]",
+  ENGANO: "bg-[#FDECEC] text-[#C62828] dark:bg-[rgba(229,57,53,0.16)] dark:text-[#F87171]",
+  SEM_INTERESSE: "bg-[#F9FAFB] text-[#6B7280] dark:bg-white/5 dark:text-[#9C97AE]",
+  RETORNAR_DEPOIS: "bg-[#FEF6E0] text-[#9a6a00] dark:bg-[rgba(249,168,37,0.14)] dark:text-[#FBBF24]",
+  TRANSFERIR: "bg-[#F2EBFC] text-[#6C2BD9] dark:bg-[rgba(108,43,217,0.28)] dark:text-[#C79CF7]",
+  RECUSADO: "bg-[#FDECEC] text-[#C62828] dark:bg-[rgba(229,57,53,0.16)] dark:text-[#F87171]",
 };
 
 const KANBAN_COLUMNS: LeadMarker[] = [
@@ -217,18 +218,18 @@ interface KanbanColumnProps {
 
 function KanbanColumn({ marker, leads, summary, onCardClick, onDragStart, onDragOver, onDrop }: KanbanColumnProps) {
   return (
-    <div 
-      className="flex-shrink-0 w-80 flex flex-col bg-muted/30 rounded-lg"
+    <div
+      className="flex-shrink-0 w-[270px] flex flex-col rounded-xl bg-[#EDEEF0] dark:bg-white/[0.03]"
       onDragOver={onDragOver}
       onDrop={(e) => onDrop(e, marker)}
       data-testid={`column-${marker}`}
     >
-      <div className="p-3 border-b">
+      <div className="pt-3.5 px-3.5 pb-3">
         <div className="flex items-center justify-between gap-2">
-          <Badge className={MARKER_COLORS[marker]}>
+          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[12.5px] font-bold ${MARKER_COLORS[marker]}`}>
             {LEAD_MARKER_LABELS[marker]}
-          </Badge>
-          <span className="text-sm font-medium text-muted-foreground">{leads.length}</span>
+          </span>
+          <span className="text-[13px] font-bold text-muted-foreground">{leads.length}</span>
         </div>
         {summary && (summary.somaMargens > 0 || summary.somaPropostas > 0) && (
           <div className="mt-2 text-xs space-y-0.5">
@@ -243,18 +244,18 @@ function KanbanColumn({ marker, leads, summary, onCardClick, onDragStart, onDrag
           </div>
         )}
       </div>
-      <ScrollArea className="flex-1 p-2">
+      <ScrollArea className="flex-1 px-3.5 pb-3.5" style={{ minHeight: 500 }}>
         <div className="space-y-2">
           {leads.map((lead) => (
-            <LeadCard 
-              key={lead.id} 
-              lead={lead} 
+            <LeadCard
+              key={lead.id}
+              lead={lead}
               onCardClick={onCardClick}
               onDragStart={onDragStart}
             />
           ))}
           {leads.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground text-sm">
+            <div className="text-center mt-10 text-muted-foreground text-[13.5px]">
               Nenhum lead
             </div>
           )}
@@ -781,11 +782,11 @@ export default function VendasPipeline() {
               </Button>
             )}
             <div>
-              <h1 className="text-2xl font-bold" data-testid="text-page-title">
+              <h1 className="text-2xl font-bold tracking-[-0.01em]" data-testid="text-page-title">
                 {isGestorMode ? "Pipeline do Corretor" : "Meu Pipeline"}
               </h1>
-              <p className="text-muted-foreground">
-                {isGestorMode 
+              <p className="text-sm text-muted-foreground mt-1">
+                {isGestorMode
                   ? "Visualizando pipeline de outro usuário (somente leitura para gestão)"
                   : "Gerencie seus leads arrastando entre as colunas"
                 }
@@ -814,7 +815,7 @@ export default function VendasPipeline() {
                 placeholder="Buscar lead..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 w-64"
+                className="pl-9 w-[220px] h-[38px] rounded-[9px] bg-muted/50 text-[13.5px]"
                 data-testid="input-search"
               />
               {searchTerm && (
@@ -1501,8 +1502,8 @@ export default function VendasPipeline() {
       </Dialog>
 
       {(isGestorMode || viewUserId || activeTab === "pipeline") && (
-      <div className="flex-1 overflow-x-auto p-4">
-        <div className="flex gap-4 min-w-max h-full">
+      <div className="flex-1 overflow-x-auto px-8 py-6">
+        <div className="flex gap-4 items-start">
           {KANBAN_COLUMNS.map((marker) => (
             <KanbanColumn
               key={marker}
