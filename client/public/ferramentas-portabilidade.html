@@ -6179,16 +6179,17 @@ function calcRefim() {
       return true;
     }
 
+    const minTrocoUnif = regra.minTroco || 250;
     let trocoLiquido = 0, parcelaTotal = 0, trocoBruto = 0, iof = 0;
     if (modo === 'troco') {
-      trocoLiquido  = parseBR(document.getElementById('refimTrocoInput').value);
-      if (!trocoLiquido) return;
+      const inputTroco = parseBR(document.getElementById('refimTrocoInput').value);
+      trocoLiquido  = inputTroco || minTrocoUnif; // padrão = mínimo do banco
       trocoBruto    = trocoBrutoDeLiquido(trocoLiquido); // bruto = líquido × 1,032
       iof           = calcIOF(trocoBruto);
       parcelaTotal  = price.pmt(saldoPortado + trocoBruto);
     } else {
-      parcelaTotal  = parseBR(document.getElementById('refimParcelaInput').value);
-      if (!parcelaTotal) return;
+      const inputParcela = parseBR(document.getElementById('refimParcelaInput').value);
+      parcelaTotal  = inputParcela || somaParcelasOrig; // padrão = mantém parcela atual
       trocoBruto    = price.pv(parcelaTotal) - saldoPortado;
       if (trocoBruto <= 0) {
         avisoEl.innerHTML = '<span style="color:#EF4444;font-weight:600;">⚠️ Parcela insuficiente — ' +
