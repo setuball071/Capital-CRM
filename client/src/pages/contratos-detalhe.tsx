@@ -564,7 +564,6 @@ export default function ContratosDetalhePage() {
       case "installmentValue": body = { installmentValue: parseBrNum(editVal) }; break;
       case "term":             body = { term: editVal.trim() ? parseInt(editVal) : null }; break;
       case "taxa":             body = { clientMetaPatch: { taxa: parseBrNum(editVal) } }; break;
-      case "taxaAtual":        body = { clientMetaPatch: { taxaAtual: parseBrNum(editVal) } }; break;
       case "ade":              body = { ade: editVal.trim() }; break;
       case "adeRefin":         body = { adeRefin: editVal.trim() }; break;
       case "numeroContrato":   body = { clientMetaPatch: { numeroContrato: editVal.trim() } }; break;
@@ -950,6 +949,18 @@ export default function ContratosDetalhePage() {
               </div>
             </div>
           )}
+          {/* Portabilidade — CONTRATO DE ORIGEM primeiro (o que está sendo portado) */}
+          {isPortabilidade && (
+            <>
+              {renderField({ fieldKey: "bancoOrigem", label: "Banco Origem", value: m.bancoOrigem })}
+              {renderField({ fieldKey: "numeroContrato", label: "Nº Contrato Origem", value: m.numeroContrato, mono: true, editable: true })}
+              {/* Taxa usada no cálculo do saldo (a da operação nova já vem da tabela selecionada) */}
+              {renderField({ fieldKey: "taxa", label: "Taxa (%)", value: (m.taxa ?? m.taxaAtual) != null ? String(m.taxa ?? m.taxaAtual) : "", editable: true, copyable: false })}
+              {renderField({ fieldKey: "contractValue", label: "Saldo Devedor", value: proposal.contractValue, money: true, editable: true })}
+              {renderField({ fieldKey: "parcelaOrig", label: "Parcela Original", value: m.parcelaOriginal, money: true })}
+              {renderField({ fieldKey: "prazoRest", label: "Prazo Restante", value: m.prazoAtual != null ? `${m.prazoAtual}${m.prazoTotal ? `/${m.prazoTotal}` : ""}` : "", copyable: false })}
+            </>
+          )}
           {/* Tabela — edição via select */}
           <div className="group min-w-0">
             <p className="text-xs text-muted-foreground">Tabela</p>
@@ -978,29 +989,27 @@ export default function ContratosDetalhePage() {
               </div>
             )}
           </div>
-          {renderField({ fieldKey: "contractValue", label: "Valor Contrato", value: proposal.contractValue, money: true, editable: true })}
-          {renderField({ fieldKey: "installmentValue", label: "Parcela", value: proposal.installmentValue, money: true, editable: true })}
-          {renderField({ fieldKey: "term", label: "Prazo (meses)", value: proposal.term != null ? String(proposal.term) : "", editable: true, copyable: false })}
-          {renderField({ fieldKey: "taxa", label: "Taxa (%)", value: m.taxa != null ? String(m.taxa) : "", editable: true, copyable: false })}
-          {/* ADE */}
           {isPortabilidade ? (
             <>
+              {/* NOVA operação (a tabela selecionada acima define a taxa nova) */}
+              {renderField({ fieldKey: "installmentValue", label: "Parcela Final", value: proposal.installmentValue, money: true, editable: true })}
+              {renderField({ fieldKey: "term", label: "Prazo (meses)", value: proposal.term != null ? String(proposal.term) : "", editable: true, copyable: false })}
               {renderField({ fieldKey: "ade", label: "ADE Portabilidade", value: proposal.ade, mono: true, editable: true, isAde: true })}
               {renderField({ fieldKey: "adeRefin", label: "ADE Refinanciamento", value: proposal.adeRefin, mono: true, editable: true, isAde: true })}
+              {renderField({ fieldKey: "saldoDevedor", label: "Saldo Devedor Informado", value: m.saldoDevedor, money: true, editable: true })}
+              {renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true, editable: true })}
+              {renderField({ fieldKey: "valorTotalOp", label: "Valor Total da Operação", value: valorTotalOperacao, money: true, copyable: true })}
             </>
           ) : (
-            renderField({ fieldKey: "ade", label: "ADE", value: proposal.ade, mono: true, editable: true, isAde: true })
+            <>
+              {renderField({ fieldKey: "contractValue", label: "Valor Contrato", value: proposal.contractValue, money: true, editable: true })}
+              {renderField({ fieldKey: "installmentValue", label: "Parcela", value: proposal.installmentValue, money: true, editable: true })}
+              {renderField({ fieldKey: "term", label: "Prazo (meses)", value: proposal.term != null ? String(proposal.term) : "", editable: true, copyable: false })}
+              {renderField({ fieldKey: "taxa", label: "Taxa (%)", value: m.taxa != null ? String(m.taxa) : "", editable: true, copyable: false })}
+              {renderField({ fieldKey: "ade", label: "ADE", value: proposal.ade, mono: true, editable: true, isAde: true })}
+              {m.bancoOrigem && renderField({ fieldKey: "bancoOrigem", label: "Banco Origem", value: m.bancoOrigem })}
+            </>
           )}
-          {/* Portabilidade — origem e simulação */}
-          {m.bancoOrigem && renderField({ fieldKey: "bancoOrigem", label: "Banco Origem", value: m.bancoOrigem })}
-          {isPortabilidade && renderField({ fieldKey: "numeroContrato", label: "Nº Contrato Origem", value: m.numeroContrato, mono: true, editable: true })}
-          {m.parcelaOriginal != null && renderField({ fieldKey: "parcelaOrig", label: "Parcela Original", value: m.parcelaOriginal, money: true })}
-          {m.prazoAtual != null && renderField({ fieldKey: "prazoRest", label: "Prazo Restante", value: `${m.prazoAtual}${m.prazoTotal ? `/${m.prazoTotal}` : ""}`, copyable: false })}
-          {m.taxaAtual != null && renderField({ fieldKey: "taxaAtual", label: "Taxa Original (%)", value: String(m.taxaAtual), editable: true, copyable: false })}
-          {/* Financeiro da operação (portabilidade) */}
-          {isPortabilidade && renderField({ fieldKey: "saldoDevedor", label: "Saldo Devedor Informado", value: m.saldoDevedor, money: true, editable: true })}
-          {isPortabilidade && renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true, editable: true })}
-          {isPortabilidade && renderField({ fieldKey: "valorTotalOp", label: "Valor Total da Operação", value: valorTotalOperacao, money: true, copyable: true })}
           {/* Data CIP + contador de dias úteis (portabilidade) */}
           {isPortabilidade && (
             <div className="min-w-0">
