@@ -1629,40 +1629,41 @@ body { background: #F8F8FC !important; color: #111827 !important; }
       <!-- RESULTADO DO REFIM -->
       <!-- RESULTADO UNIFICADO -->
       <div id="refimResultado" style="display:none;margin-top:16px;padding:20px;background:#fff;border:2px solid #6C2BD9;border-radius:10px;">
-        <h3 style="font-size:15px;margin:0 0 16px 0;color:#6C2BD9;">📊 Resultado do Refinanciamento</h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;">
+        <h3 style="font-size:15px;margin:0 0 14px 0;color:#6C2BD9;">📊 Resultado do Refinanciamento</h3>
+        <!-- Métricas principais -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px;">
           <div style="background:#F8F7FF;padding:12px;border-radius:8px;">
-            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Saldo Portado</div>
-            <div style="font-size:17px;font-weight:700;color:#1a0030;" id="rSaldoPortado">-</div>
-          </div>
-          <div style="background:#FFF7ED;padding:12px;border-radius:8px;">
-            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Valor Refim (bruto)</div>
-            <div style="font-size:17px;font-weight:700;color:#EA580C;" id="rValorRefim">-</div>
-          </div>
-          <div style="background:#FFF7ED;padding:12px;border-radius:8px;">
-            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">IOF (sobre refim)</div>
-            <div style="font-size:17px;font-weight:700;color:#EA580C;" id="rIOF">-</div>
-          </div>
-          <div style="background:#FFF7ED;padding:12px;border-radius:8px;">
-            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Encargos</div>
-            <div style="font-size:17px;font-weight:700;color:#EA580C;" id="rEncargos">-</div>
-          </div>
-          <div style="background:#F0FDF4;padding:12px;border-radius:8px;">
-            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Troco Líquido Cliente</div>
-            <div style="font-size:20px;font-weight:800;color:#16A34A;" id="rTrocoLiquido">-</div>
+            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Parcela Atual (total)</div>
+            <div style="font-size:18px;font-weight:700;color:#374151;" id="rParcelaAtual">-</div>
           </div>
           <div style="background:#EDE9FE;padding:12px;border-radius:8px;">
-            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Parcela Total</div>
-            <div style="font-size:20px;font-weight:800;color:#6C2BD9;" id="rParcelaTotal">-</div>
+            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Parcela Nova</div>
+            <div style="font-size:22px;font-weight:800;color:#6C2BD9;" id="rParcelaTotal">-</div>
           </div>
-          <div style="background:#F8F7FF;padding:12px;border-radius:8px;">
-            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Valor Bruto (parc × prazo)</div>
-            <div style="font-size:17px;font-weight:700;color:#1a0030;" id="rValorBruto">-</div>
+          <div style="background:#F0FDF4;padding:12px;border-radius:8px;">
+            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Dif. Parcela / mês</div>
+            <div style="font-size:18px;font-weight:700;" id="rDifParcela">-</div>
+          </div>
+          <div style="background:#F0FDF4;padding:12px;border-radius:8px;">
+            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Troco Líquido</div>
+            <div style="font-size:22px;font-weight:800;color:#16A34A;" id="rTrocoLiquido">-</div>
           </div>
           <div style="background:#F8F7FF;padding:12px;border-radius:8px;">
             <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Taxa Refim</div>
-            <div style="font-size:17px;font-weight:700;color:#1a0030;" id="rTaxaRefim">-</div>
+            <div style="font-size:18px;font-weight:700;color:#1a0030;" id="rTaxaRefim">-</div>
           </div>
+          <div style="background:#F8F7FF;padding:12px;border-radius:8px;">
+            <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Prazo</div>
+            <div style="font-size:18px;font-weight:700;color:#1a0030;" id="rPrazo">-</div>
+          </div>
+        </div>
+        <!-- Detalhes financeiros secundários -->
+        <div style="display:flex;flex-wrap:wrap;gap:8px 20px;padding:10px 12px;background:#FAFAFA;border-radius:8px;font-size:12px;color:#6B7280;">
+          <span>Saldo portado: <b id="rSaldoPortado" style="color:#374151;">-</b></span>
+          <span>Valor refim (bruto): <b id="rValorRefim" style="color:#EA580C;">-</b></span>
+          <span>IOF: <b id="rIOF" style="color:#EA580C;">-</b></span>
+          <span>Encargos: <b id="rEncargos" style="color:#EA580C;">-</b></span>
+          <span>Total pago (parc×prazo): <b id="rValorBruto" style="color:#374151;">-</b></span>
         </div>
         <div id="rMargemNegBlock" style="display:none;margin-top:12px;padding:12px 16px;border-radius:8px;background:#FFFBEB;border:1px solid #FDE68A;font-size:13px;"></div>
       </div>
@@ -6202,7 +6203,7 @@ function calcRefim() {
     const encargos  = parcelaTotal * prazo - (saldoPortado + trocoBruto);
     const valorBruto = parcelaTotal * prazo;
     if (!validarUnif(trocoBruto, parcelaTotal, trocoLiquido)) return;
-    renderResultadoRefim(saldoPortado, trocoBruto, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim * 100, valorBruto);
+    renderResultadoRefim(saldoPortado, trocoBruto, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim * 100, valorBruto, somaParcelasOrig);
     mostrarCoberturaMargem(margemNeg, somaParcelasOrig, parcelaTotal, 'rMargemNegBlock');
 
   } else {
@@ -6358,7 +6359,17 @@ function calcRefim() {
   }
 }
 
-function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim, valorBruto) {
+function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim, valorBruto, somaParcelasOrig) {
+  const dif = (somaParcelasOrig || 0) - parcelaTotal;
+  const difEl = document.getElementById('rDifParcela');
+  if (difEl) {
+    difEl.textContent = (dif >= 0 ? '▼ ' : '▲ ') + fmtBRL(Math.abs(dif));
+    difEl.style.color = dif >= 0 ? '#16A34A' : '#EF4444';
+  }
+  const paAtEl = document.getElementById('rParcelaAtual');
+  if (paAtEl) paAtEl.textContent = somaParcelasOrig ? fmtBRL(somaParcelasOrig) : '-';
+  const prazoEl = document.getElementById('rPrazo');
+  if (prazoEl) prazoEl.textContent = prazo + ' meses';
   document.getElementById('rSaldoPortado').textContent = fmtBRL(saldoPortado);
   document.getElementById('rValorRefim').textContent   = fmtBRL(valorRefim);
   document.getElementById('rIOF').textContent          = fmtBRL(iof);
@@ -6368,7 +6379,6 @@ function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiqu
   document.getElementById('rValorBruto').textContent   = fmtBRL(valorBruto);
   document.getElementById('rTaxaRefim').textContent    = fmtPct(taxaRefim) + ' a.m.';
   document.getElementById('refimResultado').style.display = '';
-  // Salva resultado para uso no Criador de Proposta
   _refimResult = { modo: 'unificado', parcela: parcelaTotal, troco: trocoLiquido, prazo };
 }
 
