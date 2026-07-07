@@ -11,6 +11,7 @@ import {
 } from "@shared/schema";
 import { ocrClient, ocrModel } from "./openaiClient";
 import { extractTextFromPdf } from "./roteiros-pdf-service";
+import { transcreverAudio, extrairTextoImagem } from "./assistente-media";
 import {
   indexarArtigo,
   removerChunksDoArtigo,
@@ -22,6 +23,12 @@ import {
 const uploadKb = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+});
+
+// multer p/ mídia do chat (25MB)
+const uploadChat = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
 });
 
 export const CATEGORIAS_KB = [
@@ -288,10 +295,56 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
   );
 
   // ---------- Chat (qualquer usuário autenticado) ----------
-  app.post("/api/assistente/chat", requireAuth, async (req: any, res: Response) => {
-    const { conversaId, mensagem } = req.body || {};
-    const texto = String(mensagem || "").trim();
+  app.post("/api/assistente/chat", requireAuth, uploadChat.single("arquivo"), async (req: any, res: Response) => {
+    const { conversaId, mensagem, modoCaptura } = req.body || {};
+    let texto = String(mensagem || "").trim();
+    let extraidoDeMidia = "";
+    let origemMidia: "audio" | "imagem" | null = null;
+
+    try {
+      if (req.file) {
+        const mime = req.file.mimetype || "";
+        if (mime.startsWith("audio/")) {
+          extraidoDeMidia = await transcreverAudio(req.file.buffer, mime);
+          origemMidia = "audio";
+        } else if (mime.startsWith("image/")) {
+          extraidoDeMidia = await extrairTextoImagem(req.file.buffer, mime);
+          origemMidia = "imagem";
+        } else {
+          return res.status(422).json({ message: "Arquivo deve ser áudio ou imagem" });
+        }
+      }
+    } catch (e: any) {
+      console.error("[assistente/chat] mídia falhou:", e);
+      return res.status(422).json({ message: "Não consegui processar o áudio/imagem" });
+    }
+
+    if (extraidoDeMidia) {
+      texto = texto
+        ? `${texto}\n\n[Conteúdo do ${origemMidia}]:\n${extraidoDeMidia}`
+        : extraidoDeMidia;
+    }
     if (!texto) return res.status(422).json({ message: "mensagem é obrigatória" });
+
+    // ---- MODO CAPTURA (só gestores): guarda conhecimento em vez de responder ----
+    if (modoCaptura === "1" && podeGerenciarKb(req.user)) {
+      const clas = await classificarConteudo(texto);
+      const { id: sugestaoId } = await criarSugestao({
+        tenantId: req.user.tenantId,
+        titulo: clas.titulo,
+        conteudo: clas.conteudo,
+        categoria: clas.categoria,
+        banco: clas.banco,
+        origem: origemMidia ?? "manual",
+        payloadBruto: texto,
+        criadoPor: req.user.id,
+      });
+      return res.json({
+        captura: true,
+        sugestaoId,
+        resumo: `Guardei como sugestão: "${clas.titulo}" (${clas.categoria}${clas.banco ? `, ${clas.banco}` : ""}). Aprova lá na Base de Conhecimento → Fila!`,
+      });
+    }
 
     // resolve conversa (do próprio usuário)
     let convId = Number(conversaId) || 0;
