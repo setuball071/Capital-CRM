@@ -241,8 +241,6 @@ interface PortabilidadeContrato {
   novaParcela: string;
   troco: string;
   novoPrazo: string;
-  // Taxa da NOVA operação (taxa_nova / taxa_refim do simulador) — vira a "Taxa (%)" da ficha
-  taxaNova?: string;
   tableId?: string;
   // Bancos que pagam saldo e troco separados (ex. Paraná): tabela do refin do troco
   tableRefinId?: string;
@@ -1139,9 +1137,8 @@ export default function ContratosPropostaPage() {
             ...(c.prazoTotal      ? { prazoTotal:       parseInt(c.prazoTotal) }   : {}),
             ...(c.inicio          ? { inicioContrato:   c.inicio }                 : {}),
             ...(c.fim             ? { fimContrato:      c.fim }                    : {}),
-            // "Taxa (%)" da ficha = taxa da NOVA operação; a do contrato de origem vai em taxaAtual
-            ...(c.taxaNova        ? { taxa:             parseFloat(c.taxaNova) }   : {}),
-            ...(c.taxa            ? { taxaAtual:        parseFloat(c.taxa) }       : {}),
+            // Taxa do contrato de ORIGEM (a que calculou o saldo) — a nova já vem da tabela
+            ...(c.taxa            ? { taxa:             parseFloat(c.taxa) }       : {}),
             ...(c.troco           ? { troco:            parseFloat(c.troco) }      : {}),
             ...(c.novoPrazo       ? { novoPrazo:        parseInt(c.novoPrazo) }    : {}),
           },
@@ -1216,7 +1213,6 @@ export default function ContratosPropostaPage() {
             novaParcela:    c.nova_parcela    ? String(c.nova_parcela)   : "",
             troco:          c.troco           ? String(c.troco)          : "0",
             novoPrazo:      c.prazo_novo      ? String(c.prazo_novo)     : "",
-            taxaNova:       c.taxa_nova       ? String(c.taxa_nova)      : "",
           }));
         } else if (sim.contratos_selecionados && sim.contratos_selecionados.length > 0) {
           // Formato antigo (salvarCotacao): contratos_selecionados + resultado.linhas
@@ -1238,8 +1234,6 @@ export default function ContratosPropostaPage() {
               novaParcela:    linha?.parcela ? String(Math.round(linha.parcela * 100) / 100) : "",
               troco:          linha?.troco   ? String(linha.troco) : "0",
               novoPrazo:      linha?.prazo   ? String(linha.prazo) : "",
-              // Formato antigo: a taxa nova é única para a operação (taxa_refim)
-              taxaNova:       sim.taxa_refim ? String(sim.taxa_refim) : "",
             };
           });
         }
