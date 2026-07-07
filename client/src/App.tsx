@@ -87,6 +87,7 @@ import SiapeHistoricoPage from "@/pages/siape-historico";
 import ImportarDadosComplementaresPage from "@/pages/importar-dados-complementares";
 import MinhaCarteiraPage from "@/pages/minha-carteira";
 import { UpdatesPopup } from "@/components/UpdatesPopup";
+import AssistenteWidget from "@/components/assistente/AssistenteWidget";
 import NotFound from "@/pages/not-found";
 import PrivacidadePage from "@/pages/privacidade";
 import AdminAssinaturasPage from "@/pages/admin-assinaturas";
@@ -652,6 +653,7 @@ function Router() {
         onClose={() => setModalAberto(false)}
       />
       <UpdatesPopup />
+      <AssistenteWidget />
     </SidebarProvider>
   );
 }
