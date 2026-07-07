@@ -860,6 +860,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         corretorCommissionValue: corretorCommInput,
         dataPagamento: dataPagamentoInput,
         saldoInformado: saldoInformadoInput,
+        prazoInformado: prazoInformadoInput,
       } = req.body;
 
       const updateData: any = {};
@@ -882,6 +883,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       }
       if (saldoInformadoInput !== undefined && saldoInformadoInput !== null && String(saldoInformadoInput) !== "") {
         metaChanges = { ...(metaChanges || {}), saldoDevedor: String(saldoInformadoInput) };
+      }
+      // Prazo remanescente informado pelo banco (junto com o saldo informado)
+      if (prazoInformadoInput !== undefined && prazoInformadoInput !== null && String(prazoInformadoInput) !== "") {
+        const pz = parseInt(String(prazoInformadoInput));
+        if (!isNaN(pz)) metaChanges = { ...(metaChanges || {}), prazoInformado: pz };
       }
       if (metaChanges) {
         updateData.clientMeta = { ...((current.clientMeta as Record<string, any>) || {}), ...metaChanges };

@@ -98,6 +98,7 @@ export default function ContratosDetalhePage() {
   const [adeValue, setAdeValue] = useState("");
   const [nextStatus, setNextStatus] = useState("");
   const [saldoInformado, setSaldoInformado] = useState("");
+  const [prazoInformado, setPrazoInformado] = useState("");
 
   // edição inline de campos
   const [editField, setEditField] = useState<string | null>(null);
@@ -230,7 +231,7 @@ export default function ContratosDetalhePage() {
       if (!res.ok) throw new Error((await res.json()).message || "Erro");
       return res.json();
     },
-    onSuccess: () => { toast({ title: "Status atualizado" }); invalidate(); setActionNotes(""); setAdeValue(""); setNextStatus(""); setSaldoInformado(""); },
+    onSuccess: () => { toast({ title: "Status atualizado" }); invalidate(); setActionNotes(""); setAdeValue(""); setNextStatus(""); setSaldoInformado(""); setPrazoInformado(""); },
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
@@ -569,6 +570,7 @@ export default function ContratosDetalhePage() {
       case "numeroContrato":   body = { clientMetaPatch: { numeroContrato: editVal.trim() } }; break;
       case "dataCip":          body = { clientMetaPatch: { dataCip: editVal.trim() || null } }; break;
       case "saldoDevedor":     body = { clientMetaPatch: { saldoDevedor: parseBrNum(editVal) } }; break;
+      case "prazoInformado":   body = { clientMetaPatch: { prazoInformado: editVal.trim() ? parseInt(editVal) : null } }; break;
       case "troco":            body = { clientMetaPatch: { troco: parseBrNum(editVal) } }; break;
       // Conta bancária de crédito: grava o objeto completo em contaSelecionada (origem manual)
       case "bancoCredito":     body = { clientMetaPatch: { contaSelecionada: { banco: editVal.trim(), agencia, conta, origem: "manual" } } }; break;
@@ -996,8 +998,15 @@ export default function ContratosDetalhePage() {
               {renderField({ fieldKey: "term", label: "Prazo (meses)", value: proposal.term != null ? String(proposal.term) : "", editable: true, copyable: false })}
               {renderField({ fieldKey: "ade", label: "ADE Portabilidade", value: proposal.ade, mono: true, editable: true, isAde: true })}
               {renderField({ fieldKey: "adeRefin", label: "ADE Refinanciamento", value: proposal.adeRefin, mono: true, editable: true, isAde: true })}
-              {renderField({ fieldKey: "saldoDevedor", label: "Saldo Devedor Informado", value: m.saldoDevedor, money: true, editable: true })}
               {renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true, editable: true })}
+              {/* Destaque: dados INFORMADOS pelo banco (saldo + prazo remanescente) */}
+              <div className="col-span-2 rounded-md border border-green-300 bg-green-50 dark:border-green-900/50 dark:bg-green-950/20 p-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-green-700 dark:text-green-400 mb-1.5">Informado pelo banco</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {renderField({ fieldKey: "saldoDevedor", label: "Saldo Devedor Informado", value: m.saldoDevedor, money: true, editable: true })}
+                  {renderField({ fieldKey: "prazoInformado", label: "Prazo Informado", value: m.prazoInformado != null ? String(m.prazoInformado) : "", editable: true, copyable: false })}
+                </div>
+              </div>
               {renderField({ fieldKey: "valorTotalOp", label: "Valor Total da Operação", value: valorTotalOperacao, money: true, copyable: true })}
             </>
           ) : (
@@ -1133,14 +1142,28 @@ export default function ContratosDetalhePage() {
 
             {isSaldoInformadoStatus && (
               <div className="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 p-3 space-y-1.5">
-                <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">Saldo informado pelo banco</p>
-                <Input
-                  value={saldoInformado}
-                  onChange={(e) => setSaldoInformado(e.target.value)}
-                  placeholder="0,00"
-                  inputMode="decimal"
-                />
-                <p className="text-[11px] text-muted-foreground">Será salvo em "Saldo Devedor Informado" na Operação e somado ao troco no Valor Total.</p>
+                <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">Informado pelo banco</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1">Saldo (R$)</p>
+                    <Input
+                      value={saldoInformado}
+                      onChange={(e) => setSaldoInformado(e.target.value)}
+                      placeholder="0,00"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1">Prazo remanescente</p>
+                    <Input
+                      value={prazoInformado}
+                      onChange={(e) => setPrazoInformado(e.target.value.replace(/\D/g, ""))}
+                      placeholder="ex: 92"
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Os dois vão para o destaque "Informado pelo banco" na Operação; o saldo soma ao troco no Valor Total.</p>
               </div>
             )}
 
@@ -1193,6 +1216,7 @@ export default function ContratosDetalhePage() {
                     notes: actionNotes,
                     action: nextStatus === "PAGO" ? "PAGAMENTO" : ["CANCELADA", "PERDIDA"].includes(nextStatus) ? "CANCELAMENTO" : "AVANCO",
                     ...(isSaldoInformadoStatus && saldoInformado.trim() ? { saldoInformado: parseBrNum(saldoInformado) } : {}),
+                    ...(isSaldoInformadoStatus && prazoInformado.trim() ? { prazoInformado: parseInt(prazoInformado) } : {}),
                     ...(nextStatus === "PAGO" ? { dataPagamento } : {}),
                     ...(nextStatus === "PAGO" && commPercNum > 0 ? {
                       contractValue: contractValNum || undefined,
