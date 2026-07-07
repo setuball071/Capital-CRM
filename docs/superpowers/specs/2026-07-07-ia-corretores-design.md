@@ -18,9 +18,11 @@ fica preparada para tools de consulta ao CRM na fase 2.
 
 ## 2. Mascote e experiência do corretor
 
-- **Nome:** **Capitão** (decisão do Fábio em 08/07/2026 — Capital → Capitão,
-  emoji/avatar provisório ⚓). Configurável via env `ASSISTENTE_NOME` e persona
-  editável. (Capi/capivara foi descartado.)
+- **Nome:** **Jarvis** (decisão final do Fábio em 08/07/2026, inspirado no
+  J.A.R.V.I.S. da Marvel — nome já usado na cultura da equipe, inclusive na
+  Biblioteca do WhatsApp CRM; emoji/avatar provisório 🤖). Uso interno apenas
+  (marca de terceiros — não usar em material público). Configurável via env
+  `ASSISTENTE_NOME` e persona editável. (Capi/capivara e Capitão descartados.)
 - **Interface:** balão flutuante no canto inferior direito em todas as telas do
   CRM; abre painel de chat lateral.
 - Saudação inicial com 3–4 perguntas sugeridas.

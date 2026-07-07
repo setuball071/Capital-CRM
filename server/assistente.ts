@@ -50,7 +50,7 @@ function requireGestorKb(req: any, res: Response, next: Function) {
   next();
 }
 
-export const NOME_MASCOTE = process.env.ASSISTENTE_NOME || "Capitão";
+export const NOME_MASCOTE = process.env.ASSISTENTE_NOME || "Jarvis";
 
 const PERSONA_DEFAULT = `Você é ${NOME_MASCOTE}, o mascote assistente interno dos corretores da Capital (crédito consignado).
 Personalidade: simpático, direto, didático, brasileiro. Trata o corretor como colega de equipe.
