@@ -6549,25 +6549,29 @@ function renderTbRegras() {
         </tr>`).join('')
       : '';
     const outrosBancos = regrasBancos.filter((_, j) => j !== i);
-    const jaExcecoes = new Set((Array.isArray(r.excecoesOrigem) ? r.excecoesOrigem : []).map(e => e.bancoOrigem));
-    const checkboxHtml = outrosBancos.map(b => {
-      const jaEh = jaExcecoes.has(b.banco);
+    const replicarCheckboxHtml = outrosBancos.map(b => {
       const safe = b.banco.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-      return `<label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:${jaEh?'default':'pointer'};opacity:${jaEh?'0.4':'1'};white-space:nowrap;">
-        <input type="checkbox" class="excBancoCheck-${i}" value="${safe}" ${jaEh?'disabled':''}>${b.banco}
+      return `<label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;white-space:nowrap;">
+        <input type="checkbox" class="replicarCheck-${i}" value="${safe}">${b.banco}
       </label>`;
     }).join('');
     const addExcForm = `
       <tr id="exc-add-${i}" style="display:none;background:#F9F9FF;">
         <td colspan="9" style="padding:8px 12px;">
-          <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:6px;">Selecione os bancos de origem para adicionar como exceção:</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px 16px;max-height:100px;overflow-y:auto;padding:6px 8px;background:#fff;border:1px solid #DDD6FE;border-radius:6px;margin-bottom:8px;">${checkboxHtml || '<span style="color:#9CA3AF;font-size:11px;">Sem outros bancos cadastrados.</span>'}</div>
-          <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;">
+          <div style="font-size:11px;color:#6B7280;margin-bottom:6px;">Banco de origem = banco de onde o contrato vem (ex: Nubank, C6, PicPay...)</div>
+          <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+            <div><label style="font-size:10px;display:block;">Banco Origem</label><input id="excBanco-${i}" placeholder="Ex: Nubank" style="width:110px;font-size:11px;"></div>
             <div><label style="font-size:10px;display:block;color:#6C2BD9;font-weight:600;">Pagas p/ Portar</label><input id="excPortar-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
             <div><label style="font-size:10px;display:block;color:#6C2BD9;font-weight:600;">Pagas p/ Remunerar</label><input id="excRem-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
-            <button onclick="adicionarExcecao(${i})" style="padding:4px 10px;background:#6C2BD9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">+ Adicionar selecionados</button>
+            <button onclick="adicionarExcecao(${i})" style="padding:4px 10px;background:#6C2BD9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">+ Adicionar</button>
             <button onclick="document.getElementById('exc-add-${i}').style.display='none'" style="padding:4px 8px;background:#E5E7EB;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Cancelar</button>
           </div>
+          ${outrosBancos.length ? `
+          <div style="border-top:1px solid #DDD6FE;padding-top:8px;">
+            <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:6px;">📋 Replicar todas as exceções acima para outros bancos destino:</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:6px 8px;background:#fff;border:1px solid #DDD6FE;border-radius:6px;margin-bottom:6px;">${replicarCheckboxHtml}</div>
+            <button onclick="replicarExcecoes(${i})" style="padding:4px 10px;background:#059669;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Replicar selecionados</button>
+          </div>` : ''}
         </td>
       </tr>`;
     return `
@@ -6603,7 +6607,6 @@ function renderTbRegras() {
       </td>
       <td style="padding:6px;white-space:nowrap;">
         <button onclick="toggleExcForm(${i})" style="background:#EDE9FE;color:#6C2BD9;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;" title="Gerenciar exceções por banco de origem">⚙</button>
-        <button onclick="duplicarBanco(${i})" style="background:#ECFDF5;color:#059669;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;" title="Duplicar este banco">⧉</button>
         <button onclick="removerRegra(${i})" style="background:#FEE2E2;color:#DC2626;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;">✕</button>
       </td>
     </tr>
@@ -6618,16 +6621,33 @@ function toggleExcForm(i) {
 }
 
 function adicionarExcecao(i) {
+  const bancoOrigem = (document.getElementById(`excBanco-${i}`)?.value || '').trim();
   const pagasMinPortar = parseInt(document.getElementById(`excPortar-${i}`)?.value) || 0;
   const pagasMinRemunerar = parseInt(document.getElementById(`excRem-${i}`)?.value) || 0;
-  const checkboxes = document.querySelectorAll(`.excBancoCheck-${i}:checked`);
-  if (!checkboxes.length) { alert('Selecione ao menos um banco.'); return; }
+  if (!bancoOrigem) { alert('Informe o banco de origem da exceção.'); return; }
   if (!Array.isArray(regrasBancos[i].excecoesOrigem)) regrasBancos[i].excecoesOrigem = [];
+  if (regrasBancos[i].excecoesOrigem.some(e => e.bancoOrigem === bancoOrigem)) {
+    alert(`Exceção para "${bancoOrigem}" já existe neste banco.`); return;
+  }
+  regrasBancos[i].excecoesOrigem.push({ bancoOrigem, pagasMinPortar, pagasMinRemunerar });
+  salvarRegras();
+  renderTbRegras();
+}
+
+function replicarExcecoes(i) {
+  const checkboxes = document.querySelectorAll(`.replicarCheck-${i}:checked`);
+  if (!checkboxes.length) { alert('Selecione ao menos um banco destino.'); return; }
+  const excOrigem = regrasBancos[i].excecoesOrigem || [];
+  if (!excOrigem.length) { alert('Este banco não tem exceções para replicar.'); return; }
   checkboxes.forEach(cb => {
-    const bancoOrigem = cb.value;
-    if (!regrasBancos[i].excecoesOrigem.some(e => e.bancoOrigem === bancoOrigem)) {
-      regrasBancos[i].excecoesOrigem.push({ bancoOrigem, pagasMinPortar, pagasMinRemunerar });
-    }
+    const j = regrasBancos.findIndex(r => r.banco === cb.value);
+    if (j === -1) return;
+    if (!Array.isArray(regrasBancos[j].excecoesOrigem)) regrasBancos[j].excecoesOrigem = [];
+    excOrigem.forEach(exc => {
+      if (!regrasBancos[j].excecoesOrigem.some(e => e.bancoOrigem === exc.bancoOrigem)) {
+        regrasBancos[j].excecoesOrigem.push({ ...exc });
+      }
+    });
   });
   salvarRegras();
   renderTbRegras();
@@ -6668,19 +6688,6 @@ function removerRegra(i) {
   if (!_isMaster) { alert('Apenas usuários master podem remover bancos.'); return; }
   if (!confirm(`Remover banco "${regrasBancos[i].banco}"?`)) return;
   regrasBancos.splice(i, 1);
-  salvarRegras();
-  renderTbRegras();
-  popularSelectBancos();
-}
-
-function duplicarBanco(i) {
-  if (!_isMaster) { alert('Apenas usuários master podem duplicar bancos.'); return; }
-  const orig = regrasBancos[i];
-  let nome = orig.banco + ' (cópia)';
-  let n = 2;
-  while (regrasBancos.some(r => r.banco === nome)) nome = orig.banco + ` (cópia ${n++})`;
-  const copia = { ...orig, banco: nome, excecoesOrigem: (orig.excecoesOrigem || []).map(e => ({...e})) };
-  regrasBancos.push(copia);
   salvarRegras();
   renderTbRegras();
   popularSelectBancos();
