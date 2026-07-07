@@ -1,5 +1,5 @@
-export const NOME_MASCOTE = "Capi";
-export const EMOJI_MASCOTE = "🦫"; // capivara honorária até ter avatar próprio
+export const NOME_MASCOTE = "Capitão";
+export const EMOJI_MASCOTE = "⚓"; // âncora do Capitão até ter avatar próprio
 
 export const PERGUNTAS_SUGERIDAS = [
   "Quais bancos o BRB porta?",

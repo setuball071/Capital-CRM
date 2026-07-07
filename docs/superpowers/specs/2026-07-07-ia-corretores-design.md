@@ -18,9 +18,9 @@ fica preparada para tools de consulta ao CRM na fase 2.
 
 ## 2. Mascote e experiência do corretor
 
-- **Nome:** configurável (armazenado junto à persona editável). Sugestão default:
-  **Capi** (Capital + capivara). Alternativas discutidas: Sabiá, Marge. Decisão
-  final do nome não bloqueia implementação.
+- **Nome:** **Capitão** (decisão do Fábio em 08/07/2026 — Capital → Capitão,
+  emoji/avatar provisório ⚓). Configurável via env `ASSISTENTE_NOME` e persona
+  editável. (Capi/capivara foi descartado.)
 - **Interface:** balão flutuante no canto inferior direito em todas as telas do
   CRM; abre painel de chat lateral.
 - Saudação inicial com 3–4 perguntas sugeridas.
