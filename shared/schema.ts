@@ -4052,3 +4052,70 @@ export const apiKeys = pgTable("api_keys", {
 
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type InsertApiKey = typeof apiKeys.$inferInsert;
+
+// ============ IA INTERNA (MASCOTE) — BASE DE CONHECIMENTO ============
+
+export const kbArtigos = pgTable("kb_artigos", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  conteudo: text("conteudo").notNull(), // markdown
+  categoria: varchar("categoria", { length: 30 }).notNull(), // regras_banco | roteiros | dicas | atalhos_sistema
+  banco: varchar("banco", { length: 100 }),
+  status: varchar("status", { length: 20 }).notNull().default("rascunho"), // rascunho | publicado | arquivado
+  origem: varchar("origem", { length: 30 }).notNull().default("manual"), // manual | pdf | audio | imagem | whatsapp | whatsapp_biblioteca
+  origemRef: varchar("origem_ref", { length: 100 }), // id externo (dedupe import)
+  criadoPor: integer("criado_por").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const kbSugestoes = pgTable("kb_sugestoes", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  tituloProposto: varchar("titulo_proposto", { length: 255 }).notNull(),
+  conteudoProposto: text("conteudo_proposto").notNull(),
+  categoriaProposta: varchar("categoria_proposta", { length: 30 }),
+  bancoProposto: varchar("banco_proposto", { length: 100 }),
+  origem: varchar("origem", { length: 30 }).notNull(), // pdf | audio | imagem | whatsapp | whatsapp_biblioteca
+  origemRef: varchar("origem_ref", { length: 100 }),
+  payloadBruto: text("payload_bruto"), // transcrição/extração original
+  artigoConflitanteId: integer("artigo_conflitante_id").references(
+    () => kbArtigos.id,
+    { onDelete: "set null" },
+  ),
+  status: varchar("status", { length: 20 }).notNull().default("pendente"), // pendente | aprovada | rejeitada
+  decididoPor: integer("decidido_por").references(() => users.id),
+  decididoEm: timestamp("decidido_em"),
+  criadoPor: integer("criado_por").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const assistenteConversas = pgTable("assistente_conversas", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  iniciadaEm: timestamp("iniciada_em").notNull().defaultNow(),
+});
+
+export const assistenteMensagens = pgTable("assistente_mensagens", {
+  id: serial("id").primaryKey(),
+  conversaId: integer("conversa_id")
+    .notNull()
+    .references(() => assistenteConversas.id, { onDelete: "cascade" }),
+  role: varchar("role", { length: 10 }).notNull(), // user | assistant
+  conteudo: text("conteudo").notNull(),
+  chunksUsados: jsonb("chunks_usados").$type<number[]>(),
+  tokens: integer("tokens"),
+  feedback: varchar("feedback", { length: 5 }), // up | down | null
+  semResposta: boolean("sem_resposta").notNull().default(false),
+  criadaEm: timestamp("criada_em").notNull().defaultNow(),
+});

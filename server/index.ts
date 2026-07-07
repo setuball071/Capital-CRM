@@ -553,6 +553,94 @@ app.use((req, res, next) => {
           console.error("Simulador migration error (non-fatal):", migErr);
         }
 
+        // ===== IA INTERNA (MASCOTE) — base de conhecimento =====
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          // pgvector: no Supabase a extensão vive no schema "extensions" (que está no search_path)
+          try {
+            await migDb.execute(migSql`CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions`);
+          } catch {
+            await migDb.execute(migSql`CREATE EXTENSION IF NOT EXISTS vector`);
+          }
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS kb_artigos (
+              id            SERIAL PRIMARY KEY,
+              tenant_id     INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              titulo        VARCHAR(255) NOT NULL,
+              conteudo      TEXT NOT NULL,
+              categoria     VARCHAR(30) NOT NULL,
+              banco         VARCHAR(100),
+              status        VARCHAR(20) NOT NULL DEFAULT 'rascunho',
+              origem        VARCHAR(30) NOT NULL DEFAULT 'manual',
+              origem_ref    VARCHAR(100),
+              criado_por    INTEGER REFERENCES users(id),
+              created_at    TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at    TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS kb_chunks (
+              id            SERIAL PRIMARY KEY,
+              artigo_id     INTEGER NOT NULL REFERENCES kb_artigos(id) ON DELETE CASCADE,
+              ordem         INTEGER NOT NULL DEFAULT 0,
+              texto         TEXT NOT NULL,
+              embedding     vector(768),
+              created_at    TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE INDEX IF NOT EXISTS kb_chunks_embedding_idx ON kb_chunks
+              USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)
+          `);
+          await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS kb_chunks_artigo_idx ON kb_chunks(artigo_id)`);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS kb_sugestoes (
+              id                     SERIAL PRIMARY KEY,
+              tenant_id              INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              titulo_proposto        VARCHAR(255) NOT NULL,
+              conteudo_proposto      TEXT NOT NULL,
+              categoria_proposta     VARCHAR(30),
+              banco_proposto         VARCHAR(100),
+              origem                 VARCHAR(30) NOT NULL,
+              origem_ref             VARCHAR(100),
+              payload_bruto          TEXT,
+              artigo_conflitante_id  INTEGER REFERENCES kb_artigos(id) ON DELETE SET NULL,
+              status                 VARCHAR(20) NOT NULL DEFAULT 'pendente',
+              decidido_por           INTEGER REFERENCES users(id),
+              decidido_em            TIMESTAMP,
+              criado_por             INTEGER REFERENCES users(id),
+              created_at             TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS assistente_conversas (
+              id            SERIAL PRIMARY KEY,
+              tenant_id     INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              iniciada_em   TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS assistente_mensagens (
+              id            SERIAL PRIMARY KEY,
+              conversa_id   INTEGER NOT NULL REFERENCES assistente_conversas(id) ON DELETE CASCADE,
+              role          VARCHAR(10) NOT NULL,
+              conteudo      TEXT NOT NULL,
+              chunks_usados JSONB,
+              tokens        INTEGER,
+              feedback      VARCHAR(5),
+              sem_resposta  BOOLEAN NOT NULL DEFAULT FALSE,
+              criada_em     TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS idx_kb_sugestoes_status ON kb_sugestoes(tenant_id, status)`);
+          await migDb.execute(migSql`CREATE INDEX IF NOT EXISTS idx_assistente_msgs_conversa ON assistente_mensagens(conversa_id)`);
+          log("✓ Migração IA interna (kb_*, assistente_*) ok");
+        } catch (e) {
+          log(`⚠ Migração IA interna falhou (non-fatal): ${e}`);
+        }
+
         // Database seed
         const { seedDatabase } = await import("./seed");
         log("Starting seed...");
