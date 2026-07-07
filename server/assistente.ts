@@ -35,6 +35,41 @@ function requireGestorKb(req: any, res: Response, next: Function) {
   next();
 }
 
+export const NOME_MASCOTE = process.env.ASSISTENTE_NOME || "Capi";
+
+const PERSONA_DEFAULT = `Você é ${NOME_MASCOTE}, o mascote assistente interno dos corretores da Capital (crédito consignado).
+Personalidade: simpático, direto, didático, brasileiro. Trata o corretor como colega de equipe.
+
+REGRAS INEGOCIÁVEIS:
+1. Responda APENAS com base nos TRECHOS DA BASE DE CONHECIMENTO fornecidos abaixo. NUNCA use conhecimento externo sobre regras de banco, taxas, prazos ou processos.
+2. Se os trechos não respondem a pergunta, diga exatamente que não tem essa informação na base e oriente procurar o gestor. NÃO tente adivinhar.
+3. Ao final da resposta, cite as fontes usadas no formato: "📎 Fonte: <título do artigo>" (uma linha por fonte distinta).
+4. Seja conciso: responda em poucos parágrafos ou passos numerados.
+5. NUNCA invente números, percentuais, nomes de banco ou regras que não estejam nos trechos.`;
+
+async function obterPersona(): Promise<string> {
+  try {
+    const [row] = await db
+      .select()
+      .from(aiPrompts)
+      .where(
+        and(
+          eq(aiPrompts.type, "assistente"),
+          eq(aiPrompts.scope, "global"),
+          eq(aiPrompts.isActive, true),
+        ),
+      )
+      .limit(1);
+    if (row?.promptText) return row.promptText;
+  } catch {
+    // fallback silencioso
+  }
+  return PERSONA_DEFAULT;
+}
+
+const RESPOSTA_NAO_SEI = `Hmm, essa eu ainda não tenho na minha base de conhecimento. 🙈
+Recomendo confirmar com seu gestor — e se a resposta for útil pra todo mundo, pede pra ele me ensinar que eu guardo pra próxima!`;
+
 /** Classifica conteúdo bruto em título/categoria/banco via LLM (JSON). */
 export async function classificarConteudo(texto: string): Promise<{
   titulo: string;
@@ -202,5 +237,166 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
       await removerChunksDoArtigo(artigo.id); // rascunho/arquivado sai da busca
     }
     res.json(artigo);
+  });
+
+  // ---------- Chat (qualquer usuário autenticado) ----------
+  app.post("/api/assistente/chat", requireAuth, async (req: any, res: Response) => {
+    const { conversaId, mensagem } = req.body || {};
+    const texto = String(mensagem || "").trim();
+    if (!texto) return res.status(422).json({ message: "mensagem é obrigatória" });
+
+    // resolve conversa (do próprio usuário)
+    let convId = Number(conversaId) || 0;
+    if (convId) {
+      const [conv] = await db
+        .select()
+        .from(assistenteConversas)
+        .where(
+          and(
+            eq(assistenteConversas.id, convId),
+            eq(assistenteConversas.userId, req.user.id),
+          ),
+        )
+        .limit(1);
+      if (!conv) convId = 0;
+    }
+    if (!convId) {
+      const [nova] = await db
+        .insert(assistenteConversas)
+        .values({ tenantId: req.user.tenantId, userId: req.user.id })
+        .returning({ id: assistenteConversas.id });
+      convId = nova.id;
+    }
+
+    // grava a pergunta
+    await db.insert(assistenteMensagens).values({
+      conversaId: convId,
+      role: "user",
+      conteudo: texto,
+    });
+
+    // SSE
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+    const enviar = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+    try {
+      const chunks = await buscarChunks(req.user.tenantId, texto, 8);
+      const relevantes = chunks.filter((c) => c.similaridade >= CORTE_SIMILARIDADE);
+
+      if (!relevantes.length) {
+        const [msg] = await db
+          .insert(assistenteMensagens)
+          .values({
+            conversaId: convId,
+            role: "assistant",
+            conteudo: RESPOSTA_NAO_SEI,
+            semResposta: true,
+          })
+          .returning({ id: assistenteMensagens.id });
+        enviar({ delta: RESPOSTA_NAO_SEI });
+        enviar({ done: true, conversaId: convId, mensagemId: msg.id, semResposta: true, fontes: [] });
+        return res.end();
+      }
+
+      // histórico recente da conversa (máx 20 mensagens anteriores)
+      const historico = await db
+        .select()
+        .from(assistenteMensagens)
+        .where(eq(assistenteMensagens.conversaId, convId))
+        .orderBy(desc(assistenteMensagens.id))
+        .limit(21);
+      const anteriores = historico
+        .slice(1) // remove a pergunta que acabou de ser gravada
+        .reverse()
+        .map((m) => ({
+          role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+          content: m.conteudo,
+        }));
+
+      const trechos = relevantes
+        .map((c, i) => `[${i + 1}] (Artigo: "${c.titulo}"${c.banco ? `, Banco: ${c.banco}` : ""})\n${c.texto}`)
+        .join("\n\n---\n\n");
+      const persona = await obterPersona();
+      const system = `${persona}\n\n===== TRECHOS DA BASE DE CONHECIMENTO =====\n${trechos}`;
+
+      const stream = await ocrClient.chat.completions.create({
+        model: ocrModel,
+        stream: true,
+        temperature: 0.3,
+        max_tokens: 1500,
+        messages: [
+          { role: "system", content: system },
+          ...anteriores,
+          { role: "user", content: texto },
+        ],
+      });
+
+      let resposta = "";
+      const timeoutMs = 30000;
+      const inicio = Date.now();
+      for await (const parte of stream) {
+        const delta = parte.choices?.[0]?.delta?.content || "";
+        if (delta) {
+          resposta += delta;
+          enviar({ delta });
+        }
+        if (Date.now() - inicio > timeoutMs) break;
+      }
+      if (!resposta.trim()) resposta = RESPOSTA_NAO_SEI;
+
+      const fontesUnicas = Array.from(
+        new Map(relevantes.map((c) => [c.artigoId, { artigoId: c.artigoId, titulo: c.titulo }])).values(),
+      );
+      const [msg] = await db
+        .insert(assistenteMensagens)
+        .values({
+          conversaId: convId,
+          role: "assistant",
+          conteudo: resposta,
+          chunksUsados: relevantes.map((c) => c.chunkId),
+          semResposta: false,
+        })
+        .returning({ id: assistenteMensagens.id });
+      enviar({ done: true, conversaId: convId, mensagemId: msg.id, semResposta: false, fontes: fontesUnicas });
+      res.end();
+    } catch (err: any) {
+      console.error("[assistente/chat] erro:", err);
+      enviar({ delta: "Opa, tive um probleminha técnico aqui. 😵 Tenta de novo em instantes!" });
+      enviar({ done: true, conversaId: convId, erro: true, fontes: [] });
+      res.end();
+    }
+  });
+
+  // ---------- Feedback ----------
+  app.post("/api/assistente/feedback", requireAuth, async (req: any, res) => {
+    const { mensagemId, feedback } = req.body || {};
+    if (!["up", "down"].includes(feedback)) {
+      return res.status(422).json({ message: "feedback deve ser up ou down" });
+    }
+    // garante que a mensagem pertence a uma conversa do usuário
+    const res1 = await db
+      .select({ id: assistenteMensagens.id })
+      .from(assistenteMensagens)
+      .innerJoin(
+        assistenteConversas,
+        eq(assistenteMensagens.conversaId, assistenteConversas.id),
+      )
+      .where(
+        and(
+          eq(assistenteMensagens.id, Number(mensagemId)),
+          eq(assistenteConversas.userId, req.user.id),
+        ),
+      )
+      .limit(1);
+    if (!res1.length) return res.status(404).json({ message: "Mensagem não encontrada" });
+    await db
+      .update(assistenteMensagens)
+      .set({ feedback })
+      .where(eq(assistenteMensagens.id, Number(mensagemId)));
+    res.json({ ok: true });
   });
 }
