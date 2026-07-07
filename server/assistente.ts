@@ -1,7 +1,7 @@
 import type { Express, Request, Response, RequestHandler } from "express";
 import multer from "multer";
 import { db } from "./storage";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   kbArtigos,
   kbSugestoes,
@@ -630,5 +630,80 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
       payloadBruto: null,
     });
     res.status(201).json({ sugestaoId: id, duplicada });
+  });
+
+  // ---------- Métricas (gestão) ----------
+  app.get("/api/assistente/metricas", requireAuth, requireGestorKb, async (req: any, res) => {
+    const dias = Math.min(Math.max(Number(req.query.dias) || 30, 1), 365);
+    const tenantId = req.user.tenantId;
+    const rows = (r: unknown) => ((r as any)?.rows ?? r) as any[];
+
+    const [tot] = rows(await db.execute(sql`
+      SELECT
+        count(*) FILTER (WHERE m.role = 'user') AS total_perguntas,
+        count(*) FILTER (WHERE m.role = 'assistant' AND m.sem_resposta) AS total_sem_resposta,
+        count(*) FILTER (WHERE m.role = 'assistant' AND m.feedback = 'down') AS total_down
+      FROM assistente_mensagens m
+      JOIN assistente_conversas c ON c.id = m.conversa_id
+      WHERE c.tenant_id = ${tenantId} AND m.criada_em >= NOW() - (${dias} || ' days')::interval
+    `));
+
+    const semResposta = rows(await db.execute(sql`
+      SELECT prev.conteudo, m.criada_em AS quando
+      FROM assistente_mensagens m
+      JOIN assistente_conversas c ON c.id = m.conversa_id
+      JOIN LATERAL (
+        SELECT conteudo FROM assistente_mensagens p
+        WHERE p.conversa_id = m.conversa_id AND p.id < m.id AND p.role = 'user'
+        ORDER BY p.id DESC LIMIT 1
+      ) prev ON true
+      WHERE c.tenant_id = ${tenantId} AND m.role = 'assistant' AND m.sem_resposta
+        AND m.criada_em >= NOW() - (${dias} || ' days')::interval
+      ORDER BY m.criada_em DESC LIMIT 50
+    `));
+
+    const feedbackDown = rows(await db.execute(sql`
+      SELECT prev.conteudo AS pergunta, m.conteudo AS resposta, m.criada_em AS quando
+      FROM assistente_mensagens m
+      JOIN assistente_conversas c ON c.id = m.conversa_id
+      JOIN LATERAL (
+        SELECT conteudo FROM assistente_mensagens p
+        WHERE p.conversa_id = m.conversa_id AND p.id < m.id AND p.role = 'user'
+        ORDER BY p.id DESC LIMIT 1
+      ) prev ON true
+      WHERE c.tenant_id = ${tenantId} AND m.role = 'assistant' AND m.feedback = 'down'
+        AND m.criada_em >= NOW() - (${dias} || ' days')::interval
+      ORDER BY m.criada_em DESC LIMIT 50
+    `));
+
+    const perguntasFrequentes = rows(await db.execute(sql`
+      SELECT lower(trim(m.conteudo)) AS pergunta, count(*)::int AS vezes
+      FROM assistente_mensagens m
+      JOIN assistente_conversas c ON c.id = m.conversa_id
+      WHERE c.tenant_id = ${tenantId} AND m.role = 'user'
+        AND m.criada_em >= NOW() - (${dias} || ' days')::interval
+      GROUP BY 1 HAVING count(*) > 1
+      ORDER BY vezes DESC LIMIT 20
+    `));
+
+    const volumePorDia = rows(await db.execute(sql`
+      SELECT to_char(m.criada_em::date, 'YYYY-MM-DD') AS dia, count(*)::int AS perguntas
+      FROM assistente_mensagens m
+      JOIN assistente_conversas c ON c.id = m.conversa_id
+      WHERE c.tenant_id = ${tenantId} AND m.role = 'user'
+        AND m.criada_em >= NOW() - (${dias} || ' days')::interval
+      GROUP BY 1 ORDER BY 1
+    `));
+
+    res.json({
+      periodoDias: dias,
+      totalPerguntas: Number(tot?.total_perguntas || 0),
+      totalSemResposta: Number(tot?.total_sem_resposta || 0),
+      totalFeedbackDown: Number(tot?.total_down || 0),
+      semResposta,
+      feedbackDown,
+      perguntasFrequentes,
+      volumePorDia,
+    });
   });
 }
