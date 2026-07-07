@@ -98,7 +98,30 @@ Tela "Base de Conhecimento" (menu master/admin/operacional; corretor não vê):
    no WhatsApp CRM envia sugestões via endpoint com API key → mesma fila de
    aprovação. Nada entra sozinho.
 
-### 4.1 Atualização inteligente (anti-conflito)
+### 4.1 Carga inicial: importação da Biblioteca do WhatsApp CRM
+
+O WhatsApp CRM (capitalgo) já tem uma "Biblioteca" com ~55 memórias indexadas
+(`knowledge_files` + `knowledge_chunks`, Supabase próprio, embeddings 384d
+`text-embedding-004`) — tutoriais, passo-a-passo, regras operacionais (livros
+"azuis", curados) e Sínteses geradas automaticamente da leitura de grupos
+(livros "Síntese", qualidade variável).
+
+Importação **única, via fila de aprovação** (mesma triagem de tudo):
+
+1. Script/rotina lê os livros da Biblioteca (texto dos chunks reagrupado por
+   livro) no Supabase do WhatsApp CRM (service key em env, execução manual).
+2. Cada livro vira uma `kb_sugestao` com **classificação proposta pelo LLM**
+   (categoria + banco + título limpo) e marcação da origem
+   (`whatsapp_biblioteca`, guardando o id original para não reimportar).
+3. Fábio/gestor tria na fila: aprova (vira artigo publicado), edita ou rejeita.
+   Expectativa: azuis aprovam quase direto; Sínteses exigem mais edição.
+4. **Não copiar embeddings** — dimensão/modelo diferentes (384d vs 768d);
+   reindexar com o pipeline próprio na aprovação.
+
+A Biblioteca continua existindo e servindo o WhatsApp CRM normalmente; a
+importação é uma cópia curada, não uma migração destrutiva.
+
+### 4.2 Atualização inteligente (anti-conflito)
 
 Todo conhecimento novo (qualquer origem) passa por busca de similaridade contra
 artigos publicados. Se houver artigo muito parecido, a fila de aprovação mostra
