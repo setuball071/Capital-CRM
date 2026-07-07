@@ -5884,8 +5884,8 @@ function pintarRefimContratos() {
     return;
   }
 
-  let totalSaldo = 0;
-  let totalElegiveis = 0;
+  let saldoRemunerado = 0, qtdRemunerado = 0;
+  let saldoNaoRemunerado = 0, qtdNaoRemunerado = 0;
 
   tb.innerHTML = marcados.map(c => {
     const taxa  = parseBR(c.taxa);
@@ -5904,15 +5904,15 @@ function pintarRefimContratos() {
         statusHtml = `<span style="color:#EF4444;font-weight:600;font-size:12px;">🔴 Taxa baixa</span><br><span style="font-size:10px;color:#9CA3AF;">mín ${fmtPct(regra.entradaMin)}%</span>`;
       } else if (elig.portavel === null) {
         statusHtml = `<span style="color:#16A34A;font-weight:600;font-size:12px;">🟢 Taxa aceita</span><br><span style="font-size:10px;color:#9CA3AF;">pagas: ?</span>`;
-        totalSaldo += saldo; totalElegiveis++;
+        saldoRemunerado += saldo; qtdRemunerado++;
       } else if (!elig.portavel) {
         statusHtml = `<span style="color:#EF4444;font-weight:600;font-size:12px;">🔴 Não porta</span><br><span style="font-size:10px;color:#9CA3AF;">${elig.motivo}</span>`;
       } else if (!elig.remunera) {
         statusHtml = `<span style="color:#D97706;font-weight:600;font-size:12px;">🟡 Sem remuneração</span><br><span style="font-size:10px;color:#9CA3AF;">${elig.motivo}</span>`;
-        totalSaldo += saldo; totalElegiveis++;
+        saldoNaoRemunerado += saldo; qtdNaoRemunerado++;
       } else {
         statusHtml = `<span style="color:#16A34A;font-weight:600;font-size:12px;">🟢 Porta e remunera</span><br><span style="font-size:10px;color:#9CA3AF;">${elig.motivo}</span>`;
-        totalSaldo += saldo; totalElegiveis++;
+        saldoRemunerado += saldo; qtdRemunerado++;
       }
     }
 
@@ -5927,11 +5927,27 @@ function pintarRefimContratos() {
   }).join('');
 
   const info = document.getElementById('refimSaldoTotal');
+  const totalElegiveis = qtdRemunerado + qtdNaoRemunerado;
   if (regra) {
-    info.textContent = `Saldo elegível para portar: ${fmtBRL(totalSaldo)} (${totalElegiveis} contrato${totalElegiveis !== 1 ? 's' : ''})`;
-    info.style.color = totalElegiveis > 0 ? '#16A34A' : '#EF4444';
+    let html = '';
+    if (totalElegiveis === 0) {
+      html = `<span style="color:#EF4444;">Nenhum contrato elegível para portar</span>`;
+    } else {
+      html += `<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;">`;
+      html += `<div><span style="color:#16A34A;">🟢 Remunerado:</span> <strong>${fmtBRL(saldoRemunerado)}</strong> <span style="color:#6B7280;font-weight:400;">(${qtdRemunerado} contrato${qtdRemunerado !== 1 ? 's' : ''})</span></div>`;
+      html += `<div><span style="color:#D97706;">🟡 Sem remuneração:</span> <strong>${fmtBRL(saldoNaoRemunerado)}</strong> <span style="color:#6B7280;font-weight:400;">(${qtdNaoRemunerado} contrato${qtdNaoRemunerado !== 1 ? 's' : ''})</span></div>`;
+      html += `</div>`;
+      if (nome === 'Caixa' && qtdNaoRemunerado > 0) {
+        const custoCaixa = qtdNaoRemunerado * 30;
+        html += `<div style="margin-top:8px;padding:8px 12px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;font-size:12px;color:#92400E;">`;
+        html += `⚠️ <strong>Custo estimado Caixa:</strong> ${qtdNaoRemunerado} contrato${qtdNaoRemunerado !== 1 ? 's' : ''} × R$30,00 = <strong>R$${custoCaixa.toFixed(2).replace('.',',')}</strong> (taxa de não remuneração — exclusiva da Caixa)`;
+        html += `</div>`;
+      }
+    }
+    info.innerHTML = html;
+    info.style.color = '';
   } else {
-    info.textContent = '';
+    info.innerHTML = '';
   }
 }
 
