@@ -553,6 +553,36 @@ app.use((req, res, next) => {
           console.error("Simulador migration error (non-fatal):", migErr);
         }
 
+        // Consulta de Taxa Caixa — camada de edições/adições do master sobre o
+        // material estático (HTML lê a base + mescla estes overrides do banco)
+        try {
+          const { db: taxaDb } = await import("./storage");
+          const { sql: taxaSql } = await import("drizzle-orm");
+          await taxaDb.execute(taxaSql`
+            CREATE TABLE IF NOT EXISTS caixa_taxas (
+              id            SERIAL PRIMARY KEY,
+              tenant_id     INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              chave         VARCHAR(120) NOT NULL,
+              nome          VARCHAR(500) NOT NULL,
+              cnpj          VARCHAR(40),
+              portabilidade VARCHAR(20),
+              refin_da_port VARCHAR(20),
+              refin_open    VARCHAR(20),
+              publico       VARCHAR(255),
+              regional      BOOLEAN NOT NULL DEFAULT false,
+              data_ref      VARCHAR(20),
+              is_novo       BOOLEAN NOT NULL DEFAULT false,
+              created_at    TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at    TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE(tenant_id, chave)
+            )
+          `);
+          await taxaDb.execute(taxaSql`CREATE INDEX IF NOT EXISTS idx_caixa_taxas_tenant ON caixa_taxas(tenant_id)`);
+          log("Caixa taxas migration OK");
+        } catch (migErr) {
+          console.error("Caixa taxas migration error (non-fatal):", migErr);
+        }
+
         // Database seed
         const { seedDatabase } = await import("./seed");
         log("Starting seed...");
