@@ -564,6 +564,7 @@ export default function ContratosDetalhePage() {
       case "installmentValue": body = { installmentValue: parseBrNum(editVal) }; break;
       case "term":             body = { term: editVal.trim() ? parseInt(editVal) : null }; break;
       case "taxa":             body = { clientMetaPatch: { taxa: parseBrNum(editVal) } }; break;
+      case "taxaAtual":        body = { clientMetaPatch: { taxaAtual: parseBrNum(editVal) } }; break;
       case "ade":              body = { ade: editVal.trim() }; break;
       case "adeRefin":         body = { adeRefin: editVal.trim() }; break;
       case "numeroContrato":   body = { clientMetaPatch: { numeroContrato: editVal.trim() } }; break;
@@ -995,6 +996,7 @@ export default function ContratosDetalhePage() {
           {isPortabilidade && renderField({ fieldKey: "numeroContrato", label: "Nº Contrato Origem", value: m.numeroContrato, mono: true, editable: true })}
           {m.parcelaOriginal != null && renderField({ fieldKey: "parcelaOrig", label: "Parcela Original", value: m.parcelaOriginal, money: true })}
           {m.prazoAtual != null && renderField({ fieldKey: "prazoRest", label: "Prazo Restante", value: `${m.prazoAtual}${m.prazoTotal ? `/${m.prazoTotal}` : ""}`, copyable: false })}
+          {m.taxaAtual != null && renderField({ fieldKey: "taxaAtual", label: "Taxa Original (%)", value: String(m.taxaAtual), editable: true, copyable: false })}
           {/* Financeiro da operação (portabilidade) */}
           {isPortabilidade && renderField({ fieldKey: "saldoDevedor", label: "Saldo Devedor Informado", value: m.saldoDevedor, money: true, editable: true })}
           {isPortabilidade && renderField({ fieldKey: "troco", label: "Troco", value: m.troco, money: true, editable: true })}
