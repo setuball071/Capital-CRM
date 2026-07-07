@@ -19,6 +19,7 @@ import {
   buscarChunks,
   CORTE_SIMILARIDADE,
 } from "./assistente-rag";
+import { requireApiKey } from "./api-key-middleware";
 
 const uploadKb = multer({
   storage: multer.memoryStorage(),
@@ -607,4 +608,27 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
       res.json({ ok: true, artigoId: artigo.id });
     },
   );
+
+  // ---------- Sugestões vindas do WhatsApp CRM (API key, sem sessão) ----------
+  app.post("/api/assistente/kb/sugestoes/externa", requireApiKey, async (req: any, res) => {
+    const escopos: string[] = req.apiKeyEscopos || [];
+    if (!escopos.includes("kb_sugestoes")) {
+      return res.status(403).json({ error: "API key sem escopo kb_sugestoes" });
+    }
+    const { titulo, conteudo, categoria, banco, origemRef } = req.body || {};
+    if (!titulo || !conteudo) {
+      return res.status(422).json({ error: "titulo e conteudo são obrigatórios" });
+    }
+    const { id, duplicada } = await criarSugestao({
+      tenantId: req.apiTenantId,
+      titulo: String(titulo),
+      conteudo: String(conteudo),
+      categoria: categoria || null,
+      banco: banco || null,
+      origem: "whatsapp",
+      origemRef: origemRef ? String(origemRef).slice(0, 100) : null,
+      payloadBruto: null,
+    });
+    res.status(201).json({ sugestaoId: id, duplicada });
+  });
 }
