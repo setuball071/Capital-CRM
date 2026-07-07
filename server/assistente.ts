@@ -185,73 +185,91 @@ export async function criarSugestao(dados: {
 export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandler) {
   // ---------- CRUD de artigos (gestão) ----------
   app.get("/api/assistente/kb", requireAuth, requireGestorKb, async (req: any, res) => {
-    const artigos = await db
-      .select()
-      .from(kbArtigos)
-      .where(eq(kbArtigos.tenantId, req.user.tenantId))
-      .orderBy(desc(kbArtigos.updatedAt));
-    res.json(artigos);
+    try {
+      if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
+      const artigos = await db
+        .select()
+        .from(kbArtigos)
+        .where(eq(kbArtigos.tenantId, req.tenantId))
+        .orderBy(desc(kbArtigos.updatedAt));
+      res.json(artigos);
+    } catch (err) {
+      console.error("[assistente/kb] erro:", err);
+      res.status(500).json({ message: "Erro interno" });
+    }
   });
 
   app.post("/api/assistente/kb", requireAuth, requireGestorKb, async (req: any, res) => {
-    const { titulo, conteudo, categoria, banco, status } = req.body || {};
-    if (!titulo || !conteudo || !CATEGORIAS_KB.includes(categoria)) {
-      return res.status(422).json({ message: "titulo, conteudo e categoria válida são obrigatórios" });
+    try {
+      if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
+      const { titulo, conteudo, categoria, banco, status } = req.body || {};
+      if (!titulo || !conteudo || !CATEGORIAS_KB.includes(categoria)) {
+        return res.status(422).json({ message: "titulo, conteudo e categoria válida são obrigatórios" });
+      }
+      const [artigo] = await db
+        .insert(kbArtigos)
+        .values({
+          tenantId: req.tenantId,
+          titulo: String(titulo).slice(0, 255),
+          conteudo,
+          categoria,
+          banco: banco || null,
+          status: status === "publicado" ? "publicado" : "rascunho",
+          origem: "manual",
+          criadoPor: req.user.id,
+        })
+        .returning();
+      if (artigo.status === "publicado") {
+        await indexarArtigo(artigo.id, artigo.titulo, artigo.conteudo);
+      }
+      res.json(artigo);
+    } catch (err) {
+      console.error("[assistente/kb] erro:", err);
+      res.status(500).json({ message: "Erro interno" });
     }
-    const [artigo] = await db
-      .insert(kbArtigos)
-      .values({
-        tenantId: req.user.tenantId,
-        titulo: String(titulo).slice(0, 255),
-        conteudo,
-        categoria,
-        banco: banco || null,
-        status: status === "publicado" ? "publicado" : "rascunho",
-        origem: "manual",
-        criadoPor: req.user.id,
-      })
-      .returning();
-    if (artigo.status === "publicado") {
-      await indexarArtigo(artigo.id, artigo.titulo, artigo.conteudo);
-    }
-    res.json(artigo);
   });
 
   app.patch("/api/assistente/kb/:id", requireAuth, requireGestorKb, async (req: any, res) => {
-    const id = Number(req.params.id);
-    const [atual] = await db
-      .select()
-      .from(kbArtigos)
-      .where(and(eq(kbArtigos.id, id), eq(kbArtigos.tenantId, req.user.tenantId)))
-      .limit(1);
-    if (!atual) return res.status(404).json({ message: "Artigo não encontrado" });
+    try {
+      if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
+      const id = Number(req.params.id);
+      const [atual] = await db
+        .select()
+        .from(kbArtigos)
+        .where(and(eq(kbArtigos.id, id), eq(kbArtigos.tenantId, req.tenantId)))
+        .limit(1);
+      if (!atual) return res.status(404).json({ message: "Artigo não encontrado" });
 
-    const { titulo, conteudo, categoria, banco, status } = req.body || {};
-    if (categoria && !CATEGORIAS_KB.includes(categoria)) {
-      return res.status(422).json({ message: "categoria inválida" });
-    }
-    if (status && !["rascunho", "publicado", "arquivado"].includes(status)) {
-      return res.status(422).json({ message: "status inválido" });
-    }
-    const [artigo] = await db
-      .update(kbArtigos)
-      .set({
-        titulo: titulo !== undefined ? String(titulo).slice(0, 255) : atual.titulo,
-        conteudo: conteudo !== undefined ? conteudo : atual.conteudo,
-        categoria: categoria ?? atual.categoria,
-        banco: banco !== undefined ? banco || null : atual.banco,
-        status: status ?? atual.status,
-        updatedAt: new Date(),
-      })
-      .where(eq(kbArtigos.id, id))
-      .returning();
+      const { titulo, conteudo, categoria, banco, status } = req.body || {};
+      if (categoria && !CATEGORIAS_KB.includes(categoria)) {
+        return res.status(422).json({ message: "categoria inválida" });
+      }
+      if (status && !["rascunho", "publicado", "arquivado"].includes(status)) {
+        return res.status(422).json({ message: "status inválido" });
+      }
+      const [artigo] = await db
+        .update(kbArtigos)
+        .set({
+          titulo: titulo !== undefined ? String(titulo).slice(0, 255) : atual.titulo,
+          conteudo: conteudo !== undefined ? conteudo : atual.conteudo,
+          categoria: categoria ?? atual.categoria,
+          banco: banco !== undefined ? banco || null : atual.banco,
+          status: status ?? atual.status,
+          updatedAt: new Date(),
+        })
+        .where(eq(kbArtigos.id, id))
+        .returning();
 
-    if (artigo.status === "publicado") {
-      await indexarArtigo(artigo.id, artigo.titulo, artigo.conteudo);
-    } else {
-      await removerChunksDoArtigo(artigo.id); // rascunho/arquivado sai da busca
+      if (artigo.status === "publicado") {
+        await indexarArtigo(artigo.id, artigo.titulo, artigo.conteudo);
+      } else {
+        await removerChunksDoArtigo(artigo.id); // rascunho/arquivado sai da busca
+      }
+      res.json(artigo);
+    } catch (err) {
+      console.error("[assistente/kb/:id] erro:", err);
+      res.status(500).json({ message: "Erro interno" });
     }
-    res.json(artigo);
   });
 
   // ---------- Upload PDF → rascunho ----------
@@ -261,121 +279,135 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
     requireGestorKb,
     uploadKb.single("arquivo"),
     async (req: any, res) => {
-      const file = req.file;
-      if (!file) return res.status(422).json({ message: "arquivo é obrigatório" });
-      if (!file.originalname.toLowerCase().endsWith(".pdf")) {
-        return res.status(422).json({ message: "Apenas PDF é aceito por enquanto" });
-      }
-      let texto = "";
       try {
-        texto = await extractTextFromPdf(file.buffer);
-      } catch (e) {
-        console.error("[assistente/upload] extração falhou:", e);
-        return res.status(422).json({ message: "Não consegui extrair texto deste PDF" });
+        if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
+        const file = req.file;
+        if (!file) return res.status(422).json({ message: "arquivo é obrigatório" });
+        if (!file.originalname.toLowerCase().endsWith(".pdf")) {
+          return res.status(422).json({ message: "Apenas PDF é aceito por enquanto" });
+        }
+        let texto = "";
+        try {
+          texto = await extractTextFromPdf(file.buffer);
+        } catch (e) {
+          console.error("[assistente/upload] extração falhou:", e);
+          return res.status(422).json({ message: "Não consegui extrair texto deste PDF" });
+        }
+        if (!texto.trim() || texto.trim().length < 50) {
+          return res.status(422).json({ message: "PDF sem texto legível (pode ser imagem escaneada)" });
+        }
+        const clas = await classificarConteudo(texto);
+        const [artigo] = await db
+          .insert(kbArtigos)
+          .values({
+            tenantId: req.tenantId,
+            titulo: clas.titulo,
+            conteudo: clas.conteudo,
+            categoria: clas.categoria,
+            banco: clas.banco,
+            status: "rascunho", // SEMPRE rascunho — revisão humana obrigatória
+            origem: "pdf",
+            origemRef: file.originalname.slice(0, 100),
+            criadoPor: req.user.id,
+          })
+          .returning();
+        res.json({ artigo });
+      } catch (err) {
+        console.error("[assistente/kb/upload] erro:", err);
+        res.status(500).json({ message: "Erro interno" });
       }
-      if (!texto.trim() || texto.trim().length < 50) {
-        return res.status(422).json({ message: "PDF sem texto legível (pode ser imagem escaneada)" });
-      }
-      const clas = await classificarConteudo(texto);
-      const [artigo] = await db
-        .insert(kbArtigos)
-        .values({
-          tenantId: req.user.tenantId,
-          titulo: clas.titulo,
-          conteudo: clas.conteudo,
-          categoria: clas.categoria,
-          banco: clas.banco,
-          status: "rascunho", // SEMPRE rascunho — revisão humana obrigatória
-          origem: "pdf",
-          origemRef: file.originalname.slice(0, 100),
-          criadoPor: req.user.id,
-        })
-        .returning();
-      res.json({ artigo });
     },
   );
 
   // ---------- Chat (qualquer usuário autenticado) ----------
   app.post("/api/assistente/chat", requireAuth, uploadChat.single("arquivo"), async (req: any, res: Response) => {
+    if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
     const { conversaId, mensagem, modoCaptura } = req.body || {};
     let texto = String(mensagem || "").trim();
     let extraidoDeMidia = "";
     let origemMidia: "audio" | "imagem" | null = null;
+    let convId = 0;
 
     try {
-      if (req.file) {
-        const mime = req.file.mimetype || "";
-        if (mime.startsWith("audio/")) {
-          extraidoDeMidia = await transcreverAudio(req.file.buffer, mime);
-          origemMidia = "audio";
-        } else if (mime.startsWith("image/")) {
-          extraidoDeMidia = await extrairTextoImagem(req.file.buffer, mime);
-          origemMidia = "imagem";
-        } else {
-          return res.status(422).json({ message: "Arquivo deve ser áudio ou imagem" });
+      try {
+        if (req.file) {
+          const mime = req.file.mimetype || "";
+          if (mime.startsWith("audio/")) {
+            extraidoDeMidia = await transcreverAudio(req.file.buffer, mime);
+            origemMidia = "audio";
+          } else if (mime.startsWith("image/")) {
+            extraidoDeMidia = await extrairTextoImagem(req.file.buffer, mime);
+            origemMidia = "imagem";
+          } else {
+            return res.status(422).json({ message: "Arquivo deve ser áudio ou imagem" });
+          }
         }
+      } catch (e: any) {
+        console.error("[assistente/chat] mídia falhou:", e);
+        return res.status(422).json({ message: "Não consegui processar o áudio/imagem" });
       }
-    } catch (e: any) {
-      console.error("[assistente/chat] mídia falhou:", e);
-      return res.status(422).json({ message: "Não consegui processar o áudio/imagem" });
-    }
 
-    if (extraidoDeMidia) {
-      texto = texto
-        ? `${texto}\n\n[Conteúdo do ${origemMidia}]:\n${extraidoDeMidia}`
-        : extraidoDeMidia;
-    }
-    if (!texto) return res.status(422).json({ message: "mensagem é obrigatória" });
+      if (extraidoDeMidia) {
+        texto = texto
+          ? `${texto}\n\n[Conteúdo do ${origemMidia}]:\n${extraidoDeMidia}`
+          : extraidoDeMidia;
+      }
+      if (!texto) return res.status(422).json({ message: "mensagem é obrigatória" });
 
-    // ---- MODO CAPTURA (só gestores): guarda conhecimento em vez de responder ----
-    if (modoCaptura === "1" && podeGerenciarKb(req.user)) {
-      const clas = await classificarConteudo(texto);
-      const { id: sugestaoId } = await criarSugestao({
-        tenantId: req.user.tenantId,
-        titulo: clas.titulo,
-        conteudo: clas.conteudo,
-        categoria: clas.categoria,
-        banco: clas.banco,
-        origem: origemMidia ?? "manual",
-        payloadBruto: texto,
-        criadoPor: req.user.id,
+      // ---- MODO CAPTURA (só gestores): guarda conhecimento em vez de responder ----
+      if (modoCaptura === "1" && podeGerenciarKb(req.user)) {
+        const clas = await classificarConteudo(texto);
+        const { id: sugestaoId } = await criarSugestao({
+          tenantId: req.tenantId,
+          titulo: clas.titulo,
+          conteudo: clas.conteudo,
+          categoria: clas.categoria,
+          banco: clas.banco,
+          origem: origemMidia ?? "manual",
+          payloadBruto: texto,
+          criadoPor: req.user.id,
+        });
+        return res.json({
+          captura: true,
+          sugestaoId,
+          resumo: `Guardei como sugestão: "${clas.titulo}" (${clas.categoria}${clas.banco ? `, ${clas.banco}` : ""}). Aprova lá na Base de Conhecimento → Fila!`,
+        });
+      }
+
+      // resolve conversa (do próprio usuário)
+      convId = Number(conversaId) || 0;
+      if (convId) {
+        const [conv] = await db
+          .select()
+          .from(assistenteConversas)
+          .where(
+            and(
+              eq(assistenteConversas.id, convId),
+              eq(assistenteConversas.userId, req.user.id),
+            ),
+          )
+          .limit(1);
+        if (!conv) convId = 0;
+      }
+      if (!convId) {
+        const [nova] = await db
+          .insert(assistenteConversas)
+          .values({ tenantId: req.tenantId, userId: req.user.id })
+          .returning({ id: assistenteConversas.id });
+        convId = nova.id;
+      }
+
+      // grava a pergunta
+      await db.insert(assistenteMensagens).values({
+        conversaId: convId,
+        role: "user",
+        conteudo: texto,
       });
-      return res.json({
-        captura: true,
-        sugestaoId,
-        resumo: `Guardei como sugestão: "${clas.titulo}" (${clas.categoria}${clas.banco ? `, ${clas.banco}` : ""}). Aprova lá na Base de Conhecimento → Fila!`,
-      });
+    } catch (err) {
+      console.error("[assistente/chat] erro:", err);
+      if (!res.headersSent) res.status(500).json({ message: "Erro interno" });
+      return;
     }
-
-    // resolve conversa (do próprio usuário)
-    let convId = Number(conversaId) || 0;
-    if (convId) {
-      const [conv] = await db
-        .select()
-        .from(assistenteConversas)
-        .where(
-          and(
-            eq(assistenteConversas.id, convId),
-            eq(assistenteConversas.userId, req.user.id),
-          ),
-        )
-        .limit(1);
-      if (!conv) convId = 0;
-    }
-    if (!convId) {
-      const [nova] = await db
-        .insert(assistenteConversas)
-        .values({ tenantId: req.user.tenantId, userId: req.user.id })
-        .returning({ id: assistenteConversas.id });
-      convId = nova.id;
-    }
-
-    // grava a pergunta
-    await db.insert(assistenteMensagens).values({
-      conversaId: convId,
-      role: "user",
-      conteudo: texto,
-    });
 
     // SSE
     res.writeHead(200, {
@@ -386,7 +418,7 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
     const enviar = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
     try {
-      const chunks = await buscarChunks(req.user.tenantId, texto, 8);
+      const chunks = await buscarChunks(req.tenantId, texto, 8);
       const relevantes = chunks.filter((c) => c.similaridade >= CORTE_SIMILARIDADE);
 
       if (!relevantes.length) {
@@ -475,61 +507,81 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
 
   // ---------- Feedback ----------
   app.post("/api/assistente/feedback", requireAuth, async (req: any, res) => {
-    const { mensagemId, feedback } = req.body || {};
-    if (!["up", "down"].includes(feedback)) {
-      return res.status(422).json({ message: "feedback deve ser up ou down" });
+    try {
+      const { mensagemId, feedback } = req.body || {};
+      if (!["up", "down"].includes(feedback)) {
+        return res.status(422).json({ message: "feedback deve ser up ou down" });
+      }
+      const mid = Number(mensagemId);
+      if (!Number.isInteger(mid) || mid <= 0) {
+        return res.status(422).json({ message: "mensagemId inválido" });
+      }
+      // garante que a mensagem pertence a uma conversa do usuário
+      const res1 = await db
+        .select({ id: assistenteMensagens.id })
+        .from(assistenteMensagens)
+        .innerJoin(
+          assistenteConversas,
+          eq(assistenteMensagens.conversaId, assistenteConversas.id),
+        )
+        .where(
+          and(
+            eq(assistenteMensagens.id, mid),
+            eq(assistenteConversas.userId, req.user.id),
+          ),
+        )
+        .limit(1);
+      if (!res1.length) return res.status(404).json({ message: "Mensagem não encontrada" });
+      await db
+        .update(assistenteMensagens)
+        .set({ feedback })
+        .where(eq(assistenteMensagens.id, mid));
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[assistente/feedback] erro:", err);
+      res.status(500).json({ message: "Erro interno" });
     }
-    // garante que a mensagem pertence a uma conversa do usuário
-    const res1 = await db
-      .select({ id: assistenteMensagens.id })
-      .from(assistenteMensagens)
-      .innerJoin(
-        assistenteConversas,
-        eq(assistenteMensagens.conversaId, assistenteConversas.id),
-      )
-      .where(
-        and(
-          eq(assistenteMensagens.id, Number(mensagemId)),
-          eq(assistenteConversas.userId, req.user.id),
-        ),
-      )
-      .limit(1);
-    if (!res1.length) return res.status(404).json({ message: "Mensagem não encontrada" });
-    await db
-      .update(assistenteMensagens)
-      .set({ feedback })
-      .where(eq(assistenteMensagens.id, Number(mensagemId)));
-    res.json({ ok: true });
   });
 
   // ---------- Fila de sugestões ----------
   app.get("/api/assistente/kb/sugestoes", requireAuth, requireGestorKb, async (req: any, res) => {
-    const status = String(req.query.status || "pendente");
-    const sugestoes = await db
-      .select()
-      .from(kbSugestoes)
-      .where(
-        and(
-          eq(kbSugestoes.tenantId, req.user.tenantId),
-          eq(kbSugestoes.status, status),
-        ),
-      )
-      .orderBy(desc(kbSugestoes.createdAt));
-    // embute o artigo conflitante (para o comparativo lado a lado)
-    const resultado = [];
-    for (const s of sugestoes) {
-      let conflito = null;
-      if (s.artigoConflitanteId) {
-        const [art] = await db
-          .select({ id: kbArtigos.id, titulo: kbArtigos.titulo, conteudo: kbArtigos.conteudo })
-          .from(kbArtigos)
-          .where(eq(kbArtigos.id, s.artigoConflitanteId))
-          .limit(1);
-        conflito = art ?? null;
+    try {
+      if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
+      const status = String(req.query.status || "pendente");
+      const sugestoes = await db
+        .select()
+        .from(kbSugestoes)
+        .where(
+          and(
+            eq(kbSugestoes.tenantId, req.tenantId),
+            eq(kbSugestoes.status, status),
+          ),
+        )
+        .orderBy(desc(kbSugestoes.createdAt));
+      // embute o artigo conflitante (para o comparativo lado a lado)
+      const resultado = [];
+      for (const s of sugestoes) {
+        let conflito = null;
+        if (s.artigoConflitanteId) {
+          const [art] = await db
+            .select({ id: kbArtigos.id, titulo: kbArtigos.titulo, conteudo: kbArtigos.conteudo })
+            .from(kbArtigos)
+            .where(
+              and(
+                eq(kbArtigos.id, s.artigoConflitanteId),
+                eq(kbArtigos.tenantId, req.tenantId),
+              ),
+            )
+            .limit(1);
+          conflito = art ?? null;
+        }
+        resultado.push({ ...s, conflito });
       }
-      resultado.push({ ...s, conflito });
+      res.json(resultado);
+    } catch (err) {
+      console.error("[assistente/kb/sugestoes] erro:", err);
+      res.status(500).json({ message: "Erro interno" });
     }
-    res.json(resultado);
   });
 
   app.post(
@@ -537,173 +589,190 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
     requireAuth,
     requireGestorKb,
     async (req: any, res) => {
-      const id = Number(req.params.id);
-      const { acao, modo, edicao } = req.body || {};
-      if (!["aprovar", "rejeitar"].includes(acao)) {
-        return res.status(422).json({ message: "acao deve ser aprovar ou rejeitar" });
-      }
-      const [sug] = await db
-        .select()
-        .from(kbSugestoes)
-        .where(
-          and(
-            eq(kbSugestoes.id, id),
-            eq(kbSugestoes.tenantId, req.user.tenantId),
-            eq(kbSugestoes.status, "pendente"),
-          ),
-        )
-        .limit(1);
-      if (!sug) return res.status(404).json({ message: "Sugestão pendente não encontrada" });
-
-      if (acao === "rejeitar") {
-        await db
-          .update(kbSugestoes)
-          .set({ status: "rejeitada", decididoPor: req.user.id, decididoEm: new Date() })
-          .where(eq(kbSugestoes.id, id));
-        return res.json({ ok: true });
-      }
-
-      // aprovar
-      const titulo = String(edicao?.titulo || sug.tituloProposto).slice(0, 255);
-      const conteudo = String(edicao?.conteudo || sug.conteudoProposto);
-      const categoria = (CATEGORIAS_KB as readonly string[]).includes(edicao?.categoria ?? sug.categoriaProposta)
-        ? (edicao?.categoria ?? sug.categoriaProposta)
-        : "dicas";
-      const banco = edicao?.banco !== undefined ? edicao.banco || null : sug.bancoProposto;
-
-      const [artigo] = await db
-        .insert(kbArtigos)
-        .values({
-          tenantId: req.user.tenantId,
-          titulo,
-          conteudo,
-          categoria,
-          banco,
-          status: "publicado",
-          origem: sug.origem,
-          origemRef: sug.origemRef,
-          criadoPor: req.user.id,
-        })
-        .returning();
-      await indexarArtigo(artigo.id, artigo.titulo, artigo.conteudo);
-
-      // substituir: arquiva o antigo e tira da busca (histórico preservado)
-      if (modo === "substituir" && sug.artigoConflitanteId) {
-        await db
-          .update(kbArtigos)
-          .set({ status: "arquivado", updatedAt: new Date() })
+      try {
+        if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
+        const id = Number(req.params.id);
+        const { acao, modo, edicao } = req.body || {};
+        if (!["aprovar", "rejeitar"].includes(acao)) {
+          return res.status(422).json({ message: "acao deve ser aprovar ou rejeitar" });
+        }
+        const [sug] = await db
+          .select()
+          .from(kbSugestoes)
           .where(
             and(
-              eq(kbArtigos.id, sug.artigoConflitanteId),
-              eq(kbArtigos.tenantId, req.user.tenantId),
+              eq(kbSugestoes.id, id),
+              eq(kbSugestoes.tenantId, req.tenantId),
+              eq(kbSugestoes.status, "pendente"),
             ),
-          );
-        await removerChunksDoArtigo(sug.artigoConflitanteId);
-      }
+          )
+          .limit(1);
+        if (!sug) return res.status(404).json({ message: "Sugestão pendente não encontrada" });
 
-      await db
-        .update(kbSugestoes)
-        .set({ status: "aprovada", decididoPor: req.user.id, decididoEm: new Date() })
-        .where(eq(kbSugestoes.id, id));
-      res.json({ ok: true, artigoId: artigo.id });
+        if (acao === "rejeitar") {
+          await db
+            .update(kbSugestoes)
+            .set({ status: "rejeitada", decididoPor: req.user.id, decididoEm: new Date() })
+            .where(eq(kbSugestoes.id, id));
+          return res.json({ ok: true });
+        }
+
+        // aprovar
+        const titulo = String(edicao?.titulo || sug.tituloProposto).slice(0, 255);
+        const conteudo = String(edicao?.conteudo || sug.conteudoProposto);
+        const categoria = (CATEGORIAS_KB as readonly string[]).includes(edicao?.categoria ?? sug.categoriaProposta)
+          ? (edicao?.categoria ?? sug.categoriaProposta)
+          : "dicas";
+        const banco = edicao?.banco !== undefined ? edicao.banco || null : sug.bancoProposto;
+
+        const [artigo] = await db
+          .insert(kbArtigos)
+          .values({
+            tenantId: req.tenantId,
+            titulo,
+            conteudo,
+            categoria,
+            banco,
+            status: "publicado",
+            origem: sug.origem,
+            origemRef: sug.origemRef,
+            criadoPor: req.user.id,
+          })
+          .returning();
+        await indexarArtigo(artigo.id, artigo.titulo, artigo.conteudo);
+
+        // substituir: arquiva o antigo e tira da busca (histórico preservado)
+        if (modo === "substituir" && sug.artigoConflitanteId) {
+          await db
+            .update(kbArtigos)
+            .set({ status: "arquivado", updatedAt: new Date() })
+            .where(
+              and(
+                eq(kbArtigos.id, sug.artigoConflitanteId),
+                eq(kbArtigos.tenantId, req.tenantId),
+              ),
+            );
+          await removerChunksDoArtigo(sug.artigoConflitanteId);
+        }
+
+        await db
+          .update(kbSugestoes)
+          .set({ status: "aprovada", decididoPor: req.user.id, decididoEm: new Date() })
+          .where(eq(kbSugestoes.id, id));
+        res.json({ ok: true, artigoId: artigo.id });
+      } catch (err) {
+        console.error("[assistente/kb/sugestoes/decidir] erro:", err);
+        res.status(500).json({ message: "Erro interno" });
+      }
     },
   );
 
   // ---------- Sugestões vindas do WhatsApp CRM (API key, sem sessão) ----------
   app.post("/api/assistente/kb/sugestoes/externa", requireApiKey, async (req: any, res) => {
-    const escopos: string[] = req.apiKeyEscopos || [];
-    if (!escopos.includes("kb_sugestoes")) {
-      return res.status(403).json({ error: "API key sem escopo kb_sugestoes" });
+    try {
+      const escopos: string[] = req.apiKeyEscopos || [];
+      if (!escopos.includes("kb_sugestoes")) {
+        return res.status(403).json({ error: "API key sem escopo kb_sugestoes" });
+      }
+      const { titulo, conteudo, categoria, banco, origemRef } = req.body || {};
+      if (!titulo || !conteudo) {
+        return res.status(422).json({ error: "titulo e conteudo são obrigatórios" });
+      }
+      const { id, duplicada } = await criarSugestao({
+        tenantId: req.apiTenantId,
+        titulo: String(titulo),
+        conteudo: String(conteudo),
+        categoria: categoria || null,
+        banco: banco || null,
+        origem: "whatsapp",
+        origemRef: origemRef ? String(origemRef).slice(0, 100) : null,
+        payloadBruto: null,
+      });
+      res.status(201).json({ sugestaoId: id, duplicada });
+    } catch (err) {
+      console.error("[assistente/kb/sugestoes/externa] erro:", err);
+      res.status(500).json({ error: "Erro interno" });
     }
-    const { titulo, conteudo, categoria, banco, origemRef } = req.body || {};
-    if (!titulo || !conteudo) {
-      return res.status(422).json({ error: "titulo e conteudo são obrigatórios" });
-    }
-    const { id, duplicada } = await criarSugestao({
-      tenantId: req.apiTenantId,
-      titulo: String(titulo),
-      conteudo: String(conteudo),
-      categoria: categoria || null,
-      banco: banco || null,
-      origem: "whatsapp",
-      origemRef: origemRef ? String(origemRef).slice(0, 100) : null,
-      payloadBruto: null,
-    });
-    res.status(201).json({ sugestaoId: id, duplicada });
   });
 
   // ---------- Métricas (gestão) ----------
   app.get("/api/assistente/metricas", requireAuth, requireGestorKb, async (req: any, res) => {
-    const dias = Math.min(Math.max(Number(req.query.dias) || 30, 1), 365);
-    const tenantId = req.user.tenantId;
-    const rows = (r: unknown) => ((r as any)?.rows ?? r) as any[];
+    try {
+      if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
+      const dias = Math.min(Math.max(Number(req.query.dias) || 30, 1), 365);
+      const tenantId = req.tenantId;
+      const rows = (r: unknown) => ((r as any)?.rows ?? r) as any[];
 
-    const [tot] = rows(await db.execute(sql`
-      SELECT
-        count(*) FILTER (WHERE m.role = 'user') AS total_perguntas,
-        count(*) FILTER (WHERE m.role = 'assistant' AND m.sem_resposta) AS total_sem_resposta,
-        count(*) FILTER (WHERE m.role = 'assistant' AND m.feedback = 'down') AS total_down
-      FROM assistente_mensagens m
-      JOIN assistente_conversas c ON c.id = m.conversa_id
-      WHERE c.tenant_id = ${tenantId} AND m.criada_em >= NOW() - (${dias} || ' days')::interval
-    `));
+      const [tot] = rows(await db.execute(sql`
+        SELECT
+          count(*) FILTER (WHERE m.role = 'user') AS total_perguntas,
+          count(*) FILTER (WHERE m.role = 'assistant' AND m.sem_resposta) AS total_sem_resposta,
+          count(*) FILTER (WHERE m.role = 'assistant' AND m.feedback = 'down') AS total_down
+        FROM assistente_mensagens m
+        JOIN assistente_conversas c ON c.id = m.conversa_id
+        WHERE c.tenant_id = ${tenantId} AND m.criada_em >= NOW() - (${dias} || ' days')::interval
+      `));
 
-    const semResposta = rows(await db.execute(sql`
-      SELECT prev.conteudo, m.criada_em AS quando
-      FROM assistente_mensagens m
-      JOIN assistente_conversas c ON c.id = m.conversa_id
-      JOIN LATERAL (
-        SELECT conteudo FROM assistente_mensagens p
-        WHERE p.conversa_id = m.conversa_id AND p.id < m.id AND p.role = 'user'
-        ORDER BY p.id DESC LIMIT 1
-      ) prev ON true
-      WHERE c.tenant_id = ${tenantId} AND m.role = 'assistant' AND m.sem_resposta
-        AND m.criada_em >= NOW() - (${dias} || ' days')::interval
-      ORDER BY m.criada_em DESC LIMIT 50
-    `));
+      const semResposta = rows(await db.execute(sql`
+        SELECT prev.conteudo, m.criada_em AS quando
+        FROM assistente_mensagens m
+        JOIN assistente_conversas c ON c.id = m.conversa_id
+        JOIN LATERAL (
+          SELECT conteudo FROM assistente_mensagens p
+          WHERE p.conversa_id = m.conversa_id AND p.id < m.id AND p.role = 'user'
+          ORDER BY p.id DESC LIMIT 1
+        ) prev ON true
+        WHERE c.tenant_id = ${tenantId} AND m.role = 'assistant' AND m.sem_resposta
+          AND m.criada_em >= NOW() - (${dias} || ' days')::interval
+        ORDER BY m.criada_em DESC LIMIT 50
+      `));
 
-    const feedbackDown = rows(await db.execute(sql`
-      SELECT prev.conteudo AS pergunta, m.conteudo AS resposta, m.criada_em AS quando
-      FROM assistente_mensagens m
-      JOIN assistente_conversas c ON c.id = m.conversa_id
-      JOIN LATERAL (
-        SELECT conteudo FROM assistente_mensagens p
-        WHERE p.conversa_id = m.conversa_id AND p.id < m.id AND p.role = 'user'
-        ORDER BY p.id DESC LIMIT 1
-      ) prev ON true
-      WHERE c.tenant_id = ${tenantId} AND m.role = 'assistant' AND m.feedback = 'down'
-        AND m.criada_em >= NOW() - (${dias} || ' days')::interval
-      ORDER BY m.criada_em DESC LIMIT 50
-    `));
+      const feedbackDown = rows(await db.execute(sql`
+        SELECT prev.conteudo AS pergunta, m.conteudo AS resposta, m.criada_em AS quando
+        FROM assistente_mensagens m
+        JOIN assistente_conversas c ON c.id = m.conversa_id
+        JOIN LATERAL (
+          SELECT conteudo FROM assistente_mensagens p
+          WHERE p.conversa_id = m.conversa_id AND p.id < m.id AND p.role = 'user'
+          ORDER BY p.id DESC LIMIT 1
+        ) prev ON true
+        WHERE c.tenant_id = ${tenantId} AND m.role = 'assistant' AND m.feedback = 'down'
+          AND m.criada_em >= NOW() - (${dias} || ' days')::interval
+        ORDER BY m.criada_em DESC LIMIT 50
+      `));
 
-    const perguntasFrequentes = rows(await db.execute(sql`
-      SELECT lower(trim(m.conteudo)) AS pergunta, count(*)::int AS vezes
-      FROM assistente_mensagens m
-      JOIN assistente_conversas c ON c.id = m.conversa_id
-      WHERE c.tenant_id = ${tenantId} AND m.role = 'user'
-        AND m.criada_em >= NOW() - (${dias} || ' days')::interval
-      GROUP BY 1 HAVING count(*) > 1
-      ORDER BY vezes DESC LIMIT 20
-    `));
+      const perguntasFrequentes = rows(await db.execute(sql`
+        SELECT lower(trim(m.conteudo)) AS pergunta, count(*)::int AS vezes
+        FROM assistente_mensagens m
+        JOIN assistente_conversas c ON c.id = m.conversa_id
+        WHERE c.tenant_id = ${tenantId} AND m.role = 'user'
+          AND m.criada_em >= NOW() - (${dias} || ' days')::interval
+        GROUP BY 1 HAVING count(*) > 1
+        ORDER BY vezes DESC LIMIT 20
+      `));
 
-    const volumePorDia = rows(await db.execute(sql`
-      SELECT to_char(m.criada_em::date, 'YYYY-MM-DD') AS dia, count(*)::int AS perguntas
-      FROM assistente_mensagens m
-      JOIN assistente_conversas c ON c.id = m.conversa_id
-      WHERE c.tenant_id = ${tenantId} AND m.role = 'user'
-        AND m.criada_em >= NOW() - (${dias} || ' days')::interval
-      GROUP BY 1 ORDER BY 1
-    `));
+      const volumePorDia = rows(await db.execute(sql`
+        SELECT to_char(m.criada_em::date, 'YYYY-MM-DD') AS dia, count(*)::int AS perguntas
+        FROM assistente_mensagens m
+        JOIN assistente_conversas c ON c.id = m.conversa_id
+        WHERE c.tenant_id = ${tenantId} AND m.role = 'user'
+          AND m.criada_em >= NOW() - (${dias} || ' days')::interval
+        GROUP BY 1 ORDER BY 1
+      `));
 
-    res.json({
-      periodoDias: dias,
-      totalPerguntas: Number(tot?.total_perguntas || 0),
-      totalSemResposta: Number(tot?.total_sem_resposta || 0),
-      totalFeedbackDown: Number(tot?.total_down || 0),
-      semResposta,
-      feedbackDown,
-      perguntasFrequentes,
-      volumePorDia,
-    });
+      res.json({
+        periodoDias: dias,
+        totalPerguntas: Number(tot?.total_perguntas || 0),
+        totalSemResposta: Number(tot?.total_sem_resposta || 0),
+        totalFeedbackDown: Number(tot?.total_down || 0),
+        semResposta,
+        feedbackDown,
+        perguntasFrequentes,
+        volumePorDia,
+      });
+    } catch (err) {
+      console.error("[assistente/metricas] erro:", err);
+      res.status(500).json({ message: "Erro interno" });
+    }
   });
 }
