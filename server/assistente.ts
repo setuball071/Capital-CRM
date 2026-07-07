@@ -1,4 +1,5 @@
 import type { Express, Request, Response, RequestHandler } from "express";
+import multer from "multer";
 import { db } from "./storage";
 import { and, desc, eq } from "drizzle-orm";
 import {
@@ -9,6 +10,7 @@ import {
   aiPrompts,
 } from "@shared/schema";
 import { ocrClient, ocrModel } from "./openaiClient";
+import { extractTextFromPdf } from "./roteiros-pdf-service";
 import {
   indexarArtigo,
   removerChunksDoArtigo,
@@ -16,6 +18,11 @@ import {
   buscarChunks,
   CORTE_SIMILARIDADE,
 } from "./assistente-rag";
+
+const uploadKb = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+});
 
 export const CATEGORIAS_KB = [
   "regras_banco",
@@ -238,6 +245,47 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
     }
     res.json(artigo);
   });
+
+  // ---------- Upload PDF → rascunho ----------
+  app.post(
+    "/api/assistente/kb/upload",
+    requireAuth,
+    requireGestorKb,
+    uploadKb.single("arquivo"),
+    async (req: any, res) => {
+      const file = req.file;
+      if (!file) return res.status(422).json({ message: "arquivo é obrigatório" });
+      if (!file.originalname.toLowerCase().endsWith(".pdf")) {
+        return res.status(422).json({ message: "Apenas PDF é aceito por enquanto" });
+      }
+      let texto = "";
+      try {
+        texto = await extractTextFromPdf(file.buffer);
+      } catch (e) {
+        console.error("[assistente/upload] extração falhou:", e);
+        return res.status(422).json({ message: "Não consegui extrair texto deste PDF" });
+      }
+      if (!texto.trim() || texto.trim().length < 50) {
+        return res.status(422).json({ message: "PDF sem texto legível (pode ser imagem escaneada)" });
+      }
+      const clas = await classificarConteudo(texto);
+      const [artigo] = await db
+        .insert(kbArtigos)
+        .values({
+          tenantId: req.user.tenantId,
+          titulo: clas.titulo,
+          conteudo: clas.conteudo,
+          categoria: clas.categoria,
+          banco: clas.banco,
+          status: "rascunho", // SEMPRE rascunho — revisão humana obrigatória
+          origem: "pdf",
+          origemRef: file.originalname.slice(0, 100),
+          criadoPor: req.user.id,
+        })
+        .returning();
+      res.json({ artigo });
+    },
+  );
 
   // ---------- Chat (qualquer usuário autenticado) ----------
   app.post("/api/assistente/chat", requireAuth, async (req: any, res: Response) => {
