@@ -5875,7 +5875,7 @@ function avaliarElegibilidade(contrato, regra) {
 function pintarRefimContratos() {
   const nome  = document.getElementById('refimBanco').value;
   const regra = regrasBancos.find(r => r.banco === nome);
-  const marcados = getContratosMarcados();
+  const marcados = getContratosMarcados().filter(c => c.acao !== 'quitar');
   const tb = document.getElementById('tbRefimContratos');
 
   if (!marcados.length) {
@@ -5889,7 +5889,8 @@ function pintarRefimContratos() {
 
   tb.innerHTML = marcados.map(c => {
     const taxa  = parseBR(c.taxa);
-    const saldo = parseBR(c.saldo);
+    const saldoBruto = parseBR(c.saldo);
+    const saldo = c.acao === 'amortizar' ? Math.max(0, saldoBruto - (c.amort || 0)) : saldoBruto;
     const elig  = avaliarElegibilidade(c, regra);
     const prazoTotal    = parseInt(c.prazo_total) || 0;
     const prazoRestante = parseInt(c.prazo)       || 0;
@@ -6133,11 +6134,15 @@ function calcRefim() {
   const modo     = document.getElementById('refimModo').value;
   const unificado = document.getElementById('refimUnificado').value === 'unificado';
 
-  // Contratos elegíveis — Caixa aceita todos (entradaMin=0)
+  // Contratos elegíveis — Caixa aceita todos (entradaMin=0); quitar = pago com troco, não porta
   const marcados = getContratosMarcados().filter(c =>
-    regra.taxaLivre ? true : parseBR(c.taxa) >= regra.entradaMin
+    c.acao !== 'quitar' &&
+    (regra.taxaLivre ? true : parseBR(c.taxa) >= regra.entradaMin)
   );
-  const saldoPortado     = marcados.reduce((acc, c) => acc + parseBR(c.saldo), 0);
+  const saldoPortado     = marcados.reduce((acc, c) => {
+    const s = parseBR(c.saldo);
+    return acc + (c.acao === 'amortizar' ? Math.max(0, s - (c.amort || 0)) : s);
+  }, 0);
   const somaParcelasOrig = marcados.reduce((acc, c) => acc + parseBR(c.parcela), 0);
 
   if (!saldoPortado) return;
@@ -6216,7 +6221,7 @@ function calcRefim() {
     }
 
     const linhas = marcados.map((c, idx) => {
-      const saldo        = parseBR(c.saldo);
+      const saldo        = c.acao === 'amortizar' ? Math.max(0, parseBR(c.saldo) - (c.amort || 0)) : parseBR(c.saldo);
       const parc         = parseBR(c.parcela);
       const prazoOriginal = parseInt(c.prazo) || 96;  // prazo restante do extrato (default 96 do contrato atual)
       const prazo        = 120; // refim com troco sempre em 120 meses (mudou de 96 em 27/05/2026)
@@ -6233,7 +6238,7 @@ function calcRefim() {
         parcelaTotal = price.pmt(saldo + trocoBruto);
       } else {
         // Distribui a parcela proporcionalmente ao saldo de cada contrato
-        const totalSaldos = marcados.reduce((a,x) => a+parseBR(x.saldo), 0);
+        const totalSaldos = marcados.reduce((a,x) => { const xs = parseBR(x.saldo); return a + (x.acao === 'amortizar' ? Math.max(0, xs - (x.amort||0)) : xs); }, 0);
         const parcelaProp = inputValor * (saldo / totalSaldos);
         trocoBruto   = price.pv(parcelaProp) - saldo;
         if (trocoBruto <= 0) {
