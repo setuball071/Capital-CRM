@@ -1369,7 +1369,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
         <tr>
           <th style="width:140px;">Banco</th>
           <th style="width:100px;">Parcela (R$)</th>
-          <th style="width:80px;">Prazo</th>
+          <th style="width:120px;">Prazo / Pagas</th>
           <th style="width:90px;">Taxa (% a.m.)</th>
           <th style="width:120px;" class="text-right">Saldo Devedor</th>
           <th style="width:110px;">Ação</th>
@@ -3605,7 +3605,14 @@ function renderContratos() {
         ${c.numero_contrato ? `<small style="display:block;color:#888;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.numero_contrato}</small>` : ''}
       </td>
       <td><input data-id="${c.id}" data-k="parcela" value="${c.parcela ? fmt(c.parcela) : ''}" placeholder="0,00"></td>
-      <td><input data-id="${c.id}" data-k="prazo" type="number" value="${c.prazo || ''}" placeholder="0"></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input data-id="${c.id}" data-k="prazo" type="number" value="${c.prazo || ''}" placeholder="rest." style="width:52px;" title="Prazo restante">
+          <span style="color:#9CA3AF;font-size:11px;">/</span>
+          <input data-id="${c.id}" data-k="prazo_total" type="number" value="${c.prazo_total || ''}" placeholder="tot." style="width:52px;" title="Prazo total de origem">
+        </div>
+        ${(c.prazo_total > 0) ? `<small style="color:#6C2BD9;font-size:10px;">${c.prazo_total - (c.prazo||0)} pagas</small>` : '<small style="color:#9CA3AF;font-size:10px;">informe o total</small>'}
+      </td>
       <td><input data-id="${c.id}" data-k="taxa" value="${c.taxa ? fmtPct(c.taxa) : ''}" placeholder="1,80"></td>
       <td class="text-right"><span class="muted" data-field="saldo">${fmt(c.saldo)}</span></td>
       <td>
@@ -3674,6 +3681,20 @@ function renderContratos() {
             updateContratoCalc(cont.id);
             renderConfigSeparado();
             atualizarSimuladorRefim();
+            // atualiza label "X pagas" ao editar prazo ou prazo_total
+            const td = e.target.closest('td');
+            if (td) {
+              const small = td.querySelector('small');
+              if (small) {
+                if (cont.prazo_total > 0) {
+                  small.style.color = '#6C2BD9';
+                  small.textContent = `${cont.prazo_total - (cont.prazo||0)} pagas`;
+                } else {
+                  small.style.color = '#9CA3AF';
+                  small.textContent = 'informe o total';
+                }
+              }
+            }
           }
         });
       } else if (el.dataset.k === 'acao') {
