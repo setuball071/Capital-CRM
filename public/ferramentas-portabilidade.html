@@ -3618,13 +3618,13 @@ function renderContratos() {
       <td class="text-right"><span class="muted" data-field="saldo">${fmt(c.saldo)}</span></td>
       <td>
         <select data-id="${c.id}" data-k="acao">
-          <option value="manter">Manter</option>
-          <option value="quitar">Quitar</option>
-          <option value="amortizar">Amortizar</option>
+          <option value="manter" ${(!c.acao || c.acao === 'manter') ? 'selected' : ''}>Manter</option>
+          <option value="quitar" ${c.acao === 'quitar' ? 'selected' : ''}>Quitar</option>
+          <option value="amortizar" ${c.acao === 'amortizar' ? 'selected' : ''}>Amortizar</option>
         </select>
       </td>
-      <td><input data-id="${c.id}" data-k="amort" value="" disabled placeholder="0,00"></td>
-      <td class="text-center"><input type="checkbox" data-id="${c.id}"></td>
+      <td><input data-id="${c.id}" data-k="amort" value="${c.acao === 'amortizar' && c.amort ? fmt(c.amort) : ''}" ${c.acao !== 'amortizar' ? 'disabled' : ''} placeholder="0,00"></td>
+      <td class="text-center"><input type="checkbox" data-id="${c.id}" ${c.portar ? 'checked' : ''}></td>
       <td><button class="btn-small" onclick="delContrato(${c.id})">X</button></td>
     `;
     tb.appendChild(tr);
@@ -6490,6 +6490,9 @@ async function carregarCotacao(id, cpf) {
       contratos.length = 0;
       d.contratos.forEach(c => contratos.push(c));
       nextContratoId = contratos.reduce((mx, c) => Math.max(mx, c.id || 0), 0) + 1;
+      // Limpa DOM para forçar re-render completo (sem isso renderContratos reutiliza linhas antigas e não restaura taxa/ação/amort)
+      const tb = document.getElementById('tbContratos');
+      if (tb) tb.innerHTML = '';
     }
     // Restaura campos
     const set = (id, v) => { const el = document.getElementById(id); if(el && v != null) el.value = v; };
