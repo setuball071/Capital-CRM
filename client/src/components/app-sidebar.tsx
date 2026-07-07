@@ -52,6 +52,7 @@ const MS_ITEM: Record<string, string> = {
   "Minhas Propostas": "description",
   "Solicitar Boleto": "receipt_long",
   "Nota Promissória": "edit_document",
+  "Base de Conhecimento": "menu_book",
   "Configurações": "settings",
   // Referências
   "Convênios": "handshake",
@@ -226,6 +227,7 @@ export function AppSidebar() {
         { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
         { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
         { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
+        { title: "Base de Conhecimento", url: "/base-conhecimento", icon: BookMarked, rolesAllowed: ["master", "operacional"] },
         { title: "Configurações", url: "/contratos/configuracoes", icon: Settings, rolesAllowed: ["master", "operacional"] },
       ],
     },

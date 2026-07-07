@@ -86,6 +86,7 @@ import ImportarObservacoesPage from "@/pages/importar-observacoes";
 import SiapeHistoricoPage from "@/pages/siape-historico";
 import ImportarDadosComplementaresPage from "@/pages/importar-dados-complementares";
 import MinhaCarteiraPage from "@/pages/minha-carteira";
+import BaseConhecimentoPage from "@/pages/base-conhecimento";
 import { UpdatesPopup } from "@/components/UpdatesPopup";
 import AssistenteWidget from "@/components/assistente/AssistenteWidget";
 import NotFound from "@/pages/not-found";
@@ -632,6 +633,9 @@ function Router() {
               </Route>
               <Route path="/contratos/configuracoes">
                 {() => <RoleRoute component={ContratosConfigPage} allowedRoles={["master", "operacional"]} />}
+              </Route>
+              <Route path="/base-conhecimento">
+                {() => <RoleRoute component={BaseConhecimentoPage} allowedRoles={["master", "operacional"]} />}
               </Route>
               <Route path="/contratos/:id">
                 {() => <ProtectedRoute component={ContratosDetalhePage} />}
