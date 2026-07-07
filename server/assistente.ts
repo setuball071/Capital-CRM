@@ -447,4 +447,111 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
       .where(eq(assistenteMensagens.id, Number(mensagemId)));
     res.json({ ok: true });
   });
+
+  // ---------- Fila de sugestões ----------
+  app.get("/api/assistente/kb/sugestoes", requireAuth, requireGestorKb, async (req: any, res) => {
+    const status = String(req.query.status || "pendente");
+    const sugestoes = await db
+      .select()
+      .from(kbSugestoes)
+      .where(
+        and(
+          eq(kbSugestoes.tenantId, req.user.tenantId),
+          eq(kbSugestoes.status, status),
+        ),
+      )
+      .orderBy(desc(kbSugestoes.createdAt));
+    // embute o artigo conflitante (para o comparativo lado a lado)
+    const resultado = [];
+    for (const s of sugestoes) {
+      let conflito = null;
+      if (s.artigoConflitanteId) {
+        const [art] = await db
+          .select({ id: kbArtigos.id, titulo: kbArtigos.titulo, conteudo: kbArtigos.conteudo })
+          .from(kbArtigos)
+          .where(eq(kbArtigos.id, s.artigoConflitanteId))
+          .limit(1);
+        conflito = art ?? null;
+      }
+      resultado.push({ ...s, conflito });
+    }
+    res.json(resultado);
+  });
+
+  app.post(
+    "/api/assistente/kb/sugestoes/:id/decidir",
+    requireAuth,
+    requireGestorKb,
+    async (req: any, res) => {
+      const id = Number(req.params.id);
+      const { acao, modo, edicao } = req.body || {};
+      if (!["aprovar", "rejeitar"].includes(acao)) {
+        return res.status(422).json({ message: "acao deve ser aprovar ou rejeitar" });
+      }
+      const [sug] = await db
+        .select()
+        .from(kbSugestoes)
+        .where(
+          and(
+            eq(kbSugestoes.id, id),
+            eq(kbSugestoes.tenantId, req.user.tenantId),
+            eq(kbSugestoes.status, "pendente"),
+          ),
+        )
+        .limit(1);
+      if (!sug) return res.status(404).json({ message: "Sugestão pendente não encontrada" });
+
+      if (acao === "rejeitar") {
+        await db
+          .update(kbSugestoes)
+          .set({ status: "rejeitada", decididoPor: req.user.id, decididoEm: new Date() })
+          .where(eq(kbSugestoes.id, id));
+        return res.json({ ok: true });
+      }
+
+      // aprovar
+      const titulo = String(edicao?.titulo || sug.tituloProposto).slice(0, 255);
+      const conteudo = String(edicao?.conteudo || sug.conteudoProposto);
+      const categoria = (CATEGORIAS_KB as readonly string[]).includes(edicao?.categoria ?? sug.categoriaProposta)
+        ? (edicao?.categoria ?? sug.categoriaProposta)
+        : "dicas";
+      const banco = edicao?.banco !== undefined ? edicao.banco || null : sug.bancoProposto;
+
+      const [artigo] = await db
+        .insert(kbArtigos)
+        .values({
+          tenantId: req.user.tenantId,
+          titulo,
+          conteudo,
+          categoria,
+          banco,
+          status: "publicado",
+          origem: sug.origem,
+          origemRef: sug.origemRef,
+          criadoPor: req.user.id,
+        })
+        .returning();
+      await indexarArtigo(artigo.id, artigo.titulo, artigo.conteudo);
+
+      // substituir: arquiva o antigo e tira da busca (histórico preservado)
+      if (modo === "substituir" && sug.artigoConflitanteId) {
+        await db
+          .update(kbArtigos)
+          .set({ status: "arquivado", updatedAt: new Date() })
+          .where(
+            and(
+              eq(kbArtigos.id, sug.artigoConflitanteId),
+              eq(kbArtigos.tenantId, req.user.tenantId),
+            ),
+          );
+        await removerChunksDoArtigo(sug.artigoConflitanteId);
+      }
+
+      await db
+        .update(kbSugestoes)
+        .set({ status: "aprovada", decididoPor: req.user.id, decididoEm: new Date() })
+        .where(eq(kbSugestoes.id, id));
+      res.json({ ok: true, artigoId: artigo.id });
+    },
+  );
 }
