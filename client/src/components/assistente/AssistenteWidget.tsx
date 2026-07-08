@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 export default function AssistenteWidget() {
-  const { user } = useAuth();
+  const { user, hasSubItemAccess } = useAuth();
   const [aberto, setAberto] = useState(false);
   const [texto, setTexto] = useState("");
   const [modoCaptura, setModoCaptura] = useState(false);
@@ -34,6 +34,12 @@ export default function AssistenteWidget() {
   }, [mensagens]);
 
   if (!user) return null;
+
+  const podeUsarChat =
+    user.isMaster ||
+    ["master", "operacional"].includes(user.role) ||
+    hasSubItemAccess("modulo_assistente", "chat");
+  if (!podeUsarChat) return null;
 
   const enviarTexto = () => {
     const t = texto.trim();

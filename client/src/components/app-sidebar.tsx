@@ -227,7 +227,7 @@ export function AppSidebar() {
         { title: "Minhas Propostas", url: "/contratos", icon: ScrollText },
         { title: "Solicitar Boleto", url: "/solicitar-boleto", icon: Receipt, module: "modulo_roteiros", tenantFeature: "solicitar_boleto" },
         { title: "Nota Promissória", url: "/nota-promissoria", icon: FileSignature, rolesAllowed: ["master", "coordenacao"] },
-        { title: "Base de Conhecimento", url: "/base-conhecimento", icon: BookMarked, rolesAllowed: ["master", "operacional"] },
+        { title: "Base de Conhecimento", url: "/base-conhecimento", icon: BookMarked, module: "modulo_assistente", subItem: "base_conhecimento" },
         { title: "Configurações", url: "/contratos/configuracoes", icon: Settings, rolesAllowed: ["master", "operacional"] },
       ],
     },

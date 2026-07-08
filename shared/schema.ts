@@ -1807,6 +1807,7 @@ export const MODULE_LIST = [
   "modulo_academia", // Treinamento
   "modulo_alpha", // ALPHA (new - consolidates CRM features)
   "modulo_financeiro", // Financeiro
+  "modulo_assistente", // Jarvis (Assistente IA)
 ] as const;
 
 export type ModuleName = (typeof MODULE_LIST)[number];
@@ -1865,6 +1866,10 @@ export const MODULE_SUB_ITEMS = {
     { key: "tabelas", label: "Tabelas" },
     { key: "configuracoes", label: "Configurações" },
   ],
+  modulo_assistente: [
+    { key: "chat", label: "Conversar com o Jarvis" },
+    { key: "base_conhecimento", label: "Gerenciar Base de Conhecimento" },
+  ],
 } as const;
 
 // Helper type for sub-item keys
@@ -1881,6 +1886,7 @@ export const MODULE_LABELS: Record<ModuleName, string> = {
   modulo_academia: "Treinamento",
   modulo_alpha: "ALPHA",
   modulo_financeiro: "Financeiro",
+  modulo_assistente: "Jarvis (Assistente IA)",
 };
 
 // Helper to get full permission key (module.subitem)

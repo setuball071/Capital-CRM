@@ -8,6 +8,7 @@ import {
   assistenteConversas,
   assistenteMensagens,
   aiPrompts,
+  userPermissions,
 } from "@shared/schema";
 import { ocrClient, ocrModel } from "./openaiClient";
 import { extractTextFromPdf } from "./roteiros-pdf-service";
@@ -43,11 +44,33 @@ export function podeGerenciarKb(user: any): boolean {
   return !!user && (user.isMaster || ["master", "operacional"].includes(user.role));
 }
 
-function requireGestorKb(req: any, res: Response, next: Function) {
-  if (!podeGerenciarKb(req.user)) {
+/** Permissão do assistente: gestão (master/admin/operacional) sempre tem; demais via user_permissions marcada pelo master. */
+async function temPermissaoAssistente(
+  user: any,
+  subItem: "chat" | "base_conhecimento",
+): Promise<boolean> {
+  if (podeGerenciarKb(user)) return true;
+  const [perm] = await db
+    .select()
+    .from(userPermissions)
+    .where(
+      and(
+        eq(userPermissions.userId, user.id),
+        eq(userPermissions.module, `modulo_assistente.${subItem}`),
+      ),
+    )
+    .limit(1);
+  return perm?.canView === true;
+}
+
+async function requireGestorKb(req: any, res: Response, next: Function) {
+  try {
+    if (await temPermissaoAssistente(req.user, "base_conhecimento")) return next();
     return res.status(403).json({ message: "Acesso negado" });
+  } catch (err) {
+    console.error("[assistente/requireGestorKb] erro:", err);
+    return res.status(500).json({ message: "Erro interno" });
   }
-  next();
 }
 
 export const NOME_MASCOTE = process.env.ASSISTENTE_NOME || "Jarvis";
@@ -329,6 +352,10 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
     let convId = 0;
 
     try {
+      if (!(await temPermissaoAssistente(req.user, "chat"))) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+
       try {
         if (req.file) {
           const mime = req.file.mimetype || "";
@@ -541,6 +568,9 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
   // ---------- Feedback ----------
   app.post("/api/assistente/feedback", requireAuth, async (req: any, res) => {
     try {
+      if (!(await temPermissaoAssistente(req.user, "chat"))) {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
       const { mensagemId, feedback } = req.body || {};
       if (!["up", "down"].includes(feedback)) {
         return res.status(422).json({ message: "feedback deve ser up ou down" });

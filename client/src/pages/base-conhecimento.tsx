@@ -24,12 +24,16 @@ type Sugestao = {
 const FORM_VAZIO = { id: 0, titulo: "", conteudo: "", categoria: "regras_banco", banco: "", status: "rascunho" };
 
 export default function BaseConhecimentoPage() {
-  const { user } = useAuth();
+  const { user, hasSubItemAccess } = useAuth();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [form, setForm] = useState<typeof FORM_VAZIO | null>(null);
 
-  const podeGerenciar = !!user && (user.isMaster || ["master", "operacional"].includes(user.role));
+  const podeGerenciar =
+    !!user &&
+    (user.isMaster ||
+      ["master", "operacional"].includes(user.role) ||
+      hasSubItemAccess("modulo_assistente", "base_conhecimento"));
 
   const { data: artigos = [] } = useQuery<Artigo[]>({
     queryKey: ["/api/assistente/kb"],

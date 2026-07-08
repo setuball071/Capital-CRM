@@ -135,7 +135,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user?.role === "operacional" && module === "modulo_roteiros") {
       return true;
     }
-    
+
+    // Roles de gestão têm acesso automático ao Jarvis (paridade com o backend)
+    if (
+      (user?.role === "operacional" || user?.role === "master") &&
+      module === "modulo_assistente"
+    ) {
+      return true;
+    }
+
     // Primeiro, verifica permissão específica do sub-item
     const subItemKey = getSubItemPermissionKey(module, subItem);
     if (permissions[subItemKey]) {
