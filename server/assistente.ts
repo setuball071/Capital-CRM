@@ -417,6 +417,13 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
     });
     const enviar = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
+    const ac = new AbortController();
+    let clienteDesconectou = false;
+    req.on("close", () => {
+      clienteDesconectou = true;
+      ac.abort();
+    });
+
     try {
       const chunks = await buscarChunks(req.tenantId, texto, 8);
       const relevantes = chunks.filter((c) => c.similaridade >= CORTE_SIMILARIDADE);
@@ -457,30 +464,53 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
       const persona = await obterPersona();
       const system = `${persona}\n\n===== TRECHOS DA BASE DE CONHECIMENTO =====\n${trechos}`;
 
-      const stream = await ocrClient.chat.completions.create({
-        model: ocrModel,
-        stream: true,
-        temperature: 0.3,
-        max_tokens: 1500,
-        messages: [
-          { role: "system", content: system },
-          ...anteriores,
-          { role: "user", content: texto },
-        ],
-      });
-
       let resposta = "";
-      const timeoutMs = 30000;
-      const inicio = Date.now();
-      for await (const parte of stream) {
-        const delta = parte.choices?.[0]?.delta?.content || "";
-        if (delta) {
-          resposta += delta;
-          enviar({ delta });
+      const timer = setTimeout(() => ac.abort(), 45_000); // teto duro de 45s (upstream travado)
+      try {
+        const stream = await ocrClient.chat.completions.create(
+          {
+            model: ocrModel,
+            stream: true,
+            temperature: 0.3,
+            max_tokens: 1500,
+            messages: [
+              { role: "system", content: system },
+              ...anteriores,
+              { role: "user", content: texto },
+            ],
+          },
+          { signal: ac.signal },
+        );
+
+        for await (const parte of stream) {
+          const delta = parte.choices?.[0]?.delta?.content || "";
+          if (delta) {
+            resposta += delta;
+            enviar({ delta });
+          }
         }
-        if (Date.now() - inicio > timeoutMs) break;
+      } catch (e) {
+        if (!ac.signal.aborted) throw e; // erro real → catch externo
+        if (clienteDesconectou) {
+          // cliente foi embora: persiste o parcial (se houver) e encerra em silêncio
+          if (resposta.trim()) {
+            await db.insert(assistenteMensagens).values({
+              conversaId: convId,
+              role: "assistant",
+              conteudo: resposta,
+              chunksUsados: relevantes.map((c) => c.chunkId),
+              semResposta: false,
+            });
+          }
+          return res.end();
+        }
+        // timeout com cliente conectado: segue o fluxo normal com o parcial
+      } finally {
+        clearTimeout(timer);
       }
-      if (!resposta.trim()) resposta = RESPOSTA_NAO_SEI;
+
+      const semResposta = !resposta.trim();
+      if (semResposta) resposta = RESPOSTA_NAO_SEI;
 
       const fontesUnicas = Array.from(
         new Map(relevantes.map((c) => [c.artigoId, { artigoId: c.artigoId, titulo: c.titulo }])).values(),
@@ -492,10 +522,10 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
           role: "assistant",
           conteudo: resposta,
           chunksUsados: relevantes.map((c) => c.chunkId),
-          semResposta: false,
+          semResposta,
         })
         .returning({ id: assistenteMensagens.id });
-      enviar({ done: true, conversaId: convId, mensagemId: msg.id, semResposta: false, fontes: fontesUnicas });
+      enviar({ done: true, conversaId: convId, mensagemId: msg.id, semResposta, fontes: fontesUnicas });
       res.end();
     } catch (err: any) {
       console.error("[assistente/chat] erro:", err);

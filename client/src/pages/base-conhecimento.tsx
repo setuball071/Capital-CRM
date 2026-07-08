@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,7 @@ const FORM_VAZIO = { id: 0, titulo: "", conteudo: "", categoria: "regras_banco",
 export default function BaseConhecimentoPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [form, setForm] = useState<typeof FORM_VAZIO | null>(null);
 
   const podeGerenciar = !!user && (user.isMaster || ["master", "operacional"].includes(user.role));
@@ -54,6 +56,7 @@ export default function BaseConhecimentoPage() {
       qc.invalidateQueries({ queryKey: ["/api/assistente/kb"] });
       setForm(null);
     },
+    onError: (e: any) => toast({ title: e.message || "Erro ao salvar", variant: "destructive" }),
   });
 
   const decidir = useMutation({
@@ -65,6 +68,7 @@ export default function BaseConhecimentoPage() {
       qc.invalidateQueries({ queryKey: ["/api/assistente/kb/sugestoes"] });
       qc.invalidateQueries({ queryKey: ["/api/assistente/kb"] });
     },
+    onError: (e: any) => toast({ title: e.message || "Erro ao decidir", variant: "destructive" }),
   });
 
   const uploadPdf = async (file: File) => {
