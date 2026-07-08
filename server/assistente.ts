@@ -510,7 +510,10 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
       }
 
       const semResposta = !resposta.trim();
-      if (semResposta) resposta = RESPOSTA_NAO_SEI;
+      if (semResposta) {
+        resposta = RESPOSTA_NAO_SEI;
+        enviar({ delta: resposta }); // nenhum delta foi emitido — sem isso o cliente mostra bolha vazia
+      }
 
       const fontesUnicas = Array.from(
         new Map(relevantes.map((c) => [c.artigoId, { artigoId: c.artigoId, titulo: c.titulo }])).values(),
