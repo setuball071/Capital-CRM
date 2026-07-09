@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useAssistenteChat } from "./useAssistenteChat";
+import { useAssistenteAvisos } from "./useAssistenteAvisos";
 import { NOME_MASCOTE, AVATAR_URL } from "./config";
 import {
   MessageCircle,
@@ -30,17 +31,25 @@ export default function AssistenteWidget() {
   // Guardar conhecimento grava na base → só master (bate com podeGerenciarKb no backend)
   const podeCaptura = !!user && (user.isMaster || user.role === "master");
 
+  const podeUsarChat =
+    !!user &&
+    (user.isMaster ||
+      ["master", "operacional"].includes(user.role) ||
+      hasSubItemAccess("modulo_assistente", "chat"));
+
+  const { count, avisos, marcarLidas } = useAssistenteAvisos(podeUsarChat);
+
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensagens]);
 
-  if (!user) return null;
+  // Ao abrir o chat, marca os avisos como lidos
+  useEffect(() => {
+    if (aberto && count > 0) marcarLidas.mutate(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto]);
 
-  const podeUsarChat =
-    user.isMaster ||
-    ["master", "operacional"].includes(user.role) ||
-    hasSubItemAccess("modulo_assistente", "chat");
-  if (!podeUsarChat) return null;
+  if (!user || !podeUsarChat) return null;
 
   const enviarTexto = () => {
     const t = texto.trim();
@@ -88,6 +97,11 @@ export default function AssistenteWidget() {
             alt={NOME_MASCOTE}
             className="h-full w-full object-contain drop-shadow-lg"
           />
+          {count > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white">
+              {count > 9 ? "9+" : count}
+            </span>
+          )}
         </button>
       )}
 
@@ -113,6 +127,21 @@ export default function AssistenteWidget() {
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto p-3">
+            {avisos.length > 0 && (
+              <div className="space-y-2">
+                {avisos.map((a) => (
+                  <div key={a.id} className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+                    <div className="font-medium">{a.titulo}</div>
+                    <div className="text-muted-foreground">{a.mensagem}</div>
+                    {a.proposalId && (
+                      <a href={`/contratos/${a.proposalId}`} className="mt-1 inline-block text-xs text-primary underline">
+                        Ver proposta
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {mensagens.length === 0 && (
               <div className="flex items-start gap-2 rounded-lg bg-muted p-3 text-sm">
                 <img src={AVATAR_URL} alt={NOME_MASCOTE} className="h-8 w-8 shrink-0 object-contain" />
