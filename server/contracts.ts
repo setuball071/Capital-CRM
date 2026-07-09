@@ -18,6 +18,7 @@ import {
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { addToPortfolio } from "./portfolio";
 import { saveDocument, getDocument } from "./document-storage";
+import { notificarStatusProposta } from "./assistente-avisos";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
@@ -40,6 +41,22 @@ function contentTypeFor(name: string): string {
     heic: "image/heic",
   };
   return map[ext] || "application/octet-stream";
+}
+
+// Set de status que representam "pendência do corretor" (para o aviso do Jarvis).
+// Mesma regra canônica de /pending-count: status com returnStatusKey + PENDENTE_CORRETOR.
+async function pendenciaCorretorKeys(tenantId: number): Promise<Set<string>> {
+  try {
+    const rows = await db
+      .select()
+      .from(contractStatuses)
+      .where(eq(contractStatuses.tenantId, tenantId));
+    const keys = rows.filter((s: any) => !!s.returnStatusKey).map((s: any) => s.key as string);
+    keys.push("PENDENTE_CORRETOR");
+    return new Set(keys);
+  } catch {
+    return new Set(["PENDENTE_CORRETOR"]);
+  }
 }
 
 export function registerContractRoutes(app: Express, requireAuth: Function) {
@@ -1009,6 +1026,20 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         }
       }
 
+      // Aviso do Jarvis (best-effort, isolado por dono) — nunca bloqueia o salvamento
+      try {
+        const pkeys = await pendenciaCorretorKeys(tenantId);
+        await notificarStatusProposta({
+          tenantId,
+          userId: updated.vendorId || current.createdBy,
+          proposalId: updated.id,
+          clientName: updated.clientName || current.clientName || null,
+          statusAntigo: current.status ?? null,
+          statusNovo: updated.status,
+          pendenciaCorretorKeys: pkeys,
+        });
+      } catch {}
+
       return res.json(updated);
     } catch (e: any) {
       console.error("PUT /api/contracts/proposals/:id/status error:", e);
@@ -1310,6 +1341,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         .set({ status, updatedAt: new Date(), ...(status === "PAGO" ? { paidAt: new Date() } : {}) })
         .where(and(inArray(proposals.id, okIds), eq(proposals.tenantId, tenantId)));
 
+      const pkeysBulk = await pendenciaCorretorKeys(tenantId);
       for (const r of rows) {
         // Mudou de fase → zera a data CIP e resolve solicitação de cancelamento (clientMeta é por-linha)
         const cm = (r.clientMeta as Record<string, any>) || {};
@@ -1329,6 +1361,18 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           notes: notes || "Alteração em lote",
           performedBy: user.id,
         });
+        // Aviso do Jarvis (best-effort, isolado por dono) — nunca bloqueia o lote
+        try {
+          await notificarStatusProposta({
+            tenantId,
+            userId: r.vendorId || r.createdBy,
+            proposalId: r.id,
+            clientName: r.clientName ?? null,
+            statusAntigo: r.status ?? null,
+            statusNovo: status,
+            pendenciaCorretorKeys: pkeysBulk,
+          });
+        } catch {}
       }
 
       return res.json({ updated: rows.length });
@@ -1417,6 +1461,21 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         notes: notes || null,
         performedBy: user.id,
       });
+
+      // Aviso do Jarvis (best-effort, isolado por dono) — nunca bloqueia a pendência.
+      // PENDENTE_BANCO não gera aviso (fora do set); PENDENTE_CORRETOR gera.
+      try {
+        const pkeys = await pendenciaCorretorKeys(tenantId);
+        await notificarStatusProposta({
+          tenantId,
+          userId: updated.vendorId || current.createdBy,
+          proposalId: updated.id,
+          clientName: updated.clientName || current.clientName || null,
+          statusAntigo: current.status ?? null,
+          statusNovo: newStatus,
+          pendenciaCorretorKeys: pkeys,
+        });
+      } catch {}
 
       return res.json(updated);
     } catch (e: any) {
