@@ -19,7 +19,7 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ROLE_LABELS, type UserRole, type ModuleName } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -591,6 +591,7 @@ export function AppSidebar() {
             >
               <button onClick={() => setLocation("/profile")} className="w-full !h-auto py-1.5">
                 <Avatar className="h-[34px] w-[34px]">
+                  {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} className="object-cover" />}
                   <AvatarFallback className="text-xs font-semibold text-white" style={{ background: "var(--grad-go)" }}>
                     {getInitials(user.name)}
                   </AvatarFallback>

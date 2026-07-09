@@ -6,6 +6,7 @@ import { useTheme } from "@/components/theme-provider";
 interface VendedorRanking {
   userId: number;
   nome: string;
+  foto?: string | null;
   efetivado: number;
   emAndamento: number;
   emAndamentoContratos: number;
@@ -180,7 +181,11 @@ function RankingRow({ v, t }: { v: VendedorRanking; t: Palette }) {
     <div style={{ display: "grid", gridTemplateColumns: GRID_COLS, alignItems: "center", gap: 16, padding: "14px 4px", borderTop: `1px solid ${t.border}` }}>
       <div style={{ width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, background: isFirst ? "#FEF6E0" : t.subtleBg, color: isFirst ? "#9a6a00" : t.textMuted }}>{v.posicao}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-        <div style={{ width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: GRAD_GO, color: "#fff", fontWeight: 600, fontSize: 13, flexShrink: 0 }}>{getInitials(v.nome)}</div>
+        {v.foto ? (
+          <img src={v.foto} alt={v.nome} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+        ) : (
+          <div style={{ width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: GRAD_GO, color: "#fff", fontWeight: 600, fontSize: 13, flexShrink: 0 }}>{getInitials(v.nome)}</div>
+        )}
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14.5, fontWeight: 600, color: t.textStrong, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.nome}</div>
           <div style={{ fontSize: 12, color: t.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Novo {fmtInt(v.novo)} · Port. {fmtInt(v.portabilidade)} · Cartão {fmtInt(v.cartao)}</div>

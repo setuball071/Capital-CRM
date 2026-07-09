@@ -4203,6 +4203,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // ===== FOTO DE PERFIL (self-service) =====
+  // Qualquer usuário logado troca/remove a PRÓPRIA foto. Guardada como data URL
+  // base64 na coluna users.avatar_url (mesmo formato do upload do admin).
+  app.post(
+    "/api/profile/avatar",
+    requireAuth,
+    uploadAvatar.single("file"),
+    async (req: any, res) => {
+      try {
+        const file = req.file;
+        if (!file)
+          return res.status(400).json({ message: "Arquivo não enviado. Use JPG, PNG ou WebP (máximo 2MB)." });
+        const mimeType = file.mimetype || "image/png";
+        const avatarUrl = `data:${mimeType};base64,${file.buffer.toString("base64")}`;
+        await db.execute(sql`UPDATE users SET avatar_url = ${avatarUrl} WHERE id = ${req.user!.id}`);
+        res.json({ avatarUrl });
+      } catch (error: any) {
+        console.error("[AVATAR] Self upload error:", error);
+        res.status(500).json({ message: "Erro ao enviar foto" });
+      }
+    },
+  );
+
+  app.delete("/api/profile/avatar", requireAuth, async (req: any, res) => {
+    try {
+      await db.execute(sql`UPDATE users SET avatar_url = NULL WHERE id = ${req.user!.id}`);
+      res.json({ message: "Foto removida" });
+    } catch (error: any) {
+      console.error("[AVATAR] Self delete error:", error);
+      res.status(500).json({ message: "Erro ao remover foto" });
+    }
+  });
+
   // ===== SIMULATIONS ROUTES =====
 
   // Get user's simulations

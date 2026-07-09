@@ -100,6 +100,7 @@ function ChartTooltip({ active, payload, label, mesNome, t }: any) {
 
 function VendedorDashboard() {
   const { theme } = useTheme();
+  const { user } = useAuth();
   const t: Palette = PALETTE[theme === "dark" ? "dark" : "light"];
   const { data, isLoading, error } = useQuery<VendData>({
     queryKey: ["/api/dashboard-vendedor"],
@@ -158,7 +159,11 @@ function VendedorDashboard() {
       {/* Identidade */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: GRAD_GO, color: "#fff", fontWeight: 600, fontSize: 16 }}>{getInitials(data.vendedorNome)}</div>
+          {(user as any)?.avatarUrl ? (
+            <img src={(user as any).avatarUrl} alt={data.vendedorNome} style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover" }} />
+          ) : (
+            <div style={{ width: 44, height: 44, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: GRAD_GO, color: "#fff", fontWeight: 600, fontSize: 16 }}>{getInitials(data.vendedorNome)}</div>
+          )}
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: t.textStrong }}>{data.vendedorNome}</div>
             <div style={{ fontSize: 12.5, color: t.textMuted }}>Corretor · {mesNome} {yy}</div>
