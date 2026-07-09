@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useAssistenteChat } from "./useAssistenteChat";
-import { NOME_MASCOTE, EMOJI_MASCOTE, PERGUNTAS_SUGERIDAS } from "./config";
+import { NOME_MASCOTE, EMOJI_MASCOTE } from "./config";
 import {
   MessageCircle,
   X,
@@ -109,20 +109,9 @@ export default function AssistenteWidget() {
 
           <div className="flex-1 space-y-3 overflow-y-auto p-3">
             {mensagens.length === 0 && (
-              <div className="space-y-2">
-                <div className="rounded-lg bg-muted p-3 text-sm">
-                  Oi! Eu sou o {NOME_MASCOTE} {EMOJI_MASCOTE}. Me pergunta qualquer coisa sobre
-                  regras de banco, roteiros e o sistema!
-                </div>
-                {PERGUNTAS_SUGERIDAS.map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => enviar(p)}
-                    className="block w-full rounded-lg border px-3 py-2 text-left text-xs hover:bg-muted"
-                  >
-                    {p}
-                  </button>
-                ))}
+              <div className="rounded-lg bg-muted p-3 text-sm">
+                Oi {user.name?.split(" ")[0] || ""}! O que você precisa? Como posso te ajudar?{" "}
+                {EMOJI_MASCOTE}
               </div>
             )}
             {mensagens.map((m) => (
