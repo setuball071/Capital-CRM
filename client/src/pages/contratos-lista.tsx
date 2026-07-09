@@ -903,10 +903,40 @@ export default function ContratosListaPage() {
     onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
   });
 
-  // ── Contagens ──────────────────────────────────────────────────────────────
+  // ── Base filtrada (corretor/período/produto/busca) — vale para os cards E a tabela ──
+  // Não inclui a seleção da caixa (fase/status), que é justamente o que os cards resumem.
+  const periodoDesde = (() => {
+    if (filterPeriodo === "all") return null;
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    if (filterPeriodo === "hoje") return d;
+    if (filterPeriodo === "7d") { d.setDate(d.getDate() - 6); return d; }
+    if (filterPeriodo === "30d") { d.setDate(d.getDate() - 29); return d; }
+    if (filterPeriodo === "mes") { d.setDate(1); return d; }
+    return null;
+  })();
+  function matchesFilters(p: any): boolean {
+    if (viewMode === "corretor" && p.vendorId !== user?.id) return false;
+    const q = search.trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, "");
+    const matchSearch =
+      !q ||
+      p.clientName?.toLowerCase().includes(q) ||
+      (!!qDigits && (p.clientCpf || "").replace(/\D/g, "").includes(qDigits)) ||
+      p.bank?.toLowerCase().includes(q) ||
+      (p.ade || "").toLowerCase().includes(q) ||
+      p.vendorName?.toLowerCase().includes(q) ||
+      (!!qDigits && String(p.id) === qDigits);
+    const matchVendor = filterVendor === "all" || String(p.vendorId) === String(filterVendor);
+    const matchPeriodo = !periodoDesde || (p.createdAt != null && new Date(p.createdAt) >= periodoDesde);
+    const matchProduct = filterProduct === "all" || p.product === filterProduct;
+    return !!(matchSearch && matchVendor && matchPeriodo && matchProduct);
+  }
+  const cardBase = proposals.filter(matchesFilters);
+
+  // ── Contagens (sobre a base filtrada) ────────────────────────────────────────
 
   const countByStatus: Record<string, number> = {};
-  proposals.forEach((p) => { countByStatus[p.status] = (countByStatus[p.status] || 0) + 1; });
+  cardBase.forEach((p) => { countByStatus[p.status] = (countByStatus[p.status] || 0) + 1; });
   function countForPhase(phase: Phase) {
     return phase.statuses.reduce((acc, s) => acc + (countByStatus[s] || 0), 0);
   }
@@ -933,7 +963,7 @@ export default function ContratosListaPage() {
     return val;
   }
   function prodForPhase(phase: Phase) {
-    return proposals.reduce(
+    return cardBase.reduce(
       (acc, p) => acc + (phase.statuses.includes(p.status) ? prodValueOf(p) : 0),
       0
     );
@@ -948,43 +978,14 @@ export default function ContratosListaPage() {
 
   const activePhaseDef = phases.find((p) => p.id === activePhase);
 
-  // Período (preset) → data mínima de cadastro
-  const periodoDesde = (() => {
-    if (filterPeriodo === "all") return null;
-    const d = new Date(); d.setHours(0, 0, 0, 0);
-    if (filterPeriodo === "hoje") return d;
-    if (filterPeriodo === "7d") { d.setDate(d.getDate() - 6); return d; }
-    if (filterPeriodo === "30d") { d.setDate(d.getDate() - 29); return d; }
-    if (filterPeriodo === "mes") { d.setDate(1); return d; }
-    return null;
-  })();
   // Só a BUSCA por texto varre todas as caixas (achar cliente em qualquer status).
   // Corretor e período SOMAM com a caixa selecionada (filtram o conteúdo dela).
   const bypassBox = !!search.trim();
-  const filtered = proposals.filter((p) => {
-    if (viewMode === "corretor" && p.vendorId !== user?.id) return false;
-    const q = search.trim().toLowerCase();
-    const qDigits = q.replace(/\D/g, "");
-    // A caixa (fase/status) aplica-se sempre, exceto quando há busca por texto.
-    if (!bypassBox) {
-      if (activePhaseDef) {
-        if (!activePhaseDef.statuses.includes(p.status)) return false;
-      } else if (filterStatus !== "all") {
-        if (p.status !== filterStatus) return false;
-      }
-    }
-    const matchSearch =
-      !q ||
-      p.clientName?.toLowerCase().includes(q) ||
-      (!!qDigits && (p.clientCpf || "").replace(/\D/g, "").includes(qDigits)) ||
-      p.bank?.toLowerCase().includes(q) ||
-      (p.ade || "").toLowerCase().includes(q) ||
-      p.vendorName?.toLowerCase().includes(q) ||
-      (!!qDigits && String(p.id) === qDigits);
-    const matchVendor = filterVendor === "all" || String(p.vendorId) === String(filterVendor);
-    const matchPeriodo = !periodoDesde || (p.createdAt != null && new Date(p.createdAt) >= periodoDesde);
-    const matchProduct = filterProduct === "all" || p.product === filterProduct;
-    return matchSearch && matchVendor && matchPeriodo && matchProduct;
+  const filtered = cardBase.filter((p) => {
+    if (bypassBox) return true;
+    if (activePhaseDef) return activePhaseDef.statuses.includes(p.status);
+    if (filterStatus !== "all") return p.status === filterStatus;
+    return true;
   });
 
   // Corretores distintos presentes nas propostas (para o filtro)
