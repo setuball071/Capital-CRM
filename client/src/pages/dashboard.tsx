@@ -192,8 +192,8 @@ function RankingRow({ v, t }: { v: VendedorRanking; t: Palette }) {
         </div>
         <div style={{ fontSize: 12, color: t.textMuted }}>{pct}% de {fmtInt(v.meta)}</div>
       </div>
-      <div style={{ fontSize: 12.5, fontWeight: 600, color: AMBER, textAlign: "right", ...num }}>{fmtInt(v.emAndamento)}</div>
       <div style={{ fontSize: 16, fontWeight: 800, color: t.textStrong, textAlign: "right", ...num }}>{fmtInt(v.efetivado)}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: AMBER, textAlign: "right", ...num }}>{fmtInt(v.emAndamento)}</div>
       <div style={{ fontSize: 13.5, fontWeight: 600, color: t.textBody, textAlign: "right" }}>{v.contratos}</div>
     </div>
   );
@@ -226,8 +226,8 @@ function RankingCard({ data, t }: { data: GestorDashboardData; t: Palette }) {
             <div style={headBase}>#</div>
             <div style={headBase}>CORRETOR</div>
             <div style={headBase}>% DA META</div>
-            <div style={{ ...headBase, textAlign: "right" }}>EM ABERTO</div>
             <div style={{ ...headBase, textAlign: "right" }}>EFETIVADO</div>
+            <div style={{ ...headBase, textAlign: "right" }}>EM ABERTO</div>
             <div style={{ ...headBase, textAlign: "right" }}>CTTS</div>
           </div>
           {data.ranking.length === 0 ? (
