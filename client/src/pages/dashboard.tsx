@@ -127,7 +127,7 @@ function MetaCard({ e, periodo, t }: { e: GestorDashboardData["equipe"]; periodo
         <div>
           <div style={kpiLabel}><CheckCircle2 size={14} /> EFETIVADO NO MÊS</div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <div style={{ ...kpiValue, ...num }}>{fmtCent(e.efetivado)}</div>
+            <div style={{ ...kpiValue, fontSize: 38, letterSpacing: "-0.02em", ...num }}>{fmtCent(e.efetivado)}</div>
             {e.deltaPercentual !== 0 && (
               <div style={{ fontSize: 14, fontWeight: 700, color: up ? GREEN : DANGER }}>
                 {up ? "↗" : "↘"} {Math.abs(e.deltaPercentual).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
@@ -138,7 +138,7 @@ function MetaCard({ e, periodo, t }: { e: GestorDashboardData["equipe"]; periodo
         </div>
         <div>
           <div style={kpiLabel}><Clock size={14} /> EM ANDAMENTO</div>
-          <div style={{ ...kpiValue, color: AMBER, ...num }}>{fmtCent(e.emAndamento)}</div>
+          <div style={{ ...kpiValue, fontSize: 26, color: AMBER, ...num }}>{fmtCent(e.emAndamento)}</div>
           <div style={kpiHelper}>{e.propostasEmAberto} propostas em aberto, aguardando efetivação</div>
         </div>
       </div>
@@ -192,8 +192,8 @@ function RankingRow({ v, t }: { v: VendedorRanking; t: Palette }) {
         </div>
         <div style={{ fontSize: 12, color: t.textMuted }}>{pct}% de {fmtInt(v.meta)}</div>
       </div>
-      <div style={{ fontSize: 13.5, fontWeight: 600, color: AMBER, textAlign: "right", ...num }}>{fmtInt(v.emAndamento)}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: t.textStrong, textAlign: "right", ...num }}>{fmtInt(v.efetivado)}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: AMBER, textAlign: "right", ...num }}>{fmtInt(v.emAndamento)}</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: t.textStrong, textAlign: "right", ...num }}>{fmtInt(v.efetivado)}</div>
       <div style={{ fontSize: 13.5, fontWeight: 600, color: t.textBody, textAlign: "right" }}>{v.contratos}</div>
     </div>
   );

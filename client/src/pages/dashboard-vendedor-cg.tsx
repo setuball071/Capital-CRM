@@ -190,7 +190,7 @@ function VendedorDashboard() {
           <div>
             <div style={kpiLabel}><CheckCircle2 size={14} /> EFETIVADO NO MÊS</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-              <div style={{ ...kpiValue, ...num }}>{fmtCent(efetivado)}</div>
+              <div style={{ ...kpiValue, fontSize: 38, letterSpacing: "-0.02em", ...num }}>{fmtCent(efetivado)}</div>
               {data.deltaPercentual !== 0 && (
                 <div style={{ fontSize: 14, fontWeight: 700, color: up ? GREEN : DANGER }}>
                   {up ? "↗" : "↘"} {Math.abs(data.deltaPercentual).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
@@ -201,7 +201,7 @@ function VendedorDashboard() {
           </div>
           <div>
             <div style={kpiLabel}><Clock size={14} /> EM ANDAMENTO</div>
-            <div style={{ ...kpiValue, color: AMBER, ...num }}>{fmtCent(data.emAndamento)}</div>
+            <div style={{ ...kpiValue, fontSize: 26, color: AMBER, ...num }}>{fmtCent(data.emAndamento)}</div>
             <div style={kpiHelper}>{data.emAndamentoContratos} propostas em aberto, aguardando efetivação</div>
           </div>
         </div>
