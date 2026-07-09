@@ -1,4 +1,4 @@
-import { Users, FileText, Table, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Wand2, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, BookMarked, Wrench, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard, KeyRound } from "lucide-react";
+import { Users, FileText, Table, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, ScrollText, BookMarked, Wrench, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard, KeyRound } from "lucide-react";
 
 import { useLocation } from "wouter";
 import { useState, useEffect, useRef, Fragment } from "react";
@@ -65,9 +65,7 @@ const MS_ITEM: Record<string, string> = {
   "Feedbacks": "rate_review",
   "Fundamentos": "menu_book",
   "Roleplay IA": "forum",
-  "Abordagem IA": "auto_awesome",
   "Perfis da Equipe": "groups",
-  "Criador de Criativos IA": "brush",
   // Base de Clientes
   "Dashboard": "monitoring",
   "Importar Base": "database",
@@ -130,7 +128,7 @@ const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_roteiros: ["/roteiros"],
   modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv", "/base-dashboard", "/enriquecer-base", "/importar-dados-complementares", "/admin/importar-observacoes"],
   modulo_config_usuarios: ["/users", "/config-precos", "/pricing", "/admin-pedidos-lista", "/funcionarios"],
-  modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/abordagem", "/academia/admin", "/config-prompts", "/desenvolvimento/fundamentos", "/desenvolvimento/roleplay", "/desenvolvimento/abordagem", "/desenvolvimento/feedbacks", "/desenvolvimento/profiler", "/desenvolvimento/profiler-gestao"],
+  modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/admin", "/config-prompts", "/desenvolvimento/fundamentos", "/desenvolvimento/roleplay", "/desenvolvimento/feedbacks", "/desenvolvimento/profiler", "/desenvolvimento/profiler-gestao"],
   modulo_alpha: ["/vendas/campanhas", "/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta", "/vendas/gestao-pipeline", "/vendas/etiquetas", "/vendas/importar-higienizados", "/vendas/minha-carteira"],
   modulo_financeiro: ["/financeiro/contratos", "/financeiro/producao", "/financeiro/proventos", "/financeiro/tabelas", "/financeiro/configuracoes"],
 };
@@ -264,9 +262,7 @@ export function AppSidebar() {
         { title: "Feedbacks", url: "/desenvolvimento/feedbacks", icon: ClipboardCheck, module: "modulo_academia", subItem: "feedbacks" },
         { title: "Fundamentos", url: "/desenvolvimento/fundamentos", icon: BookOpen, module: "modulo_academia", subItem: "fundamentos" },
         { title: "Roleplay IA", url: "/desenvolvimento/roleplay", icon: MessageSquare, module: "modulo_academia", subItem: "roleplay" },
-        { title: "Abordagem IA", url: "/desenvolvimento/abordagem", icon: Wand2, module: "modulo_academia", subItem: "scripts" },
         { title: "Perfis da Equipe", url: "/desenvolvimento/profiler-gestao", icon: Users, module: "modulo_academia", subItem: "profiler", rolesAllowed: ["master", "coordenacao"] },
-        { title: "Criador de Criativos IA", url: "/criador-criativos", icon: Sparkles, masterOnly: true },
       ],
     },
     {
