@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useAssistenteChat } from "./useAssistenteChat";
-import { NOME_MASCOTE, EMOJI_MASCOTE } from "./config";
+import { NOME_MASCOTE, AVATAR_URL } from "./config";
 import {
   MessageCircle,
   X,
@@ -80,10 +80,14 @@ export default function AssistenteWidget() {
       {!aberto && (
         <button
           onClick={() => setAberto(true)}
-          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-2xl shadow-lg transition hover:scale-110"
+          className="fixed bottom-5 right-5 z-50 h-16 w-16 transition hover:scale-110"
           title={`Perguntar pro ${NOME_MASCOTE}`}
         >
-          {EMOJI_MASCOTE}
+          <img
+            src={AVATAR_URL}
+            alt={NOME_MASCOTE}
+            className="h-full w-full object-contain drop-shadow-lg"
+          />
         </button>
       )}
 
@@ -92,7 +96,7 @@ export default function AssistenteWidget() {
         <div className="fixed bottom-5 right-5 z-50 flex h-[560px] w-[380px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border bg-background shadow-2xl">
           <div className="flex items-center justify-between border-b bg-primary/10 px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="text-xl">{EMOJI_MASCOTE}</span>
+              <img src={AVATAR_URL} alt={NOME_MASCOTE} className="h-9 w-9 shrink-0 object-contain" />
               <div>
                 <div className="text-sm font-semibold">{NOME_MASCOTE}</div>
                 <div className="text-xs text-muted-foreground">Assistente da equipe</div>
@@ -110,9 +114,9 @@ export default function AssistenteWidget() {
 
           <div className="flex-1 space-y-3 overflow-y-auto p-3">
             {mensagens.length === 0 && (
-              <div className="rounded-lg bg-muted p-3 text-sm">
-                Oi {user.name?.split(" ")[0] || ""}! O que você precisa? Como posso te ajudar?{" "}
-                {EMOJI_MASCOTE}
+              <div className="flex items-start gap-2 rounded-lg bg-muted p-3 text-sm">
+                <img src={AVATAR_URL} alt={NOME_MASCOTE} className="h-8 w-8 shrink-0 object-contain" />
+                <span>Oi {user.name?.split(" ")[0] || ""}! O que você precisa? Como posso te ajudar?</span>
               </div>
             )}
             {mensagens.map((m) => (

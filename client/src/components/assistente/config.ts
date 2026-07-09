@@ -1,5 +1,6 @@
 export const NOME_MASCOTE = "Jarvis";
-export const EMOJI_MASCOTE = "🤖"; // J.A.R.V.I.S. — até ter avatar próprio
+export const EMOJI_MASCOTE = "🤖"; // fallback textual (raro); avatar oficial abaixo
+export const AVATAR_URL = "/jarvis-avatar.png"; // client/public/jarvis-avatar.png
 
 export const PERGUNTAS_SUGERIDAS = [
   "Quais bancos o BRB porta?",

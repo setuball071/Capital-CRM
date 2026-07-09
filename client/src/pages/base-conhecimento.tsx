@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CATEGORIAS_LABEL, NOME_MASCOTE, EMOJI_MASCOTE } from "@/components/assistente/config";
+import { CATEGORIAS_LABEL, NOME_MASCOTE, AVATAR_URL } from "@/components/assistente/config";
 
 type Artigo = {
   id: number; titulo: string; conteudo: string; categoria: string;
@@ -92,8 +92,9 @@ export default function BaseConhecimentoPage() {
 
   return (
     <div className="space-y-4 p-6">
-      <h1 className="text-2xl font-bold">
-        {EMOJI_MASCOTE} Base de Conhecimento do {NOME_MASCOTE}
+      <h1 className="flex items-center gap-2 text-2xl font-bold">
+        <img src={AVATAR_URL} alt={NOME_MASCOTE} className="h-9 w-9 object-contain" />
+        Base de Conhecimento do {NOME_MASCOTE}
       </h1>
 
       <Tabs defaultValue="artigos">
