@@ -545,6 +545,7 @@ import { createNotification } from "./notification-service";
 import { registerContractRoutes } from "./contracts";
 import { registerOcrRoutes } from "./ocr";
 import { registerAssistenteRoutes } from "./assistente";
+import { registerAssistenteAvisosRoutes } from "./assistente-avisos";
 import { requireApiKey, hashApiKey } from "./api-key-middleware";
 import {
   addToPortfolio,
@@ -30164,6 +30165,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   // ===== OCR DE DOCUMENTOS =====
   registerOcrRoutes(app, requireAuth);
   registerAssistenteRoutes(app, requireAuth);
+  registerAssistenteAvisosRoutes(app, requireAuth);
 
   // ===== SIAPE — CONTRACHEQUES =====
 
