@@ -32,7 +32,7 @@ export default function BaseConhecimentoPage() {
   const podeGerenciar =
     !!user &&
     (user.isMaster ||
-      ["master", "operacional"].includes(user.role) ||
+      user.role === "master" ||
       hasSubItemAccess("modulo_assistente", "base_conhecimento"));
 
   const { data: artigos = [] } = useQuery<Artigo[]>({

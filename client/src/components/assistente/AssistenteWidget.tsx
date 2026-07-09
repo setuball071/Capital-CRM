@@ -27,7 +27,8 @@ export default function AssistenteWidget() {
   const fileRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
 
-  const podeCaptura = !!user && (user.isMaster || ["master", "operacional"].includes(user.role));
+  // Guardar conhecimento grava na base → só master (bate com podeGerenciarKb no backend)
+  const podeCaptura = !!user && (user.isMaster || user.role === "master");
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth" });

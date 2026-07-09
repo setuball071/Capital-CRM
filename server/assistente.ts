@@ -41,15 +41,22 @@ export const CATEGORIAS_KB = [
 ] as const;
 
 export function podeGerenciarKb(user: any): boolean {
+  // Gerenciar a base = SOMENTE master (admin@sistema.com, Manu). Operacional NÃO gerencia.
+  return !!user && (user.isMaster || user.role === "master");
+}
+
+/** Quem pode CONVERSAR com o Jarvis automaticamente (gestão + operacional). Demais só via permissão marcada pelo master. */
+function podeUsarChatAuto(user: any): boolean {
   return !!user && (user.isMaster || ["master", "operacional"].includes(user.role));
 }
 
-/** Permissão do assistente: gestão (master/admin/operacional) sempre tem; demais via user_permissions marcada pelo master. */
+/** Permissão do assistente por sub-item; quem não tem acesso automático depende de user_permissions marcada pelo master. */
 async function temPermissaoAssistente(
   user: any,
   subItem: "chat" | "base_conhecimento",
 ): Promise<boolean> {
-  if (podeGerenciarKb(user)) return true;
+  const auto = subItem === "base_conhecimento" ? podeGerenciarKb(user) : podeUsarChatAuto(user);
+  if (auto) return true;
   const [perm] = await db
     .select()
     .from(userPermissions)

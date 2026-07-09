@@ -136,12 +136,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     }
 
-    // Roles de gestão têm acesso automático ao Jarvis (paridade com o backend)
-    if (
-      (user?.role === "operacional" || user?.role === "master") &&
-      module === "modulo_assistente"
-    ) {
-      return true;
+    // Jarvis (paridade com o backend): GERENCIAR a base = só master (admin/Manu);
+    // CONVERSAR (chat) = master/operacional. Demais só via permissão marcada pelo master.
+    if (module === "modulo_assistente") {
+      if (subItem === "base_conhecimento") {
+        if (user?.role === "master") return true;
+      } else if (user?.role === "operacional" || user?.role === "master") {
+        return true;
+      }
+      // senão, cai na verificação de permissão específica abaixo
     }
 
     // Primeiro, verifica permissão específica do sub-item
