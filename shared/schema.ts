@@ -3696,44 +3696,6 @@ export const partners = pgTable("partners", {
 export type Partner = typeof partners.$inferSelect;
 
 
-// ===== CRIADOR DE CRIATIVOS =====
-
-export const creativeGenerations = pgTable("creative_generations", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
-  userId: integer("user_id").notNull().references(() => users.id),
-  promptUsed: text("prompt_used").notNull(),
-  formData: jsonb("form_data"),
-  imageUrls: text("image_urls").array(),
-  selectedImageUrl: text("selected_image_url"),
-  status: text("status").notNull().default("pending"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertCreativeGenerationSchema = createInsertSchema(creativeGenerations).omit({
-  id: true, createdAt: true, tenantId: true, userId: true,
-});
-export type CreativeGeneration = typeof creativeGenerations.$inferSelect;
-export type InsertCreativeGeneration = z.infer<typeof insertCreativeGenerationSchema>;
-
-export const creativeGenerationQuota = pgTable("creative_generation_quota", {
-  userId: integer("user_id").notNull().references(() => users.id),
-  date: text("date").notNull(),
-  count: integer("count").notNull().default(0),
-}, (t) => ({
-  pk: primaryKey({ columns: [t.userId, t.date] }),
-}));
-
-export const creativeBrandConfig = pgTable("creative_brand_config", {
-  id: serial("id").primaryKey(),
-  systemPrompt: text("system_prompt").notNull().default(""),
-  logoUrl: text("logo_url"),
-  logoBase64: text("logo_base64"),
-  updatedAt: timestamp("updated_at").defaultNow(),
-  updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
-});
-export type CreativeBrandConfig = typeof creativeBrandConfig.$inferSelect;
-
 // ===== CENTRAL DE ATUALIZAÇÕES =====
 
 export const systemUpdates = pgTable("system_updates", {
