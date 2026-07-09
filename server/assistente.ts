@@ -365,12 +365,31 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
 
       try {
         if (req.file) {
-          const mime = req.file.mimetype || "";
-          if (mime.startsWith("audio/")) {
-            extraidoDeMidia = await transcreverAudio(req.file.buffer, mime);
+          // Alguns navegadores mandam o mimetype vazio/octet-stream — cair na extensão também.
+          const rawMime = (req.file.mimetype || "").toLowerCase();
+          const nome = (req.file.originalname || "").toLowerCase();
+          const isAudio =
+            rawMime.startsWith("audio/") || /\.(webm|ogg|oga|mp3|m4a|wav|mpeg|mpga)$/.test(nome);
+          const isImagem =
+            rawMime.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|heic|heif)$/.test(nome);
+          if (isAudio) {
+            extraidoDeMidia = await transcreverAudio(req.file.buffer, rawMime || "audio/webm");
             origemMidia = "audio";
-          } else if (mime.startsWith("image/")) {
-            extraidoDeMidia = await extrairTextoImagem(req.file.buffer, mime);
+          } else if (isImagem) {
+            const mimeImg = rawMime.startsWith("image/")
+              ? rawMime
+              : nome.endsWith(".png")
+                ? "image/png"
+                : nome.endsWith(".gif")
+                  ? "image/gif"
+                  : nome.endsWith(".webp")
+                    ? "image/webp"
+                    : nome.endsWith(".bmp")
+                      ? "image/bmp"
+                      : nome.endsWith(".heic") || nome.endsWith(".heif")
+                        ? "image/heic"
+                        : "image/jpeg";
+            extraidoDeMidia = await extrairTextoImagem(req.file.buffer, mimeImg);
             origemMidia = "imagem";
           } else {
             return res.status(422).json({ message: "Arquivo deve ser áudio ou imagem" });
