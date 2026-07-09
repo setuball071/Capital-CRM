@@ -3595,6 +3595,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
+          // Proteção de histórico: com propostas/produção/ações, só desativar (não excluir)
+          const depB = await db.execute(sql`
+            SELECT
+              (SELECT COUNT(*) FROM proposals WHERE vendor_id = ${id} OR created_by = ${id})::int
+              + (SELECT COUNT(*) FROM producoes_contratos WHERE vendedor_id = ${id})::int
+              + (SELECT COUNT(*) FROM vendedor_contratos WHERE vendedor_id = ${id})::int
+              + (SELECT COUNT(*) FROM proposal_history WHERE performed_by = ${id})::int AS total
+          `);
+          if ((Number((depB.rows[0] as any)?.total) || 0) > 0) {
+            errors.push(`${targetUser.name}: possui histórico (propostas/produção) — desative em vez de excluir`);
+            continue;
+          }
+
           try {
             await storage.deleteUser(id);
             deleted++;
@@ -3676,6 +3689,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         // master has no restrictions (except self-delete which is already checked)
+
+        // Proteção de histórico: usuário com propostas/produção/ações no sistema NÃO
+        // pode ser excluído (o histórico sumiria ou quebraria) — deve ser DESATIVADO.
+        const dep = await db.execute(sql`
+          SELECT
+            (SELECT COUNT(*) FROM proposals WHERE vendor_id = ${id} OR created_by = ${id})::int AS propostas,
+            (SELECT COUNT(*) FROM producoes_contratos WHERE vendedor_id = ${id})::int AS producoes,
+            (SELECT COUNT(*) FROM vendedor_contratos WHERE vendedor_id = ${id})::int AS contratos,
+            (SELECT COUNT(*) FROM proposal_history WHERE performed_by = ${id})::int AS acoes
+        `);
+        const d: any = dep.rows[0] || {};
+        const totalHist = (Number(d.propostas) || 0) + (Number(d.producoes) || 0) + (Number(d.contratos) || 0) + (Number(d.acoes) || 0);
+        if (totalHist > 0) {
+          return res.status(409).json({
+            message: `Este usuário possui histórico no sistema (${d.propostas} proposta(s), ${Number(d.producoes) + Number(d.contratos)} registro(s) de produção, ${d.acoes} ação(ões) em propostas). Para preservar tudo, DESATIVE o usuário em vez de excluí-lo — as propostas dele continuam visíveis normalmente.`,
+          });
+        }
 
         // Delete user
         await storage.deleteUser(id);
