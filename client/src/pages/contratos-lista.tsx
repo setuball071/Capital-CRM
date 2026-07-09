@@ -612,19 +612,15 @@ export default function ContratosListaPage() {
   const [search, setSearch] = useState(() => sessionStorage.getItem("contratos_search") || "");
   const [filterStatus, setFilterStatus] = useState(() => sessionStorage.getItem("contratos_filterStatus") || "all");
   const [filterProduct, setFilterProduct] = useState(() => sessionStorage.getItem("contratos_filterProduct") || "all");
-  const [filterCpf, setFilterCpf] = useState(() => sessionStorage.getItem("contratos_filterCpf") || "");
   const [filterVendor, setFilterVendor] = useState(() => sessionStorage.getItem("contratos_filterVendor") || "all");
-  const [filterDateFrom, setFilterDateFrom] = useState(() => sessionStorage.getItem("contratos_filterDateFrom") || "");
-  const [filterDateTo, setFilterDateTo] = useState(() => sessionStorage.getItem("contratos_filterDateTo") || "");
+  const [filterPeriodo, setFilterPeriodo] = useState(() => sessionStorage.getItem("contratos_filterPeriodo") || "all");
   useEffect(() => {
-    const persist = (k: string, v: string) => v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k);
+    const persist = (k: string, v: string) => v && v !== "all" ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k);
     persist("contratos_search", search);
-    persist("contratos_filterProduct", filterProduct === "all" ? "" : filterProduct);
-    persist("contratos_filterCpf", filterCpf);
-    persist("contratos_filterVendor", filterVendor === "all" ? "" : filterVendor);
-    persist("contratos_filterDateFrom", filterDateFrom);
-    persist("contratos_filterDateTo", filterDateTo);
-  }, [search, filterProduct, filterCpf, filterVendor, filterDateFrom, filterDateTo]);
+    persist("contratos_filterProduct", filterProduct);
+    persist("contratos_filterVendor", filterVendor);
+    persist("contratos_filterPeriodo", filterPeriodo);
+  }, [search, filterProduct, filterVendor, filterPeriodo]);
   // Fase ativa persiste na sessão: ao abrir um contrato e voltar, mantém o filtro
   const [activePhase, setActivePhase] = useState<number | null>(() => {
     const s = sessionStorage.getItem("contratos_activePhase");
@@ -952,9 +948,18 @@ export default function ContratosListaPage() {
 
   const activePhaseDef = phases.find((p) => p.id === activePhase);
 
-  const filterCpfDigits = filterCpf.replace(/\D/g, "");
+  // Período (preset) → data mínima de cadastro
+  const periodoDesde = (() => {
+    if (filterPeriodo === "all") return null;
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    if (filterPeriodo === "hoje") return d;
+    if (filterPeriodo === "7d") { d.setDate(d.getDate() - 6); return d; }
+    if (filterPeriodo === "30d") { d.setDate(d.getDate() - 29); return d; }
+    if (filterPeriodo === "mes") { d.setDate(1); return d; }
+    return null;
+  })();
   // Qualquer filtro explícito ativo faz a busca varrer TODAS as caixas (ignora fase/status)
-  const hasActiveFilter = !!(search.trim() || filterCpfDigits || filterVendor !== "all" || filterDateFrom || filterDateTo);
+  const hasActiveFilter = !!(search.trim() || filterVendor !== "all" || periodoDesde);
   const filtered = proposals.filter((p) => {
     if (viewMode === "corretor" && p.vendorId !== user?.id) return false;
     const q = search.trim().toLowerCase();
@@ -975,13 +980,10 @@ export default function ContratosListaPage() {
       (p.ade || "").toLowerCase().includes(q) ||
       p.vendorName?.toLowerCase().includes(q) ||
       (!!qDigits && String(p.id) === qDigits);
-    const matchCpf = !filterCpfDigits || (p.clientCpf || "").replace(/\D/g, "").includes(filterCpfDigits);
     const matchVendor = filterVendor === "all" || String(p.vendorId) === String(filterVendor);
-    const created = p.createdAt ? new Date(p.createdAt) : null;
-    const matchFrom = !filterDateFrom || (created != null && created >= new Date(`${filterDateFrom}T00:00:00`));
-    const matchTo = !filterDateTo || (created != null && created <= new Date(`${filterDateTo}T23:59:59`));
+    const matchPeriodo = !periodoDesde || (p.createdAt != null && new Date(p.createdAt) >= periodoDesde);
     const matchProduct = filterProduct === "all" || p.product === filterProduct;
-    return matchSearch && matchCpf && matchVendor && matchFrom && matchTo && matchProduct;
+    return matchSearch && matchVendor && matchPeriodo && matchProduct;
   });
 
   // Corretores distintos presentes nas propostas (para o filtro)
@@ -1202,10 +1204,10 @@ export default function ContratosListaPage() {
         </div>
       )}
 
-      {/* ── Card da tabela: busca + filtro de produto + tabela (design) ────── */}
+      {/* ── Card da tabela: busca + filtros (uma linha) + tabela ──────────── */}
       <section className="rounded-2xl border border-border bg-card px-6 pt-5 pb-3 space-y-4">
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[260px]">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome, CPF, banco, ADE, corretor..."
@@ -1215,8 +1217,33 @@ export default function ContratosListaPage() {
             data-testid="input-search"
           />
         </div>
+        {showCorretorCol && (
+          <Select value={filterVendor} onValueChange={setFilterVendor}>
+            <SelectTrigger className="w-[190px] h-[38px] rounded-[9px] text-[13.5px]">
+              <SelectValue placeholder="Todos os corretores" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os corretores</SelectItem>
+              {vendorOptions.map(([id, name]) => (
+                <SelectItem key={id} value={id}>{name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <Select value={filterPeriodo} onValueChange={setFilterPeriodo}>
+          <SelectTrigger className="w-[170px] h-[38px] rounded-[9px] text-[13.5px]">
+            <SelectValue placeholder="Qualquer data" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Qualquer data</SelectItem>
+            <SelectItem value="hoje">Cadastradas hoje</SelectItem>
+            <SelectItem value="7d">Últimos 7 dias</SelectItem>
+            <SelectItem value="30d">Últimos 30 dias</SelectItem>
+            <SelectItem value="mes">Este mês</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={filterProduct} onValueChange={setFilterProduct}>
-          <SelectTrigger className="w-[180px] h-[38px] rounded-[9px] text-[13.5px]" data-testid="select-filter-product">
+          <SelectTrigger className="w-[170px] h-[38px] rounded-[9px] text-[13.5px]" data-testid="select-filter-product">
             <SelectValue placeholder="Todos os produtos" />
           </SelectTrigger>
           <SelectContent>
@@ -1226,48 +1253,12 @@ export default function ContratosListaPage() {
             ))}
           </SelectContent>
         </Select>
-      </div>
-
-      {/* Filtros dedicados (CPF, corretor, data) — persistem na sessão */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <p className="text-[11px] text-muted-foreground mb-1">CPF</p>
-          <Input
-            value={filterCpf}
-            onChange={(e) => setFilterCpf(e.target.value.replace(/[^\d.\-]/g, ""))}
-            placeholder="000.000.000-00"
-            inputMode="numeric"
-            className="w-[160px] h-[34px] rounded-[9px] text-[13px]"
-          />
-        </div>
-        {showCorretorCol && (
-          <div>
-            <p className="text-[11px] text-muted-foreground mb-1">Corretor</p>
-            <Select value={filterVendor} onValueChange={setFilterVendor}>
-              <SelectTrigger className="w-[190px] h-[34px] rounded-[9px] text-[13px]"><SelectValue placeholder="Todos" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os corretores</SelectItem>
-                {vendorOptions.map(([id, name]) => (
-                  <SelectItem key={id} value={id}>{name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <div>
-          <p className="text-[11px] text-muted-foreground mb-1">Cadastro de</p>
-          <Input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="w-[150px] h-[34px] rounded-[9px] text-[13px]" />
-        </div>
-        <div>
-          <p className="text-[11px] text-muted-foreground mb-1">até</p>
-          <Input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="w-[150px] h-[34px] rounded-[9px] text-[13px]" />
-        </div>
-        {(search || filterCpf || filterVendor !== "all" || filterDateFrom || filterDateTo || filterProduct !== "all") && (
+        {(search || filterVendor !== "all" || filterPeriodo !== "all" || filterProduct !== "all") && (
           <Button
-            variant="ghost" size="sm" className="h-[34px] text-xs"
-            onClick={() => { setSearch(""); setFilterCpf(""); setFilterVendor("all"); setFilterDateFrom(""); setFilterDateTo(""); setFilterProduct("all"); }}
+            variant="ghost" size="sm" className="h-[38px] text-xs text-muted-foreground"
+            onClick={() => { setSearch(""); setFilterVendor("all"); setFilterPeriodo("all"); setFilterProduct("all"); }}
           >
-            <X className="h-3.5 w-3.5 mr-1" /> Limpar filtros
+            <X className="h-3.5 w-3.5 mr-1" /> Limpar
           </Button>
         )}
       </div>
