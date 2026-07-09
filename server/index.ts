@@ -641,6 +641,29 @@ app.use((req, res, next) => {
           log(`⚠ Migração IA interna falhou (non-fatal): ${e}`);
         }
 
+        // ===== JARVIS — canal de avisos de contrato =====
+        try {
+          const { db: avDb } = await import("./storage");
+          const { sql: avSql } = await import("drizzle-orm");
+          await avDb.execute(avSql`
+            CREATE TABLE IF NOT EXISTS assistente_avisos (
+              id          SERIAL PRIMARY KEY,
+              tenant_id   INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              tipo        VARCHAR(30) NOT NULL,
+              titulo      VARCHAR(255) NOT NULL,
+              mensagem    TEXT NOT NULL,
+              proposal_id INTEGER,
+              lida        BOOLEAN NOT NULL DEFAULT FALSE,
+              criada_em   TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await avDb.execute(avSql`CREATE INDEX IF NOT EXISTS idx_assistente_avisos_user ON assistente_avisos(user_id, lida)`);
+          log("✓ Migração assistente_avisos ok");
+        } catch (e) {
+          log(`⚠ Migração assistente_avisos falhou (non-fatal): ${e}`);
+        }
+
         // Database seed
         const { seedDatabase } = await import("./seed");
         log("Starting seed...");

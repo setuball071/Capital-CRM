@@ -4125,3 +4125,19 @@ export const assistenteMensagens = pgTable("assistente_mensagens", {
   semResposta: boolean("sem_resposta").notNull().default(false),
   criadaEm: timestamp("criada_em").notNull().defaultNow(),
 });
+
+export const assistenteAvisos = pgTable("assistente_avisos", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tipo: varchar("tipo", { length: 30 }).notNull(), // contrato_pago | contrato_pendencia | contrato_cancelado
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  mensagem: text("mensagem").notNull(),
+  proposalId: integer("proposal_id"),
+  lida: boolean("lida").notNull().default(false),
+  criadaEm: timestamp("criada_em").notNull().defaultNow(),
+});
