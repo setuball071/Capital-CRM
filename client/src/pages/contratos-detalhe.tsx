@@ -576,6 +576,29 @@ export default function ContratosDetalhePage() {
       case "bancoCredito":     body = { clientMetaPatch: { contaSelecionada: { banco: editVal.trim(), agencia, conta, origem: "manual" } } }; break;
       case "agenciaCredito":   body = { clientMetaPatch: { contaSelecionada: { banco: bancoCredito, agencia: editVal.trim(), conta, origem: "manual" } } }; break;
       case "contaCredito":     body = { clientMetaPatch: { contaSelecionada: { banco: bancoCredito, agencia, conta: editVal.trim(), origem: "manual" } } }; break;
+      // Documento (RG/CNH): grava o objeto docFoto completo (merge é raso no backend)
+      case "doc_nome":
+      case "doc_rg":
+      case "doc_nasc":
+      case "doc_emissao":
+      case "doc_orgao":
+      case "doc_natural":
+      case "doc_mae":
+      case "doc_pai": {
+        const df: any = { ...(m.docFoto || {}) };
+        const fil: any[] = Array.isArray(df.filiacao) ? [...df.filiacao] : [null, null];
+        const v = editVal.trim() || null;
+        if      (editField === "doc_nome")    df.nome = v;
+        else if (editField === "doc_rg")      df.numeroRegistro = v;
+        else if (editField === "doc_nasc")    df.dataNascimento = v;
+        else if (editField === "doc_emissao") df.dataExpedicao = v;
+        else if (editField === "doc_orgao")   df.orgaoEmissor = v;
+        else if (editField === "doc_natural") df.naturalidade = v;
+        else if (editField === "doc_mae")   { fil[0] = v; df.filiacao = fil; }
+        else if (editField === "doc_pai")   { fil[1] = v; df.filiacao = fil; }
+        body = { clientMetaPatch: { docFoto: df } };
+        break;
+      }
       default: return;
     }
     editMutation.mutate(body);
@@ -873,13 +896,14 @@ export default function ContratosDetalhePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            {m.docFoto.dataNascimento && renderField({ fieldKey: "doc_nasc", label: "Nascimento", value: m.docFoto.dataNascimento })}
-            {m.docFoto.naturalidade && renderField({ fieldKey: "doc_natural", label: "Naturalidade", value: m.docFoto.naturalidade })}
-            {m.docFoto.numeroRegistro && renderField({ fieldKey: "doc_rg", label: "Nº RG / Registro", value: m.docFoto.numeroRegistro, mono: true })}
-            {m.docFoto.dataExpedicao && renderField({ fieldKey: "doc_emissao", label: "Data Emissão", value: m.docFoto.dataExpedicao })}
-            {m.docFoto.orgaoEmissor && renderField({ fieldKey: "doc_orgao", label: "Órgão Emissor", value: m.docFoto.orgaoEmissor })}
-            {m.docFoto.filiacao?.[0] && renderField({ fieldKey: "doc_mae", label: "Mãe", value: m.docFoto.filiacao[0] })}
-            {m.docFoto.filiacao?.[1] && renderField({ fieldKey: "doc_pai", label: "Pai", value: m.docFoto.filiacao[1] })}
+            {renderField({ fieldKey: "doc_nome", label: "Nome", value: m.docFoto.nome, editable: true })}
+            {renderField({ fieldKey: "doc_nasc", label: "Nascimento", value: m.docFoto.dataNascimento, editable: true })}
+            {renderField({ fieldKey: "doc_natural", label: "Naturalidade", value: m.docFoto.naturalidade, editable: true })}
+            {renderField({ fieldKey: "doc_rg", label: "Nº RG / Registro", value: m.docFoto.numeroRegistro, mono: true, editable: true })}
+            {renderField({ fieldKey: "doc_emissao", label: "Data Emissão", value: m.docFoto.dataExpedicao, editable: true })}
+            {renderField({ fieldKey: "doc_orgao", label: "Órgão Emissor", value: m.docFoto.orgaoEmissor, editable: true })}
+            {renderField({ fieldKey: "doc_mae", label: "Mãe", value: m.docFoto.filiacao?.[0], editable: true })}
+            {renderField({ fieldKey: "doc_pai", label: "Pai", value: m.docFoto.filiacao?.[1], editable: true })}
           </CardContent>
         </Card>
       )}
