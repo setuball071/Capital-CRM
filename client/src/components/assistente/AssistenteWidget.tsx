@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useAssistenteChat } from "./useAssistenteChat";
-import { useAssistenteAvisos } from "./useAssistenteAvisos";
+import { useAssistenteAvisos, type Aviso } from "./useAssistenteAvisos";
 import { NOME_MASCOTE, AVATAR_URL } from "./config";
 import {
   MessageCircle,
@@ -38,16 +38,29 @@ export default function AssistenteWidget() {
       hasSubItemAccess("modulo_assistente", "chat"));
 
   const { count, avisos, marcarLidas } = useAssistenteAvisos(podeUsarChat);
+  const [avisosPainel, setAvisosPainel] = useState<Aviso[]>([]);
+  const avisosSnapshotDone = useRef(false);
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensagens]);
 
-  // Ao abrir o chat, marca os avisos como lidos
+  // Ao abrir: tira uma "foto" dos avisos não lidos e a mantém visível durante a
+  // sessão. Marcar como lido limpa a bolinha, mas NÃO apaga o que está na tela
+  // (a lista do backend só traz não lidos, então sem a foto os avisos sumiriam).
   useEffect(() => {
-    if (aberto && count > 0) marcarLidas.mutate(undefined);
+    if (!aberto) {
+      avisosSnapshotDone.current = false;
+      setAvisosPainel([]);
+      return;
+    }
+    if (!avisosSnapshotDone.current && avisos.length > 0) {
+      avisosSnapshotDone.current = true;
+      setAvisosPainel(avisos);
+      marcarLidas.mutate(avisos.map((a) => a.id));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aberto]);
+  }, [aberto, avisos]);
 
   if (!user || !podeUsarChat) return null;
 
@@ -127,9 +140,9 @@ export default function AssistenteWidget() {
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto p-3">
-            {avisos.length > 0 && (
+            {avisosPainel.length > 0 && (
               <div className="space-y-2">
-                {avisos.map((a) => (
+                {avisosPainel.map((a) => (
                   <div key={a.id} className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
                     <div className="font-medium">{a.titulo}</div>
                     <div className="text-muted-foreground">{a.mensagem}</div>
