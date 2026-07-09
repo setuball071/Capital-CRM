@@ -958,14 +958,15 @@ export default function ContratosListaPage() {
     if (filterPeriodo === "mes") { d.setDate(1); return d; }
     return null;
   })();
-  // Qualquer filtro explícito ativo faz a busca varrer TODAS as caixas (ignora fase/status)
-  const hasActiveFilter = !!(search.trim() || filterVendor !== "all" || periodoDesde);
+  // Só a BUSCA por texto varre todas as caixas (achar cliente em qualquer status).
+  // Corretor e período SOMAM com a caixa selecionada (filtram o conteúdo dela).
+  const bypassBox = !!search.trim();
   const filtered = proposals.filter((p) => {
     if (viewMode === "corretor" && p.vendorId !== user?.id) return false;
     const q = search.trim().toLowerCase();
     const qDigits = q.replace(/\D/g, "");
-    // O filtro de caixa só se aplica quando não há filtro explícito ativo.
-    if (!hasActiveFilter) {
+    // A caixa (fase/status) aplica-se sempre, exceto quando há busca por texto.
+    if (!bypassBox) {
       if (activePhaseDef) {
         if (!activePhaseDef.statuses.includes(p.status)) return false;
       } else if (filterStatus !== "all") {
