@@ -608,9 +608,23 @@ export default function ContratosListaPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [search, setSearch] = useState("");
+  // Busca e filtros — todos persistidos na sessão (ao abrir um contrato e voltar, mantêm)
+  const [search, setSearch] = useState(() => sessionStorage.getItem("contratos_search") || "");
   const [filterStatus, setFilterStatus] = useState(() => sessionStorage.getItem("contratos_filterStatus") || "all");
-  const [filterProduct, setFilterProduct] = useState("all");
+  const [filterProduct, setFilterProduct] = useState(() => sessionStorage.getItem("contratos_filterProduct") || "all");
+  const [filterCpf, setFilterCpf] = useState(() => sessionStorage.getItem("contratos_filterCpf") || "");
+  const [filterVendor, setFilterVendor] = useState(() => sessionStorage.getItem("contratos_filterVendor") || "all");
+  const [filterDateFrom, setFilterDateFrom] = useState(() => sessionStorage.getItem("contratos_filterDateFrom") || "");
+  const [filterDateTo, setFilterDateTo] = useState(() => sessionStorage.getItem("contratos_filterDateTo") || "");
+  useEffect(() => {
+    const persist = (k: string, v: string) => v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k);
+    persist("contratos_search", search);
+    persist("contratos_filterProduct", filterProduct === "all" ? "" : filterProduct);
+    persist("contratos_filterCpf", filterCpf);
+    persist("contratos_filterVendor", filterVendor === "all" ? "" : filterVendor);
+    persist("contratos_filterDateFrom", filterDateFrom);
+    persist("contratos_filterDateTo", filterDateTo);
+  }, [search, filterProduct, filterCpf, filterVendor, filterDateFrom, filterDateTo]);
   // Fase ativa persiste na sessão: ao abrir um contrato e voltar, mantém o filtro
   const [activePhase, setActivePhase] = useState<number | null>(() => {
     const s = sessionStorage.getItem("contratos_activePhase");
@@ -938,13 +952,15 @@ export default function ContratosListaPage() {
 
   const activePhaseDef = phases.find((p) => p.id === activePhase);
 
+  const filterCpfDigits = filterCpf.replace(/\D/g, "");
+  // Qualquer filtro explícito ativo faz a busca varrer TODAS as caixas (ignora fase/status)
+  const hasActiveFilter = !!(search.trim() || filterCpfDigits || filterVendor !== "all" || filterDateFrom || filterDateTo);
   const filtered = proposals.filter((p) => {
     if (viewMode === "corretor" && p.vendorId !== user?.id) return false;
     const q = search.trim().toLowerCase();
     const qDigits = q.replace(/\D/g, "");
-    // Ao pesquisar, a busca varre TUDO (ignora a caixa de fase/status selecionada).
-    // O filtro de caixa só se aplica quando não há texto de busca.
-    if (!q) {
+    // O filtro de caixa só se aplica quando não há filtro explícito ativo.
+    if (!hasActiveFilter) {
       if (activePhaseDef) {
         if (!activePhaseDef.statuses.includes(p.status)) return false;
       } else if (filterStatus !== "all") {
@@ -959,9 +975,19 @@ export default function ContratosListaPage() {
       (p.ade || "").toLowerCase().includes(q) ||
       p.vendorName?.toLowerCase().includes(q) ||
       (!!qDigits && String(p.id) === qDigits);
+    const matchCpf = !filterCpfDigits || (p.clientCpf || "").replace(/\D/g, "").includes(filterCpfDigits);
+    const matchVendor = filterVendor === "all" || String(p.vendorId) === String(filterVendor);
+    const created = p.createdAt ? new Date(p.createdAt) : null;
+    const matchFrom = !filterDateFrom || (created != null && created >= new Date(`${filterDateFrom}T00:00:00`));
+    const matchTo = !filterDateTo || (created != null && created <= new Date(`${filterDateTo}T23:59:59`));
     const matchProduct = filterProduct === "all" || p.product === filterProduct;
-    return matchSearch && matchProduct;
+    return matchSearch && matchCpf && matchVendor && matchFrom && matchTo && matchProduct;
   });
+
+  // Corretores distintos presentes nas propostas (para o filtro)
+  const vendorOptions = Array.from(
+    new Map(proposals.filter((p) => p.vendorId).map((p) => [String(p.vendorId), p.vendorName || `#${p.vendorId}`])).entries()
+  ).sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
 
   // Na caixa "Aguardando retorno CIP": ordena pela data da CIP — a mais antiga
   // (mais perto de vencer o prazo) no topo; sem data CIP vai pro fim.
@@ -1200,6 +1226,50 @@ export default function ContratosListaPage() {
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Filtros dedicados (CPF, corretor, data) — persistem na sessão */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <p className="text-[11px] text-muted-foreground mb-1">CPF</p>
+          <Input
+            value={filterCpf}
+            onChange={(e) => setFilterCpf(e.target.value.replace(/[^\d.\-]/g, ""))}
+            placeholder="000.000.000-00"
+            inputMode="numeric"
+            className="w-[160px] h-[34px] rounded-[9px] text-[13px]"
+          />
+        </div>
+        {showCorretorCol && (
+          <div>
+            <p className="text-[11px] text-muted-foreground mb-1">Corretor</p>
+            <Select value={filterVendor} onValueChange={setFilterVendor}>
+              <SelectTrigger className="w-[190px] h-[34px] rounded-[9px] text-[13px]"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os corretores</SelectItem>
+                {vendorOptions.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div>
+          <p className="text-[11px] text-muted-foreground mb-1">Cadastro de</p>
+          <Input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="w-[150px] h-[34px] rounded-[9px] text-[13px]" />
+        </div>
+        <div>
+          <p className="text-[11px] text-muted-foreground mb-1">até</p>
+          <Input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="w-[150px] h-[34px] rounded-[9px] text-[13px]" />
+        </div>
+        {(search || filterCpf || filterVendor !== "all" || filterDateFrom || filterDateTo || filterProduct !== "all") && (
+          <Button
+            variant="ghost" size="sm" className="h-[34px] text-xs"
+            onClick={() => { setSearch(""); setFilterCpf(""); setFilterVendor("all"); setFilterDateFrom(""); setFilterDateTo(""); setFilterProduct("all"); }}
+          >
+            <X className="h-3.5 w-3.5 mr-1" /> Limpar filtros
+          </Button>
+        )}
       </div>
 
       {/* ── Barra de ações em lote ─────────────────────────────────────────── */}
