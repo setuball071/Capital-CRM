@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import {
   Plus, Search, Filter, Briefcase, Eye,
   Settings, Trash2, Pencil, Check, X, Lock, MoreHorizontal,
-  ListChecks, Hash, MessageSquare, RefreshCw, Copy,
+  ListChecks, Hash, MessageSquare, RefreshCw, Copy, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1041,6 +1041,45 @@ export default function ContratosListaPage() {
     if (sortBy === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
     else { setSortBy(key); setSortDir("desc"); }
   }
+
+  // Exporta a lista atual (respeita caixa + filtros + ordenação) para CSV — só master.
+  function exportarCsv() {
+    const rows = sorted;
+    if (!rows.length) return;
+    const statusLabel = (k: string) => statusList.find((s) => s.key === k)?.label || k;
+    const money = (v: any) => (parseFloat(v || "0") || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["#", "Órgão", "CPF", "Nome", "Corretor", "Tipo", "Banco", "Parcela", "Contrato", "ADE", "Status", "Parceiro", "Cadastro", "Última consulta"];
+    const linhas = [header.map(esc).join(";")];
+    for (const p of rows) {
+      linhas.push([
+        p.id,
+        p.clientConvenio || "",
+        (p.clientCpf || "").replace(/\D/g, ""),
+        p.clientName || "",
+        p.vendorName || "",
+        PRODUCT_LABEL[p.product] || p.product || "",
+        p.bank || "",
+        money(p.installmentValue),
+        money(p.contractValue),
+        p.ade || "",
+        statusLabel(p.status),
+        p.parceiroNome || "",
+        p.createdAt ? new Date(p.createdAt).toLocaleDateString("pt-BR") : "",
+        p.ultimaConsulta ? new Date(p.ultimaConsulta).toLocaleString("pt-BR") : "",
+      ].map(esc).join(";"));
+    }
+    const csv = "﻿" + linhas.join("\r\n"); // BOM p/ o Excel abrir acentos corretamente
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const alvo = activePhaseDef?.name || (filterStatus !== "all" ? statusLabel(filterStatus) : "todos");
+    a.download = `contratos-${alvo.replace(/[^\w\-]+/g, "_").toLowerCase()}-${stamp}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
   const sortHead = (key: string, label: string, cls = "") => (
     // Na caixa CIP a ordenação é fixa (por urgência) → cabeçalho não clicável
     <TableHead
@@ -1128,6 +1167,16 @@ export default function ContratosListaPage() {
           {canManageContracts && (
             <Button variant="outline" size="sm" onClick={() => setShowPhaseManager(true)} className="gap-1.5">
               <Settings className="h-4 w-4" />Fases
+            </Button>
+          )}
+          {isMaster && (
+            <Button
+              variant="outline" size="sm" className="gap-1.5"
+              onClick={exportarCsv}
+              disabled={sorted.length === 0}
+              title="Exportar a lista atual (com os filtros aplicados) em CSV"
+            >
+              <Download className="h-4 w-4" />Exportar CSV
             </Button>
           )}
         </div>
