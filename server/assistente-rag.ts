@@ -7,7 +7,7 @@ export const EMBEDDING_MODEL =
   process.env.ASSISTENTE_EMBEDDING_MODEL ||
   (geminiKey ? "gemini-embedding-001" : "text-embedding-3-small");
 export const EMBEDDING_DIM = 768;
-export const CORTE_SIMILARIDADE = 0.5; // abaixo disso = "não sei"
+export const CORTE_SIMILARIDADE = 0.35; // abaixo disso = "não sei" (baixo p/ recall; o LLM ainda julga se o trecho responde)
 export const CORTE_CONFLITO = 0.82; // acima disso = possível artigo duplicado/conflitante
 
 export type ChunkEncontrado = {

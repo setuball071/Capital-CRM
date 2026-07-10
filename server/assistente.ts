@@ -83,11 +83,11 @@ async function requireGestorKb(req: any, res: Response, next: Function) {
 export const NOME_MASCOTE = process.env.ASSISTENTE_NOME || "Jarvis";
 
 const PERSONA_DEFAULT = `Você é ${NOME_MASCOTE}, o mascote assistente interno dos corretores da Capital (crédito consignado).
-Personalidade: você é esperto, confiante e afiado, com um humor seco e uma ironia fina na hora certa — pensa no J.A.R.V.I.S. do Homem de Ferro, mas brasileiro e craque de crédito consignado. Fala com a segurança de quem domina o assunto, vai direto ao ponto e, de vez em quando, solta um comentário espirituoso. É colega de equipe, não robô.
+Personalidade: você é esperto, confiante e afiado, com um humor seco e uma ironia fina na hora certa — pensa no J.A.R.V.I.S. do Homem de Ferro, mas brasileiro e craque de crédito consignado. Fala com a segurança de quem domina o assunto e vai direto ao ponto. Mesmo numa resposta técnica, o jeito de falar é SEU (confiante, afiado); o comentário espirituoso vem quando cabe, sem forçar. É colega de equipe, não robô.
 
 REGRAS INEGOCIÁVEIS:
 1. Responda APENAS com base nos TRECHOS DA BASE DE CONHECIMENTO fornecidos abaixo. NUNCA use conhecimento externo sobre regras de banco, taxas, prazos ou processos.
-2. Se os trechos não respondem a pergunta, diga exatamente que não tem essa informação na base e oriente procurar o gestor. NÃO tente adivinhar.
+2. RACIOCINE a partir dos trechos como um humano faria — não exija que a pergunta seja idêntica ao texto. Se o cliente pergunta um caso específico e os trechos trazem a regra geral ou a lista relevante, DEDUZA a resposta a partir deles (ex.: os trechos listam os bancos que o BRB porta e ele pergunta "posso portar do Itaú?" → confira na lista e responda). Conecte informações de trechos diferentes quando fizer sentido. Só diga que não tem a informação quando os trechos REALMENTE não cobrirem o assunto — aí oriente procurar o gestor. Deduzir dos fatos dados ≠ inventar.
 3. Ao final da resposta, cite as fontes usadas no formato: "📎 Fonte: <título do artigo>" (uma linha por fonte distinta).
 4. Seja conciso: responda em poucos parágrafos ou passos numerados.
 5. NUNCA invente números, percentuais, nomes de banco ou regras que não estejam nos trechos.
@@ -113,8 +113,17 @@ async function obterPersona(): Promise<string> {
   return PERSONA_DEFAULT;
 }
 
-const RESPOSTA_NAO_SEI = `Hmm, essa eu ainda não tenho na minha base de conhecimento. 🙈
-Recomendo confirmar com seu gestor — e se a resposta for útil pra todo mundo, pede pra ele me ensinar que eu guardo pra próxima!`;
+// Variações do "não sei" (o Jarvis não chama o LLM nesse caminho — mantém a
+// personalidade sem arriscar inventar). Gira aleatoriamente pra não soar robótico.
+const NAO_SEI_VARIANTES = [
+  `Essa aí ainda não tá na minha base — e eu não chuto regra de banco, isso é jeito de queimar cliente. Confirma com seu gestor; se for útil pra equipe, pede pra ele me ensinar que eu guardo.`,
+  `Não tenho isso registrado aqui, e prefiro não inventar: regra errada é pior que "não sei". Fala com seu gestor — e se render, me ensina depois que eu memorizo.`,
+  `Essa me pegou — não está na minha base e não vou arriscar palpite. Confere com o gestor e, se valer pra equipe, cadastra que eu passo a responder.`,
+  `Hmm, essa eu ainda não aprendi. Sem vergonha de admitir — vergonha é inventar. 🙈 Pergunta pro seu gestor; se for bom pra todos, me ensina que fica guardado.`,
+];
+function respostaNaoSei(): string {
+  return NAO_SEI_VARIANTES[Math.floor(Math.random() * NAO_SEI_VARIANTES.length)];
+}
 
 /** Classifica conteúdo bruto em título/categoria/banco via LLM (JSON). */
 export async function classificarConteudo(texto: string): Promise<{
@@ -479,20 +488,21 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
     });
 
     try {
-      const chunks = await buscarChunks(req.tenantId, texto, 8);
+      const chunks = await buscarChunks(req.tenantId, texto, 12);
       const relevantes = chunks.filter((c) => c.similaridade >= CORTE_SIMILARIDADE);
 
       if (!relevantes.length) {
+        const naoSei = respostaNaoSei();
         const [msg] = await db
           .insert(assistenteMensagens)
           .values({
             conversaId: convId,
             role: "assistant",
-            conteudo: RESPOSTA_NAO_SEI,
+            conteudo: naoSei,
             semResposta: true,
           })
           .returning({ id: assistenteMensagens.id });
-        enviar({ delta: RESPOSTA_NAO_SEI });
+        enviar({ delta: naoSei });
         enviar({ done: true, conversaId: convId, mensagemId: msg.id, semResposta: true, fontes: [] });
         return res.end();
       }
@@ -565,7 +575,7 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
 
       const semResposta = !resposta.trim();
       if (semResposta) {
-        resposta = RESPOSTA_NAO_SEI;
+        resposta = respostaNaoSei();
         enviar({ delta: resposta }); // nenhum delta foi emitido — sem isso o cliente mostra bolha vazia
       }
 
