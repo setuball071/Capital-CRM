@@ -93,6 +93,23 @@ export async function indexarArtigo(
   return chunks.length;
 }
 
+const STOPWORDS_BUSCA = new Set([
+  "o","a","os","as","de","do","da","dos","das","que","qual","quais","como",
+  "um","uma","pra","para","por","com","no","na","em","sobre","ao","aos",
+  "me","ele","ela","eles","voce","vc","isso","essa","esse","sabe","sabemos",
+  "saber","tem","temos","ter","e","ou","se","meu","minha","seu","sua","the",
+  "quero","posso","pode","preciso","onde","quando","porque","porquê","tudo",
+]);
+
+/** Termos significativos da pergunta p/ busca por palavra-chave (sigla/código exato). */
+function extrairTermosBusca(q: string): string[] {
+  const termos = (q || "")
+    .toLowerCase()
+    .split(/[^a-z0-9à-úãõâêôçü]+/i)
+    .filter((t) => t.length >= 3 && !STOPWORDS_BUSCA.has(t));
+  return Array.from(new Set(termos)).slice(0, 6);
+}
+
 export async function buscarChunks(
   tenantId: number,
   pergunta: string,
@@ -100,7 +117,19 @@ export async function buscarChunks(
 ): Promise<ChunkEncontrado[]> {
   const [emb] = await gerarEmbeddings([pergunta]);
   const vec = `[${emb.join(",")}]`;
-  const res = await db.execute(sql`
+
+  const mapear = (r: any): ChunkEncontrado => ({
+    chunkId: Number(r.chunk_id),
+    artigoId: Number(r.artigo_id),
+    titulo: r.titulo,
+    categoria: r.categoria,
+    banco: r.banco ?? null,
+    texto: r.texto,
+    similaridade: Number(r.similaridade ?? 0),
+  });
+
+  // 1) Busca semântica (vetorial) — significado
+  const vetorRes = await db.execute(sql`
     SELECT kc.id AS chunk_id, kc.artigo_id, ka.titulo, ka.categoria, ka.banco, kc.texto,
            (1 - (kc.embedding <=> ${vec}::vector))::float AS similaridade
     FROM kb_chunks kc
@@ -109,15 +138,44 @@ export async function buscarChunks(
     ORDER BY kc.embedding <=> ${vec}::vector
     LIMIT ${limite}
   `);
-  return pegarRows(res).map((r) => ({
-    chunkId: Number(r.chunk_id),
-    artigoId: Number(r.artigo_id),
-    titulo: r.titulo,
-    categoria: r.categoria,
-    banco: r.banco ?? null,
-    texto: r.texto,
-    similaridade: Number(r.similaridade),
-  }));
+  const vetor = pegarRows(vetorRes).map(mapear);
+
+  // 2) Busca por palavra-chave — pega sigla/código exato (ex.: "J17") que a
+  //    busca semântica erra. ILIKE nos termos significativos da pergunta.
+  const termos = extrairTermosBusca(pergunta);
+  let keyword: ChunkEncontrado[] = [];
+  if (termos.length) {
+    try {
+      const likes = termos.map((t) => `%${t}%`);
+      const orConds = sql.join(
+        likes.map((p) => sql`kc.texto ILIKE ${p}`),
+        sql` OR `,
+      );
+      const scoreExpr = sql.join(
+        likes.map((p) => sql`(kc.texto ILIKE ${p})::int`),
+        sql` + `,
+      );
+      const kwRes = await db.execute(sql`
+        SELECT kc.id AS chunk_id, kc.artigo_id, ka.titulo, ka.categoria, ka.banco, kc.texto,
+               0.9::float AS similaridade
+        FROM kb_chunks kc
+        JOIN kb_artigos ka ON ka.id = kc.artigo_id
+        WHERE ka.status = 'publicado' AND ka.tenant_id = ${tenantId} AND (${orConds})
+        ORDER BY (${scoreExpr}) DESC
+        LIMIT 6
+      `);
+      keyword = pegarRows(kwRes).map(mapear);
+    } catch (e) {
+      // best-effort: se a busca por palavra-chave falhar, segue só com a vetorial
+      console.error("[assistente-rag] busca por palavra-chave falhou (usando só vetorial):", e);
+    }
+  }
+
+  // 3) Mescla: keyword primeiro (match exato), depois vetorial, sem duplicar chunk
+  const porId = new Map<number, ChunkEncontrado>();
+  for (const c of keyword) porId.set(c.chunkId, c);
+  for (const c of vetor) if (!porId.has(c.chunkId)) porId.set(c.chunkId, c);
+  return Array.from(porId.values());
 }
 
 export async function buscarArtigoConflitante(
