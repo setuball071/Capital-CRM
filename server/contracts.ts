@@ -885,6 +885,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       if (nextStepId) updateData.currentStepId = nextStepId;
       if (ade !== undefined) updateData.ade = ade;
       updateData.updatedAt = new Date();
+      // Mudança de status é ação operacional → zera o contador de acompanhamento (consulta)
+      if (status && status !== current.status) {
+        updateData.ultimaConsulta = new Date();
+        updateData.ultimaConsultaPor = user.name || user.email || null;
+      }
 
       // Mudanças no clientMeta (mescladas numa única gravação):
       // - ao mudar de fase, zera a data CIP (contador só vale aguardando o retorno);
@@ -1220,6 +1225,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         .set({
           status: target,
           updatedAt: new Date(),
+          // Regularização muda o status → zera o contador de acompanhamento (consulta)
+          ...(target !== current.status ? { ultimaConsulta: new Date(), ultimaConsultaPor: user.name || user.email || null } : {}),
           ...(Object.keys(regMetaPatch).length ? { clientMeta: { ...regMeta, ...regMetaPatch } } : {}),
         })
         .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
@@ -1338,7 +1345,12 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       const okIds = rows.map((r) => r.id);
       await db
         .update(proposals)
-        .set({ status, updatedAt: new Date(), ...(status === "PAGO" ? { paidAt: new Date() } : {}) })
+        .set({
+          status, updatedAt: new Date(),
+          // Ação operacional em lote → zera o contador de acompanhamento (consulta)
+          ultimaConsulta: new Date(), ultimaConsultaPor: user.name || user.email || null,
+          ...(status === "PAGO" ? { paidAt: new Date() } : {}),
+        })
         .where(and(inArray(proposals.id, okIds), eq(proposals.tenantId, tenantId)));
 
       const pkeysBulk = await pendenciaCorretorKeys(tenantId);
@@ -1447,7 +1459,9 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
       const [updated] = await db
         .update(proposals)
-        .set({ isPaused: true, pausedAtStepId: current.currentStepId, status: newStatus, updatedAt: new Date() })
+        .set({ isPaused: true, pausedAtStepId: current.currentStepId, status: newStatus, updatedAt: new Date(),
+          // Pendenciar muda o status → zera o contador de acompanhamento (consulta)
+          ultimaConsulta: new Date(), ultimaConsultaPor: user.name || user.email || null })
         .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
         .returning();
 
@@ -1501,7 +1515,9 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
       const [updated] = await db
         .update(proposals)
-        .set({ isPaused: false, pausedAtStepId: null, status: prevStatus, updatedAt: new Date() })
+        .set({ isPaused: false, pausedAtStepId: null, status: prevStatus, updatedAt: new Date(),
+          // Retomar muda o status → zera o contador de acompanhamento (consulta)
+          ultimaConsulta: new Date(), ultimaConsultaPor: user.name || user.email || null })
         .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
         .returning();
 
