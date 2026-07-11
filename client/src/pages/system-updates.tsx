@@ -46,6 +46,7 @@ interface SystemUpdate {
   target_roles: string[];
   image_urls: string[];
   is_active: boolean;
+  nivel?: string;
   published_at: string;
   created_by_name: string | null;
   reads_count: number;
@@ -96,6 +97,7 @@ const EMPTY_FORM = {
   targetRoles: ["todos"] as string[],
   imageUrls: [] as string[],
   isActive: true,
+  nivel: "tenant" as "tenant" | "plataforma",
 };
 
 const MAX_IMAGES = 5;
@@ -221,6 +223,7 @@ export default function SystemUpdatesPage() {
       targetRoles: u.target_roles,
       imageUrls: u.image_urls ?? [],
       isActive: u.is_active,
+      nivel: (u.nivel === "plataforma" ? "plataforma" : "tenant") as "tenant" | "plataforma",
     });
     setOpenDialog(true);
   }
@@ -544,6 +547,34 @@ export default function SystemUpdatesPage() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Nível do aviso</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="nivel-tenant"
+                    checked={form.nivel === "tenant"}
+                    onCheckedChange={() => setForm(p => ({ ...p, nivel: "tenant" }))}
+                    data-testid="checkbox-nivel-tenant"
+                  />
+                  <label htmlFor="nivel-tenant" className="text-sm cursor-pointer select-none">
+                    Este ambiente
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="nivel-plataforma"
+                    checked={form.nivel === "plataforma"}
+                    onCheckedChange={() => setForm(p => ({ ...p, nivel: "plataforma" }))}
+                    data-testid="checkbox-nivel-plataforma"
+                  />
+                  <label htmlFor="nivel-plataforma" className="text-sm cursor-pointer select-none">
+                    Plataforma (todos os ambientes)
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">

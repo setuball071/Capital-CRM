@@ -28447,7 +28447,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           ) AS target_count
         FROM system_updates su
         LEFT JOIN users u ON u.id = su.created_by
-        WHERE su.tenant_id = ${tenantId}
+        WHERE su.tenant_id = ${tenantId} OR su.nivel = 'plataforma'
         ORDER BY su.published_at DESC
       `);
       res.json(result.rows);
@@ -28461,19 +28461,20 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   app.post("/api/system-updates", requireAuth, requireMaster, async (req: any, res) => {
     try {
       const tenantId = req.tenantId!;
-      const { title, rawInput, contentWhat, contentHow, contentImpact, targetRoles, isActive, imageUrls } = req.body;
+      const { title, rawInput, contentWhat, contentHow, contentImpact, targetRoles, isActive, imageUrls, nivel } = req.body;
 
       if (!title || !rawInput || !contentWhat || !contentHow || !contentImpact || !Array.isArray(targetRoles) || targetRoles.length === 0) {
         return res.status(400).json({ message: "Campos obrigatórios: title, rawInput, contentWhat, contentHow, contentImpact, targetRoles" });
       }
+      const nivelValue = nivel === "plataforma" ? "plataforma" : "tenant";
 
       const rolesPgArray = '{' + (targetRoles as string[]).map(r => `"${r}"`).join(',') + '}';
       const imgArr: string[] = Array.isArray(imageUrls) ? imageUrls.slice(0, 5) : [];
       const imgPgArray = imgArr.length === 0 ? '{}' : '{' + imgArr.map((s: string) => `"${s}"`).join(',') + '}';
 
       const result = await db.execute(sql`
-        INSERT INTO system_updates (tenant_id, title, raw_input, content_what, content_how, content_impact, target_roles, image_urls, is_active, created_by)
-        VALUES (${tenantId}, ${title}, ${rawInput}, ${contentWhat}, ${contentHow}, ${contentImpact}, ${rolesPgArray}::text[], ${imgPgArray}::text[], ${isActive !== false}, ${req.user!.id})
+        INSERT INTO system_updates (tenant_id, title, raw_input, content_what, content_how, content_impact, target_roles, image_urls, is_active, created_by, nivel)
+        VALUES (${tenantId}, ${title}, ${rawInput}, ${contentWhat}, ${contentHow}, ${contentImpact}, ${rolesPgArray}::text[], ${imgPgArray}::text[], ${isActive !== false}, ${req.user!.id}, ${nivelValue})
         RETURNING *
       `);
       res.status(201).json(result.rows[0]);
@@ -28488,11 +28489,12 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     try {
       const tenantId = req.tenantId!;
       const { id } = req.params;
-      const { title, rawInput, contentWhat, contentHow, contentImpact, targetRoles, isActive, imageUrls } = req.body;
+      const { title, rawInput, contentWhat, contentHow, contentImpact, targetRoles, isActive, imageUrls, nivel } = req.body;
 
       if (!title || !rawInput || !contentWhat || !contentHow || !contentImpact || !Array.isArray(targetRoles)) {
         return res.status(400).json({ message: "Campos obrigatórios faltando" });
       }
+      const nivelValue = nivel === "plataforma" ? "plataforma" : "tenant";
 
       const rolesPgArray = '{' + (targetRoles as string[]).map(r => `"${r}"`).join(',') + '}';
       const imgArr: string[] = Array.isArray(imageUrls) ? imageUrls.slice(0, 5) : [];
@@ -28507,8 +28509,9 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           content_impact = ${contentImpact},
           target_roles = ${rolesPgArray}::text[],
           image_urls = ${imgPgArray}::text[],
-          is_active = ${isActive !== false}
-        WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
+          is_active = ${isActive !== false},
+          nivel = ${nivelValue}
+        WHERE id = ${parseInt(id)} AND (tenant_id = ${tenantId} OR nivel = 'plataforma')
         RETURNING *
       `);
 
@@ -28528,7 +28531,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const tenantId = req.tenantId!;
       const { id } = req.params;
       await db.execute(sql`
-        DELETE FROM system_updates WHERE id = ${parseInt(id)} AND tenant_id = ${tenantId}
+        DELETE FROM system_updates WHERE id = ${parseInt(id)} AND (tenant_id = ${tenantId} OR nivel = 'plataforma')
       `);
       res.json({ message: "Atualização removida com sucesso" });
     } catch (err: any) {
@@ -28547,7 +28550,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const result = await db.execute(sql`
         SELECT su.*
         FROM system_updates su
-        WHERE su.tenant_id = ${tenantId}
+        WHERE (su.tenant_id = ${tenantId} OR su.nivel = 'plataforma')
           AND su.is_active = true
           AND (su.target_roles && ARRAY[${user.role}::text] OR 'todos' = ANY(su.target_roles))
           AND NOT EXISTS (
@@ -28576,7 +28579,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const check = await db.execute(sql`
         SELECT id FROM system_updates
         WHERE id = ${updateId}
-          AND tenant_id = ${tenantId}
+          AND (tenant_id = ${tenantId} OR nivel = 'plataforma')
           AND is_active = true
           AND (target_roles && ARRAY[${user.role}::text] OR 'todos' = ANY(target_roles))
       `);
@@ -30229,8 +30232,32 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     return ESCOPOS_VALIDOS.filter((e) => input.includes(e));
   }
 
+  // Acesso à gestão de API Keys: dono do SaaS sempre; admin do cliente (role master)
+  // só se o ambiente tem o módulo compra_leads contratado (capacidade vendável).
+  // Sem linhas em tenant_modulos = tudo ativo (retrocompatibilidade).
+  async function requireApiKeysAccess(req: any, res: any, next: any) {
+    try {
+      if (req.user?.isMaster === true) return next();
+      if (req.user?.role !== "master") {
+        return res.status(403).json({ message: "Acesso negado" });
+      }
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
+      const rows = await db.execute(
+        sql`SELECT modulo_key, ativo FROM tenant_modulos WHERE tenant_id = ${tenantId}`,
+      );
+      if (rows.rows.length === 0) return next();
+      const mod = (rows.rows as any[]).find((r) => r.modulo_key === "compra_leads");
+      if (mod?.ativo) return next();
+      return res.status(403).json({ message: "Módulo de API não contratado neste ambiente" });
+    } catch (err) {
+      console.error("[API Keys] access check error:", err);
+      return res.status(500).json({ message: "Erro ao verificar acesso" });
+    }
+  }
+
   // GET /api/admin/api-keys — lista chaves do tenant atual
-  app.get("/api/admin/api-keys", requireAuth, requireMaster, async (req: any, res) => {
+  app.get("/api/admin/api-keys", requireAuth, requireApiKeysAccess, async (req: any, res) => {
     try {
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
@@ -30243,7 +30270,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   });
 
   // POST /api/admin/api-keys — cria nova chave (retorna a chave em texto puro UMA VEZ)
-  app.post("/api/admin/api-keys", requireAuth, requireMaster, async (req: any, res) => {
+  app.post("/api/admin/api-keys", requireAuth, requireApiKeysAccess, async (req: any, res) => {
     try {
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
@@ -30276,7 +30303,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   });
 
   // PATCH /api/admin/api-keys/:id/toggle — ativa ou desativa uma chave
-  app.patch("/api/admin/api-keys/:id/toggle", requireAuth, requireMaster, async (req: any, res) => {
+  app.patch("/api/admin/api-keys/:id/toggle", requireAuth, requireApiKeysAccess, async (req: any, res) => {
     try {
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
@@ -30295,7 +30322,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   });
 
   // PATCH /api/admin/api-keys/:id — edita nome e/ou escopos
-  app.patch("/api/admin/api-keys/:id", requireAuth, requireMaster, async (req: any, res) => {
+  app.patch("/api/admin/api-keys/:id", requireAuth, requireApiKeysAccess, async (req: any, res) => {
     try {
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });
@@ -30324,7 +30351,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   });
 
   // DELETE /api/admin/api-keys/:id — exclui permanentemente
-  app.delete("/api/admin/api-keys/:id", requireAuth, requireMaster, async (req: any, res) => {
+  app.delete("/api/admin/api-keys/:id", requireAuth, requireApiKeysAccess, async (req: any, res) => {
     try {
       const tenantId = req.tenantId;
       if (!tenantId) return res.status(400).json({ message: "Tenant não identificado" });

@@ -743,6 +743,10 @@ app.use((req, res, next) => {
           `);
           await saasDb.execute(saasSql`CREATE INDEX IF NOT EXISTS idx_cobrancas_tenant ON cobrancas(tenant_id)`);
           await saasDb.execute(saasSql`CREATE INDEX IF NOT EXISTS idx_cobrancas_asaas ON cobrancas(asaas_id)`);
+          // Central de Atualizações: aviso de nível plataforma alcança usuários de todos os ambientes
+          await saasDb.execute(saasSql`
+            ALTER TABLE system_updates ADD COLUMN IF NOT EXISTS nivel VARCHAR(20) NOT NULL DEFAULT 'tenant'
+          `);
           log("✓ Migração Admin SaaS (interno/planos/tenant_modulos/cobrancas) ok");
         } catch (e) {
           log(`⚠ Migração Admin SaaS falhou (non-fatal): ${e}`);

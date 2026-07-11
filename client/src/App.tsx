@@ -508,7 +508,7 @@ function Router() {
                 {() => <MasterRoute component={AdminTenantsPage} />}
               </Route>
               <Route path="/admin/api-keys">
-                {() => <MasterRoute component={ApiKeysPage} />}
+                {() => <RoleRoute component={ApiKeysPage} allowedRoles={["master"]} />}
               </Route>
               <Route path="/admin/assinaturas">
                 {() => <MasterRoute component={AdminAssinaturasPage} />}

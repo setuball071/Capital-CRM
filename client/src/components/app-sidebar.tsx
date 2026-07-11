@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
+import { useTenantModules } from "@/hooks/use-tenant-modules";
 import { useTheme } from "@/components/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -120,6 +121,7 @@ interface MenuSection {
     rolesAllowed?: string[];
     tenantFeature?: string;
     clienteAdminOnly?: boolean;
+    tenantModule?: string;
   }[];
 }
 
@@ -146,6 +148,7 @@ function getModuleForUrl(url: string): string | undefined {
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { user, logout, hasModuleAccess, hasSubItemAccess } = useAuth();
+  const { hasTenantModule } = useTenantModules();
   const { tenant, logoUrl, logoHeight, sidebarGradient, useSidebarGradient, sidebarBgColor } = useTenant();
   const { theme, toggleTheme } = useTheme();
   const [logoFailed, setLogoFailed] = useState(false);
@@ -198,13 +201,18 @@ export function AppSidebar() {
     solicitar_boleto: !!tenant,
   };
 
-  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; rolesAllowed?: string[]; tenantFeature?: string; clienteAdminOnly?: boolean }): boolean => {
+  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; rolesAllowed?: string[]; tenantFeature?: string; clienteAdminOnly?: boolean; tenantModule?: string }): boolean => {
     // Só o admin do CLIENTE (role master, sem isMaster) em ambiente pagante (não-interno).
     // Some para o dono do SaaS, para ambientes internos e para os demais papéis.
     if (item.clienteAdminOnly) {
       const isDonoSaas = (user as any)?.isMaster === true;
       const ambienteInterno = (tenant as any)?.interno === true;
       if (isDonoSaas || ambienteInterno || userRole !== "master") return false;
+    }
+    // Capacidade vendável por AMBIENTE: dono sempre vê; admin do cliente só com o módulo contratado
+    if (item.tenantModule) {
+      const isDonoSaas = (user as any)?.isMaster === true;
+      if (!isDonoSaas && (userRole !== "master" || !hasTenantModule(item.tenantModule))) return false;
     }
     // Master sempre vê tudo, inclusive itens com tenantFeature
     if (item.tenantFeature && !isMaster && !tenantFeatureFlags[item.tenantFeature]) return false;
@@ -309,7 +317,7 @@ export function AppSidebar() {
         { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
         { title: "Central de Atualizações", url: "/admin/atualizacoes", icon: Bell, masterOnly: true },
         { title: "Regras de Carteira", url: "/admin/carteira-regras", icon: ShieldCheck, masterOnly: true },
-        { title: "API Keys Externas", url: "/admin/api-keys", icon: KeyRound, masterOnly: true },
+        { title: "API Keys Externas", url: "/admin/api-keys", icon: KeyRound, tenantModule: "compra_leads" },
       ],
     },
     {
