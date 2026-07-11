@@ -189,7 +189,6 @@ const ALL_MODULES: HubModule[] = [
     color: "#94a3b8",
     subItems: [
       { id: "usuarios", title: "Usuários", description: "Gerenciar acessos", icon: Users, route: "/users" },
-      { id: "funcionarios", title: "Funcionários", description: "Cadastro de funcionários", icon: UserSearch, route: "/funcionarios" },
       { id: "equipes", title: "Equipes", description: "Times comerciais", icon: Target, route: "/equipes" },
     ],
   },

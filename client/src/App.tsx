@@ -51,8 +51,6 @@ import VendasImportarHigienizadosPage from "@/pages/vendas-importar-higienizados
 import VendasConsultaPage from "@/pages/vendas-consulta";
 import VendasEtiquetasPage from "@/pages/vendas-etiquetas";
 import NotaPromissoriaPage from "@/pages/nota-promissoria";
-import ConfigPromptsPage from "@/pages/config-prompts";
-import ConfigDadosPage from "@/pages/config-dados";
 import AdminTenantsPage from "@/pages/admin-tenants";
 import ApiKeysPage from "@/pages/api-keys";
 import AdminBrandingPage from "@/pages/admin-branding";
@@ -62,7 +60,6 @@ import CalculadoraContracheque from "@/pages/calculadora-contracheque";
 import CriadorPropostaPage from "@/pages/criador-proposta";
 import SimuladorPortCompletoPage from "@/pages/simulador-port-completo";
 import SimuladoresHub from "@/pages/simuladores-hub";
-import FuncionariosPage from "@/pages/funcionarios";
 import EquipesPage from "@/pages/equipes";
 import DashboardVendedorPage from "@/pages/dashboard-vendedor-cg";
 import GestaoComercialDashboardPage from "@/pages/gestao-comercial-dashboard";
@@ -507,9 +504,6 @@ function Router() {
               <Route path="/vendas/consulta">
                 {() => <ModuleRoute component={VendasConsultaPage} module="modulo_alpha" />}
               </Route>
-              <Route path="/config-prompts">
-                {() => <ProtectedRoute component={ConfigPromptsPage} />}
-              </Route>
               <Route path="/admin/tenants">
                 {() => <MasterRoute component={AdminTenantsPage} />}
               </Route>
@@ -524,9 +518,6 @@ function Router() {
               </Route>
               <Route path="/admin/branding">
                 {() => <MasterRoute component={AdminBrandingPage} />}
-              </Route>
-              <Route path="/admin/configuracoes-dados">
-                {() => <MasterRoute component={ConfigDadosPage} />}
               </Route>
               <Route path="/admin/carteira-regras">
                 {() => <MasterOnlyRoute component={PortfolioRulesPage} />}
@@ -548,9 +539,6 @@ function Router() {
               </Route>
               <Route path="/simulador-port-completo">
                 {() => <ModuleRoute component={SimuladorPortCompletoPage} module="modulo_simulador" />}
-              </Route>
-              <Route path="/funcionarios">
-                {() => <ModuleRoute component={FuncionariosPage} module="modulo_config_usuarios" />}
               </Route>
               <Route path="/equipes">
                 {() => <ModuleRoute component={EquipesPage} module="modulo_config_usuarios" />}
