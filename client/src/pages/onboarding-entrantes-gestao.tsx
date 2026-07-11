@@ -47,6 +47,7 @@ const ETAPA_LABEL: Record<string, { label: string; variant: "default" | "seconda
   tour: { label: "No tour", variant: "secondary" },
   teste: { label: "No teste", variant: "secondary" },
   produto: { label: "Produto + exemplos", variant: "secondary" },
+  extrato: { label: "Leitura de extrato", variant: "secondary" },
   aguardando_liberacao: { label: "Aguardando liberação", variant: "default" },
   liberado: { label: "Liberado", variant: "outline" },
 };
@@ -127,6 +128,9 @@ export default function OnboardingEntrantesGestao() {
     return t ? `${t.acertos}/${t.total}` : "—";
   };
 
+  const tentativaDe = (e: Entrante, origem: string) =>
+    e.tentativas.find((t) => t.origem === origem);
+
   const EntranteCard = ({ e }: { e: Entrante }) => {
     const etapaInfo = ETAPA_LABEL[e.onboardingEtapa] || ETAPA_LABEL.entrada;
     return (
@@ -169,6 +173,22 @@ export default function OnboardingEntrantesGestao() {
               <p className="text-muted-foreground text-xs">Produto inicial</p>
               <p className="font-medium capitalize">{e.produtoInicial || "portabilidade"}</p>
             </div>
+            {e.experienciaDeclarada && (
+              <div>
+                <p className="text-muted-foreground text-xs">Leitura de extrato</p>
+                {(() => {
+                  const t = tentativaDe(e, "onboarding_extrato");
+                  if (!t) return <p className="font-medium">—</p>;
+                  const baixo = t.total > 0 && t.acertos / t.total < 0.6;
+                  return (
+                    <p className={`font-medium ${baixo ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {t.acertos}/{t.total}
+                      {baixo ? " ⚠️" : ""}
+                    </p>
+                  );
+                })()}
+              </div>
+            )}
           </div>
 
           {/* Progresso dos blocos */}

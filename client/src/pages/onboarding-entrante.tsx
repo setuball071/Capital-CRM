@@ -15,6 +15,7 @@ import {
   Map,
   ClipboardList,
   Package,
+  FileText,
   CheckCircle2,
   ChevronDown,
   Loader2,
@@ -24,6 +25,7 @@ import {
   ThumbsDown,
   GraduationCap,
   ArrowRight,
+  ExternalLink,
 } from "lucide-react";
 import {
   ONBOARDING_META_NORTE,
@@ -57,6 +59,13 @@ interface ResultadoTeste {
   percentual: number;
   baselineNivel?: string;
   onboardingEtapa: string;
+}
+
+interface ExtratoItem {
+  id: string;
+  titulo: string;
+  imagem: string;
+  perguntas: PerguntaOnboarding[];
 }
 
 const BAGAGEM_OPCOES = [
@@ -208,6 +217,124 @@ function QuizBloco({
   );
 }
 
+// Bloco de Leitura de Extrato — diagnóstico só para experientes (imagem + perguntas)
+function ExtratoBloco({ onFinalizado }: { onFinalizado: () => void }) {
+  const { toast } = useToast();
+  const [respostas, setRespostas] = useState<Record<number, number>>({});
+  const [resultado, setResultado] = useState<ResultadoTeste | null>(null);
+
+  const { data, isLoading } = useQuery<{ itens: ExtratoItem[] }>({
+    queryKey: ["/api/onboarding/extrato"],
+  });
+
+  const submeterMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/onboarding/extrato", { respostas });
+      return res.json();
+    },
+    onSuccess: (data: ResultadoTeste) => {
+      setResultado(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding/estado"] });
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Não foi possível enviar as respostas", variant: "destructive" });
+    },
+  });
+
+  if (isLoading) {
+    return <Skeleton className="h-96 w-full" />;
+  }
+
+  const itens = data?.itens || [];
+  const totalPerguntas = itens.reduce((acc, it) => acc + it.perguntas.length, 0);
+  const todasRespondidas =
+    totalPerguntas > 0 &&
+    itens.every((it) => it.perguntas.every((p) => respostas[p.id] !== undefined));
+
+  if (resultado) {
+    return (
+      <Card>
+        <CardContent className="pt-6 text-center space-y-4">
+          <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
+          <h3 className="text-xl font-bold" data-testid="text-resultado-extrato">
+            Você acertou {resultado.acertos} de {resultado.total} ({resultado.percentual}%)
+          </h3>
+          <p className="text-muted-foreground text-sm">
+            Este é um diagnóstico de leitura de extrato. Seu gestor usa esse resultado para calibrar o acompanhamento.
+          </p>
+          <Button onClick={onFinalizado} data-testid="button-continuar-extrato">
+            Continuar
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {itens.map((item) => (
+        <Card key={item.id}>
+          <CardHeader>
+            <CardTitle className="text-base">{item.titulo}</CardTitle>
+            <CardDescription>Analise o extrato e responda.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <a
+              href={item.imagem}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block relative group"
+              data-testid={`img-${item.id}`}
+            >
+              <img
+                src={item.imagem}
+                alt={item.titulo}
+                className="w-full max-h-[520px] object-contain rounded-lg border bg-muted"
+              />
+              <span className="absolute top-2 right-2 inline-flex items-center gap-1 text-xs bg-background/90 border rounded px-2 py-1 text-muted-foreground">
+                <ExternalLink className="h-3 w-3" /> ampliar
+              </span>
+            </a>
+            {item.perguntas.map((p, idx) => (
+              <div key={p.id} className="space-y-2">
+                <p className="font-medium">
+                  {idx + 1}. {p.pergunta}
+                </p>
+                <div className="grid gap-2">
+                  {p.opcoes.map((opcao, oIdx) => (
+                    <button
+                      key={oIdx}
+                      onClick={() => setRespostas((prev) => ({ ...prev, [p.id]: oIdx }))}
+                      className={`text-left text-sm p-3 rounded-lg border transition-colors ${
+                        respostas[p.id] === oIdx
+                          ? "border-primary bg-primary/10 font-medium"
+                          : "border-border hover:bg-accent"
+                      }`}
+                      data-testid={`option-${p.id}-${oIdx}`}
+                    >
+                      {opcao}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ))}
+      <Button
+        className="w-full"
+        disabled={!todasRespondidas || submeterMutation.isPending}
+        onClick={() => submeterMutation.mutate()}
+        data-testid="button-enviar-extrato"
+      >
+        {submeterMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+        Enviar respostas
+      </Button>
+    </div>
+  );
+}
+
 export default function OnboardingEntrante() {
   const { toast } = useToast();
   const [experiencia, setExperiencia] = useState<boolean | null>(null);
@@ -261,8 +388,10 @@ export default function OnboardingEntrante() {
 
   const etapa = estado.onboardingEtapa || "entrada";
   const semExperiencia = estado.experienciaDeclarada === false;
+  const comExperiencia = estado.experienciaDeclarada === true;
+  const fimDaJornada = etapa === "aguardando_liberacao" || etapa === "liberado";
 
-  // Progresso dos 3 blocos
+  // Progresso dos blocos (o de extrato só existe para experientes)
   const blocos = [
     { id: "tour", titulo: "Tour do Sistema", icon: Map, concluido: estado.tourConcluido },
     { id: "teste", titulo: "Teste de Conhecimento", icon: ClipboardList, concluido: estado.baselineNota !== null },
@@ -270,8 +399,18 @@ export default function OnboardingEntrante() {
       id: "produto",
       titulo: "Produto + Exemplos",
       icon: Package,
-      concluido: etapa === "aguardando_liberacao" || etapa === "liberado",
+      concluido: etapa === "extrato" || fimDaJornada,
     },
+    ...(comExperiencia
+      ? [
+          {
+            id: "extrato",
+            titulo: "Leitura de Extrato",
+            icon: FileText,
+            concluido: fimDaJornada,
+          },
+        ]
+      : []),
   ];
   const concluidos = blocos.filter((b) => b.concluido).length;
   const progressoPercent = (concluidos / blocos.length) * 100;
@@ -566,6 +705,25 @@ export default function OnboardingEntrante() {
         </div>
       )}
 
+      {/* ===== ETAPA: LEITURA DE EXTRATO (só experiente) ===== */}
+      {etapa === "extrato" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Leitura de Extrato
+              </CardTitle>
+              <CardDescription>
+                Como você já tem experiência, este bloco mede sua leitura de extrato de consignação na prática.
+                Analise cada extrato e responda — é um diagnóstico, não reprova ninguém.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          <ExtratoBloco onFinalizado={refetchEstado} />
+        </div>
+      )}
+
       {/* ===== ETAPA: AGUARDANDO LIBERAÇÃO ===== */}
       {etapa === "aguardando_liberacao" && (
         <Card>
@@ -573,7 +731,7 @@ export default function OnboardingEntrante() {
             <Lock className="h-12 w-12 text-primary mx-auto" />
             <h2 className="text-2xl font-bold" data-testid="text-aguardando">Onboarding concluído!</h2>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Você completou os 3 blocos. Agora seu gestor vai revisar seu percurso e liberar você para começar a
+              Você completou todos os blocos. Agora seu gestor vai revisar seu percurso e liberar você para começar a
               prospectar. Aguarde a liberação — você será avisado.
             </p>
             <Badge variant="secondary" className="text-sm">
