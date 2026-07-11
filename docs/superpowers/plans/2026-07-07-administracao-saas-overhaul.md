@@ -1,7 +1,7 @@
 # Administração → Painel SaaS — Plano de Implementação
 
 > **STATUS DE EXECUÇÃO (11/07/2026):**
-> - ✅ **Fase 0** concluída (commit `f530b67`) — EXCETO o `DROP TABLE employees`, que aguarda o Fábio confirmar o backup (exportar a tabela no Supabase Studio).
+> - ✅ **Fase 0** concluída 100% (commits `f530b67` + `08a24b7`) — `DROP TABLE employees` no boot; Fábio dispensou o backup (11/07/2026).
 > - ✅ **Fase 1** concluída (commit `b399c32`) — interno/planos/tenant_modulos/cobrancas/asaas.ts/webhook.
 > - ✅ **Fase 2** concluída (commit `6f7852a`).
 > - ✅ **Fase 6** concluída (commit `a549600`) — email-service ficou com TODO(fase6) documentado (alertas internos não têm tenant de contexto).
