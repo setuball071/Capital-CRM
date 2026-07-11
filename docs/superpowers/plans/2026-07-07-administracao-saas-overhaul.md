@@ -1,5 +1,13 @@
 # Administração → Painel SaaS — Plano de Implementação
 
+> **STATUS DE EXECUÇÃO (11/07/2026):**
+> - ✅ **Fase 0** concluída (commit `f530b67`) — EXCETO o `DROP TABLE employees`, que aguarda o Fábio confirmar o backup (exportar a tabela no Supabase Studio).
+> - ✅ **Fase 1** concluída (commit `b399c32`) — interno/planos/tenant_modulos/cobrancas/asaas.ts/webhook.
+> - ✅ **Fase 2** concluída (commit `6f7852a`).
+> - ✅ **Fase 6** concluída (commit `a549600`) — email-service ficou com TODO(fase6) documentado (alertas internos não têm tenant de contexto).
+> - ✅ **Fase 7** concluída (commit `e33670e`).
+> - ⛔ **Fases 3, 4 e 5** pendentes — dependem das pendências do Fábio (conta Asaas + ASAAS_API_KEY/ASAAS_WEBHOOK_TOKEN; domínio-curinga + RAILWAY_API_TOKEN).
+
 > **Para o executor (Fable 5):** implemente **fase por fase, na ordem** (há dependências reais entre elas). Cada fase é um entregável que builda, deploya e é conferível sozinho. Marque os `- [ ]` conforme avança. Este repo **não tem suíte de testes automatizada** — a verificação de cada fase é **`npm run build` + deploy + conferência manual no app** (o fluxo que o time já usa). NÃO invente framework de teste.
 
 **Goal:** Transformar a área de Administração do Capital CRM num verdadeiro painel de operação SaaS: excluir telas mortas, unificar preços+pedidos num módulo de "Serviços & Cobrança" com gateway Asaas, reformar Ambientes em painel de provisionamento de clientes, e ajustar Usuários/Identidade Visual/Atualizações/API Keys pro modelo dono-do-SaaS × clientes pagantes.
