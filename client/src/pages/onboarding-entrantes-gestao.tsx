@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Users,
@@ -14,6 +15,7 @@ import {
   Map,
   ClipboardList,
   Package,
+  RotateCcw,
 } from "lucide-react";
 
 interface TentativaOnboarding {
@@ -57,6 +59,7 @@ const BASELINE_LABEL: Record<string, string> = {
 
 export default function OnboardingEntrantesGestao() {
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const { data: entrantes, isLoading } = useQuery<Entrante[]>({
     queryKey: ["/api/onboarding/entrantes"],
@@ -75,6 +78,32 @@ export default function OnboardingEntrantesGestao() {
       toast({ title: "Erro", description: "Não foi possível liberar", variant: "destructive" });
     },
   });
+
+  const reiniciarMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const res = await apiRequest("POST", `/api/onboarding/entrantes/${userId}/reiniciar`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding/entrantes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding/estado"] });
+      toast({ title: "Onboarding reiniciado", description: "O entrante volta ao início da jornada." });
+    },
+    onError: () => {
+      toast({ title: "Erro", description: "Não foi possível reiniciar", variant: "destructive" });
+    },
+  });
+
+  const handleReiniciar = (e: Entrante) => {
+    const nome = e.userName || e.userEmail || `usuário #${e.userId}`;
+    if (
+      window.confirm(
+        `Reiniciar o onboarding de ${nome}?\n\nTodo o progresso (declaração, tour, testes e liberação) volta ao início. O histórico de tentativas é preservado.`,
+      )
+    ) {
+      reiniciarMutation.mutate(e.userId);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -163,21 +192,38 @@ export default function OnboardingEntrantesGestao() {
             </span>
           </div>
 
-          {/* Ação */}
-          {e.onboardingEtapa === "aguardando_liberacao" && (
-            <Button
-              onClick={() => liberarMutation.mutate(e.userId)}
-              disabled={liberarMutation.isPending}
-              data-testid={`button-liberar-${e.userId}`}
-            >
-              {liberarMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Rocket className="h-4 w-4 mr-2" />
-              )}
-              Liberar para prospectar
-            </Button>
-          )}
+          {/* Ações */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {e.onboardingEtapa === "aguardando_liberacao" && (
+              <Button
+                onClick={() => liberarMutation.mutate(e.userId)}
+                disabled={liberarMutation.isPending}
+                data-testid={`button-liberar-${e.userId}`}
+              >
+                {liberarMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Rocket className="h-4 w-4 mr-2" />
+                )}
+                Liberar para prospectar
+              </Button>
+            )}
+            {user?.isMaster && e.onboardingEtapa !== "entrada" && (
+              <Button
+                variant="outline"
+                onClick={() => handleReiniciar(e)}
+                disabled={reiniciarMutation.isPending}
+                data-testid={`button-reiniciar-${e.userId}`}
+              >
+                {reiniciarMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                )}
+                Reiniciar onboarding
+              </Button>
+            )}
+          </div>
           {e.onboardingEtapa === "liberado" && e.liberadoEm && (
             <p className="text-xs text-muted-foreground">
               Liberado em {new Date(e.liberadoEm).toLocaleDateString("pt-BR")}

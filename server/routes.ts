@@ -13728,6 +13728,52 @@ Responda EXCLUSIVAMENTE em JSON:
     },
   );
 
+  // POST /api/onboarding/entrantes/:userId/reiniciar - Zera o onboarding do entrante (só master)
+  app.post(
+    "/api/onboarding/entrantes/:userId/reiniciar",
+    requireAuth,
+    requireManagerAccess,
+    async (req, res) => {
+      try {
+        if (!req.user!.isMaster) {
+          return res.status(403).json({ message: "Apenas o master pode reiniciar um onboarding" });
+        }
+        const targetUserId = parseInt(req.params.userId, 10);
+        if (isNaN(targetUserId)) {
+          return res.status(400).json({ message: "Usuário inválido" });
+        }
+        const [perfil] = await db
+          .select()
+          .from(vendedoresAcademia)
+          .where(eq(vendedoresAcademia.userId, targetUserId))
+          .limit(1);
+        if (!perfil) {
+          return res.status(404).json({ message: "Entrante não encontrado" });
+        }
+        await db
+          .update(vendedoresAcademia)
+          .set({
+            experienciaDeclarada: null,
+            bagagemOrigem: null,
+            onboardingEtapa: "entrada",
+            tourConcluido: false,
+            baselineNota: null,
+            baselineNivel: null,
+            liberadoParaProspectar: false,
+            liberadoEm: null,
+            liberadoPor: null,
+            atualizadoEm: new Date(),
+          })
+          .where(eq(vendedoresAcademia.userId, targetUserId));
+        // Tentativas anteriores em quiz_tentativas são preservadas como histórico
+        return res.json({ success: true });
+      } catch (error) {
+        console.error("Post onboarding reiniciar error:", error);
+        return res.status(500).json({ message: "Erro ao reiniciar onboarding" });
+      }
+    },
+  );
+
   // GET /api/academia/sessoes - Listar sessões de roleplay do usuário
   app.get(
     "/api/academia/sessoes",
