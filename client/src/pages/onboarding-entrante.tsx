@@ -409,7 +409,7 @@ export default function OnboardingEntrante() {
                 Bloco 1 — Tour do Sistema
               </CardTitle>
               <CardDescription>
-                Conheça as 3 áreas que você vai usar todos os dias. Leia cada uma antes de concluir.
+                Conheça as áreas que você vai usar todos os dias. Leia cada uma antes de concluir.
               </CardDescription>
             </CardHeader>
           </Card>
