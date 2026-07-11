@@ -35,7 +35,7 @@ import {
   Landmark,
   Globe,
   MessageSquare,
-  Wand2,
+  Rocket,
   Brain,
   Flag,
   TrendingUp,
@@ -140,7 +140,7 @@ const ALL_MODULES: HubModule[] = [
     subItems: [
       { id: "fundamentos", title: "Fundamentos", description: "Módulos de aprendizado", icon: BookMarked, route: "/desenvolvimento/fundamentos" },
       { id: "roleplay", title: "Roleplay IA", description: "Treino de venda com IA", icon: MessageSquare, route: "/desenvolvimento/roleplay" },
-      { id: "abordagem", title: "Abordagem IA", description: "Scripts e abordagem", icon: Wand2, route: "/desenvolvimento/abordagem" },
+      { id: "onboarding", title: "Onboarding", description: "Jornada de entrada do vendedor", icon: Rocket, route: "/onboarding" },
       { id: "profiler", title: "Perfil DISC", description: "Análise comportamental", icon: Brain, route: "/desenvolvimento/profiler" },
       { id: "feedbacks", title: "Feedbacks", description: "Avaliações e comentários", icon: Flag, route: "/desenvolvimento/feedbacks" },
     ],

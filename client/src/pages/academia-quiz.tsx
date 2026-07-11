@@ -211,12 +211,6 @@ export default function AcademiaQuiz() {
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               </Link>
-              <Link href="/academia/abordagem">
-                <Button variant="outline" data-testid="button-ir-abordagem">
-                  Gerador de Abordagem
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </Link>
             </div>
           </CardContent>
         </Card>
@@ -280,11 +274,6 @@ export default function AcademiaQuiz() {
                   <Button data-testid="button-ir-roleplay">
                     Ir para Roleplay
                     <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
-                </Link>
-                <Link href="/academia/abordagem">
-                  <Button variant="outline" data-testid="button-ir-abordagem">
-                    Gerador de Abordagem
                   </Button>
                 </Link>
               </>

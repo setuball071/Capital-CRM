@@ -37,6 +37,8 @@ import AcademiaFundamentosPage from "@/pages/academia-fundamentos";
 import AcademiaQuizPage from "@/pages/academia-quiz";
 import AcademiaRoleplayPage from "@/pages/academia-roleplay";
 import AcademiaAdminPage from "@/pages/academia-admin";
+import OnboardingEntrantePage from "@/pages/onboarding-entrante";
+import OnboardingEntrantesGestaoPage from "@/pages/onboarding-entrantes-gestao";
 import DesenvolvimentoProfilerPage from "@/pages/desenvolvimento-profiler";
 import DesenvolvimentoProfilerGestaoPage from "@/pages/desenvolvimento-profiler-gestao";
 import DesenvolvimentoFeedbacksPage from "@/pages/desenvolvimento-feedbacks";
@@ -459,6 +461,12 @@ function Router() {
               </Route>
               <Route path="/academia/admin">
                 {() => <ModuleRoute component={AcademiaAdminPage} module="modulo_academia" accessType="edit" />}
+              </Route>
+              <Route path="/onboarding">
+                {() => <ModuleRoute component={OnboardingEntrantePage} module="modulo_academia" />}
+              </Route>
+              <Route path="/onboarding/entrantes">
+                {() => <RoleRoute component={OnboardingEntrantesGestaoPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/desenvolvimento/fundamentos">
                 {() => <ModuleRoute component={AcademiaFundamentosPage} module="modulo_academia" />}
