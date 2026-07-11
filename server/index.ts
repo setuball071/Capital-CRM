@@ -748,6 +748,9 @@ app.use((req, res, next) => {
           await saasDb.execute(saasSql`
             ALTER TABLE system_updates ADD COLUMN IF NOT EXISTS nivel VARCHAR(20) NOT NULL DEFAULT 'tenant'
           `);
+          // Fase 0 (fechamento): módulo Funcionários removido; Fábio dispensou backup (11/07/2026).
+          // CASCADE derruba só as FKs (users.employee_id / commercial_team_members.employee_id) — as colunas ficam.
+          await saasDb.execute(saasSql`DROP TABLE IF EXISTS employees CASCADE`);
           log("✓ Migração Admin SaaS (interno/planos/tenant_modulos/cobrancas) ok");
         } catch (e) {
           log(`⚠ Migração Admin SaaS falhou (non-fatal): ${e}`);
