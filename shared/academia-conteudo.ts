@@ -809,14 +809,14 @@ export function getLicoesByNivel(nivelId: number): Licao[] {
 // =============================================================================
 // ONBOARDING DO ENTRANTE
 // Conteúdo estático da jornada de entrada (tour, material conceitual, produto,
-// exemplos). RASCUNHO INICIAL — editável conforme a operação evoluir.
-// Meta-norte do entrante: 100 primeiras abordagens de WhatsApp por dia.
+// exemplos). Editável conforme a operação evoluir.
+// Meta-norte do entrante: 100 abordagens por dia, em qualquer canal.
 // =============================================================================
 
 export const ONBOARDING_META_NORTE = {
   titulo: "Meta: 100 abordagens por dia",
   descricao:
-    "Prospectar = fazer o primeiro contato pelo WhatsApp. Sua meta ao ser liberado é iniciar 100 conversas novas por dia. Volume + consistência é o que constrói resultado.",
+    "Prospectar = fazer a primeira abordagem ao cliente, por ligação OU WhatsApp. Sua meta ao ser liberado é iniciar 100 abordagens novas por dia, no canal que fizer sentido. O sistema registra sua evolução diária. Volume + consistência é o que constrói resultado.",
 };
 
 // ===== BLOCO 1 — Tour guiado do sistema (igual para todos) =====
@@ -831,51 +831,87 @@ export interface OnboardingTourPasso {
 export const ONBOARDING_TOUR_PASSOS: OnboardingTourPasso[] = [
   {
     id: "tour.1",
-    titulo: "Disparar no WhatsApp",
-    resumo: "Onde você inicia as conversas com os clientes — o coração da prospecção",
-    conteudo: `## Disparar no WhatsApp
+    titulo: "Como a prospecção começa",
+    resumo: "Lista Manual ou discador automático — o que importa é prospectar, por ligação ou WhatsApp",
+    conteudo: `## Como a prospecção começa
 
-É aqui que a prospecção acontece: **cada primeira mensagem enviada conta 1 para a sua meta de 100/dia**.
+Seu trabalho é **prospectar clientes** — e cada primeira abordagem conta 1 para a sua meta de 100/dia, seja por **ligação ou WhatsApp**.
 
-### Onde fica
-- **Vendas → Atendimento**: sua central de conversas do WhatsApp.
-- **Vendas → Campanhas**: envio da abordagem inicial em escala para uma lista de clientes.
+### As duas portas de entrada
+- **Lista Manual** (Vendas → Atendimento): você recebe uma **lista direcionada** para prospectar — pode trabalhar por WhatsApp ou ligação.
+- **Discador Automático** (Vendas → Consulta Individual): você se conecta ao discador e passa a **receber automaticamente as ligações atendidas**, fazendo a consulta do cliente direto no CRM.
 
 ### Como funciona no dia a dia
-1. Você recebe/acessa a lista de clientes do dia.
-2. Usa o modelo de abordagem aprovado (você vai treinar ele no Bloco 3).
-3. Dispara a primeira mensagem — personalizada com o nome do cliente.
-4. Acompanha as respostas na tela de Atendimento e responde rápido.
+1. Receba uma lista direcionada **ou** conecte-se ao discador automático.
+2. Prospecte os clientes.
+3. Consulte o cliente dentro do CRM.
+4. Evolua o atendimento conforme a negociação.
+
+> **Dica para quem está começando:** recomendamos iniciar pelo **discador automático**. Ele dá um ritmo maior de atendimento e facilita bater a meta diária de abordagens.
+
+### Modelos de abordagem
+- Use os **modelos de abordagem recomendados** pela empresa.
+- Use os **scripts debatidos e aprovados** durante os treinamentos.
+- **Sempre personalize** a conversa conforme o contexto do cliente.
+- Mantenha um atendimento **natural e humanizado**.
 
 ### Regras de ouro
-- **Nunca copie e cole robótico**: use o nome do cliente e o modelo aprovado.
-- **Responda rápido** quem responder — cliente que respondeu é prioridade.
-- **Não invente promessas**: use só o que está nos materiais aprovados.`,
+- **Responda rapidamente** — cliente que respondeu é prioridade.
+- **Não crie promessas** que não possam ser cumpridas.
+- **Não responda de forma robótica.**
+- **Evite copiar e colar** mensagens sem adaptação.
+- **Personalize o atendimento** conforme a conversa.`,
   },
   {
     id: "tour.2",
     titulo: "Funil / Pipeline",
-    resumo: "Onde você organiza quem respondeu — registrar, etiquetar e mover",
+    resumo: "O pipeline acompanha toda a evolução comercial — etiquetar, conferir e mover",
     conteudo: `## Funil / Pipeline
 
-Quando um cliente responde, a conversa vira um **lead no funil** — e sua obrigação é manter esse funil organizado.
+Conforme você prospecta, os clientes vão sendo **registrados no funil** — e o pipeline acompanha **toda a evolução comercial**, não apenas quando o cliente responde.
 
 ### Onde fica
 - **Vendas → Pipeline**: o kanban com as etapas do lead (novo → em conversa → simulação → fechamento).
 - **Vendas → Etiquetas**: etiquetas para classificar a situação de cada cliente.
 
 ### Como funciona no dia a dia
-1. Cliente respondeu? **Registre o atendimento** — nada fica só na sua cabeça.
-2. **Aplique a etiqueta** certa (ex.: interessado, pediu simulação, sem interesse).
-3. **Mova o card** para a etapa correta do funil.
+1. Nossas **ferramentas e integrações registram automaticamente** a evolução dos atendimentos.
+2. Conforme a negociação avança, **confira se o card está na etapa certa** e mova quando precisar.
+3. **Aplique a etiqueta** certa (ex.: interessado, pediu simulação, sem interesse).
 4. Agende retorno quando o cliente pedir para falar depois (Vendas → Agenda).
 
 ### Por que isso importa
-- O que não está registrado **não existe** para a gestão — e você perde o cliente.
-- Funil organizado = você sabe exatamente quem cobrar amanhã.`,
+- Pipeline organizado mostra **exatamente quem trabalhar amanhã**.
+- O que está registrado vira histórico — você não perde o fio de nenhuma negociação.`,
   },
   {
     id: "tour.3",
+    titulo: "Minha Carteira e Pós-venda",
+    resumo: "Seus clientes conquistados são seu maior ativo — carteira, pós-venda e relacionamento contínuo",
+    conteudo: `## Minha Carteira e Pós-venda
+
+### Minha Carteira
+A área **Vendas → Minha Carteira** reúne **todos os clientes que você conquistou**. Ela é **atualizada mensalmente** e deve ser usada para:
+- Fazer **novos contatos**;
+- Oferecer **novas oportunidades**;
+- Pedir **indicações**;
+- Realizar **pós-venda**.
+
+> Sua carteira é **um dos seus maiores ativos comerciais**. Cuide dela.
+
+### Customer Success (CS)
+Seu trabalho **não termina quando a operação é concluída** — você continua responsável pelo relacionamento com aquele cliente.
+
+Esse acompanhamento aumenta:
+- **Fidelização**;
+- **Recompra**;
+- **Venda de novos produtos**;
+- **Indicações**.
+
+Você faz parte do **sucesso contínuo do cliente** — e manter esse relacionamento evita que ele seja atendido por outro consultor em futuras oportunidades.`,
+  },
+  {
+    id: "tour.4",
     titulo: "Painel / Meta do dia",
     resumo: "Onde você acompanha seu número — abordagens feitas vs a meta de 100",
     conteudo: `## Painel / Meta do dia
@@ -887,7 +923,7 @@ O painel é o seu **placar**: mostra quanto você já produziu hoje e quanto fal
 
 ### Como funciona no dia a dia
 1. Comece o dia olhando o painel: qual é a meta e onde você está.
-2. Ao longo do dia, acompanhe: **quantas abordagens você já fez das 100?**
+2. Ao longo do dia, acompanhe: **quantas abordagens você já fez das 100?** (ligações + WhatsApp)
 3. Fim do dia: bateu? Se não, o que travou? (isso vira conversa com seu gestor)
 
 ### Regras de ouro
@@ -952,20 +988,26 @@ export const ONBOARDING_PRODUTO_BRIEFING = {
 Você vai começar prospectando **portabilidade**: trazer o contrato de consignado que o cliente **já tem** em outro banco para um parceiro nosso com **taxa menor**.
 
 ### O que o cliente ganha
-- **Parcela menor** pagando o mesmo contrato — ou
-- **Sobra de margem** para usar se precisar —
-- E tudo isso **sem pegar dinheiro novo**, sem se endividar mais.
+- **Redução da parcela**
+- **Redução da taxa de juros**
+- **Aumento da margem disponível**
+- **Liberação de troco sem aumentar o custo da operação**
+
+### Nossa estratégia (o diferencial)
+A portabilidade é a **porta de entrada**: primeiro resolvemos um problema do cliente — reduzimos a parcela e a taxa e **liberamos margem**. Depois, usamos essa margem para **liberar crédito novo sem aumentar o custo mensal** do cliente.
+
+O foco é sempre **otimizar os ganhos do cliente e da operação**: sempre que possível, use a margem liberada para gerar uma nova operação — desde que isso **não aumente o quanto o cliente paga por mês**.
 
 ### O gancho da abordagem
-> "Consegui uma condição que **reduz o valor da sua parcela** / **libera margem**, sem você pegar dinheiro novo."
+> "Consegui uma condição que **reduz sua parcela e sua taxa** e ainda **libera uma margem** que pode virar um valor em conta — sem aumentar o que você paga por mês."
 
 ### Quem é o alvo
 Aposentados/pensionistas INSS, servidores e militares **que já têm consignado ativo** — se já paga parcela, dá para tentar melhorar.
 
 ### O processo (visão geral)
-1. Primeiro contato no WhatsApp (sua meta de 100/dia é isso).
-2. Cliente respondeu → levantar os dados do contrato atual.
-3. Simulação: comparar parcela atual vs nova.
+1. Primeira abordagem ao cliente — por ligação ou WhatsApp (sua meta de 100/dia é isso).
+2. Cliente engajou → levantar os dados do contrato atual.
+3. Simulação: comparar parcela atual vs nova (e quanto de margem libera).
 4. Fechamento e digitação — com apoio do seu gestor no começo.`,
 };
 
@@ -984,18 +1026,18 @@ export const ONBOARDING_EXEMPLOS_PORTABILIDADE: OnboardingExemplo[] = [
     titulo: "Exemplo 1 — Abertura recomendada",
     tipo: "bom",
     mensagem:
-      "Bom dia, Sr. João! Aqui é a Ana, da Capital. Vi que o senhor tem um empréstimo consignado ativo — consegui uma condição que pode REDUZIR o valor da sua parcela, sem pegar dinheiro novo. Posso te mostrar a comparação?",
+      "Bom dia, Sr. João! Aqui é a Ana, da Capital. Vi que o senhor possui um empréstimo consignado ativo. Em muitos casos conseguimos reduzir a parcela, diminuir a taxa e ainda liberar um valor em conta sem aumentar o custo mensal. Posso fazer uma simulação para verificar se isso é possível no seu caso?",
     analise:
-      "Curta, identificada (nome + empresa), usa o nome do cliente, benefício concreto (reduzir parcela), deixa claro que não é dívida nova e termina com pergunta simples de responder.",
+      "Clara e identificada (nome + empresa), usa o nome do cliente, traz benefícios concretos (parcela e taxa menores) e o nosso diferencial (liberar valor em conta sem aumentar o custo mensal) — e fecha convidando para uma simulação, um compromisso baixo e fácil de aceitar.",
   },
   {
     id: "ex.2",
-    titulo: "Exemplo 2 — Abertura com sobra de margem",
+    titulo: "Exemplo 2 — Abertura educando sobre o direito",
     tipo: "bom",
     mensagem:
-      "Boa tarde, Dona Maria! Sou o Carlos, da Capital. A senhora sabia que dá pra trocar o banco do seu consignado e pagar MENOS na parcela? É um direito seu, sem custo pra trocar. Quer que eu simule pra senhora ver a diferença?",
+      "Boa tarde, Dona Maria! Sou o Carlos, da Capital. A senhora sabia que dá pra trocar o banco do seu consignado pagando MENOS na parcela e com taxa menor? É um direito seu, sem custo pra trocar — e em muitos casos ainda sobra uma margem que pode virar um valor em conta, sem aumentar o que a senhora paga por mês. Quer que eu simule pra ver a diferença?",
     analise:
-      "Educa o cliente (portabilidade é um direito), remove a barreira do custo, e o convite é para VER a diferença — compromisso baixo, fácil dizer sim.",
+      "Educa o cliente (portabilidade é um direito), remove a barreira do custo e apresenta a nossa lógica completa: reduzir parcela e taxa, liberar margem e transformá-la em valor em conta sem aumentar o custo mensal. O convite é para VER a diferença — fácil dizer sim.",
   },
   {
     id: "ex.3",
@@ -1021,9 +1063,9 @@ export const ONBOARDING_EXEMPLOS_PORTABILIDADE: OnboardingExemplo[] = [
     titulo: "Exemplo 5 — Respondendo 'não tenho interesse'",
     tipo: "bom",
     mensagem:
-      "Sem problema, Sr. João! Agradeço a atenção. Se em algum momento quiser ver quanto daria pra economizar na parcela, é só me chamar aqui. Tenha um ótimo dia! 🙏",
+      "Sem problema, Sr. João! Agradeço a atenção. Se em algum momento quiser ver quanto daria pra economizar na parcela ou liberar de margem, é só me chamar aqui. Tenha um ótimo dia! 🙏",
     analise:
-      "Respeita o não, agradece e deixa a porta aberta com um benefício específico (economizar na parcela). Sem insistência — e o registro no sistema garante que esse cliente pode ser retomado no futuro.",
+      "Respeita o não, agradece e deixa a porta aberta com um benefício específico (economizar na parcela / liberar margem). Sem insistência — e o registro no sistema garante que esse cliente pode ser retomado no futuro.",
     apenasIniciante: true,
   },
 ];
