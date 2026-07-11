@@ -13492,7 +13492,11 @@ Responda EXCLUSIVAMENTE em JSON:
         });
 
         const etapa =
-          perfil.onboardingEtapa === "produto" ? "aguardando_liberacao" : perfil.onboardingEtapa;
+          perfil.onboardingEtapa === "produto"
+            ? perfil.experienciaDeclarada
+              ? "extrato" // experiente ainda passa pelo diagnóstico de leitura de extrato
+              : "aguardando_liberacao"
+            : perfil.onboardingEtapa;
         await db
           .update(vendedoresAcademia)
           .set({ onboardingEtapa: etapa, atualizadoEm: new Date() })
@@ -13554,7 +13558,7 @@ Responda EXCLUSIVAMENTE em JSON:
             .where(
               and(
                 inArray(quizTentativas.userId, userIds),
-                inArray(quizTentativas.origem, ["onboarding_teste", "onboarding_compreensao"]),
+                inArray(quizTentativas.origem, ["onboarding_teste", "onboarding_compreensao", "onboarding_extrato"]),
               ),
             )
             .orderBy(sql`${quizTentativas.criadoEm} DESC`);
@@ -13663,6 +13667,82 @@ Responda EXCLUSIVAMENTE em JSON:
       } catch (error) {
         console.error("Post onboarding reiniciar error:", error);
         return res.status(500).json({ message: "Erro ao reiniciar onboarding" });
+      }
+    },
+  );
+
+  // GET /api/onboarding/extrato - Leitura de extrato (diagnóstico só experiente). Imagens + perguntas sem gabarito.
+  app.get(
+    "/api/onboarding/extrato",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const { ONBOARDING_EXTRATO_ITENS } = await import("./onboarding-conteudo");
+        const itens = ONBOARDING_EXTRATO_ITENS.map((item) => ({
+          id: item.id,
+          titulo: item.titulo,
+          imagem: item.imagem,
+          perguntas: item.perguntas.map((p) => ({
+            id: p.id,
+            pergunta: p.pergunta,
+            opcoes: p.opcoes,
+          })),
+        }));
+        return res.json({ itens });
+      } catch (error) {
+        console.error("Get onboarding extrato error:", error);
+        return res.status(500).json({ message: "Erro ao buscar extratos" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/extrato - Pontua a leitura de extrato e vai para aguardando_liberacao
+  app.post(
+    "/api/onboarding/extrato",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const userId = req.user!.id;
+        const { respostas } = req.body; // { perguntaId: opcaoIndex }
+        if (!respostas || typeof respostas !== "object") {
+          return res.status(400).json({ message: "Respostas são obrigatórias" });
+        }
+        const perfil = await getOrCreatePerfilOnboarding(userId);
+        const { ONBOARDING_EXTRATO_ITENS } = await import("./onboarding-conteudo");
+
+        const perguntas = ONBOARDING_EXTRATO_ITENS.flatMap((item) => item.perguntas);
+        let acertos = 0;
+        const resultados: { perguntaId: number; correto: boolean; respostaCorreta: number }[] = [];
+        for (const pergunta of perguntas) {
+          const correto = respostas[pergunta.id] === pergunta.correta;
+          if (correto) acertos++;
+          resultados.push({ perguntaId: pergunta.id, correto, respostaCorreta: pergunta.correta });
+        }
+        const total = perguntas.length;
+        const percentual = total > 0 ? Math.round((acertos / total) * 100) : 0;
+
+        await db.insert(quizTentativas).values({
+          userId,
+          respostas,
+          acertos,
+          total,
+          aprovado: true, // diagnóstico: não reprova; o gate é a liberação do gestor
+          origem: "onboarding_extrato",
+        });
+
+        const etapa =
+          perfil.onboardingEtapa === "extrato" ? "aguardando_liberacao" : perfil.onboardingEtapa;
+        await db
+          .update(vendedoresAcademia)
+          .set({ onboardingEtapa: etapa, atualizadoEm: new Date() })
+          .where(eq(vendedoresAcademia.userId, userId));
+
+        return res.json({ acertos, total, percentual, resultados, onboardingEtapa: etapa });
+      } catch (error) {
+        console.error("Post onboarding extrato error:", error);
+        return res.status(500).json({ message: "Erro ao submeter leitura de extrato" });
       }
     },
   );

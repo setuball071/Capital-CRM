@@ -230,3 +230,105 @@ export function classificarBaseline(percentual: number): string {
   if (percentual >= 50) return "tem_nocao";
   return "cru";
 }
+
+// ===== LEITURA DE EXTRATO — diagnóstico só para experientes =====
+// 3 extratos limpos + perguntas de interpretação. Mede o quanto o candidato
+// que se diz experiente realmente sabe ler um extrato de consignação hoje.
+
+export interface ExtratoPergunta {
+  id: number;
+  pergunta: string;
+  opcoes: string[];
+  correta: number; // índice da opção correta
+}
+
+export interface ExtratoItem {
+  id: string;
+  titulo: string;
+  imagem: string; // caminho servido em client/public
+  perguntas: ExtratoPergunta[];
+}
+
+export const ONBOARDING_EXTRATO_ITENS: ExtratoItem[] = [
+  {
+    id: "extrato-1",
+    titulo: "Extrato 1",
+    imagem: "/onboarding/Limpas/extrato-1.jpg",
+    perguntas: [
+      {
+        id: 201,
+        pergunta: "Quais bancos seria viável uma portabilidade remunerada?",
+        opcoes: [
+          "Apenas os acima de 12 meses.",
+          "Apenas os de banco de rede.",
+          "Independente do que for seguir, precisa fazer todos, pois o cliente está com a margem negativa.",
+          "O cliente está com a margem zerada, mas apenas uma parcela tem o mínimo pago para portar a parcela de R$ 314,49.",
+        ],
+        correta: 2,
+      },
+      {
+        id: 202,
+        pergunta: "Qual é a margem real do cliente neste momento?",
+        opcoes: [
+          "Zerada, como mostra o extrato.",
+          "Na realidade era para ter R$ 528,70, pois ele só usou R$ 2.786,76 do total que tem.",
+          "Na realidade ele está R$ 266,52 negativo.",
+        ],
+        correta: 2,
+      },
+    ],
+  },
+  {
+    id: "extrato-2",
+    titulo: "Extrato 2",
+    imagem: "/onboarding/Limpas/extrato-2.jpg",
+    perguntas: [
+      {
+        id: 203,
+        pergunta: "Qual é o valor da margem negativa deste cliente?",
+        opcoes: [
+          "Ele teve desconto de férias, por isso está negativo em R$ 3 mil.",
+          "Descontando os valores de margens usadas da global, ele está negativo em R$ 180,23.",
+          "Esse cliente não está negativo.",
+          "Impossível saber só olhando este extrato: é preciso solicitar o contracheque para cruzar, pois a compulsória está zerada.",
+        ],
+        correta: 3,
+      },
+      {
+        id: 204,
+        pergunta: "Quais parcelas você portaria para que valesse a remuneração?",
+        opcoes: [
+          "Todas acima de 12 pagas.",
+          "Apenas os bancos conhecidos, pois não sabemos se dá para portar esse 'estranho'.",
+          "Todos, pois todos são bancos de rede.",
+          "Não é possível portar nenhum, por conta da margem negativa.",
+        ],
+        correta: 2,
+      },
+    ],
+  },
+  {
+    id: "extrato-3",
+    titulo: "Extrato 3",
+    imagem: "/onboarding/Limpas/extrato-3.jpg",
+    perguntas: [
+      {
+        id: 205,
+        pergunta: "Qual parcela pode ser portada?",
+        opcoes: [
+          "Todas, para abrir o máximo de margem e ganhar na portabilidade que for remunerada.",
+          "Só a do BB, por se tratar de banco de rede.",
+          "Nenhuma, pois são muito recentes.",
+          "Nenhuma, pois a margem da cliente está errada e com isso não é possível fazer a negociação.",
+        ],
+        correta: 0,
+      },
+    ],
+  },
+];
+
+/** Total de perguntas de extrato (para pontuação). */
+export const ONBOARDING_EXTRATO_TOTAL = ONBOARDING_EXTRATO_ITENS.reduce(
+  (acc, item) => acc + item.perguntas.length,
+  0,
+);
