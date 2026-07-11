@@ -519,9 +519,6 @@ import {
   insertCreativePackSchema,
   creatives,
   insertCreativeSchema,
-  creativeGenerations,
-  creativeGenerationQuota,
-  creativeBrandConfig,
   companies,
   insertCompanySchema,
   lemitJobs,
@@ -13360,6 +13357,373 @@ Responda EXCLUSIVAMENTE em JSON:
       } catch (error) {
         console.error("Submit quiz error:", error);
         return res.status(500).json({ message: "Erro ao submeter quiz" });
+      }
+    },
+  );
+
+  // ===== ONBOARDING DO ENTRANTE =====
+  // Jornada de entrada: declaração → tour → teste (baseline) → produto/exemplos → liberação do gestor
+
+  async function getOrCreatePerfilOnboarding(userId: number) {
+    let [perfil] = await db
+      .select()
+      .from(vendedoresAcademia)
+      .where(eq(vendedoresAcademia.userId, userId))
+      .limit(1);
+    if (!perfil) {
+      [perfil] = await db
+        .insert(vendedoresAcademia)
+        .values({ userId, nivelAtual: 1, quizAprovado: false, totalSimulacoes: 0 })
+        .returning();
+    }
+    return perfil;
+  }
+
+  // GET /api/onboarding/estado - Estado do onboarding do usuário logado
+  app.get(
+    "/api/onboarding/estado",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const perfil = await getOrCreatePerfilOnboarding(req.user!.id);
+        return res.json({
+          experienciaDeclarada: perfil.experienciaDeclarada,
+          bagagemOrigem: perfil.bagagemOrigem,
+          onboardingEtapa: perfil.onboardingEtapa || "entrada",
+          tourConcluido: perfil.tourConcluido || false,
+          produtoInicial: perfil.produtoInicial || "portabilidade",
+          baselineNota: perfil.baselineNota,
+          baselineNivel: perfil.baselineNivel,
+          liberadoParaProspectar: perfil.liberadoParaProspectar || false,
+          liberadoEm: perfil.liberadoEm,
+        });
+      } catch (error) {
+        console.error("Get onboarding estado error:", error);
+        return res.status(500).json({ message: "Erro ao buscar estado do onboarding" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/declaracao - Auto-declaração de experiência
+  app.post(
+    "/api/onboarding/declaracao",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const userId = req.user!.id;
+        const { experiencia, bagagemOrigem } = req.body;
+        if (typeof experiencia !== "boolean") {
+          return res.status(400).json({ message: "Informe se você tem experiência (sim/não)" });
+        }
+        const perfil = await getOrCreatePerfilOnboarding(userId);
+        const etapa = perfil.onboardingEtapa === "entrada" ? "tour" : perfil.onboardingEtapa;
+        await db
+          .update(vendedoresAcademia)
+          .set({
+            experienciaDeclarada: experiencia,
+            bagagemOrigem: typeof bagagemOrigem === "string" ? bagagemOrigem.slice(0, 255) : null,
+            onboardingEtapa: etapa,
+            atualizadoEm: new Date(),
+          })
+          .where(eq(vendedoresAcademia.userId, userId));
+        return res.json({ onboardingEtapa: etapa });
+      } catch (error) {
+        console.error("Post onboarding declaracao error:", error);
+        return res.status(500).json({ message: "Erro ao salvar declaração" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/tour/concluir - Marca o tour como concluído
+  app.post(
+    "/api/onboarding/tour/concluir",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const userId = req.user!.id;
+        const perfil = await getOrCreatePerfilOnboarding(userId);
+        const etapa =
+          perfil.onboardingEtapa === "entrada" || perfil.onboardingEtapa === "tour"
+            ? "teste"
+            : perfil.onboardingEtapa;
+        await db
+          .update(vendedoresAcademia)
+          .set({ tourConcluido: true, onboardingEtapa: etapa, atualizadoEm: new Date() })
+          .where(eq(vendedoresAcademia.userId, userId));
+        return res.json({ onboardingEtapa: etapa });
+      } catch (error) {
+        console.error("Post onboarding tour error:", error);
+        return res.status(500).json({ message: "Erro ao concluir tour" });
+      }
+    },
+  );
+
+  // GET /api/onboarding/teste - Perguntas do teste de conhecimento (sem gabarito)
+  app.get(
+    "/api/onboarding/teste",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const perfil = await getOrCreatePerfilOnboarding(req.user!.id);
+        const { ONBOARDING_TESTE_PERGUNTAS, perguntasParaPerfil } = await import(
+          "./onboarding-conteudo"
+        );
+        const perguntas = perguntasParaPerfil(
+          ONBOARDING_TESTE_PERGUNTAS,
+          perfil.experienciaDeclarada,
+        ).map((p) => ({ id: p.id, pergunta: p.pergunta, opcoes: p.opcoes }));
+        return res.json({ perguntas });
+      } catch (error) {
+        console.error("Get onboarding teste error:", error);
+        return res.status(500).json({ message: "Erro ao buscar teste" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/teste - Submete o teste, salva baseline e avança etapa
+  app.post(
+    "/api/onboarding/teste",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const userId = req.user!.id;
+        const { respostas } = req.body; // { perguntaId: opcaoIndex }
+        if (!respostas || typeof respostas !== "object") {
+          return res.status(400).json({ message: "Respostas são obrigatórias" });
+        }
+        const perfil = await getOrCreatePerfilOnboarding(userId);
+        const { ONBOARDING_TESTE_PERGUNTAS, perguntasParaPerfil, classificarBaseline } =
+          await import("./onboarding-conteudo");
+        const perguntas = perguntasParaPerfil(
+          ONBOARDING_TESTE_PERGUNTAS,
+          perfil.experienciaDeclarada,
+        );
+
+        let acertos = 0;
+        const resultados: { perguntaId: number; correto: boolean; respostaCorreta: number }[] = [];
+        for (const pergunta of perguntas) {
+          const correto = respostas[pergunta.id] === pergunta.correta;
+          if (correto) acertos++;
+          resultados.push({ perguntaId: pergunta.id, correto, respostaCorreta: pergunta.correta });
+        }
+        const total = perguntas.length;
+        const percentual = total > 0 ? Math.round((acertos / total) * 100) : 0;
+        const baselineNivel = classificarBaseline(percentual);
+
+        await db.insert(quizTentativas).values({
+          userId,
+          respostas,
+          acertos,
+          total,
+          aprovado: true, // teste diagnóstico: não reprova, mede o baseline
+          origem: "onboarding_teste",
+        });
+
+        const etapa = perfil.onboardingEtapa === "teste" ? "produto" : perfil.onboardingEtapa;
+        await db
+          .update(vendedoresAcademia)
+          .set({
+            baselineNota: String(percentual),
+            baselineNivel,
+            onboardingEtapa: etapa,
+            atualizadoEm: new Date(),
+          })
+          .where(eq(vendedoresAcademia.userId, userId));
+
+        return res.json({ acertos, total, percentual, baselineNivel, resultados, onboardingEtapa: etapa });
+      } catch (error) {
+        console.error("Post onboarding teste error:", error);
+        return res.status(500).json({ message: "Erro ao submeter teste" });
+      }
+    },
+  );
+
+  // GET /api/onboarding/compreensao - Perguntas de compreensão dos exemplos (sem gabarito)
+  app.get(
+    "/api/onboarding/compreensao",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const { ONBOARDING_COMPREENSAO_PERGUNTAS } = await import("./onboarding-conteudo");
+        const perguntas = ONBOARDING_COMPREENSAO_PERGUNTAS.map((p) => ({
+          id: p.id,
+          pergunta: p.pergunta,
+          opcoes: p.opcoes,
+        }));
+        return res.json({ perguntas });
+      } catch (error) {
+        console.error("Get onboarding compreensao error:", error);
+        return res.status(500).json({ message: "Erro ao buscar perguntas" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/compreensao - Submete compreensão e vai para aguardando_liberacao
+  app.post(
+    "/api/onboarding/compreensao",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const userId = req.user!.id;
+        const { respostas } = req.body;
+        if (!respostas || typeof respostas !== "object") {
+          return res.status(400).json({ message: "Respostas são obrigatórias" });
+        }
+        const perfil = await getOrCreatePerfilOnboarding(userId);
+        const { ONBOARDING_COMPREENSAO_PERGUNTAS } = await import("./onboarding-conteudo");
+
+        let acertos = 0;
+        const resultados: { perguntaId: number; correto: boolean; respostaCorreta: number }[] = [];
+        for (const pergunta of ONBOARDING_COMPREENSAO_PERGUNTAS) {
+          const correto = respostas[pergunta.id] === pergunta.correta;
+          if (correto) acertos++;
+          resultados.push({ perguntaId: pergunta.id, correto, respostaCorreta: pergunta.correta });
+        }
+        const total = ONBOARDING_COMPREENSAO_PERGUNTAS.length;
+        const percentual = total > 0 ? Math.round((acertos / total) * 100) : 0;
+
+        await db.insert(quizTentativas).values({
+          userId,
+          respostas,
+          acertos,
+          total,
+          aprovado: true, // diagnóstico: o gate é a liberação do gestor
+          origem: "onboarding_compreensao",
+        });
+
+        const etapa =
+          perfil.onboardingEtapa === "produto" ? "aguardando_liberacao" : perfil.onboardingEtapa;
+        await db
+          .update(vendedoresAcademia)
+          .set({ onboardingEtapa: etapa, atualizadoEm: new Date() })
+          .where(eq(vendedoresAcademia.userId, userId));
+
+        return res.json({ acertos, total, percentual, resultados, onboardingEtapa: etapa });
+      } catch (error) {
+        console.error("Post onboarding compreensao error:", error);
+        return res.status(500).json({ message: "Erro ao submeter respostas" });
+      }
+    },
+  );
+
+  // GET /api/onboarding/entrantes - Raio-x dos entrantes (master/coordenacao)
+  app.get(
+    "/api/onboarding/entrantes",
+    requireAuth,
+    requireManagerAccess,
+    async (req, res) => {
+      try {
+        const teamUserIds = await getAcademiaTeamUserIds(req.user!);
+
+        let entrantesQuery = db
+          .select({
+            userId: vendedoresAcademia.userId,
+            userName: users.name,
+            userEmail: users.email,
+            experienciaDeclarada: vendedoresAcademia.experienciaDeclarada,
+            bagagemOrigem: vendedoresAcademia.bagagemOrigem,
+            onboardingEtapa: vendedoresAcademia.onboardingEtapa,
+            tourConcluido: vendedoresAcademia.tourConcluido,
+            produtoInicial: vendedoresAcademia.produtoInicial,
+            baselineNota: vendedoresAcademia.baselineNota,
+            baselineNivel: vendedoresAcademia.baselineNivel,
+            liberadoParaProspectar: vendedoresAcademia.liberadoParaProspectar,
+            liberadoEm: vendedoresAcademia.liberadoEm,
+            criadoEm: vendedoresAcademia.criadoEm,
+          })
+          .from(vendedoresAcademia)
+          .leftJoin(users, eq(vendedoresAcademia.userId, users.id));
+
+        if (teamUserIds) {
+          entrantesQuery = entrantesQuery.where(
+            inArray(vendedoresAcademia.userId, teamUserIds),
+          ) as any;
+        }
+
+        const entrantes = await entrantesQuery.orderBy(
+          sql`${vendedoresAcademia.criadoEm} DESC`,
+        );
+
+        // Tentativas do onboarding (para o raio-x de respostas)
+        const userIds = entrantes.map((e) => e.userId);
+        let tentativas: (typeof quizTentativas.$inferSelect)[] = [];
+        if (userIds.length > 0) {
+          tentativas = await db
+            .select()
+            .from(quizTentativas)
+            .where(
+              and(
+                inArray(quizTentativas.userId, userIds),
+                inArray(quizTentativas.origem, ["onboarding_teste", "onboarding_compreensao"]),
+              ),
+            )
+            .orderBy(sql`${quizTentativas.criadoEm} DESC`);
+        }
+
+        const comTentativas = entrantes.map((e) => ({
+          ...e,
+          tentativas: tentativas
+            .filter((t) => t.userId === e.userId)
+            .map((t) => ({
+              origem: t.origem,
+              acertos: t.acertos,
+              total: t.total,
+              criadoEm: t.criadoEm,
+            })),
+        }));
+
+        return res.json(comTentativas);
+      } catch (error) {
+        console.error("Get onboarding entrantes error:", error);
+        return res.status(500).json({ message: "Erro ao buscar entrantes" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/entrantes/:userId/liberar - Libera o entrante para prospectar
+  app.post(
+    "/api/onboarding/entrantes/:userId/liberar",
+    requireAuth,
+    requireManagerAccess,
+    async (req, res) => {
+      try {
+        const targetUserId = parseInt(req.params.userId, 10);
+        if (isNaN(targetUserId)) {
+          return res.status(400).json({ message: "Usuário inválido" });
+        }
+        const teamUserIds = await getAcademiaTeamUserIds(req.user!);
+        if (teamUserIds && !teamUserIds.includes(targetUserId)) {
+          return res.status(403).json({ message: "Este entrante não está na sua equipe" });
+        }
+        const [perfil] = await db
+          .select()
+          .from(vendedoresAcademia)
+          .where(eq(vendedoresAcademia.userId, targetUserId))
+          .limit(1);
+        if (!perfil) {
+          return res.status(404).json({ message: "Entrante não encontrado" });
+        }
+        await db
+          .update(vendedoresAcademia)
+          .set({
+            liberadoParaProspectar: true,
+            liberadoEm: new Date(),
+            liberadoPor: req.user!.id,
+            onboardingEtapa: "liberado",
+            atualizadoEm: new Date(),
+          })
+          .where(eq(vendedoresAcademia.userId, targetUserId));
+        return res.json({ success: true });
+      } catch (error) {
+        console.error("Post onboarding liberar error:", error);
+        return res.status(500).json({ message: "Erro ao liberar entrante" });
       }
     },
   );
@@ -28632,233 +28996,6 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error: any) {
       console.error("POST /api/promissory-notes error:", error);
       res.status(500).json({ message: "Erro ao criar nota promissória" });
-    }
-  });
-
-  // ===== CRIADOR DE CRIATIVOS =====
-
-  function todayBR(): string {
-    return new Date().toISOString().slice(0, 10);
-  }
-
-  async function getQuotaRecord(userId: number, date: string) {
-    const [row] = await db
-      .select()
-      .from(creativeGenerationQuota)
-      .where(and(eq(creativeGenerationQuota.userId, userId), eq(creativeGenerationQuota.date, date)));
-    return row ?? null;
-  }
-
-  app.get("/api/creatives/quota", requireAuth, async (req: Request, res: Response) => {
-    try {
-      if (req.user!.isMaster) {
-        return res.json({ used: 0, limit: null, resetsAt: null, unlimited: true });
-      }
-      const today = todayBR();
-      const row = await getQuotaRecord(req.user!.id, today);
-      const used = row?.count ?? 0;
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const resetsAt = tomorrow.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " às 00:00";
-      return res.json({ used, limit: 5, resetsAt });
-    } catch (err) {
-      console.error("GET /api/creatives/quota error:", err);
-      return res.status(500).json({ message: "Erro ao consultar cota" });
-    }
-  });
-
-  app.post("/api/creatives/generate", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const today = todayBR();
-      const userId = req.user!.id;
-
-      // Check quota (master users have no limit)
-      const isMaster = req.user!.isMaster;
-      const quotaRow = isMaster ? null : await getQuotaRecord(userId, today);
-      const used = quotaRow?.count ?? 0;
-      if (!isMaster && used >= 5) {
-        return res.status(429).json({ message: "Você atingiu o limite de 5 criações por dia. Tente novamente amanhã." });
-      }
-
-      const { prompt, formato, personalizable } = req.body;
-      if (!prompt || !formato) {
-        return res.status(400).json({ message: "Preencha todos os campos obrigatórios" });
-      }
-
-      // Create pending record
-      const [gen] = await db.insert(creativeGenerations).values({
-        tenantId: req.tenantId!,
-        userId,
-        promptUsed: "",
-        formData: req.body,
-        status: "pending",
-      }).returning();
-
-      // Generate images
-      const { buildImagePrompt, sanitizePrompt } = await import("./services/creativePromptService");
-      const { generateImages } = await import("./services/imagenService");
-      const aspectRatio = formato; // formato value IS the aspectRatio (e.g. "1:1", "9:16")
-
-      // Load brand config (global, single row)
-      const brandRows = await db.select().from(creativeBrandConfig).limit(1);
-      const brandCfg = brandRows[0]
-        ? { systemPrompt: brandRows[0].systemPrompt || "", logoBase64: brandRows[0].logoBase64 || undefined }
-        : { systemPrompt: "" };
-
-      const cleanPrompt = await sanitizePrompt(prompt);
-      const builtPrompt = buildImagePrompt(cleanPrompt, aspectRatio, !!personalizable, brandCfg);
-      let imageUrls: string[];
-      try {
-        imageUrls = await generateImages(builtPrompt, aspectRatio);
-      } catch (genErr: any) {
-        await db.update(creativeGenerations).set({ status: "error" }).where(eq(creativeGenerations.id, gen.id));
-        console.error("Image generation error:", genErr?.message);
-        return res.status(502).json({ message: genErr?.message || "Erro ao gerar imagens. Tente novamente." });
-      }
-
-      // Update record
-      await db.update(creativeGenerations).set({
-        promptUsed: builtPrompt,
-        imageUrls,
-        status: "generated",
-      }).where(eq(creativeGenerations.id, gen.id));
-
-      // Increment quota ONLY after success, and only for non-master users
-      if (!isMaster) {
-        await db.execute(
-          sql`INSERT INTO creative_generation_quota (user_id, date, count) VALUES (${userId}, ${today}, 1)
-              ON CONFLICT (user_id, date) DO UPDATE SET count = creative_generation_quota.count + 1`
-        );
-      }
-
-      return res.status(201).json({
-        generationId: gen.id,
-        images: imageUrls,
-        quotaUsed: used + 1,
-        quotaLimit: 5,
-      });
-    } catch (err: any) {
-      console.error("POST /api/creatives/generate error:", err);
-      return res.status(500).json({ message: "Erro interno ao gerar criativo" });
-    }
-  });
-
-  // ─── Brand Config ─────────────────────────────────────────────────────────
-
-  app.get("/api/creatives/brand-config", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const [row] = await db.select().from(creativeBrandConfig).limit(1);
-      if (!row) {
-        return res.json({ systemPrompt: "", logoUrl: null, hasLogo: false });
-      }
-      return res.json({
-        systemPrompt: row.systemPrompt || "",
-        logoUrl: row.logoUrl || null,
-        hasLogo: !!row.logoUrl,
-      });
-    } catch (err) {
-      console.error("GET /api/creatives/brand-config error:", err);
-      return res.status(500).json({ message: "Erro ao carregar configuração de marca" });
-    }
-  });
-
-  app.post("/api/creatives/brand-config", requireAuth, upload.single("logo"), async (req: Request, res: Response) => {
-    try {
-      if (!req.user!.isMaster) {
-        return res.status(403).json({ message: "Acesso negado: apenas administradores podem configurar a marca" });
-      }
-
-      const { systemPrompt = "" } = req.body;
-
-      let logoUrl: string | null = null;
-      let logoBase64: string | null = null;
-
-      if (req.file) {
-        const mime = req.file.mimetype || "image/png";
-        const b64 = req.file.buffer.toString("base64");
-        logoBase64 = b64;
-        logoUrl = `data:${mime};base64,${b64}`;
-      }
-
-      // Check if a row exists
-      const [existing] = await db.select({ id: creativeBrandConfig.id }).from(creativeBrandConfig).limit(1);
-
-      if (existing) {
-        const updateData: Record<string, any> = {
-          systemPrompt,
-          updatedAt: new Date(),
-          updatedBy: req.user!.id,
-        };
-        if (logoUrl !== null) {
-          updateData.logoUrl = logoUrl;
-          updateData.logoBase64 = logoBase64;
-        }
-        await db.update(creativeBrandConfig).set(updateData).where(eq(creativeBrandConfig.id, existing.id));
-      } else {
-        await db.insert(creativeBrandConfig).values({
-          systemPrompt,
-          logoUrl,
-          logoBase64,
-          updatedBy: req.user!.id,
-        });
-      }
-
-      return res.json({ success: true });
-    } catch (err) {
-      console.error("POST /api/creatives/brand-config error:", err);
-      return res.status(500).json({ message: "Erro ao salvar configuração de marca" });
-    }
-  });
-
-  app.delete("/api/creatives/brand-config/logo", requireAuth, async (req: Request, res: Response) => {
-    try {
-      if (!req.user!.isMaster) {
-        return res.status(403).json({ message: "Acesso negado" });
-      }
-      const [existing] = await db.select({ id: creativeBrandConfig.id }).from(creativeBrandConfig).limit(1);
-      if (existing) {
-        await db.update(creativeBrandConfig).set({ logoUrl: null, logoBase64: null, updatedAt: new Date(), updatedBy: req.user!.id }).where(eq(creativeBrandConfig.id, existing.id));
-      }
-      return res.json({ success: true });
-    } catch (err) {
-      console.error("DELETE /api/creatives/brand-config/logo error:", err);
-      return res.status(500).json({ message: "Erro ao remover logo" });
-    }
-  });
-
-  // ─── Save Generation ───────────────────────────────────────────────────────
-
-  app.post("/api/creatives/save-generation", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const { generationId, selectedImageUrl, name, packId } = req.body;
-      if (!generationId || !selectedImageUrl || !name || !packId) {
-        return res.status(400).json({ message: "Dados incompletos para salvar" });
-      }
-
-      // Verify generation belongs to this tenant
-      const [gen] = await db.select().from(creativeGenerations)
-        .where(and(eq(creativeGenerations.id, Number(generationId)), eq(creativeGenerations.tenantId, req.tenantId!)));
-      if (!gen) return res.status(404).json({ message: "Geração não encontrada" });
-
-      // Save to main creatives gallery
-      const [saved] = await db.insert(creatives).values({
-        tenantId: req.tenantId!,
-        packId: Number(packId),
-        title: name,
-        imageUrl: selectedImageUrl,
-        tipo: "personalizado",
-        ativo: true,
-        createdBy: req.user!.id,
-      }).returning();
-
-      // Mark generation as saved
-      await db.update(creativeGenerations).set({ selectedImageUrl, status: "saved" })
-        .where(eq(creativeGenerations.id, Number(generationId)));
-
-      return res.status(201).json(saved);
-    } catch (err) {
-      console.error("POST /api/creatives/save-generation error:", err);
-      return res.status(500).json({ message: "Erro ao salvar criativo" });
     }
   });
 

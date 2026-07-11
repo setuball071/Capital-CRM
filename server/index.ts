@@ -307,6 +307,31 @@ app.use((req, res, next) => {
           console.error("Lemit migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — Onboarding do Entrante (espelha migrations/onboarding-entrante.sql)
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            ALTER TABLE vendedores_academia
+              ADD COLUMN IF NOT EXISTS experiencia_declarada BOOLEAN,
+              ADD COLUMN IF NOT EXISTS bagagem_origem VARCHAR(255),
+              ADD COLUMN IF NOT EXISTS onboarding_etapa VARCHAR(30) NOT NULL DEFAULT 'entrada',
+              ADD COLUMN IF NOT EXISTS tour_concluido BOOLEAN NOT NULL DEFAULT FALSE,
+              ADD COLUMN IF NOT EXISTS produto_inicial VARCHAR(50) DEFAULT 'portabilidade',
+              ADD COLUMN IF NOT EXISTS baseline_nota DECIMAL(5,2),
+              ADD COLUMN IF NOT EXISTS baseline_nivel VARCHAR(30),
+              ADD COLUMN IF NOT EXISTS liberado_para_prospectar BOOLEAN NOT NULL DEFAULT FALSE,
+              ADD COLUMN IF NOT EXISTS liberado_em TIMESTAMP,
+              ADD COLUMN IF NOT EXISTS liberado_por INTEGER REFERENCES users(id)
+          `);
+          await migDb.execute(migSql`
+            ALTER TABLE quiz_tentativas ADD COLUMN IF NOT EXISTS origem VARCHAR(40)
+          `);
+          log("Onboarding migration OK");
+        } catch (migErr) {
+          console.error("Onboarding migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — Contratos (status configuráveis, fases, ADE refin)
         try {
           const { db: migDb } = await import("./storage");

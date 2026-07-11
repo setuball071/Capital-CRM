@@ -1243,6 +1243,17 @@ export const vendedoresAcademia = pgTable("vendedores_academia", {
   quizAprovadoEm: timestamp("quiz_aprovado_em"),
   totalSimulacoes: integer("total_simulacoes").notNull().default(0),
   notaMediaGlobal: decimal("nota_media_global", { precision: 4, scale: 2 }),
+  // ===== Onboarding do Entrante =====
+  experienciaDeclarada: boolean("experiencia_declarada"), // null = ainda não declarou
+  bagagemOrigem: varchar("bagagem_origem", { length: 255 }),
+  onboardingEtapa: varchar("onboarding_etapa", { length: 30 }).notNull().default("entrada"), // entrada | tour | teste | produto | aguardando_liberacao | liberado
+  tourConcluido: boolean("tour_concluido").notNull().default(false),
+  produtoInicial: varchar("produto_inicial", { length: 50 }).default("portabilidade"),
+  baselineNota: decimal("baseline_nota", { precision: 5, scale: 2 }), // % de acertos no teste de entrada
+  baselineNivel: varchar("baseline_nivel", { length: 30 }), // cru | tem_nocao | avancado
+  liberadoParaProspectar: boolean("liberado_para_prospectar").notNull().default(false),
+  liberadoEm: timestamp("liberado_em"),
+  liberadoPor: integer("liberado_por").references(() => users.id),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
   atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
 });
@@ -1257,6 +1268,7 @@ export const quizTentativas = pgTable("quiz_tentativas", {
   acertos: integer("acertos").notNull(),
   total: integer("total").notNull(),
   aprovado: boolean("aprovado").notNull(),
+  origem: varchar("origem", { length: 40 }), // null = quiz academia | onboarding_teste | onboarding_compreensao
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
 });
 
@@ -3695,44 +3707,6 @@ export const partners = pgTable("partners", {
 
 export type Partner = typeof partners.$inferSelect;
 
-
-// ===== CRIADOR DE CRIATIVOS =====
-
-export const creativeGenerations = pgTable("creative_generations", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
-  userId: integer("user_id").notNull().references(() => users.id),
-  promptUsed: text("prompt_used").notNull(),
-  formData: jsonb("form_data"),
-  imageUrls: text("image_urls").array(),
-  selectedImageUrl: text("selected_image_url"),
-  status: text("status").notNull().default("pending"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertCreativeGenerationSchema = createInsertSchema(creativeGenerations).omit({
-  id: true, createdAt: true, tenantId: true, userId: true,
-});
-export type CreativeGeneration = typeof creativeGenerations.$inferSelect;
-export type InsertCreativeGeneration = z.infer<typeof insertCreativeGenerationSchema>;
-
-export const creativeGenerationQuota = pgTable("creative_generation_quota", {
-  userId: integer("user_id").notNull().references(() => users.id),
-  date: text("date").notNull(),
-  count: integer("count").notNull().default(0),
-}, (t) => ({
-  pk: primaryKey({ columns: [t.userId, t.date] }),
-}));
-
-export const creativeBrandConfig = pgTable("creative_brand_config", {
-  id: serial("id").primaryKey(),
-  systemPrompt: text("system_prompt").notNull().default(""),
-  logoUrl: text("logo_url"),
-  logoBase64: text("logo_base64"),
-  updatedAt: timestamp("updated_at").defaultNow(),
-  updatedBy: integer("updated_by").references(() => users.id, { onDelete: "set null" }),
-});
-export type CreativeBrandConfig = typeof creativeBrandConfig.$inferSelect;
 
 // ===== CENTRAL DE ATUALIZAÇÕES =====
 

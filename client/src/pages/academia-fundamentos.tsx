@@ -271,7 +271,7 @@ export default function AcademiaFundamentos() {
                 <>
                   <h3 className="font-semibold text-lg">Pronto para o Quiz?</h3>
                   <p className="text-muted-foreground">
-                    Complete o quiz para liberar os módulos de IA (Roleplay e Abordagem)
+                    Complete o quiz para liberar o módulo de IA (Roleplay)
                   </p>
                 </>
               )}
@@ -279,13 +279,8 @@ export default function AcademiaFundamentos() {
             {quizAprovado ? (
               <div className="flex gap-2">
                 <Link href="/academia/roleplay">
-                  <Button variant="outline" data-testid="button-ir-roleplay">
+                  <Button data-testid="button-ir-roleplay">
                     Roleplay IA
-                  </Button>
-                </Link>
-                <Link href="/academia/abordagem">
-                  <Button data-testid="button-ir-abordagem">
-                    Abordagem IA
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
                 </Link>

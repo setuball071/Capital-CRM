@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import { CriativosGallery } from "@/components/criativos-gallery";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -197,15 +197,6 @@ export default function MaterialApoioPage() {
 
       {activeCategory === "criativos" ? (
         <div className="space-y-4">
-          {user?.isMaster && (
-            <div className="flex justify-end">
-              <Link to="/criador-criativos">
-                <Button variant="outline" size="sm" data-testid="button-criar-criativo">
-                  Criar novo criativo
-                </Button>
-              </Link>
-            </div>
-          )}
           <CriativosGallery />
         </div>
       ) : isLoading ? (

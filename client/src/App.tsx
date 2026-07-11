@@ -36,8 +36,9 @@ import ConfigPrecosPage from "@/pages/config-precos";
 import AcademiaFundamentosPage from "@/pages/academia-fundamentos";
 import AcademiaQuizPage from "@/pages/academia-quiz";
 import AcademiaRoleplayPage from "@/pages/academia-roleplay";
-import AcademiaAbordagemPage from "@/pages/academia-abordagem";
 import AcademiaAdminPage from "@/pages/academia-admin";
+import OnboardingEntrantePage from "@/pages/onboarding-entrante";
+import OnboardingEntrantesGestaoPage from "@/pages/onboarding-entrantes-gestao";
 import DesenvolvimentoProfilerPage from "@/pages/desenvolvimento-profiler";
 import DesenvolvimentoProfilerGestaoPage from "@/pages/desenvolvimento-profiler-gestao";
 import DesenvolvimentoFeedbacksPage from "@/pages/desenvolvimento-feedbacks";
@@ -73,7 +74,6 @@ import GestaoComercialHistoricoPage from "@/pages/gestao-comercial-historico";
 import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
 import MaterialApoioPage from "@/pages/material-apoio";
 import { MaterialApoioModal } from "@/components/material-apoio-modal";
-import CriadorCriativosPage from "@/pages/criador-criativos";
 import FinanceiroComissoesPage from "@/pages/financeiro-comissoes";
 import ContratosListaPage from "@/pages/contratos-lista";
 import ContratosPropostaPage from "@/pages/contratos-proposta";
@@ -459,20 +459,20 @@ function Router() {
               <Route path="/academia/roleplay">
                 {() => <ModuleRoute component={AcademiaRoleplayPage} module="modulo_academia" />}
               </Route>
-              <Route path="/academia/abordagem">
-                {() => <ModuleRoute component={AcademiaAbordagemPage} module="modulo_academia" />}
-              </Route>
               <Route path="/academia/admin">
                 {() => <ModuleRoute component={AcademiaAdminPage} module="modulo_academia" accessType="edit" />}
+              </Route>
+              <Route path="/onboarding">
+                {() => <ModuleRoute component={OnboardingEntrantePage} module="modulo_academia" />}
+              </Route>
+              <Route path="/onboarding/entrantes">
+                {() => <RoleRoute component={OnboardingEntrantesGestaoPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/desenvolvimento/fundamentos">
                 {() => <ModuleRoute component={AcademiaFundamentosPage} module="modulo_academia" />}
               </Route>
               <Route path="/desenvolvimento/roleplay">
                 {() => <ModuleRoute component={AcademiaRoleplayPage} module="modulo_academia" />}
-              </Route>
-              <Route path="/desenvolvimento/abordagem">
-                {() => <ModuleRoute component={AcademiaAbordagemPage} module="modulo_academia" />}
               </Route>
               <Route path="/desenvolvimento/feedbacks">
                 {() => <ModuleRoute component={DesenvolvimentoFeedbacksPage} module="modulo_academia" />}
@@ -588,9 +588,6 @@ function Router() {
               </Route>
               <Route path="/material-apoio">
                 {() => <ProtectedRoute component={MaterialApoioPage} />}
-              </Route>
-              <Route path="/criador-criativos">
-                {() => <MasterOnlyRoute component={CriadorCriativosPage} />}
               </Route>
               <Route path="/admin/atualizacoes">
                 {() => <MasterOnlyRoute component={SystemUpdatesPage} />}

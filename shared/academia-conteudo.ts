@@ -805,3 +805,225 @@ export function getLicoesByNivel(nivelId: number): Licao[] {
   const nivel = getNivelById(nivelId);
   return nivel?.licoes || [];
 }
+
+// =============================================================================
+// ONBOARDING DO ENTRANTE
+// Conteúdo estático da jornada de entrada (tour, material conceitual, produto,
+// exemplos). RASCUNHO INICIAL — editável conforme a operação evoluir.
+// Meta-norte do entrante: 100 primeiras abordagens de WhatsApp por dia.
+// =============================================================================
+
+export const ONBOARDING_META_NORTE = {
+  titulo: "Meta: 100 abordagens por dia",
+  descricao:
+    "Prospectar = fazer o primeiro contato pelo WhatsApp. Sua meta ao ser liberado é iniciar 100 conversas novas por dia. Volume + consistência é o que constrói resultado.",
+};
+
+// ===== BLOCO 1 — Tour guiado do sistema (igual para todos) =====
+
+export interface OnboardingTourPasso {
+  id: string;
+  titulo: string;
+  resumo: string;
+  conteudo: string; // markdown
+}
+
+export const ONBOARDING_TOUR_PASSOS: OnboardingTourPasso[] = [
+  {
+    id: "tour.1",
+    titulo: "Disparar no WhatsApp",
+    resumo: "Onde você inicia as conversas com os clientes — o coração da prospecção",
+    conteudo: `## Disparar no WhatsApp
+
+É aqui que a prospecção acontece: **cada primeira mensagem enviada conta 1 para a sua meta de 100/dia**.
+
+### Onde fica
+- **Vendas → Atendimento**: sua central de conversas do WhatsApp.
+- **Vendas → Campanhas**: envio da abordagem inicial em escala para uma lista de clientes.
+
+### Como funciona no dia a dia
+1. Você recebe/acessa a lista de clientes do dia.
+2. Usa o modelo de abordagem aprovado (você vai treinar ele no Bloco 3).
+3. Dispara a primeira mensagem — personalizada com o nome do cliente.
+4. Acompanha as respostas na tela de Atendimento e responde rápido.
+
+### Regras de ouro
+- **Nunca copie e cole robótico**: use o nome do cliente e o modelo aprovado.
+- **Responda rápido** quem responder — cliente que respondeu é prioridade.
+- **Não invente promessas**: use só o que está nos materiais aprovados.`,
+  },
+  {
+    id: "tour.2",
+    titulo: "Funil / Pipeline",
+    resumo: "Onde você organiza quem respondeu — registrar, etiquetar e mover",
+    conteudo: `## Funil / Pipeline
+
+Quando um cliente responde, a conversa vira um **lead no funil** — e sua obrigação é manter esse funil organizado.
+
+### Onde fica
+- **Vendas → Pipeline**: o kanban com as etapas do lead (novo → em conversa → simulação → fechamento).
+- **Vendas → Etiquetas**: etiquetas para classificar a situação de cada cliente.
+
+### Como funciona no dia a dia
+1. Cliente respondeu? **Registre o atendimento** — nada fica só na sua cabeça.
+2. **Aplique a etiqueta** certa (ex.: interessado, pediu simulação, sem interesse).
+3. **Mova o card** para a etapa correta do funil.
+4. Agende retorno quando o cliente pedir para falar depois (Vendas → Agenda).
+
+### Por que isso importa
+- O que não está registrado **não existe** para a gestão — e você perde o cliente.
+- Funil organizado = você sabe exatamente quem cobrar amanhã.`,
+  },
+  {
+    id: "tour.3",
+    titulo: "Painel / Meta do dia",
+    resumo: "Onde você acompanha seu número — abordagens feitas vs a meta de 100",
+    conteudo: `## Painel / Meta do dia
+
+O painel é o seu **placar**: mostra quanto você já produziu hoje e quanto falta.
+
+### Onde fica
+- **Dashboard do Vendedor**: sua produção do dia/mês, meta diária e evolução.
+
+### Como funciona no dia a dia
+1. Comece o dia olhando o painel: qual é a meta e onde você está.
+2. Ao longo do dia, acompanhe: **quantas abordagens você já fez das 100?**
+3. Fim do dia: bateu? Se não, o que travou? (isso vira conversa com seu gestor)
+
+### Regras de ouro
+- Meta é diária: **o dia que passou não volta**. 100 hoje, 100 amanhã.
+- Não espere o gestor cobrar: **o placar é seu**, olhe você primeiro.`,
+  },
+];
+
+// ===== BLOCO 2 — Material conceitual (apenas para quem NÃO tem experiência) =====
+
+export const ONBOARDING_MATERIAL_CONCEITUAL: Licao[] = [
+  {
+    id: "onb.c1",
+    titulo: "O que é o crédito consignado",
+    resumo: "O produto que você vai trabalhar — e por que ele é bom para o cliente",
+    conteudo: `## O que é o crédito consignado
+
+O consignado é um empréstimo em que a parcela é **descontada direto da folha de pagamento ou do benefício** do cliente.
+
+### Por que isso muda tudo
+- O banco tem **garantia de recebimento** (desconto automático) → risco menor.
+- Risco menor = **taxa de juros bem mais baixa** que empréstimo pessoal ou cartão.
+- Para o cliente, é a forma mais barata de crédito que ele consegue acessar.
+
+### O ponto ético (grave isso)
+Você não está "empurrando dívida". Bem usado, o consignado **substitui dívidas caras por uma dívida barata** e cabe no orçamento porque respeita a margem. Seu papel é consultivo: entender a situação e oferecer o que melhora a vida do cliente.`,
+    atividadePratica:
+      "Explique com suas palavras, em 2-3 frases, por que a taxa do consignado é menor que a do cartão de crédito.",
+  },
+  {
+    id: "onb.c2",
+    titulo: "Quem é o seu cliente",
+    resumo: "Aposentados INSS, servidores e militares — quem são e o que sentem",
+    conteudo: `## Quem é o seu cliente
+
+### Os três públicos do consignado
+- **Aposentados e pensionistas do INSS** — em geral 55+, muitos com renda apertada, cuidado redobrado com golpes.
+- **Servidores públicos** (municipais, estaduais, federais) — estabilidade, margem melhor, comparam propostas.
+- **Militares** (ativos e da reserva) — perfil direto, valorizam objetividade e transparência.
+
+### As dores mais comuns
+- Parcela alta comprometendo o orçamento do mês.
+- Várias dívidas espalhadas (cartão, cheque especial) muito mais caras.
+- **Medo de golpe** — esse público é alvo constante. Por isso a sua abordagem precisa ser clara, identificada e sem pressão.
+
+### Como isso muda sua conversa
+- Fale simples, sem juridiquês.
+- Identifique-se sempre (nome + empresa).
+- Nunca prometa o que não está na simulação.`,
+    atividadePratica:
+      "Liste 2 motivos pelos quais um aposentado pode desconfiar de uma mensagem de WhatsApp — e o que você faria para passar confiança.",
+  },
+];
+
+// ===== BLOCO 3 — Produto inicial: PORTABILIDADE =====
+
+export const ONBOARDING_PRODUTO_BRIEFING = {
+  produto: "portabilidade",
+  titulo: "Seu produto inicial: Portabilidade de Consignado",
+  conteudo: `## Portabilidade de Consignado
+
+Você vai começar prospectando **portabilidade**: trazer o contrato de consignado que o cliente **já tem** em outro banco para um parceiro nosso com **taxa menor**.
+
+### O que o cliente ganha
+- **Parcela menor** pagando o mesmo contrato — ou
+- **Sobra de margem** para usar se precisar —
+- E tudo isso **sem pegar dinheiro novo**, sem se endividar mais.
+
+### O gancho da abordagem
+> "Consegui uma condição que **reduz o valor da sua parcela** / **libera margem**, sem você pegar dinheiro novo."
+
+### Quem é o alvo
+Aposentados/pensionistas INSS, servidores e militares **que já têm consignado ativo** — se já paga parcela, dá para tentar melhorar.
+
+### O processo (visão geral)
+1. Primeiro contato no WhatsApp (sua meta de 100/dia é isso).
+2. Cliente respondeu → levantar os dados do contrato atual.
+3. Simulação: comparar parcela atual vs nova.
+4. Fechamento e digitação — com apoio do seu gestor no começo.`,
+};
+
+export interface OnboardingExemplo {
+  id: string;
+  titulo: string;
+  tipo: "bom" | "ruim";
+  mensagem: string;
+  analise: string; // por que funciona / por que não funciona
+  apenasIniciante?: boolean; // exemplos extras para quem não tem experiência
+}
+
+export const ONBOARDING_EXEMPLOS_PORTABILIDADE: OnboardingExemplo[] = [
+  {
+    id: "ex.1",
+    titulo: "Exemplo 1 — Abertura recomendada",
+    tipo: "bom",
+    mensagem:
+      "Bom dia, Sr. João! Aqui é a Ana, da Capital. Vi que o senhor tem um empréstimo consignado ativo — consegui uma condição que pode REDUZIR o valor da sua parcela, sem pegar dinheiro novo. Posso te mostrar a comparação?",
+    analise:
+      "Curta, identificada (nome + empresa), usa o nome do cliente, benefício concreto (reduzir parcela), deixa claro que não é dívida nova e termina com pergunta simples de responder.",
+  },
+  {
+    id: "ex.2",
+    titulo: "Exemplo 2 — Abertura com sobra de margem",
+    tipo: "bom",
+    mensagem:
+      "Boa tarde, Dona Maria! Sou o Carlos, da Capital. A senhora sabia que dá pra trocar o banco do seu consignado e pagar MENOS na parcela? É um direito seu, sem custo pra trocar. Quer que eu simule pra senhora ver a diferença?",
+    analise:
+      "Educa o cliente (portabilidade é um direito), remove a barreira do custo, e o convite é para VER a diferença — compromisso baixo, fácil dizer sim.",
+  },
+  {
+    id: "ex.3",
+    titulo: "Exemplo 3 — Como NÃO abordar",
+    tipo: "ruim",
+    mensagem:
+      "ATENÇÃO!!! 🚨🚨 DINHEIRO LIBERADO NO SEU CPF!!! Empréstimo APROVADO com a MENOR TAXA DO BRASIL, só HOJE!!! Chama agora antes que expire!!! 💰💰💰",
+    analise:
+      "Textão gritado, promessa vaga e exagerada, urgência falsa, sem identificação — é exatamente a cara das mensagens de golpe que esse público já aprendeu a temer. Gera bloqueio e denúncia, não resposta.",
+  },
+  {
+    id: "ex.4",
+    titulo: "Exemplo 4 — Respondendo 'quem é você?'",
+    tipo: "bom",
+    mensagem:
+      "Claro! Me apresento de novo: sou a Ana, consultora da Capital, trabalhamos com crédito consignado. Seu contato veio da nossa base de clientes com consignado ativo. Fico feliz em explicar tudo com calma — e se preferir, posso até ligar. Sem compromisso nenhum.",
+    analise:
+      "Reage à desconfiança com calma e transparência: repete identificação, explica a origem do contato e devolve o controle ao cliente (ligação, sem compromisso). Desconfiança tratada com paciência vira confiança.",
+    apenasIniciante: true,
+  },
+  {
+    id: "ex.5",
+    titulo: "Exemplo 5 — Respondendo 'não tenho interesse'",
+    tipo: "bom",
+    mensagem:
+      "Sem problema, Sr. João! Agradeço a atenção. Se em algum momento quiser ver quanto daria pra economizar na parcela, é só me chamar aqui. Tenha um ótimo dia! 🙏",
+    analise:
+      "Respeita o não, agradece e deixa a porta aberta com um benefício específico (economizar na parcela). Sem insistência — e o registro no sistema garante que esse cliente pode ser retomado no futuro.",
+    apenasIniciante: true,
+  },
+];
