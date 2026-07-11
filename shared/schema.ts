@@ -1243,6 +1243,17 @@ export const vendedoresAcademia = pgTable("vendedores_academia", {
   quizAprovadoEm: timestamp("quiz_aprovado_em"),
   totalSimulacoes: integer("total_simulacoes").notNull().default(0),
   notaMediaGlobal: decimal("nota_media_global", { precision: 4, scale: 2 }),
+  // ===== Onboarding do Entrante =====
+  experienciaDeclarada: boolean("experiencia_declarada"), // null = ainda não declarou
+  bagagemOrigem: varchar("bagagem_origem", { length: 255 }),
+  onboardingEtapa: varchar("onboarding_etapa", { length: 30 }).notNull().default("entrada"), // entrada | tour | teste | produto | aguardando_liberacao | liberado
+  tourConcluido: boolean("tour_concluido").notNull().default(false),
+  produtoInicial: varchar("produto_inicial", { length: 50 }).default("portabilidade"),
+  baselineNota: decimal("baseline_nota", { precision: 5, scale: 2 }), // % de acertos no teste de entrada
+  baselineNivel: varchar("baseline_nivel", { length: 30 }), // cru | tem_nocao | avancado
+  liberadoParaProspectar: boolean("liberado_para_prospectar").notNull().default(false),
+  liberadoEm: timestamp("liberado_em"),
+  liberadoPor: integer("liberado_por").references(() => users.id),
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
   atualizadoEm: timestamp("atualizado_em").notNull().defaultNow(),
 });
@@ -1257,6 +1268,7 @@ export const quizTentativas = pgTable("quiz_tentativas", {
   acertos: integer("acertos").notNull(),
   total: integer("total").notNull(),
   aprovado: boolean("aprovado").notNull(),
+  origem: varchar("origem", { length: 40 }), // null = quiz academia | onboarding_teste | onboarding_compreensao
   criadoEm: timestamp("criado_em").notNull().defaultNow(),
 });
 
