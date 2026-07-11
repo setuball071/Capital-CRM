@@ -1681,6 +1681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         slogan: (tenant as any).slogan,
         fontFamily: (tenant as any).fontFamily,
         theme: tenant.themeJson,
+        interno: (tenant as any).interno === true,
       });
     } catch (error) {
       console.error("Get tenant error:", error);
@@ -3345,26 +3346,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let users: User[];
         const currentUserRole = req.user!.role as UserRole;
         const { sem_vinculo } = req.query;
+        const isMasterUser = req.user!.isMaster === true;
 
-        if (currentUserRole === "master" || currentUserRole === "atendimento") {
-          // Master and atendimento see all users
+        if (isMasterUser) {
+          // Dono do SaaS: vê usuários de TODOS os ambientes
           users = await storage.getAllUsers();
-        } else if (currentUserRole === "coordenacao") {
-          // Coordenacao sees only themselves + their vendedores
-          const teamUsers = await storage.getUsersByManager(req.user!.id);
-          users = [req.user!, ...teamUsers];
         } else {
-          // Users with modulo_config_usuarios permission can see all non-master users
-          const hasConfigEditAccess = await storage.hasModuleEditAccess(
-            req.user!.id,
-            "modulo_config_usuarios",
+          // Não-dono: escopo restrito ao ambiente atual
+          const tenantId = (req as any).tenantId;
+          if (!tenantId) {
+            return res
+              .status(403)
+              .json({ message: "Acesso negado - ambiente não identificado" });
+          }
+          const scoped = await db.execute(sql`
+            SELECT ut.user_id FROM user_tenants ut WHERE ut.tenant_id = ${tenantId}
+          `);
+          const scopedIds = new Set(
+            (scoped.rows as any[]).map((r) => Number(r.user_id)),
           );
-          if (hasConfigEditAccess) {
-            const allUsers = await storage.getAllUsers();
-            // Filter out master users - non-master managers cannot see/manage masters
-            users = allUsers.filter((u) => u.role !== "master");
+          const allUsers = await storage.getAllUsers();
+          users = allUsers.filter((u) => scopedIds.has(u.id));
+
+          if (currentUserRole === "master" || currentUserRole === "atendimento") {
+            // Admin do cliente e atendimento veem todos do ambiente
+          } else if (currentUserRole === "coordenacao") {
+            // Coordenacao vê só a si + seus vendedores
+            users = users.filter(
+              (u) => u.id === req.user!.id || u.managerId === req.user!.id,
+            );
           } else {
-            return res.status(403).json({ message: "Acesso negado" });
+            // Users with modulo_config_usuarios permission can see all non-master users
+            const hasConfigEditAccess = await storage.hasModuleEditAccess(
+              req.user!.id,
+              "modulo_config_usuarios",
+            );
+            if (hasConfigEditAccess) {
+              users = users.filter((u) => u.role !== "master");
+            } else {
+              return res.status(403).json({ message: "Acesso negado" });
+            }
           }
         }
 
@@ -3373,9 +3394,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           users = users.filter((u) => !u.employeeId || u.employeeId === 0);
         }
 
+        // Dono: anexa a lista de ambientes de cada usuário (coluna/filtro na tela)
+        let ambientesByUser: Record<number, string[]> = {};
+        if (isMasterUser) {
+          const rows = await db.execute(sql`
+            SELECT ut.user_id, t.name
+            FROM user_tenants ut
+            JOIN tenants t ON t.id = ut.tenant_id
+            ORDER BY t.name
+          `);
+          for (const r of rows.rows as any[]) {
+            (ambientesByUser[Number(r.user_id)] ||= []).push(r.name);
+          }
+        }
+
         // Remove password hashes
         const usersWithoutPasswords = users.map(
-          ({ passwordHash: _, ...user }) => user,
+          ({ passwordHash: _, ...user }) => ({
+            ...user,
+            ...(isMasterUser
+              ? { ambientes: ambientesByUser[user.id] || [] }
+              : {}),
+          }),
         );
         return res.json(usersWithoutPasswords);
       } catch (error) {

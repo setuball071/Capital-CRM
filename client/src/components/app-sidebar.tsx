@@ -119,6 +119,7 @@ interface MenuSection {
     roleOnly?: string;
     rolesAllowed?: string[];
     tenantFeature?: string;
+    clienteAdminOnly?: boolean;
   }[];
 }
 
@@ -197,7 +198,14 @@ export function AppSidebar() {
     solicitar_boleto: !!tenant,
   };
 
-  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; rolesAllowed?: string[]; tenantFeature?: string }): boolean => {
+  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; rolesAllowed?: string[]; tenantFeature?: string; clienteAdminOnly?: boolean }): boolean => {
+    // Só o admin do CLIENTE (role master, sem isMaster) em ambiente pagante (não-interno).
+    // Some para o dono do SaaS, para ambientes internos e para os demais papéis.
+    if (item.clienteAdminOnly) {
+      const isDonoSaas = (user as any)?.isMaster === true;
+      const ambienteInterno = (tenant as any)?.interno === true;
+      if (isDonoSaas || ambienteInterno || userRole !== "master") return false;
+    }
     // Master sempre vê tudo, inclusive itens com tenantFeature
     if (item.tenantFeature && !isMaster && !tenantFeatureFlags[item.tenantFeature]) return false;
     if (item.masterOnly && !isMaster) return false;
@@ -293,7 +301,7 @@ export function AppSidebar() {
       icon: Settings,
       items: [
         { title: "Assinaturas", url: "/admin/assinaturas", icon: CreditCard, masterOnly: true },
-        { title: "Minha Assinatura", url: "/assinatura", icon: CreditCard, rolesAllowed: ["coordenacao", "vendedor", "financeiro"] },
+        { title: "Minha Assinatura", url: "/assinatura", icon: CreditCard, clienteAdminOnly: true },
         { title: "Admin Pedidos", url: "/admin-pedidos-lista", icon: ShieldCheck, masterOnly: true },
         { title: "Ambientes", url: "/admin/tenants", icon: Building2, module: "modulo_config_usuarios", subItem: "ambientes" },
         { title: "Identidade Visual", url: "/admin/branding", icon: Palette, masterOnly: true },

@@ -77,6 +77,8 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "ativos" | "inativos">("todos");
+  const [ambienteFilter, setAmbienteFilter] = useState<string>("todos");
   const [selectedUserIds, setSelectedUserIds] = useState<Set<number>>(new Set());
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   
@@ -102,6 +104,8 @@ export default function UsersPage() {
 
   const currentUserRole = currentUser?.role as UserRole;
   const isMaster = currentUserRole === "master";
+  // Dono do SaaS (isMaster flag): visão cross-ambiente com coluna/filtro Ambiente
+  const isDono = (currentUser as any)?.isMaster === true;
   const isAtendimento = currentUserRole === "atendimento";
   const isCoordenacao = currentUserRole === "coordenacao";
   
@@ -640,8 +644,23 @@ export default function UsersPage() {
     copyToClipboard(text, "Credenciais");
   };
 
-  // Filter users based on search term
+  // Ambientes disponíveis para o filtro (união dos ambientes dos usuários listados)
+  const ambientesDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    for (const u of users) {
+      for (const a of ((u as any).ambientes || []) as string[]) set.add(a);
+    }
+    return Array.from(set).sort();
+  }, [users]);
+
+  // Filter users based on search term + status + ambiente
   const filteredUsers = users.filter((user) => {
+    if (statusFilter === "ativos" && !user.isActive) return false;
+    if (statusFilter === "inativos" && user.isActive) return false;
+    if (ambienteFilter !== "todos") {
+      const ambientes = ((user as any).ambientes || []) as string[];
+      if (!ambientes.includes(ambienteFilter)) return false;
+    }
     if (!searchTerm.trim()) return true;
     const search = searchTerm.toLowerCase();
     return (
@@ -1033,15 +1052,40 @@ export default function UsersPage() {
                   : `${filteredUsers.length} de ${users.length} usuário${users.length !== 1 ? "s" : ""}`}
               </CardDescription>
             </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Pesquisar por nome, login ou função..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-                data-testid="input-search-users"
-              />
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                <SelectTrigger className="w-full sm:w-32" data-testid="select-filter-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="ativos">Ativos</SelectItem>
+                  <SelectItem value="inativos">Inativos</SelectItem>
+                </SelectContent>
+              </Select>
+              {isDono && ambientesDisponiveis.length > 0 && (
+                <Select value={ambienteFilter} onValueChange={setAmbienteFilter}>
+                  <SelectTrigger className="w-full sm:w-44" data-testid="select-filter-ambiente">
+                    <SelectValue placeholder="Ambiente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos ambientes</SelectItem>
+                    {ambientesDisponiveis.map((a) => (
+                      <SelectItem key={a} value={a}>{a}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Pesquisar por nome, login ou função..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                  data-testid="input-search-users"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -1083,6 +1127,7 @@ export default function UsersPage() {
                 <TableHead>Nome</TableHead>
                 <TableHead>Login</TableHead>
                 <TableHead>Função</TableHead>
+                {isDono && <TableHead>Ambiente</TableHead>}
                 {canManageAllUsers && <TableHead>Coordenador</TableHead>}
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right min-w-[280px]">Ações</TableHead>
@@ -1127,6 +1172,17 @@ export default function UsersPage() {
                         )}
                       </div>
                     </TableCell>
+                    {isDono && (
+                      <TableCell data-testid={`user-ambiente-${user.id}`}>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {(((user as any).ambientes || []) as string[]).length > 0
+                            ? (((user as any).ambientes || []) as string[]).map((a) => (
+                                <Badge key={a} variant="outline" className="text-xs">{a}</Badge>
+                              ))
+                            : "-"}
+                        </div>
+                      </TableCell>
+                    )}
                     {canManageAllUsers && (
                       <TableCell data-testid={`user-manager-${user.id}`}>
                         {manager ? manager.name : "-"}

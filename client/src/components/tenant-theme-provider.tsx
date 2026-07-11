@@ -33,6 +33,7 @@ interface TenantBranding {
   slogan: string | null;
   fontFamily: string | null;
   theme: TenantTheme | null;
+  interno: boolean;
 }
 
 interface TenantApiResponse {
@@ -46,6 +47,7 @@ interface TenantApiResponse {
   slogan?: string | null;
   fontFamily?: string | null;
   theme?: TenantTheme | null;
+  interno?: boolean;
   tenant?: null;
   development?: boolean;
   message?: string;
@@ -235,6 +237,7 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
     slogan: rawData.slogan || null,
     fontFamily: rawData.fontFamily || null,
     theme: rawData.theme || null,
+    interno: rawData.interno === true,
   } : null;
   
   const logoUrl = tenant?.logoUrl || "/branding/logo.png";
