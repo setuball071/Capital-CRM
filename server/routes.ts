@@ -19984,6 +19984,189 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
   // ===== TENANT MANAGEMENT ROUTES (Master Only) =====
 
+  // ===== ADMIN SAAS — PLANOS & MÓDULOS (Fase 1) =====
+
+  // GET /api/admin/planos - Lista planos com seus módulos (dono do SaaS)
+  app.get("/api/admin/planos", requireAuth, requireMaster, async (_req, res) => {
+    try {
+      const planosResult = await db.execute(
+        sql`SELECT * FROM planos ORDER BY preco_mensal ASC, id ASC`,
+      );
+      const modsResult = await db.execute(
+        sql`SELECT plano_id, modulo_key FROM plano_modulos`,
+      );
+      const modulosPorPlano: Record<number, string[]> = {};
+      for (const m of modsResult.rows as any[]) {
+        (modulosPorPlano[m.plano_id] ||= []).push(m.modulo_key);
+      }
+      return res.json(
+        (planosResult.rows as any[]).map((p) => ({
+          ...p,
+          modulos: modulosPorPlano[p.id] || [],
+        })),
+      );
+    } catch (error) {
+      console.error("List planos error:", error);
+      return res.status(500).json({ message: "Erro ao listar planos" });
+    }
+  });
+
+  // POST /api/admin/planos - Cria plano { nome, descricao, precoMensal, modulos[] }
+  app.post("/api/admin/planos", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { MODULO_KEYS } = await import("@shared/modulos");
+      const { nome, descricao, precoMensal, modulos } = req.body;
+      if (!nome || typeof nome !== "string") {
+        return res.status(400).json({ message: "Nome do plano é obrigatório" });
+      }
+      const mods: string[] = Array.isArray(modulos) ? modulos : [];
+      const invalid = mods.filter((k) => !(MODULO_KEYS as string[]).includes(k));
+      if (invalid.length > 0) {
+        return res.status(400).json({ message: `Módulos inválidos: ${invalid.join(", ")}` });
+      }
+      const inserted = await db.execute(sql`
+        INSERT INTO planos (nome, descricao, preco_mensal)
+        VALUES (${nome}, ${descricao || null}, ${Number(precoMensal) || 0})
+        RETURNING *
+      `);
+      const plano = inserted.rows[0] as any;
+      for (const key of mods) {
+        await db.execute(sql`
+          INSERT INTO plano_modulos (plano_id, modulo_key) VALUES (${plano.id}, ${key})
+          ON CONFLICT DO NOTHING
+        `);
+      }
+      return res.status(201).json({ ...plano, modulos: mods });
+    } catch (error) {
+      console.error("Create plano error:", error);
+      return res.status(500).json({ message: "Erro ao criar plano" });
+    }
+  });
+
+  // PUT /api/admin/planos/:id - Atualiza plano e substitui a lista de módulos
+  app.put("/api/admin/planos/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { MODULO_KEYS } = await import("@shared/modulos");
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+      const { nome, descricao, precoMensal, ativo, modulos } = req.body;
+      const existing = await db.execute(sql`SELECT id FROM planos WHERE id = ${id}`);
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ message: "Plano não encontrado" });
+      }
+      const mods: string[] | null = Array.isArray(modulos) ? modulos : null;
+      if (mods) {
+        const invalid = mods.filter((k) => !(MODULO_KEYS as string[]).includes(k));
+        if (invalid.length > 0) {
+          return res.status(400).json({ message: `Módulos inválidos: ${invalid.join(", ")}` });
+        }
+      }
+      await db.execute(sql`
+        UPDATE planos SET
+          nome = COALESCE(${nome ?? null}, nome),
+          descricao = COALESCE(${descricao ?? null}, descricao),
+          preco_mensal = COALESCE(${precoMensal != null ? Number(precoMensal) : null}, preco_mensal),
+          ativo = COALESCE(${typeof ativo === "boolean" ? ativo : null}, ativo)
+        WHERE id = ${id}
+      `);
+      if (mods) {
+        await db.execute(sql`DELETE FROM plano_modulos WHERE plano_id = ${id}`);
+        for (const key of mods) {
+          await db.execute(sql`
+            INSERT INTO plano_modulos (plano_id, modulo_key) VALUES (${id}, ${key})
+            ON CONFLICT DO NOTHING
+          `);
+        }
+      }
+      const updated = await db.execute(sql`SELECT * FROM planos WHERE id = ${id}`);
+      const modsNow = await db.execute(
+        sql`SELECT modulo_key FROM plano_modulos WHERE plano_id = ${id}`,
+      );
+      return res.json({
+        ...(updated.rows[0] as any),
+        modulos: (modsNow.rows as any[]).map((m) => m.modulo_key),
+      });
+    } catch (error) {
+      console.error("Update plano error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar plano" });
+    }
+  });
+
+  // DELETE /api/admin/planos/:id - Remove plano (plano_modulos cai por cascade)
+  app.delete("/api/admin/planos/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+      await db.execute(sql`DELETE FROM planos WHERE id = ${id}`);
+      return res.json({ message: "Plano removido" });
+    } catch (error) {
+      console.error("Delete plano error:", error);
+      return res.status(500).json({ message: "Erro ao remover plano" });
+    }
+  });
+
+  // GET /api/tenant/modulos - Módulos ativos do ambiente atual (para o front esconder o que não foi contratado)
+  // Retrocompatibilidade: tenant sem NENHUMA linha em tenant_modulos = todos os módulos ativos.
+  app.get("/api/tenant/modulos", requireAuth, async (req: any, res) => {
+    try {
+      const { MODULO_KEYS } = await import("@shared/modulos");
+      const tenantId = req.tenantId;
+      if (!tenantId) return res.json({ modulos: MODULO_KEYS });
+      const result = await db.execute(
+        sql`SELECT modulo_key, ativo FROM tenant_modulos WHERE tenant_id = ${tenantId}`,
+      );
+      if (result.rows.length === 0) {
+        return res.json({ modulos: MODULO_KEYS });
+      }
+      const ativos = (result.rows as any[])
+        .filter((r) => r.ativo)
+        .map((r) => r.modulo_key);
+      return res.json({ modulos: ativos });
+    } catch (error) {
+      console.error("Get tenant modulos error:", error);
+      return res.status(500).json({ message: "Erro ao buscar módulos" });
+    }
+  });
+
+  // ===== WEBHOOK ASAAS (Fase 1c — handlers de liberação entram nas Fases 3/4) =====
+  // Validação por token próprio: configurar o mesmo valor no painel do Asaas (header asaas-access-token).
+  app.post("/api/webhooks/asaas", async (req, res) => {
+    try {
+      const expected = process.env.ASAAS_WEBHOOK_TOKEN;
+      const received = req.headers["asaas-access-token"];
+      if (!expected || received !== expected) {
+        return res.status(401).json({ message: "Token inválido" });
+      }
+      const event = req.body?.event as string | undefined;
+      const payment = req.body?.payment;
+      if (!event || !payment?.id) {
+        return res.status(200).json({ received: true });
+      }
+      let novoStatus: string | null = null;
+      if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
+        novoStatus = "pago";
+      } else if (event === "PAYMENT_OVERDUE") {
+        novoStatus = "vencido";
+      } else if (event === "PAYMENT_DELETED" || event === "PAYMENT_REFUNDED") {
+        novoStatus = "cancelado";
+      }
+      if (novoStatus) {
+        await db.execute(sql`
+          UPDATE cobrancas SET
+            status = ${novoStatus},
+            pago_em = ${novoStatus === "pago" ? sql`NOW()` : sql`pago_em`}
+          WHERE asaas_id = ${payment.id}
+        `);
+        console.log(`[ASAAS-WEBHOOK] ${event} → cobranca ${payment.id} = ${novoStatus}`);
+      }
+      return res.status(200).json({ received: true });
+    } catch (error) {
+      console.error("Asaas webhook error:", error);
+      // 200 mesmo em erro interno para o Asaas não desativar o webhook por falhas repetidas
+      return res.status(200).json({ received: true });
+    }
+  });
+
   // GET /api/admin/tenants - List all tenants
   app.get(
     "/api/admin/tenants",
@@ -20056,7 +20239,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const id = parseInt(req.params.id);
         const userId = req.user?.id;
         const ipAddress = req.ip || req.connection?.remoteAddress;
-        const { name, logoUrl, faviconUrl, themeJson, isActive } = req.body;
+        const { name, logoUrl, faviconUrl, themeJson, isActive, interno } = req.body;
 
         // Fetch current tenant for audit
         const [currentTenant] = await db
@@ -20092,6 +20275,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             faviconUrl,
             themeJson: mergedAdminThemeJson,
             isActive,
+            ...(typeof interno === "boolean" ? { interno } : {}),
             updatedAt: new Date(),
           })
           .where(eq(tenants.id, id))

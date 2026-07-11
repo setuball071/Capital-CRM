@@ -33,6 +33,8 @@ export const tenants = pgTable("tenants", {
   slogan: varchar("slogan", { length: 255 }), // Slogan/subtítulo exibido no login
   fontFamily: varchar("font_family", { length: 100 }).default("Inter"), // Fonte base
   themeJson: jsonb("theme_json"), // { primaryColor, secondaryColor, loginBgColor, etc }
+  interno: boolean("interno").notNull().default(false), // Ambiente interno do dono do SaaS (não paga assinatura)
+  asaasCustomerId: text("asaas_customer_id"), // Customer no gateway Asaas (só ambientes clientes)
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(), // Rastrear última modificação de branding

@@ -689,6 +689,65 @@ app.use((req, res, next) => {
           log(`⚠ Migração assistente_avisos falhou (non-fatal): ${e}`);
         }
 
+        // ===== ADMIN SAAS — Fase 1: interno, planos/módulos, Asaas =====
+        try {
+          const { db: saasDb } = await import("./storage");
+          const { sql: saasSql } = await import("drizzle-orm");
+          await saasDb.execute(saasSql`
+            ALTER TABLE tenants
+              ADD COLUMN IF NOT EXISTS interno BOOLEAN NOT NULL DEFAULT false,
+              ADD COLUMN IF NOT EXISTS asaas_customer_id TEXT
+          `);
+          // Capital Go (tenant 4) é o ambiente interno do dono — time próprio, não paga assinatura
+          await saasDb.execute(saasSql`UPDATE tenants SET interno = true WHERE id = 4 AND interno = false`);
+          await saasDb.execute(saasSql`
+            CREATE TABLE IF NOT EXISTS planos (
+              id            SERIAL PRIMARY KEY,
+              tenant_id     INTEGER,
+              nome          VARCHAR(100) NOT NULL,
+              descricao     TEXT,
+              preco_mensal  DECIMAL(10,2) NOT NULL DEFAULT 0,
+              ativo         BOOLEAN NOT NULL DEFAULT true,
+              created_at    TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await saasDb.execute(saasSql`
+            CREATE TABLE IF NOT EXISTS plano_modulos (
+              plano_id   INTEGER NOT NULL REFERENCES planos(id) ON DELETE CASCADE,
+              modulo_key VARCHAR(50) NOT NULL,
+              PRIMARY KEY (plano_id, modulo_key)
+            )
+          `);
+          await saasDb.execute(saasSql`
+            CREATE TABLE IF NOT EXISTS tenant_modulos (
+              tenant_id  INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              modulo_key VARCHAR(50) NOT NULL,
+              ativo      BOOLEAN NOT NULL DEFAULT true,
+              PRIMARY KEY (tenant_id, modulo_key)
+            )
+          `);
+          await saasDb.execute(saasSql`
+            CREATE TABLE IF NOT EXISTS cobrancas (
+              id          SERIAL PRIMARY KEY,
+              tenant_id   INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              tipo        VARCHAR(20) NOT NULL,
+              ref_id      INTEGER,
+              asaas_id    TEXT,
+              valor       DECIMAL(10,2) NOT NULL,
+              status      VARCHAR(30) NOT NULL DEFAULT 'pendente',
+              metodo      VARCHAR(30),
+              vencimento  DATE,
+              pago_em     TIMESTAMP,
+              created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await saasDb.execute(saasSql`CREATE INDEX IF NOT EXISTS idx_cobrancas_tenant ON cobrancas(tenant_id)`);
+          await saasDb.execute(saasSql`CREATE INDEX IF NOT EXISTS idx_cobrancas_asaas ON cobrancas(asaas_id)`);
+          log("✓ Migração Admin SaaS (interno/planos/tenant_modulos/cobrancas) ok");
+        } catch (e) {
+          log(`⚠ Migração Admin SaaS falhou (non-fatal): ${e}`);
+        }
+
         // Database seed
         const { seedDatabase } = await import("./seed");
         log("Starting seed...");

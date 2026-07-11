@@ -75,6 +75,7 @@ interface Tenant {
   faviconUrl?: string;
   themeJson?: Record<string, unknown>;
   isActive: boolean;
+  interno?: boolean;
   createdAt: string;
 }
 
@@ -186,12 +187,13 @@ export default function AdminTenantsPage() {
   });
 
   const updateTenantMutation = useMutation({
-    mutationFn: async (data: { id: number } & typeof formData & { isActive?: boolean }) => {
+    mutationFn: async (data: { id: number } & typeof formData & { isActive?: boolean; interno?: boolean }) => {
       const payload: Record<string, unknown> = {
         name: data.name,
         logoUrl: data.logoUrl || null,
         faviconUrl: data.faviconUrl || null,
         isActive: data.isActive,
+        interno: data.interno,
       };
       if (data.themeJson) {
         try {
@@ -606,6 +608,7 @@ export default function AdminTenantsPage() {
                   id: selectedTenant.id,
                   ...formData,
                   isActive: selectedTenant.isActive,
+                  interno: selectedTenant.interno === true,
                 });
               }
             }}
@@ -660,6 +663,17 @@ export default function AdminTenantsPage() {
                   data-testid="switch-tenant-active"
                 />
                 <Label htmlFor="edit-isActive">Ambiente Ativo</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="edit-interno"
+                  checked={selectedTenant?.interno === true}
+                  onCheckedChange={(checked) =>
+                    setSelectedTenant(selectedTenant ? { ...selectedTenant, interno: checked } : null)
+                  }
+                  data-testid="switch-tenant-interno"
+                />
+                <Label htmlFor="edit-interno">Ambiente interno (não paga)</Label>
               </div>
             </div>
             <div className="flex justify-end gap-2">
