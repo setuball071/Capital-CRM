@@ -149,7 +149,7 @@ export function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { user, logout, hasModuleAccess, hasSubItemAccess } = useAuth();
   const { hasTenantModule } = useTenantModules();
-  const { tenant, logoUrl, logoHeight, sidebarGradient, useSidebarGradient, sidebarBgColor } = useTenant();
+  const { tenant, logoUrl, logoUrlDark, logoHeight, sidebarGradient, useSidebarGradient, sidebarBgColor } = useTenant();
   const { theme, toggleTheme } = useTheme();
   const [logoFailed, setLogoFailed] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -408,9 +408,10 @@ export function AppSidebar() {
         >
           {!logoFailed && logoUrl ? (
             <img
-              src={logoUrl}
+              // Logo dedicada para o tema escuro quando existir; senão usa a padrão
+              src={theme === "dark" && logoUrlDark ? logoUrlDark : logoUrl}
               alt={tenant?.name || "Logo"}
-              className={cn("max-w-full object-contain", theme === "dark" && "brightness-0 invert")}
+              className="max-w-full object-contain"
               style={{ height: 52, display: 'block' }}
               onError={() => setLogoFailed(true)}
               data-testid="sidebar-logo-image"

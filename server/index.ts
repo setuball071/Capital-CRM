@@ -696,7 +696,8 @@ app.use((req, res, next) => {
           await saasDb.execute(saasSql`
             ALTER TABLE tenants
               ADD COLUMN IF NOT EXISTS interno BOOLEAN NOT NULL DEFAULT false,
-              ADD COLUMN IF NOT EXISTS asaas_customer_id TEXT
+              ADD COLUMN IF NOT EXISTS asaas_customer_id TEXT,
+              ADD COLUMN IF NOT EXISTS logo_url_dark VARCHAR(500)
           `);
           // Capital Go (tenant 4) é o ambiente interno do dono — time próprio, não paga assinatura
           await saasDb.execute(saasSql`UPDATE tenants SET interno = true WHERE id = 4 AND interno = false`);

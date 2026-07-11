@@ -20,6 +20,10 @@ interface TenantTheme {
   sidebarBgColor?: string;
   sidebarFontColor?: string;
   radius?: string;
+  // Overrides opcionais aplicados apenas quando o tema escuro está ativo
+  darkSidebarBg?: string;
+  darkSidebarText?: string;
+  darkLoginBg?: string;
 }
 
 interface TenantBranding {
@@ -27,6 +31,7 @@ interface TenantBranding {
   key: string;
   name: string;
   logoUrl: string | null;
+  logoUrlDark: string | null;
   logoLoginUrl: string | null;
   faviconUrl: string | null;
   logoHeight: number | null;
@@ -41,6 +46,7 @@ interface TenantApiResponse {
   key?: string;
   name?: string;
   logoUrl?: string | null;
+  logoUrlDark?: string | null;
   logoLoginUrl?: string | null;
   faviconUrl?: string | null;
   logoHeight?: number | null;
@@ -57,6 +63,7 @@ interface TenantContextValue {
   tenant: TenantBranding | null;
   isLoading: boolean;
   logoUrl: string;
+  logoUrlDark: string;
   logoLoginUrl: string;
   faviconUrl: string;
   logoHeight: number;
@@ -158,6 +165,16 @@ function applyThemeVariables(theme: TenantTheme, isDark: boolean) {
     // Also remove sidebar-specific overrides so dark sidebar CSS variables apply
     root.style.removeProperty("--sidebar");
     root.style.removeProperty("--sidebar-foreground");
+
+    // Overrides de branding específicos do dark (opcionais, por tenant)
+    if (theme.darkSidebarBg) {
+      const darkSidebarBg = parseColor(theme.darkSidebarBg);
+      if (darkSidebarBg) root.style.setProperty("--sidebar", darkSidebarBg);
+    }
+    if (theme.darkSidebarText) {
+      const darkSidebarFg = parseColor(theme.darkSidebarText);
+      if (darkSidebarFg) root.style.setProperty("--sidebar-foreground", darkSidebarFg);
+    }
   } else {
     // Light mode: apply all theme-sensitive vars from tenant config
     Object.entries(THEME_SENSITIVE_VARS).forEach(([cssVar, themeKey]) => {
@@ -231,6 +248,7 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
     key: rawData.key || "",
     name: rawData.name || "",
     logoUrl: rawData.logoUrl || null,
+    logoUrlDark: rawData.logoUrlDark || null,
     logoLoginUrl: rawData.logoLoginUrl || null,
     faviconUrl: rawData.faviconUrl || null,
     logoHeight: rawData.logoHeight || null,
@@ -248,8 +266,11 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   const fontFamily = tenant?.fontFamily || "Inter";
   
   const themeData = tenant?.theme as any;
-  const loginBgColor = themeData?.loginBgColor || "#1e293b";
-  const primaryColor = themeData?.primaryColor || "#3b82f6";
+  // No tema escuro, o fundo do login pode ter um override dedicado (darkLoginBg)
+  const loginBgColor = (theme === "dark" && themeData?.darkLoginBg)
+    ? themeData.darkLoginBg
+    : (themeData?.loginBgColor || "#1e293b");
+  const primaryColor = themeData?.primaryColor || "#6C2BD9";
   const secondaryColor = themeData?.secondaryColor || "#10b981";
   const textColor = themeData?.textColor || "#1f2937";
   const welcomeText = themeData?.welcomeText || "";
@@ -297,8 +318,9 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
   return (
     <TenantContext.Provider value={{ 
       tenant: tenant || null, 
-      isLoading, 
-      logoUrl, 
+      isLoading,
+      logoUrl,
+      logoUrlDark: tenant?.logoUrlDark || "",
       logoLoginUrl,
       faviconUrl,
       logoHeight,

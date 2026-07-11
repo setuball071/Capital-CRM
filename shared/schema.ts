@@ -27,6 +27,7 @@ export const tenants = pgTable("tenants", {
   key: varchar("key", { length: 50 }).notNull().unique(), // e.g., "goldcard", "consigcore"
   name: varchar("name", { length: 255 }).notNull(), // Display name
   logoUrl: varchar("logo_url", { length: 500 }), // Logo menu lateral
+  logoUrlDark: varchar("logo_url_dark", { length: 500 }), // Logo menu lateral p/ tema escuro (opcional)
   logoLoginUrl: varchar("logo_login_url", { length: 500 }), // Logo tela de login
   faviconUrl: varchar("favicon_url", { length: 500 }),
   logoHeight: integer("logo_height").default(64), // Altura da logo no menu lateral (px)
@@ -160,6 +161,10 @@ export const tenantThemeSchema = z.object({
   loginBgImage: z.string().optional(), // Imagem de fundo do login (URL)
   sidebarBgColor: z.string().optional(), // Cor de fundo do menu lateral
   sidebarFontColor: z.string().optional(), // Cor da fonte do menu lateral
+  // Overrides opcionais aplicados apenas quando o tema escuro está ativo
+  darkSidebarBg: z.string().optional(), // Fundo do menu lateral no dark
+  darkSidebarText: z.string().optional(), // Fonte do menu lateral no dark
+  darkLoginBg: z.string().optional(), // Fundo da tela de login no dark
   // Gradientes CSS (strings CSS geradas)
   sidebarGradient: z.string().optional(), // CSS gradient para sidebar (ex: linear-gradient(135deg, #FF6B00 0%, #FF1493 50%, #9C27B0 100%))
   loginGradient: z.string().optional(), // CSS gradient para tela de login

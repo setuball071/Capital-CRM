@@ -45,6 +45,10 @@ async function sendEmail(subject: string, html: string): Promise<void> {
 
   try {
     await transporter.sendMail({
+      // TODO(fase6): estes alertas são internos (vão só para ALERT_EMAIL do dono
+      // do SaaS) e são disparados fora do contexto de requisição/tenant, então não
+      // há tenant "atual" para usar aqui. Se um dia houver e-mail transacional
+      // para usuários finais, o remetente deve usar o nome do tenant.
       from: `"Capital Go Security" <${process.env.SMTP_USER}>`,
       to: alertEmail,
       subject,

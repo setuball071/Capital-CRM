@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useProposta } from "@/contexts/proposta-context";
 import { useAuth } from "@/lib/auth";
+import { useTenant } from "@/components/tenant-theme-provider";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -33,6 +34,7 @@ const OPERATION_TYPES = [
 
 export default function CalculatorPage() {
   const { user } = useAuth();
+  const { tenant, slogan } = useTenant();
   const [result, setResult] = useState<{ totalContractValue: number; clientRefund: number; saldoFinal: number } | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [liquidPayment, setLiquidPayment] = useState<number>(0);
@@ -343,7 +345,11 @@ export default function CalculatorPage() {
         const cw = pageWidth - ml - mr;
         let y = 0;
 
-        // === Faixa roxa Capital Go ===
+        // Fase 6 — marca do tenant no PDF (nome/slogan dinâmicos)
+        const tenantName = tenant?.name || "Capital Go";
+        const tenantSlogan = slogan || "Crédito Consignado";
+
+        // === Faixa roxa (cor primária) ===
         pdf.setFillColor(124, 58, 237); // #7C3AED
         pdf.rect(0, 0, pageWidth, 4, 'F');
         y = 16;
@@ -352,11 +358,11 @@ export default function CalculatorPage() {
         pdf.setTextColor(124, 58, 237);
         pdf.setFontSize(20);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Capital Go', ml, y);
+        pdf.text(tenantName, ml, y);
         pdf.setFontSize(8);
         pdf.setFont('helvetica', 'normal');
         pdf.setTextColor(120, 120, 120);
-        pdf.text('Crédito Consignado', ml, y + 4);
+        pdf.text(tenantSlogan, ml, y + 4);
         // Data e nº proposta no canto direito
         const dt = new Date();
         const dataStr = dt.toLocaleDateString('pt-BR');

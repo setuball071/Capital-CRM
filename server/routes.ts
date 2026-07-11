@@ -1675,6 +1675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         key: tenant.key,
         name: tenant.name,
         logoUrl: tenant.logoUrl,
+        logoUrlDark: (tenant as any).logoUrlDark,
         logoLoginUrl: (tenant as any).logoLoginUrl,
         faviconUrl: tenant.faviconUrl,
         logoHeight: (tenant as any).logoHeight || 64,
@@ -1691,10 +1692,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Fase 6 — Identidade Visual: dono do SaaS (isMaster) pode editar a marca de
+  // qualquer ambiente via ?tenantId=. Para os demais usuários o param é ignorado.
+  function resolveBrandingTenantId(req: any): number | null {
+    const queryTenantId = parseInt(req.query?.tenantId as string);
+    if (req.user?.isMaster && !isNaN(queryTenantId)) {
+      return queryTenantId;
+    }
+    return req.tenantId || null;
+  }
+
   // Get current tenant for branding page (requires auth)
   app.get("/api/tenant/current", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = req.tenantId;
+      const tenantId = resolveBrandingTenantId(req);
       if (!tenantId) {
         return res.status(404).json({ message: "Tenant não encontrado" });
       }
@@ -1722,7 +1733,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireMaster,
     async (req: any, res) => {
       try {
-        const tenantId = req.tenantId;
+        const tenantId = resolveBrandingTenantId(req);
         const userId = req.user?.id;
         const ipAddress = req.ip || req.connection?.remoteAddress;
 
@@ -1852,11 +1863,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     uploadLogo.single("file"),
     async (req: any, res) => {
       try {
-        const tenantId = req.tenantId;
+        const tenantId = resolveBrandingTenantId(req);
         const userId = req.user?.id;
         const ipAddress = req.ip || req.connection?.remoteAddress;
         const file = req.file;
-        const type = req.body.type as "sidebar" | "login" | "favicon";
+        const type = req.body.type as
+          | "sidebar"
+          | "sidebar-dark"
+          | "login"
+          | "favicon";
 
         console.log(
           `[TENANT-LOGO-UPLOAD] userId=${userId} tenantId=${tenantId} type=${type} timestamp=${new Date().toISOString()}`,
@@ -1873,10 +1888,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        if (!["sidebar", "login", "favicon"].includes(type)) {
-          return res
-            .status(400)
-            .json({ message: "Tipo inválido. Use: sidebar, login ou favicon" });
+        if (!["sidebar", "sidebar-dark", "login", "favicon"].includes(type)) {
+          return res.status(400).json({
+            message: "Tipo inválido. Use: sidebar, sidebar-dark, login ou favicon",
+          });
         }
 
         // Fetch current tenant for audit
@@ -1941,6 +1956,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updateData.logoUrl = logoUrl;
           fieldName = "logoUrl";
           oldValue = currentTenant?.logoUrl || "";
+        } else if (type === "sidebar-dark") {
+          // Logo dedicada para o tema escuro (substitui o hack brightness/invert)
+          updateData.logoUrlDark = logoUrl;
+          fieldName = "logoUrlDark";
+          oldValue = (currentTenant as any)?.logoUrlDark || "";
         } else if (type === "login") {
           updateData.logoLoginUrl = logoUrl;
           fieldName = "logoLoginUrl";
