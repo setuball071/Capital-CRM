@@ -13327,6 +13327,373 @@ Responda EXCLUSIVAMENTE em JSON:
     },
   );
 
+  // ===== ONBOARDING DO ENTRANTE =====
+  // Jornada de entrada: declaração → tour → teste (baseline) → produto/exemplos → liberação do gestor
+
+  async function getOrCreatePerfilOnboarding(userId: number) {
+    let [perfil] = await db
+      .select()
+      .from(vendedoresAcademia)
+      .where(eq(vendedoresAcademia.userId, userId))
+      .limit(1);
+    if (!perfil) {
+      [perfil] = await db
+        .insert(vendedoresAcademia)
+        .values({ userId, nivelAtual: 1, quizAprovado: false, totalSimulacoes: 0 })
+        .returning();
+    }
+    return perfil;
+  }
+
+  // GET /api/onboarding/estado - Estado do onboarding do usuário logado
+  app.get(
+    "/api/onboarding/estado",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const perfil = await getOrCreatePerfilOnboarding(req.user!.id);
+        return res.json({
+          experienciaDeclarada: perfil.experienciaDeclarada,
+          bagagemOrigem: perfil.bagagemOrigem,
+          onboardingEtapa: perfil.onboardingEtapa || "entrada",
+          tourConcluido: perfil.tourConcluido || false,
+          produtoInicial: perfil.produtoInicial || "portabilidade",
+          baselineNota: perfil.baselineNota,
+          baselineNivel: perfil.baselineNivel,
+          liberadoParaProspectar: perfil.liberadoParaProspectar || false,
+          liberadoEm: perfil.liberadoEm,
+        });
+      } catch (error) {
+        console.error("Get onboarding estado error:", error);
+        return res.status(500).json({ message: "Erro ao buscar estado do onboarding" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/declaracao - Auto-declaração de experiência
+  app.post(
+    "/api/onboarding/declaracao",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const userId = req.user!.id;
+        const { experiencia, bagagemOrigem } = req.body;
+        if (typeof experiencia !== "boolean") {
+          return res.status(400).json({ message: "Informe se você tem experiência (sim/não)" });
+        }
+        const perfil = await getOrCreatePerfilOnboarding(userId);
+        const etapa = perfil.onboardingEtapa === "entrada" ? "tour" : perfil.onboardingEtapa;
+        await db
+          .update(vendedoresAcademia)
+          .set({
+            experienciaDeclarada: experiencia,
+            bagagemOrigem: typeof bagagemOrigem === "string" ? bagagemOrigem.slice(0, 255) : null,
+            onboardingEtapa: etapa,
+            atualizadoEm: new Date(),
+          })
+          .where(eq(vendedoresAcademia.userId, userId));
+        return res.json({ onboardingEtapa: etapa });
+      } catch (error) {
+        console.error("Post onboarding declaracao error:", error);
+        return res.status(500).json({ message: "Erro ao salvar declaração" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/tour/concluir - Marca o tour como concluído
+  app.post(
+    "/api/onboarding/tour/concluir",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const userId = req.user!.id;
+        const perfil = await getOrCreatePerfilOnboarding(userId);
+        const etapa =
+          perfil.onboardingEtapa === "entrada" || perfil.onboardingEtapa === "tour"
+            ? "teste"
+            : perfil.onboardingEtapa;
+        await db
+          .update(vendedoresAcademia)
+          .set({ tourConcluido: true, onboardingEtapa: etapa, atualizadoEm: new Date() })
+          .where(eq(vendedoresAcademia.userId, userId));
+        return res.json({ onboardingEtapa: etapa });
+      } catch (error) {
+        console.error("Post onboarding tour error:", error);
+        return res.status(500).json({ message: "Erro ao concluir tour" });
+      }
+    },
+  );
+
+  // GET /api/onboarding/teste - Perguntas do teste de conhecimento (sem gabarito)
+  app.get(
+    "/api/onboarding/teste",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const perfil = await getOrCreatePerfilOnboarding(req.user!.id);
+        const { ONBOARDING_TESTE_PERGUNTAS, perguntasParaPerfil } = await import(
+          "./onboarding-conteudo"
+        );
+        const perguntas = perguntasParaPerfil(
+          ONBOARDING_TESTE_PERGUNTAS,
+          perfil.experienciaDeclarada,
+        ).map((p) => ({ id: p.id, pergunta: p.pergunta, opcoes: p.opcoes }));
+        return res.json({ perguntas });
+      } catch (error) {
+        console.error("Get onboarding teste error:", error);
+        return res.status(500).json({ message: "Erro ao buscar teste" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/teste - Submete o teste, salva baseline e avança etapa
+  app.post(
+    "/api/onboarding/teste",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const userId = req.user!.id;
+        const { respostas } = req.body; // { perguntaId: opcaoIndex }
+        if (!respostas || typeof respostas !== "object") {
+          return res.status(400).json({ message: "Respostas são obrigatórias" });
+        }
+        const perfil = await getOrCreatePerfilOnboarding(userId);
+        const { ONBOARDING_TESTE_PERGUNTAS, perguntasParaPerfil, classificarBaseline } =
+          await import("./onboarding-conteudo");
+        const perguntas = perguntasParaPerfil(
+          ONBOARDING_TESTE_PERGUNTAS,
+          perfil.experienciaDeclarada,
+        );
+
+        let acertos = 0;
+        const resultados: { perguntaId: number; correto: boolean; respostaCorreta: number }[] = [];
+        for (const pergunta of perguntas) {
+          const correto = respostas[pergunta.id] === pergunta.correta;
+          if (correto) acertos++;
+          resultados.push({ perguntaId: pergunta.id, correto, respostaCorreta: pergunta.correta });
+        }
+        const total = perguntas.length;
+        const percentual = total > 0 ? Math.round((acertos / total) * 100) : 0;
+        const baselineNivel = classificarBaseline(percentual);
+
+        await db.insert(quizTentativas).values({
+          userId,
+          respostas,
+          acertos,
+          total,
+          aprovado: true, // teste diagnóstico: não reprova, mede o baseline
+          origem: "onboarding_teste",
+        });
+
+        const etapa = perfil.onboardingEtapa === "teste" ? "produto" : perfil.onboardingEtapa;
+        await db
+          .update(vendedoresAcademia)
+          .set({
+            baselineNota: String(percentual),
+            baselineNivel,
+            onboardingEtapa: etapa,
+            atualizadoEm: new Date(),
+          })
+          .where(eq(vendedoresAcademia.userId, userId));
+
+        return res.json({ acertos, total, percentual, baselineNivel, resultados, onboardingEtapa: etapa });
+      } catch (error) {
+        console.error("Post onboarding teste error:", error);
+        return res.status(500).json({ message: "Erro ao submeter teste" });
+      }
+    },
+  );
+
+  // GET /api/onboarding/compreensao - Perguntas de compreensão dos exemplos (sem gabarito)
+  app.get(
+    "/api/onboarding/compreensao",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const { ONBOARDING_COMPREENSAO_PERGUNTAS } = await import("./onboarding-conteudo");
+        const perguntas = ONBOARDING_COMPREENSAO_PERGUNTAS.map((p) => ({
+          id: p.id,
+          pergunta: p.pergunta,
+          opcoes: p.opcoes,
+        }));
+        return res.json({ perguntas });
+      } catch (error) {
+        console.error("Get onboarding compreensao error:", error);
+        return res.status(500).json({ message: "Erro ao buscar perguntas" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/compreensao - Submete compreensão e vai para aguardando_liberacao
+  app.post(
+    "/api/onboarding/compreensao",
+    requireAuth,
+    requireAcademiaAccess,
+    async (req, res) => {
+      try {
+        const userId = req.user!.id;
+        const { respostas } = req.body;
+        if (!respostas || typeof respostas !== "object") {
+          return res.status(400).json({ message: "Respostas são obrigatórias" });
+        }
+        const perfil = await getOrCreatePerfilOnboarding(userId);
+        const { ONBOARDING_COMPREENSAO_PERGUNTAS } = await import("./onboarding-conteudo");
+
+        let acertos = 0;
+        const resultados: { perguntaId: number; correto: boolean; respostaCorreta: number }[] = [];
+        for (const pergunta of ONBOARDING_COMPREENSAO_PERGUNTAS) {
+          const correto = respostas[pergunta.id] === pergunta.correta;
+          if (correto) acertos++;
+          resultados.push({ perguntaId: pergunta.id, correto, respostaCorreta: pergunta.correta });
+        }
+        const total = ONBOARDING_COMPREENSAO_PERGUNTAS.length;
+        const percentual = total > 0 ? Math.round((acertos / total) * 100) : 0;
+
+        await db.insert(quizTentativas).values({
+          userId,
+          respostas,
+          acertos,
+          total,
+          aprovado: true, // diagnóstico: o gate é a liberação do gestor
+          origem: "onboarding_compreensao",
+        });
+
+        const etapa =
+          perfil.onboardingEtapa === "produto" ? "aguardando_liberacao" : perfil.onboardingEtapa;
+        await db
+          .update(vendedoresAcademia)
+          .set({ onboardingEtapa: etapa, atualizadoEm: new Date() })
+          .where(eq(vendedoresAcademia.userId, userId));
+
+        return res.json({ acertos, total, percentual, resultados, onboardingEtapa: etapa });
+      } catch (error) {
+        console.error("Post onboarding compreensao error:", error);
+        return res.status(500).json({ message: "Erro ao submeter respostas" });
+      }
+    },
+  );
+
+  // GET /api/onboarding/entrantes - Raio-x dos entrantes (master/coordenacao)
+  app.get(
+    "/api/onboarding/entrantes",
+    requireAuth,
+    requireManagerAccess,
+    async (req, res) => {
+      try {
+        const teamUserIds = await getAcademiaTeamUserIds(req.user!);
+
+        let entrantesQuery = db
+          .select({
+            userId: vendedoresAcademia.userId,
+            userName: users.name,
+            userEmail: users.email,
+            experienciaDeclarada: vendedoresAcademia.experienciaDeclarada,
+            bagagemOrigem: vendedoresAcademia.bagagemOrigem,
+            onboardingEtapa: vendedoresAcademia.onboardingEtapa,
+            tourConcluido: vendedoresAcademia.tourConcluido,
+            produtoInicial: vendedoresAcademia.produtoInicial,
+            baselineNota: vendedoresAcademia.baselineNota,
+            baselineNivel: vendedoresAcademia.baselineNivel,
+            liberadoParaProspectar: vendedoresAcademia.liberadoParaProspectar,
+            liberadoEm: vendedoresAcademia.liberadoEm,
+            criadoEm: vendedoresAcademia.criadoEm,
+          })
+          .from(vendedoresAcademia)
+          .leftJoin(users, eq(vendedoresAcademia.userId, users.id));
+
+        if (teamUserIds) {
+          entrantesQuery = entrantesQuery.where(
+            inArray(vendedoresAcademia.userId, teamUserIds),
+          ) as any;
+        }
+
+        const entrantes = await entrantesQuery.orderBy(
+          sql`${vendedoresAcademia.criadoEm} DESC`,
+        );
+
+        // Tentativas do onboarding (para o raio-x de respostas)
+        const userIds = entrantes.map((e) => e.userId);
+        let tentativas: (typeof quizTentativas.$inferSelect)[] = [];
+        if (userIds.length > 0) {
+          tentativas = await db
+            .select()
+            .from(quizTentativas)
+            .where(
+              and(
+                inArray(quizTentativas.userId, userIds),
+                inArray(quizTentativas.origem, ["onboarding_teste", "onboarding_compreensao"]),
+              ),
+            )
+            .orderBy(sql`${quizTentativas.criadoEm} DESC`);
+        }
+
+        const comTentativas = entrantes.map((e) => ({
+          ...e,
+          tentativas: tentativas
+            .filter((t) => t.userId === e.userId)
+            .map((t) => ({
+              origem: t.origem,
+              acertos: t.acertos,
+              total: t.total,
+              criadoEm: t.criadoEm,
+            })),
+        }));
+
+        return res.json(comTentativas);
+      } catch (error) {
+        console.error("Get onboarding entrantes error:", error);
+        return res.status(500).json({ message: "Erro ao buscar entrantes" });
+      }
+    },
+  );
+
+  // POST /api/onboarding/entrantes/:userId/liberar - Libera o entrante para prospectar
+  app.post(
+    "/api/onboarding/entrantes/:userId/liberar",
+    requireAuth,
+    requireManagerAccess,
+    async (req, res) => {
+      try {
+        const targetUserId = parseInt(req.params.userId, 10);
+        if (isNaN(targetUserId)) {
+          return res.status(400).json({ message: "Usuário inválido" });
+        }
+        const teamUserIds = await getAcademiaTeamUserIds(req.user!);
+        if (teamUserIds && !teamUserIds.includes(targetUserId)) {
+          return res.status(403).json({ message: "Este entrante não está na sua equipe" });
+        }
+        const [perfil] = await db
+          .select()
+          .from(vendedoresAcademia)
+          .where(eq(vendedoresAcademia.userId, targetUserId))
+          .limit(1);
+        if (!perfil) {
+          return res.status(404).json({ message: "Entrante não encontrado" });
+        }
+        await db
+          .update(vendedoresAcademia)
+          .set({
+            liberadoParaProspectar: true,
+            liberadoEm: new Date(),
+            liberadoPor: req.user!.id,
+            onboardingEtapa: "liberado",
+            atualizadoEm: new Date(),
+          })
+          .where(eq(vendedoresAcademia.userId, targetUserId));
+        return res.json({ success: true });
+      } catch (error) {
+        console.error("Post onboarding liberar error:", error);
+        return res.status(500).json({ message: "Erro ao liberar entrante" });
+      }
+    },
+  );
+
   // GET /api/academia/sessoes - Listar sessões de roleplay do usuário
   app.get(
     "/api/academia/sessoes",
