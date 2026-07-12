@@ -930,6 +930,30 @@ O painel é o seu **placar**: mostra quanto você já produziu hoje e quanto fal
 - Meta é diária: **o dia que passou não volta**. 100 hoje, 100 amanhã.
 - Não espere o gestor cobrar: **o placar é seu**, olhe você primeiro.`,
   },
+  {
+    id: "tour.5",
+    titulo: "Jarvis — seu assistente de IA",
+    resumo: "Você não está sozinho: tire dúvidas na hora com o assistente de IA da Capital",
+    conteudo: `## Jarvis — seu assistente de IA
+
+O **Jarvis** é o assistente de inteligência artificial da Capital. Ele fica sempre à mão — o robô 🤖 flutuando na tela — pronto para te ajudar a qualquer momento.
+
+### Pra que ele serve
+Pergunte em linguagem natural e ele responde na hora, com base na base de conhecimento da empresa:
+- **Regras de banco** — ex.: "Quais bancos o BRB porta?"
+- **Roteiros e passo a passo** — ex.: "Qual o passo a passo do refin no app do BB?"
+- **Dicas de atendimento** e **atalhos do sistema**
+
+### Avisos automáticos
+O Jarvis também te **avisa quando um contrato seu muda de status** (pago, pendente, cancelado) — você recebe o alerta sem precisar ficar caçando.
+
+### Como usar
+1. Clique no **robô 🤖** que fica flutuando na tela.
+2. Escreva sua pergunta como se estivesse falando com um colega.
+3. Leia a resposta — e siga o atendimento sem travar.
+
+> **Dica:** antes de acionar seu gestor com uma dúvida, pergunte ao Jarvis. Na maioria das vezes a resposta vem na hora.`,
+  },
 ];
 
 // ===== BLOCO 2 — Material conceitual (apenas para quem NÃO tem experiência) =====
