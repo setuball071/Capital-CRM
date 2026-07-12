@@ -48,7 +48,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check, ChevronDown, Clock, Camera, X, Presentation } from "lucide-react";
+import { Loader2, Plus, UserPlus, CheckCircle, XCircle, Trash2, Search, Copy, Check, ChevronDown, Clock, Camera, X, Presentation, RefreshCw, Save } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ConfigurarAcessoModal } from "@/components/ConfigurarAcessoModal";
 import { 
@@ -330,6 +330,65 @@ export default function UsersPage() {
     },
   });
 
+  // ===== Modelos de permissão (por função) =====
+  const { data: permissionTemplates = [] } = useQuery<any[]>({
+    queryKey: ["/api/users/permission-templates", role],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/users/permission-templates?role=${encodeURIComponent(role)}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isDialogOpen && hasConfigUsuariosPermission,
+  });
+
+  const saveTemplateMutation = useMutation({
+    mutationFn: async (payload: { nome: string; role: string; permissions: PermissionState[] }) => {
+      return apiRequest("POST", "/api/users/permission-templates", payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/permission-templates"] });
+      toast({ title: "Modelo salvo", description: "Você pode aplicá-lo nas próximas criações." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro ao salvar modelo", description: error.message || "", variant: "destructive" });
+    },
+  });
+
+  // Gera um login de 4 dígitos livre e preenche o campo
+  const gerarLogin = async () => {
+    try {
+      const res = await apiRequest("GET", "/api/users/next-login");
+      const body = await res.json();
+      if (body?.login) setEmail(body.login);
+    } catch {
+      // silencioso — o usuário pode digitar manualmente
+    }
+  };
+
+  const aplicarModelo = (templateId: string) => {
+    const t = permissionTemplates.find((m) => String(m.id) === templateId);
+    if (t && Array.isArray(t.permissions)) {
+      setPermissions(t.permissions as PermissionState[]);
+      toast({ title: "Modelo aplicado", description: `Permissões de "${t.nome}" carregadas.` });
+    }
+  };
+
+  const salvarComoModelo = () => {
+    const nome = window.prompt("Nome do modelo (ex.: Vendedor padrão):");
+    if (nome && nome.trim()) {
+      saveTemplateMutation.mutate({ nome: nome.trim(), role, permissions });
+    }
+  };
+
+  // Mostra a coluna de permissões tanto ao criar quanto ao editar (não para master)
+  const mostrarPermissoes =
+    hasConfigUsuariosPermission &&
+    (editingUser ? editingUser.role !== "master" : role !== "master") &&
+    (isMaster ? modules.length > 0 : delegatableModules.length > 0);
+
   // Toggle active mutation
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
@@ -485,7 +544,9 @@ export default function UsersPage() {
     setManagerId("");
     setIsDemo(false);
     setSelectedTenantIds([]);
+    setPermissions([]);
     setIsDialogOpen(true);
+    gerarLogin(); // login de 4 dígitos já vem preenchido
   };
 
   const handleOpenEditDialog = (user: User) => {
@@ -568,11 +629,16 @@ export default function UsersPage() {
       });
     } else {
       createUserMutation.mutate(data, {
-        onSuccess: async (response) => {
-          // Save tenants for newly created user
-          if (canManageAllUsers && selectedTenantIds.length > 0) {
-            const newUser = await response.json();
-            if (newUser?.id) {
+        onSuccess: async (response: any) => {
+          const body = await response.json().catch(() => ({}));
+          const newUser = body?.user ?? body;
+          if (newUser?.id) {
+            // Salva permissões escolhidas já na criação
+            if (hasConfigUsuariosPermission && role !== "master" && permissions.length > 0) {
+              savePermissionsMutation.mutate({ userId: newUser.id, permissions });
+            }
+            // Salva ambientes selecionados
+            if (canManageAllUsers && selectedTenantIds.length > 0) {
               saveUserTenantsMutation.mutate({ userId: newUser.id, tenantIds: selectedTenantIds });
             }
           }
@@ -746,12 +812,12 @@ export default function UsersPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col">
               {/* Body: 2 colunas no edit com permissões, 1 coluna no create */}
-              <div className={editingUser && hasConfigUsuariosPermission && editingUser.role !== "master" && (isMaster ? modules.length > 0 : delegatableModules.length > 0)
+              <div className={mostrarPermissoes
                 ? "flex-1 overflow-hidden grid grid-cols-2 divide-x"
                 : "flex-1 overflow-y-auto"}>
 
                 {/* Coluna esquerda: dados do usuário */}
-                <div className={`overflow-y-auto p-6 space-y-4 ${!(editingUser && hasConfigUsuariosPermission && editingUser.role !== "master" && (isMaster ? modules.length > 0 : delegatableModules.length > 0)) ? "max-w-lg mx-auto w-full" : ""}`}>
+                <div className={`overflow-y-auto p-6 space-y-4 ${!(mostrarPermissoes) ? "max-w-lg mx-auto w-full" : ""}`}>
                   {editingUser && canManageAllUsers && (
                     <div className="flex items-center gap-4">
                       <div className="relative group">
@@ -794,18 +860,32 @@ export default function UsersPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="email">Login</Label>
-                    <Input
-                      id="email"
-                      type="text"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder={editingUser ? "" : "1234"}
-                      data-testid="input-user-email"
-                      disabled={!!editingUser}
-                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="email"
+                        type="text"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder={editingUser ? "" : "1234"}
+                        data-testid="input-user-email"
+                        disabled={!!editingUser}
+                      />
+                      {!editingUser && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={gerarLogin}
+                          title="Gerar outro código"
+                          data-testid="button-gerar-login"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                     {!editingUser && (
                       <p className="text-xs text-muted-foreground">
-                        Digite um código de 4 dígitos numéricos (ou email para compatibilidade)
+                        Código de 4 dígitos gerado automaticamente (editável). Emails legados também funcionam.
                       </p>
                     )}
                   </div>
@@ -921,7 +1001,7 @@ export default function UsersPage() {
                 </div>
 
                 {/* Coluna direita: permissões (só no edit com permissões disponíveis) */}
-                {editingUser && hasConfigUsuariosPermission && editingUser.role !== "master" && (isMaster ? modules.length > 0 : delegatableModules.length > 0) && (
+                {mostrarPermissoes && (
                   <div className="overflow-y-auto p-6 space-y-3">
                     <Label className="text-base font-semibold">Permissões de Acesso</Label>
                     <p className="text-sm text-muted-foreground">
@@ -929,6 +1009,39 @@ export default function UsersPage() {
                         ? "Configure quais sub-itens de cada módulo este usuário pode acessar e editar."
                         : `Você pode delegar acesso aos seguintes módulos: ${delegatableModules.map(m => MODULE_TRANSLATIONS[m] || m).join(", ")}.`}
                     </p>
+                    {/* Modelos de permissão por função */}
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 p-2">
+                      {permissionTemplates.length > 0 ? (
+                        <Select onValueChange={aplicarModelo}>
+                          <SelectTrigger className="h-8 w-[200px]" data-testid="select-aplicar-modelo">
+                            <SelectValue placeholder="Aplicar modelo…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {permissionTemplates.map((m) => (
+                              <SelectItem key={m.id} value={String(m.id)}>
+                                {m.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Nenhum modelo salvo para esta função ainda.
+                        </span>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={salvarComoModelo}
+                        disabled={saveTemplateMutation.isPending || permissions.length === 0}
+                        data-testid="button-salvar-modelo"
+                        className="ml-auto"
+                      >
+                        <Save className="h-3.5 w-3.5 mr-1.5" />
+                        Salvar como modelo
+                      </Button>
+                    </div>
                     {isLoadingPermissions ? (
                       <div className="flex items-center justify-center py-4">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
