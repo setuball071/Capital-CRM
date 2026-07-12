@@ -110,58 +110,6 @@ button.btn-pdf:hover { background: #5a32a3; }
 .r-limitador { margin: 8px 0; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; }
 .r-limitador.ok { background: #d4edda; color: #155724; }
 .r-limitador.nok { background: #f8d7da; color: #721c24; }
-
-/* ── Dark Mode ── */
-[data-theme="dark"] body { background: #0f172a; color: #e2e8f0; }
-[data-theme="dark"] h1 { color: #93c5fd; }
-[data-theme="dark"] .sub { color: #94a3b8; }
-[data-theme="dark"] .card { background: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
-[data-theme="dark"] label { color: #94a3b8; }
-[data-theme="dark"] input, [data-theme="dark"] select { background: #0f172a; border-color: #334155; color: #e2e8f0; }
-[data-theme="dark"] input:focus, [data-theme="dark"] select:focus { border-color: #6366f1; }
-[data-theme="dark"] .drop-zone { border-color: #6366f1; background: #1e293b; }
-[data-theme="dark"] .drop-zone p { color: #93c5fd; }
-[data-theme="dark"] .drop-zone .small { color: #94a3b8; }
-[data-theme="dark"] .drop-zone:hover, [data-theme="dark"] .drop-zone.dragover { background: #263348; border-color: #818cf8; }
-[data-theme="dark"] th { background: #1e293b; color: #94a3b8; border-bottom-color: #334155; }
-[data-theme="dark"] td { border-bottom-color: #1e293b; }
-[data-theme="dark"] tr.total td { background: #263348; border-top-color: #334155; }
-[data-theme="dark"] .stat { background: #263348; border-left-color: #6366f1; }
-[data-theme="dark"] .stat .label { color: #94a3b8; }
-[data-theme="dark"] .stat .value { color: #93c5fd; }
-[data-theme="dark"] .summary { }
-[data-theme="dark"] #statusMsg.info { background: #1e3a5f; color: #93c5fd; }
-[data-theme="dark"] #statusMsg.error { background: #3b1a1a; color: #fca5a5; }
-[data-theme="dark"] #statusMsg.success { background: #14402a; color: #86efac; }
-[data-theme="dark"] .badge-yes { background: #14402a; color: #86efac; }
-[data-theme="dark"] .badge-no { background: #3b1a1a; color: #fca5a5; }
-[data-theme="dark"] .badge-skip { background: #3b2e00; color: #fde68a; }
-[data-theme="dark"] .badge-unk { background: #1e293b; color: #94a3b8; }
-[data-theme="dark"] .margin-card { }
-[data-theme="dark"] .margin-card.positive { border-color: #22c55e; background: #14402a; }
-[data-theme="dark"] .margin-card.negative { border-color: #ef4444; background: #3b1a1a; }
-[data-theme="dark"] .margin-card h3 { color: #94a3b8; }
-[data-theme="dark"] .margin-card.positive .big { color: #86efac; }
-[data-theme="dark"] .margin-card.negative .big { color: #fca5a5; }
-[data-theme="dark"] .margin-card .small { color: #94a3b8; }
-[data-theme="dark"] .r-card { background: #1e293b; border-color: #334155; }
-[data-theme="dark"] .r-card .r-label { color: #94a3b8; }
-[data-theme="dark"] .r-card .r-big { color: #93c5fd; }
-[data-theme="dark"] .r-card.highlight { border-color: #818cf8; background: #1e1e3b; }
-[data-theme="dark"] .r-card.highlight .r-big { color: #a5b4fc; }
-[data-theme="dark"] .r-limitador.ok { background: #14402a; color: #86efac; }
-[data-theme="dark"] .r-limitador.nok { background: #3b1a1a; color: #fca5a5; }
-[data-theme="dark"] .editable { background: #2d2a14; }
-[data-theme="dark"] .editable:hover { background: #3b380f; }
-[data-theme="dark"] tr.drag-over { background: #1e3a5f !important; outline-color: #6366f1; }
-[data-theme="dark"] button:not(.btn-icon):not(.btn-add) { background: #6366f1; }
-[data-theme="dark"] button:not(.btn-icon):not(.btn-add):hover { background: #4f46e5; }
-[data-theme="dark"] button.secondary { background: #475569; }
-[data-theme="dark"] button.secondary:hover { background: #334155; }
-[data-theme="dark"] button.success { background: #16a34a; }
-[data-theme="dark"] button.success:hover { background: #15803d; }
-[data-theme="dark"] .btn-add { background: #6366f1; }
-[data-theme="dark"] .btn-add:hover { background: #4f46e5; }
 </style>
 </head>
 <body>
@@ -209,29 +157,6 @@ button.btn-pdf:hover { background: #5a32a3; }
       <div class="card" style="margin-top:0;">
         <div id="panel-geral">
           <h2 style="margin-top:0;color:#1f4e78;">Resultado das Margens</h2>
-          <!-- Nova Regra SIAPE Toggle -->
-          <div id="novaRegraBox" style="display:none;background:#fffbe6;border:2px solid #f0a500;border-radius:8px;padding:14px 18px;margin-bottom:14px;">
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;color:#7d5a00;font-size:14px;margin:0;">
-                <input type="checkbox" id="chkNovaRegra" style="width:17px;height:17px;cursor:pointer;accent-color:#f0a500;">
-                &#x26A1; Nova Regra SIAPE &mdash; Margem Consignado 30%
-              </label>
-              <span style="font-size:12px;color:#a07000;font-style:italic;">(Regra atual: 35% &rarr; Nova regra: 30%)</span>
-            </div>
-            <div id="transferBox" style="display:none;margin-top:12px;padding-top:10px;border-top:1px dashed #d4a800;">
-              <div style="font-size:12px;color:#7d5a00;font-weight:600;margin-bottom:8px;">Transferir margem livre de cart&atilde;o para consignado:</div>
-              <div style="display:flex;gap:20px;flex-wrap:wrap;">
-                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:#555;">
-                  <input type="checkbox" id="chkTransferCC" style="width:15px;height:15px;cursor:pointer;accent-color:#1f4e78;">
-                  Cart&atilde;o de Cr&eacute;dito Consignado (5%)
-                </label>
-                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:#555;">
-                  <input type="checkbox" id="chkTransferCB" style="width:15px;height:15px;cursor:pointer;accent-color:#1f4e78;">
-                  Cart&atilde;o Benef&iacute;cio (5%)
-                </label>
-              </div>
-            </div>
-          </div>
           <div class="margin-grid" id="marginGrid"></div>
         </div>
       </div>
@@ -709,7 +634,6 @@ function renderResults() {
       '<td style="white-space:nowrap;">' +
         '<button class="btn-icon" onclick="moveRend(' + i + ',-1)" title="Subir"' + (i===0?' disabled':'') + '>↑</button>' +
         '<button class="btn-icon" onclick="moveRend(' + i + ',1)" title="Descer"' + (i===nRend-1?' disabled':'') + '>↓</button>' +
-        '<button class="btn-icon" onclick="openEditModal(\'rend\',' + i + ')" title="Editar" style="color:#1a6fc4;">✎</button>' +
         '<button class="btn-icon btn-danger" onclick="removeRend(' + i + ')" title="Remover">×</button>' +
       '</td>';
     tr.addEventListener('dragstart', e => { dragSrcIdx = i; dragSrcType = 'rend'; e.dataTransfer.effectAllowed = 'move'; tr.classList.add('drag-active'); });
@@ -776,7 +700,6 @@ function renderResults() {
       '<td style="white-space:nowrap;">' +
         '<button class="btn-icon" onclick="moveDesc(' + i + ',-1)" title="Subir"' + (i===0?' disabled':'') + '>↑</button>' +
         '<button class="btn-icon" onclick="moveDesc(' + i + ',1)" title="Descer"' + (i===nDesc-1?' disabled':'') + '>↓</button>' +
-        '<button class="btn-icon" onclick="openEditModal(\'desc\',' + i + ')" title="Editar" style="color:#1a6fc4;">✎</button>' +
         '<button class="btn-icon btn-danger" onclick="removeDesc(' + i + ')" title="Remover">×</button>' +
       '</td>';
     tr.addEventListener('dragstart', e => { dragSrcIdx = i; dragSrcType = 'desc'; e.dataTransfer.effectAllowed = 'move'; tr.classList.add('drag-active'); });
@@ -813,56 +736,36 @@ function renderResults() {
   addStat('Rem. Bruta', formatBRL(current.bruto));
   addStat('Rem. Liquida', formatBRL(current.liquido));
 
-  // Nova Regra SIAPE — toggle 35% → 30% + transferência de cartão
-  const novaRegra = document.getElementById('chkNovaRegra').checked;
-  const transferCC_on = novaRegra && document.getElementById('chkTransferCC').checked;
-  const transferCB_on = novaRegra && document.getElementById('chkTransferCB').checked;
-  document.getElementById('novaRegraBox').style.display = 'block';
-  document.getElementById('transferBox').style.display = novaRegra ? 'block' : 'none';
+  // Margens — Regra 40% global (CC e CB sub-limites de 5% cada, consumindo da global)
+  const consumoTotal = consig + cc + cb;
+  const livre70 = base * 0.70 - compuls;
+  const livreGlobal = base * 0.40 - consumoTotal;
+  const livre5cc = base * 0.05 - cc;
+  const livre5cb = base * 0.05 - cb;
 
-  const pctConsig = novaRegra ? 0.30 : 0.35;
-  const livre5cc_raw = base * 0.05 - cc;
-  const livre5cb_raw = base * 0.05 - cb;
-  const transferVal = (transferCC_on ? Math.max(0, livre5cc_raw) : 0) + (transferCB_on ? Math.max(0, livre5cb_raw) : 0);
-  // Saldo base 30% antes da transferência
-  const saldo30 = base * pctConsig - consig;
-  // Margem final consignado (com transferência, se houver)
-  const livreConsig = novaRegra ? saldo30 + transferVal : saldo30;
-  // Cartão: margem exibida é zerada (não negativa) quando o livre foi transferido
-  const livre5cc = novaRegra ? (transferCC_on ? Math.min(0, livre5cc_raw) : livre5cc_raw) : livre5cc_raw;
-  const livre5cb = novaRegra ? (transferCB_on ? Math.min(0, livre5cb_raw) : livre5cb_raw) : livre5cb_raw;
+  // Quando o teto 70% for menor que a margem global, ele é o fator limitante real
+  const teto70Limita = livreGlobal > 0 && livre70 < livreGlobal;
+  const disponivelReal = teto70Limita ? Math.max(0, livre70) : livreGlobal;
+
+  const extraGlobal = '<div style="font-size:11px;color:#666;margin-top:4px;">Consig: ' + formatBRL(consig) + ' &nbsp;&middot;&nbsp; CC: ' + formatBRL(cc) + ' &nbsp;&middot;&nbsp; CB: ' + formatBRL(cb) + '</div>' +
+    (teto70Limita
+      ? '<div style="font-size:12px;font-weight:700;color:#b71c1c;margin-top:6px;padding:5px 8px;background:#ffebee;border-radius:5px;border-left:3px solid #e53935;">&#x26A0; Teto 70% &eacute; o fator limitante &mdash; dispon&iacute;vel real: ' + formatBRL(disponivelReal) + '</div>'
+      : '');
 
   // Margens
   const grid = document.getElementById('marginGrid');
   grid.innerHTML = '';
   if (!current._coefs) current._coefs = { 0: '', 1: '', 2: '', 3: '' };
 
-  // Extra info para o card consignado na nova regra
-  let extraConsig = '';
-  if (novaRegra) {
-    extraConsig = '<div style="font-size:11px;color:#666;margin-top:5px;padding-top:5px;border-top:1px dashed #ccc;">' +
-      'Saldo 30%: <strong>' + formatBRL(saldo30) + '</strong>';
-    if (transferVal > 0) {
-      extraConsig += ' &nbsp;&#x2b;&nbsp; Transf. cart&atilde;o: <strong style="color:#1a6b2f;">' + formatBRL(transferVal) + '</strong>';
-    }
-    extraConsig += '</div>';
-  }
-
   const margens = [
     { key: 3, label: 'Compulsoria (Teto Total)', pct: 0.70, consumo: compuls,
-      livreVal: base * 0.70 - compuls, extraHtml: '' },
-    { key: 0, label: 'Emprestimo Consignado', pct: pctConsig, consumo: consig,
-      livreVal: livreConsig, extraHtml: extraConsig },
-    { key: 1, label: 'Cartao Consignado', pct: 0.05, consumo: cc,
-      livreVal: livre5cc,
-      extraHtml: (transferCC_on && livre5cc_raw > 0)
-        ? '<div style="font-size:11px;color:#7d5a00;margin-top:4px;">&#x279C; ' + formatBRL(livre5cc_raw) + ' transferido para consignado</div>'
-        : '' },
-    { key: 2, label: 'Cartao Beneficio', pct: 0.05, consumo: cb,
-      livreVal: livre5cb,
-      extraHtml: (transferCB_on && livre5cb_raw > 0)
-        ? '<div style="font-size:11px;color:#7d5a00;margin-top:4px;">&#x279C; ' + formatBRL(livre5cb_raw) + ' transferido para consignado</div>'
-        : '' },
+      livreVal: livre70, extraHtml: '' },
+    { key: 0, label: 'Margem Global Consignavel', pct: 0.40, consumo: consumoTotal,
+      livreVal: livreGlobal, extraHtml: extraGlobal },
+    { key: 1, label: 'Limite Cartao de Credito', pct: 0.05, consumo: cc,
+      livreVal: livre5cc, extraHtml: '' },
+    { key: 2, label: 'Limite Cartao Beneficio', pct: 0.05, consumo: cb,
+      livreVal: livre5cb, extraHtml: '' },
   ];
 
   margens.forEach(m => {
@@ -1034,9 +937,6 @@ document.getElementById('overrideBaseChk').addEventListener('change', e => {
   if (current) renderResults();
 });
 document.getElementById('overrideBaseInput').addEventListener('input', () => { if (current) renderResults(); });
-document.getElementById('chkNovaRegra').addEventListener('change', () => { if (current) renderResults(); });
-document.getElementById('chkTransferCC').addEventListener('change', () => { if (current) renderResults(); });
-document.getElementById('chkTransferCB').addEventListener('change', () => { if (current) renderResults(); });
 
 document.getElementById('btnExport').addEventListener('click', exportCSV);
 document.getElementById('btnExportPDF').addEventListener('click', exportPDF);
@@ -1169,28 +1069,10 @@ function _populateDatalist(type) {
 function openAddModal(type) {
   if (!current) return;
   document.getElementById('addModalType').value = type;
-  document.getElementById('addModalEditIdx').value = '-1';
   document.getElementById('addModalTitle').textContent = type === 'rend' ? 'Adicionar Rendimento' : 'Adicionar Desconto';
-  document.getElementById('addModalConfirmBtn').textContent = 'Adicionar';
   document.getElementById('addDiscr').value = '';
   document.getElementById('addPrazo').value = '';
   document.getElementById('addValor').value = '';
-  _populateDatalist(type);
-  document.getElementById('addModal').classList.add('open');
-  setTimeout(() => document.getElementById('addDiscr').focus(), 80);
-}
-
-function openEditModal(type, idx) {
-  if (!current) return;
-  const item = type === 'rend' ? current.rendimentos[idx] : current.descontos[idx];
-  if (!item) return;
-  document.getElementById('addModalType').value = type;
-  document.getElementById('addModalEditIdx').value = String(idx);
-  document.getElementById('addModalTitle').textContent = type === 'rend' ? 'Editar Rendimento' : 'Editar Desconto';
-  document.getElementById('addModalConfirmBtn').textContent = 'Salvar';
-  document.getElementById('addDiscr').value = item.discriminacao || '';
-  document.getElementById('addPrazo').value = item.prazo ?? '';
-  document.getElementById('addValor').value = item.valor != null ? String(item.valor).replace('.', ',') : '';
   _populateDatalist(type);
   document.getElementById('addModal').classList.add('open');
   setTimeout(() => document.getElementById('addDiscr').focus(), 80);
@@ -1202,7 +1084,6 @@ function closeAddModal() {
 
 function confirmAddItem() {
   const type = document.getElementById('addModalType').value;
-  const editIdx = parseInt(document.getElementById('addModalEditIdx').value, 10);
   const discr = document.getElementById('addDiscr').value.trim();
   const prazoStr = document.getElementById('addPrazo').value.trim();
   const valorStr = document.getElementById('addValor').value.trim();
@@ -1211,13 +1092,10 @@ function confirmAddItem() {
   const valor = parseBRNumber(valorStr);
   if (isNaN(valor) || valor < 0) { alert('Valor invalido. Use formato: 1.234,56'); return; }
   _saveHist(type, discr.toUpperCase());
-  const lista = type === 'rend' ? current.rendimentos : current.descontos;
-  if (editIdx >= 0) {
-    // Edição de item existente
-    lista[editIdx] = { ...lista[editIdx], discriminacao: discr, prazo, valor };
+  if (type === 'rend') {
+    current.rendimentos.push({ discriminacao: discr, prazo, valor });
   } else {
-    // Novo item
-    lista.push({ discriminacao: discr, prazo, valor });
+    current.descontos.push({ discriminacao: discr, prazo, valor });
   }
   closeAddModal();
   renderResults();
@@ -1341,10 +1219,9 @@ function exportPDF() {
       <label>Valor * (use virgula: 1.234,56)</label>
       <input type="text" id="addValor" placeholder="Ex: 5.000,00">
     </div>
-    <input type="hidden" id="addModalEditIdx" value="-1">
     <div class="modal-actions">
       <button class="secondary" onclick="closeAddModal()">Cancelar</button>
-      <button id="addModalConfirmBtn" onclick="confirmAddItem()">Adicionar</button>
+      <button onclick="confirmAddItem()">Adicionar</button>
     </div>
   </div>
 </div>
@@ -1353,15 +1230,6 @@ function exportPDF() {
 document.getElementById('addModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeAddModal(); });
 document.getElementById('addValor').addEventListener('keydown', e => { if (e.key === 'Enter') confirmAddItem(); });
 document.getElementById('addDiscr').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('addPrazo').focus(); });
-</script>
-
-<!-- Sincronização de tema com o CRM pai -->
-<script>
-window.addEventListener('message', function(event) {
-  if (event.data && event.data.type === 'CAPITAL_CRM_THEME') {
-    document.documentElement.setAttribute('data-theme', event.data.theme === 'dark' ? 'dark' : 'light');
-  }
-});
 </script>
 </body>
 </html>

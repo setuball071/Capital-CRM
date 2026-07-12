@@ -1,5 +1,7 @@
 # SP1 — Planos & Assinaturas (interno) — Plano de Implementação
 
+> **✅ EXECUTADO E DEPLOYADO (12/07/2026).** 7/7 tarefas na branch migracao-cloudfy. Commits: t1 `b785add`, t2 `997add9`, t3 `97aae9a`, t4+t5 `c46a262`, t6 `f0e9a62`, t7 `139f4df`. Verificação = build verde em cada tarefa; conferência manual no app pendente do Fábio. SP2 (landing page/self-serve) fica pra depois.
+
 > **Para o executor:** implemente **tarefa por tarefa, na ordem** (há dependências). Cada tarefa termina em `npm run build` verde + commit. Este repo **NÃO tem suíte de testes** — a verificação é build + deploy (`git push origin migracao-cloudfy`) + conferência manual no app. NÃO invente framework de teste. Marque os `- [ ]`.
 
 **Goal:** Assinaturas viram um módulo interno completo: catálogo de planos configuráveis, assinatura vinculada a um plano, limite de usuários aplicado, gestão com histórico, e fix dos ambientes excluídos em selects.
