@@ -2133,6 +2133,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           managerId: finalManagerId,
         });
 
+        // Vincula o novo usuário ao ambiente atual automaticamente (evita usuário órfão,
+        // que não consegue logar nem aparece na gestão). Ambientes adicionais são
+        // ajustados pelo multi-select do frontend.
+        if (tenantAlvo) {
+          try {
+            const jaVinculado = await db
+              .select({ id: userTenants.id })
+              .from(userTenants)
+              .where(
+                and(
+                  eq(userTenants.userId, user.id),
+                  eq(userTenants.tenantId, tenantAlvo),
+                ),
+              )
+              .limit(1);
+            if (jaVinculado.length === 0) {
+              await db.insert(userTenants).values({
+                userId: user.id,
+                tenantId: tenantAlvo,
+                roleInTenant: role,
+              });
+            }
+          } catch (assocErr) {
+            console.error("Falha ao vincular novo usuário ao ambiente:", assocErr);
+          }
+        }
+
         // Don't send password hash to client
         const { passwordHash: _, ...userWithoutPassword } = user;
 
