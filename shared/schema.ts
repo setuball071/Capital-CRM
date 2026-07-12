@@ -4124,3 +4124,20 @@ export const assistenteAvisos = pgTable("assistente_avisos", {
   lida: boolean("lida").notNull().default(false),
   criadaEm: timestamp("criada_em").notNull().defaultNow(),
 });
+
+export const assistentePerguntas = pgTable("assistente_perguntas", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  corretorId: integer("corretor_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  pergunta: text("pergunta").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("pendente"), // pendente | respondida | descartada
+  resposta: text("resposta"),
+  respondidaPor: integer("respondida_por").references(() => users.id),
+  respondidaEm: timestamp("respondida_em"),
+  artigoId: integer("artigo_id"), // quando a resposta virou artigo
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

@@ -706,6 +706,30 @@ app.use((req, res, next) => {
           log(`⚠ Migração assistente_avisos falhou (non-fatal): ${e}`);
         }
 
+        // ===== JARVIS — plantão de perguntas dos corretores =====
+        try {
+          const { db: perguntaDb } = await import("./storage");
+          const { sql: perguntaSql } = await import("drizzle-orm");
+          await perguntaDb.execute(perguntaSql`
+            CREATE TABLE IF NOT EXISTS assistente_perguntas (
+              id            SERIAL PRIMARY KEY,
+              tenant_id     INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              corretor_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              pergunta      TEXT NOT NULL,
+              status        VARCHAR(20) NOT NULL DEFAULT 'pendente',
+              resposta      TEXT,
+              respondida_por INTEGER REFERENCES users(id),
+              respondida_em TIMESTAMP,
+              artigo_id     INTEGER,
+              created_at    TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await perguntaDb.execute(perguntaSql`CREATE INDEX IF NOT EXISTS idx_assistente_perguntas_status ON assistente_perguntas(tenant_id, status)`);
+          log("✓ Migração assistente_perguntas ok");
+        } catch (e) {
+          log(`⚠ Migração assistente_perguntas falhou (non-fatal): ${e}`);
+        }
+
         // ===== ADMIN SAAS — Fase 1: interno, planos/módulos, Asaas =====
         try {
           const { db: saasDb } = await import("./storage");
