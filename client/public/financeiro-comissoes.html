@@ -48,6 +48,18 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,Bl
 .search::placeholder{color:var(--muted)}
 .search:focus,.filter-select:focus,.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
 .filter-select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;cursor:pointer}
+/* Filtro multi-seleção (checkbox dropdown) */
+.ms-wrap{position:relative;display:inline-block}
+.ms-btn{display:inline-flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;cursor:pointer;white-space:nowrap;max-width:230px}
+.ms-btn .ms-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ms-btn .ms-caret{color:var(--muted);font-size:10px;margin-left:auto}
+.ms-btn.has-sel{border-color:var(--accent);color:var(--accent);font-weight:600}
+.ms-pop{position:absolute;top:calc(100% + 4px);left:0;z-index:60;display:none;min-width:210px;max-width:300px;max-height:320px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:6px}
+.ms-pop.open{display:block}
+.ms-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text)}
+.ms-item:hover{background:var(--surface2)}
+.ms-item input{accent-color:var(--accent);cursor:pointer;width:14px;height:14px;flex-shrink:0}
+.ms-item.ms-all{font-weight:600;border-bottom:1px solid var(--border);border-radius:0;margin-bottom:4px;padding-bottom:8px}
 .btn{padding:8px 14px;border-radius:var(--radius);border:none;cursor:pointer;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;transition:background .15s,opacity .15s,box-shadow .15s;white-space:nowrap;letter-spacing:-.01em;box-shadow:var(--shadow)}
 .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{opacity:.9}
 .btn-green{background:var(--green);color:#fff}.btn-green:hover{opacity:.9}
@@ -325,21 +337,12 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
   <div id="prod-master">
     <!-- Filtros -->
     <div class="filter-bar">
-      <select class="filter-select" id="pf-mes" onchange="carregarProducaoAPI()"><option value="">Todos os meses</option></select>
-      <select class="filter-select" id="pf-banco" onchange="carregarProducaoAPI()"><option value="">Todos os bancos</option></select>
-      <select class="filter-select" id="pf-corretor" onchange="carregarProducaoAPI()"><option value="">Todos os corretores</option></select>
-      <select class="filter-select" id="pf-status" onchange="carregarProducaoAPI()">
-        <option value="">Todos status</option>
-        <option value="Aguardando">Aguardando</option>
-        <option value="A Pagar">A pagar</option>
-        <option value="Pago">Pago</option>
-      </select>
-      <select class="filter-select" id="pf-receb" onchange="carregarProducaoAPI()">
-        <option value="">Recebimento (todos)</option>
-        <option value="areceber">A Receber</option>
-        <option value="recebido">Recebido</option>
-      </select>
-      <select class="filter-select" id="pf-parc" onchange="carregarProducaoAPI()"><option value="">Todos parceiros</option></select>
+      <div class="ms-wrap"><button type="button" class="ms-btn" id="ms-btn-mes" onclick="msOpen('mes',event)"><span class="ms-lbl" id="ms-lbl-mes">Todos os meses</span><span class="ms-caret">▾</span></button><div class="ms-pop" id="ms-pop-mes"></div></div>
+      <div class="ms-wrap"><button type="button" class="ms-btn" id="ms-btn-banco" onclick="msOpen('banco',event)"><span class="ms-lbl" id="ms-lbl-banco">Todos os bancos</span><span class="ms-caret">▾</span></button><div class="ms-pop" id="ms-pop-banco"></div></div>
+      <div class="ms-wrap"><button type="button" class="ms-btn" id="ms-btn-corretor" onclick="msOpen('corretor',event)"><span class="ms-lbl" id="ms-lbl-corretor">Todos os corretores</span><span class="ms-caret">▾</span></button><div class="ms-pop" id="ms-pop-corretor"></div></div>
+      <div class="ms-wrap"><button type="button" class="ms-btn" id="ms-btn-status" onclick="msOpen('status',event)"><span class="ms-lbl" id="ms-lbl-status">Todos status</span><span class="ms-caret">▾</span></button><div class="ms-pop" id="ms-pop-status"></div></div>
+      <div class="ms-wrap"><button type="button" class="ms-btn" id="ms-btn-receb" onclick="msOpen('receb',event)"><span class="ms-lbl" id="ms-lbl-receb">Recebimento (todos)</span><span class="ms-caret">▾</span></button><div class="ms-pop" id="ms-pop-receb"></div></div>
+      <div class="ms-wrap"><button type="button" class="ms-btn" id="ms-btn-parc" onclick="msOpen('parc',event)"><span class="ms-lbl" id="ms-lbl-parc">Todos parceiros</span><span class="ms-caret">▾</span></button><div class="ms-pop" id="ms-pop-parc"></div></div>
       <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 12px">
         <span style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">📅 Recebido em:</span>
         <input type="month" id="pf-mes-receb" onchange="carregarProducaoAPI()" style="background:transparent;border:none;color:var(--text);font-size:13px;outline:none;cursor:pointer"/>
@@ -1917,6 +1920,78 @@ function ciclarBancoCont(id){
 let _prodData = null;
 let _prodLoading = false;
 
+// ── Filtros multi-seleção da Produção ─────────────────────────────────
+// Set vazio = "todos". mes recarrega do servidor; os demais filtram client-side.
+const _msSel = { mes:new Set(), banco:new Set(), corretor:new Set(), status:new Set(), receb:new Set(), parc:new Set() };
+const _msOpts = {};
+const _msCfg = {
+  mes:      { all:'Todos os meses',      reload:true },
+  banco:    { all:'Todos os bancos',     reload:false },
+  corretor: { all:'Todos os corretores', reload:false },
+  status:   { all:'Todos status',        reload:false },
+  receb:    { all:'Recebimento (todos)', reload:false },
+  parc:     { all:'Todos parceiros',     reload:false },
+};
+// Fecha os popups ao clicar fora
+document.addEventListener('click', e => {
+  if (e.target.closest && e.target.closest('.ms-wrap')) return;
+  document.querySelectorAll('.ms-pop.open').forEach(p => p.classList.remove('open'));
+});
+function msOpen(key, ev){
+  ev.stopPropagation();
+  const pop = document.getElementById('ms-pop-'+key);
+  const abrir = !pop.classList.contains('open');
+  document.querySelectorAll('.ms-pop.open').forEach(p => p.classList.remove('open'));
+  if (abrir) pop.classList.add('open');
+}
+// opts: [{value,label}]. Preserva a seleção guardada em _msSel[key].
+function msPopulate(key, opts){
+  _msOpts[key] = opts;
+  const pop = document.getElementById('ms-pop-'+key);
+  if (!pop) return;
+  const sel = _msSel[key];
+  pop.innerHTML =
+    `<label class="ms-item ms-all"><input type="checkbox" ${sel.size===0?'checked':''} onchange="msAll('${key}')"> Todos</label>` +
+    opts.map(o => `<label class="ms-item"><input type="checkbox" class="ms-opt" value="${escHtml(o.value)}" ${sel.has(o.value)?'checked':''} onchange="msItem('${key}')"> ${escHtml(o.label)}</label>`).join('');
+  msLabel(key);
+}
+function msAll(key){
+  // "Todos" sempre reseta para o estado neutro (nenhum específico = todos)
+  _msSel[key].clear();
+  msRefresh(key);
+  msFire(key);
+}
+function msItem(key){
+  const pop = document.getElementById('ms-pop-'+key);
+  const sel = _msSel[key];
+  sel.clear();
+  pop.querySelectorAll('.ms-opt:checked').forEach(cb => sel.add(cb.value));
+  msRefresh(key);
+  msFire(key);
+}
+function msRefresh(key){
+  const pop = document.getElementById('ms-pop-'+key);
+  if (!pop) return;
+  const sel = _msSel[key];
+  const allCb = pop.querySelector('.ms-all input');
+  if (allCb) allCb.checked = sel.size === 0;
+  pop.querySelectorAll('.ms-opt').forEach(cb => { cb.checked = sel.has(cb.value); });
+  msLabel(key);
+}
+function msLabel(key){
+  const lbl = document.getElementById('ms-lbl-'+key);
+  const btn = document.getElementById('ms-btn-'+key);
+  if (!lbl || !btn) return;
+  const sel = _msSel[key], opts = _msOpts[key] || [];
+  if (sel.size === 0){ lbl.textContent = _msCfg[key].all; btn.classList.remove('has-sel'); }
+  else if (sel.size === 1){ const v=[...sel][0]; const o=opts.find(x=>x.value===v); lbl.textContent = o?o.label:v; btn.classList.add('has-sel'); }
+  else { lbl.textContent = sel.size + ' selecionados'; btn.classList.add('has-sel'); }
+}
+function msFire(key){
+  if (_msCfg[key].reload) carregarProducaoAPI();
+  else if (_prodData) renderTabelaProducaoAPI(_prodData);
+}
+
 async function renderProducao() {
   const isMaster = _role === 'master';
   document.getElementById('prod-master').style.display = isMaster ? '' : 'none';
@@ -2014,9 +2089,9 @@ async function carregarProducaoAPI() {
   if (_prodLoading) return;
   _prodLoading = true;
 
-  const mes      = document.getElementById('pf-mes')?.value || '';
-  const banco    = document.getElementById('pf-banco')?.value || '';
-  const corretor = document.getElementById('pf-corretor')?.value || '';
+  // Só o mês recarrega do servidor (limita o volume); banco/corretor/status/
+  // recebimento/parceiro são multi-select client-side sobre o conjunto carregado.
+  const meses = [..._msSel.mes];
 
   // Mostrar loading
   const tbody = document.getElementById('prod-tbody');
@@ -2024,9 +2099,7 @@ async function carregarProducaoAPI() {
 
   try {
     const params = new URLSearchParams();
-    if (mes)      params.set('mes', mes);
-    if (banco)    params.set('banco', banco);
-    if (corretor) params.set('corretor', corretor);
+    if (meses.length) params.set('mes', meses.join(','));
 
     const resp = await fetch('/api/financeiro/producao?' + params.toString(), {
       credentials: 'include'
@@ -2037,8 +2110,8 @@ async function carregarProducaoAPI() {
 
     _prodData = data;
 
-    // Popula filtros na primeira carga (ou sempre que muda)
-    popularFiltrosProd(data.filtros, mes, banco, corretor);
+    // Popula as opções dos filtros (preservando a seleção atual)
+    popularFiltrosProd(data.filtros);
     renderTabelaProducaoAPI(data);
 
   } catch (e) {
@@ -2048,20 +2121,20 @@ async function carregarProducaoAPI() {
   }
 }
 
-function popularFiltrosProd(filtros, selMes, selBanco, selCorretor) {
-  const smEl = document.getElementById('pf-mes');
-  const sbEl = document.getElementById('pf-banco');
-  const scEl = document.getElementById('pf-corretor');
-  if (!smEl || !sbEl || !scEl) return;
-
-  smEl.innerHTML = '<option value="">Todos os meses</option>' +
-    (filtros.meses || []).map(m => `<option value="${m}" ${m===selMes?'selected':''}>${m}</option>`).join('');
-
-  sbEl.innerHTML = '<option value="">Todos os bancos</option>' +
-    (filtros.bancos || []).map(b => `<option value="${b}" ${b===selBanco?'selected':''}>${escHtml(b)}</option>`).join('');
-
-  scEl.innerHTML = '<option value="">Todos os corretores</option>' +
-    (filtros.corretores || []).map(c => `<option value="${c}" ${c===selCorretor?'selected':''}>${escHtml(c)}</option>`).join('');
+function popularFiltrosProd(filtros) {
+  filtros = filtros || {};
+  msPopulate('mes',      (filtros.meses || []).map(m => ({ value: m, label: m })));
+  msPopulate('banco',    (filtros.bancos || []).map(b => ({ value: b, label: b })));
+  msPopulate('corretor', (filtros.corretores || []).map(c => ({ value: c, label: c })));
+  msPopulate('status', [
+    { value: 'Aguardando', label: 'Aguardando' },
+    { value: 'A Pagar',    label: 'A pagar' },
+    { value: 'Pago',       label: 'Pago' },
+  ]);
+  msPopulate('receb', [
+    { value: 'areceber', label: 'A Receber' },
+    { value: 'recebido', label: 'Recebido' },
+  ]);
 }
 
 function escHtml(s) {
@@ -2141,26 +2214,19 @@ function renderTabelaProducaoAPI(data) {
   const { contratos, totais } = data;
   _producaoContratosCache = contratos || [];
 
-  // Popula filtro de parceiros (relatórios já importados), preservando seleção
-  const parcSel = document.getElementById('pf-parc');
-  if (parcSel) {
-    const prevParc = parcSel.value;
-    const parceiros = [...new Set(_producaoContratosCache.map(c => c.parceiroRelatorio).filter(Boolean))].sort();
-    parcSel.innerHTML = '<option value="">Todos parceiros</option>' +
-      parceiros.map(p => `<option value="${escHtml(p)}" ${p===prevParc?'selected':''}>${escHtml(p)}</option>`).join('');
-  }
+  // Popula opções de parceiros a partir dos dados carregados (preserva seleção)
+  const parceiros = [...new Set(_producaoContratosCache.map(c => c.parceiroRelatorio).filter(Boolean))].sort();
+  msPopulate('parc', parceiros.map(p => ({ value: p, label: p })));
 
-  // Filtros client-side: status do prêmio + recebimento + parceiro + mês de recebimento
-  const filtroSt = document.getElementById('pf-status')?.value || '';
-  const filtroReceb = document.getElementById('pf-receb')?.value || '';
-  const filtroParc = document.getElementById('pf-parc')?.value || '';
+  // Filtros multi-select client-side (Set vazio = todos) + mês de recebimento (input único)
   const filtroMesReceb = document.getElementById('pf-mes-receb')?.value || '';
   let lista = _producaoContratosCache;
-  if (filtroSt) lista = lista.filter(c => (c.statusComissao||'Aguardando') === filtroSt);
-  if (filtroReceb === 'recebido') lista = lista.filter(c => c.dataRecebimento);
-  if (filtroReceb === 'areceber') lista = lista.filter(c => !c.dataRecebimento);
-  if (filtroParc) lista = lista.filter(c => (c.parceiroRelatorio||'') === filtroParc);
-  if (filtroMesReceb) lista = lista.filter(c => (c.dataRecebimento||'').startsWith(filtroMesReceb));
+  if (_msSel.banco.size)    lista = lista.filter(c => _msSel.banco.has(c.banco || ''));
+  if (_msSel.corretor.size) lista = lista.filter(c => _msSel.corretor.has((c.nomeCorretor || '').toUpperCase()));
+  if (_msSel.status.size)   lista = lista.filter(c => _msSel.status.has(c.statusComissao || 'Aguardando'));
+  if (_msSel.receb.size)    lista = lista.filter(c => _msSel.receb.has(c.dataRecebimento ? 'recebido' : 'areceber'));
+  if (_msSel.parc.size)     lista = lista.filter(c => _msSel.parc.has(c.parceiroRelatorio || ''));
+  if (filtroMesReceb) lista = lista.filter(c => (c.dataRecebimento || '').startsWith(filtroMesReceb));
 
   // Ordenação escolhida no cabeçalho (clique no título da coluna)
   if (_prodSort.col) {

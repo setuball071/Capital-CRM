@@ -23905,7 +23905,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             AND (pa.id = ${producoesContratos.proposalId} OR pa.ade = ${producoesContratos.contratoId})
         )`,
       ];
-      if (mes) conditions.push(eq(producoesContratos.mesReferencia, mes as string));
+      if (mes) {
+        // Aceita múltiplos meses separados por vírgula (multi-select do frontend)
+        const mesesArr = String(mes).split(",").map((s) => s.trim()).filter(Boolean);
+        if (mesesArr.length === 1) conditions.push(eq(producoesContratos.mesReferencia, mesesArr[0]));
+        else if (mesesArr.length > 1) conditions.push(inArray(producoesContratos.mesReferencia, mesesArr));
+      }
       if (banco) conditions.push(eq(producoesContratos.banco, banco as string));
       if (corretor) conditions.push(sql`UPPER(${producoesContratos.nomeCorretor}) = UPPER(${corretor as string})`);
 
