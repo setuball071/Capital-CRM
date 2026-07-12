@@ -847,7 +847,59 @@ app.use((req, res, next) => {
               ADD COLUMN IF NOT EXISTS produto_id INTEGER,
               ADD COLUMN IF NOT EXISTS cobranca_id INTEGER
           `);
-          log("✓ Migração Admin SaaS (interno/planos/tenant_modulos/cobrancas/produtos) ok");
+          // SP1 — Planos & Assinaturas: catálogo configurável + assinatura vinculada a plano
+          await saasDb.execute(saasSql`
+            ALTER TABLE planos
+              ADD COLUMN IF NOT EXISTS ciclo VARCHAR(10) NOT NULL DEFAULT 'mensal',
+              ADD COLUMN IF NOT EXISTS valor DECIMAL(10,2) NOT NULL DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS max_usuarios INTEGER,
+              ADD COLUMN IF NOT EXISTS limites JSONB DEFAULT '{}'::jsonb
+          `);
+          await saasDb.execute(saasSql`UPDATE planos SET valor = preco_mensal WHERE valor = 0 AND preco_mensal > 0`);
+          await saasDb.execute(saasSql`
+            CREATE TABLE IF NOT EXISTS plano_produtos (
+              plano_id   INTEGER NOT NULL REFERENCES planos(id) ON DELETE CASCADE,
+              produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+              incluso    BOOLEAN NOT NULL DEFAULT true,
+              PRIMARY KEY (plano_id, produto_id)
+            )
+          `);
+          await saasDb.execute(saasSql`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS plano_id INTEGER REFERENCES planos(id)`);
+          await saasDb.execute(saasSql`
+            CREATE TABLE IF NOT EXISTS assinatura_historico (
+              id          SERIAL PRIMARY KEY,
+              tenant_id   INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              tipo        VARCHAR(30) NOT NULL,
+              descricao   TEXT,
+              por_user_id INTEGER REFERENCES users(id),
+              criado_em   TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await saasDb.execute(saasSql`CREATE INDEX IF NOT EXISTS idx_assinatura_hist_tenant ON assinatura_historico(tenant_id)`);
+          // Seed dos planos legados (só se a tabela estiver vazia) — viram linhas editáveis
+          const planosCountRow = (await saasDb.execute(saasSql`SELECT COUNT(*)::int AS n FROM planos`)).rows[0] as any;
+          if (Number(planosCountRow.n) === 0) {
+            const seedPlanos: [string, number][] = [
+              ["Trial", 0], ["Básico", 127], ["Profissional", 197], ["Expert", 277], ["Enterprise", 0],
+            ];
+            for (const [nome, valor] of seedPlanos) {
+              await saasDb.execute(saasSql`
+                INSERT INTO planos (nome, valor, preco_mensal, ciclo, ativo)
+                VALUES (${nome}, ${valor}, ${valor}, 'mensal', true)
+              `);
+            }
+          }
+          // Religa assinaturas existentes ao plano por nome (idempotente; só a interna existe hoje)
+          await saasDb.execute(saasSql`
+            UPDATE subscriptions s SET plano_id = p.id
+            FROM planos p
+            WHERE s.plano_id IS NULL AND (
+              lower(p.nome) = lower(s.plan)
+              OR (s.plan = 'basico' AND p.nome = 'Básico')
+              OR (s.plan = 'profissional' AND p.nome = 'Profissional')
+            )
+          `);
+          log("✓ Migração Admin SaaS (interno/planos/tenant_modulos/cobrancas/produtos/plano_produtos/assinatura_historico) ok");
         } catch (e) {
           log(`⚠ Migração Admin SaaS falhou (non-fatal): ${e}`);
         }

@@ -3913,7 +3913,8 @@ export const subscriptions = pgTable("subscriptions", {
     .notNull()
     .references(() => tenants.id, { onDelete: "cascade" })
     .unique(), // 1 assinatura por tenant
-  plan: varchar("plan", { length: 50 }).notNull().default("trial"),
+  plan: varchar("plan", { length: 50 }).notNull().default("trial"), // legado/derivado — fonte de verdade é planoId
+  planoId: integer("plano_id"), // plano contratado (FK planos.id — planos vive só via SQL no boot, sem pgTable)
   status: varchar("status", { length: 50 }).notNull().default("trial"),
   trialEndsAt: timestamp("trial_ends_at"),
   currentPeriodStart: timestamp("current_period_start"),
