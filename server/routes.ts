@@ -2247,6 +2247,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Registra sessão para controle de simultâneas
         registerSession(user.id, req.session.id);
 
+        // Ficha do ambiente: marca o último acesso do tenant (fire-and-forget)
+        if (sessionTenantId) {
+          db.execute(
+            sql`UPDATE tenants SET ultimo_acesso = NOW() WHERE id = ${sessionTenantId}`,
+          ).catch(() => {});
+        }
+
         // Log de auditoria
         logAudit({
           tenantId: sessionTenantId ?? undefined,
@@ -20384,6 +20391,204 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (error: any) {
       console.error("Create cobranca avulsa error:", error);
       return res.status(500).json({ message: error?.message || "Erro ao gerar cobrança" });
+    }
+  });
+
+  // ===== ADMIN SAAS — PAINEL DE AMBIENTES (Fase 5) =====
+
+  // Config do painel: o wizard usa p/ saber o que está disponível no runtime
+  app.get("/api/admin/saas-config", requireAuth, requireMaster, async (_req, res) => {
+    try {
+      const { asaasConfigured } = await import("./asaas");
+      const { railwayConfigured } = await import("./railway");
+      return res.json({
+        wildcardBaseDomain: process.env.WILDCARD_BASE_DOMAIN || null,
+        railwayConfigured: railwayConfigured(),
+        asaasConfigured: asaasConfigured(),
+      });
+    } catch (error) {
+      console.error("saas-config error:", error);
+      return res.status(500).json({ message: "Erro ao carregar configuração" });
+    }
+  });
+
+  // POST /api/admin/tenants/provisionar — wizard Novo Ambiente (cliente)
+  app.post("/api/admin/tenants/provisionar", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { provisionTenant } = await import("./provisioning");
+      const result = await provisionTenant(req.body);
+      return res.status(201).json(result);
+    } catch (error: any) {
+      console.error("Provisionar tenant error:", error);
+      return res.status(400).json({ message: error?.message || "Erro ao provisionar ambiente" });
+    }
+  });
+
+  // PATCH /api/admin/tenants/:id/status — ativo/suspenso/inativo/cancelado/excluido (soft delete)
+  app.patch("/api/admin/tenants/:id/status", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status } = req.body;
+      const validos = ["ativo", "suspenso", "inativo", "cancelado", "excluido"];
+      if (isNaN(id) || !validos.includes(status)) {
+        return res.status(400).json({ message: `Status inválido. Use: ${validos.join(", ")}` });
+      }
+      const [tenant] = (await db.execute(sql`SELECT interno FROM tenants WHERE id = ${id}`)).rows as any[];
+      if (!tenant) return res.status(404).json({ message: "Ambiente não encontrado" });
+      if (tenant.interno === true && status === "excluido") {
+        return res.status(400).json({ message: "O ambiente interno não pode ser excluído." });
+      }
+      // excluido/suspenso/inativo/cancelado derrubam o acesso (is_active); ativo religa
+      const isActive = status === "ativo";
+      await db.execute(sql`
+        UPDATE tenants SET status = ${status}, is_active = ${isActive}, updated_at = NOW()
+        WHERE id = ${id}
+      `);
+      return res.json({ message: `Ambiente marcado como ${status}` });
+    } catch (error) {
+      console.error("Tenant status error:", error);
+      return res.status(500).json({ message: "Erro ao alterar status" });
+    }
+  });
+
+  // GET /api/admin/tenants/:id/export-dump — backup JSON dos dados do ambiente (1º passo do hard delete)
+  app.get("/api/admin/tenants/:id/export-dump", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+      const grab = async (q: any) => (await db.execute(q)).rows;
+      const [tenant] = (await db.execute(sql`SELECT * FROM tenants WHERE id = ${id}`)).rows as any[];
+      if (!tenant) return res.status(404).json({ message: "Ambiente não encontrado" });
+      const dump = {
+        exportadoEm: new Date().toISOString(),
+        tenant,
+        dominios: await grab(sql`SELECT * FROM tenant_domains WHERE tenant_id = ${id}`),
+        usuarios: await grab(sql`
+          SELECT u.id, u.name, u.email, u.role, u.is_active, u.is_master, ut.role_in_tenant
+          FROM users u JOIN user_tenants ut ON ut.user_id = u.id WHERE ut.tenant_id = ${id}
+        `),
+        assinatura: await grab(sql`SELECT * FROM subscriptions WHERE tenant_id = ${id}`),
+        cobrancas: await grab(sql`SELECT * FROM cobrancas WHERE tenant_id = ${id}`),
+        adicionais: await grab(sql`SELECT * FROM assinatura_adicionais WHERE tenant_id = ${id}`),
+        modulos: await grab(sql`SELECT * FROM tenant_modulos WHERE tenant_id = ${id}`),
+        statusesContrato: await grab(sql`SELECT * FROM contract_statuses WHERE tenant_id = ${id}`),
+        fasesContrato: await grab(sql`SELECT * FROM contract_phases WHERE tenant_id = ${id}`),
+        propostas: await grab(sql`SELECT * FROM proposals WHERE tenant_id = ${id}`),
+      };
+      res.setHeader("Content-Disposition", `attachment; filename="ambiente-${tenant.key}-${id}-dump.json"`);
+      return res.json(dump);
+    } catch (error) {
+      console.error("Export dump error:", error);
+      return res.status(500).json({ message: "Erro ao exportar dados do ambiente" });
+    }
+  });
+
+  // DELETE /api/admin/tenants/:id/hard-delete — apaga de vez (exige confirmKey = key do ambiente)
+  app.delete("/api/admin/tenants/:id/hard-delete", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { confirmKey } = req.body || {};
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+      const [tenant] = (await db.execute(sql`SELECT key, interno FROM tenants WHERE id = ${id}`)).rows as any[];
+      if (!tenant) return res.status(404).json({ message: "Ambiente não encontrado" });
+      if (tenant.interno === true) {
+        return res.status(400).json({ message: "O ambiente interno não pode ser excluído." });
+      }
+      if (!confirmKey || confirmKey !== tenant.key) {
+        return res.status(400).json({ message: "Confirmação incorreta: digite a key exata do ambiente." });
+      }
+      // FKs com ON DELETE CASCADE limpam as tabelas dependentes
+      await db.execute(sql`DELETE FROM tenants WHERE id = ${id}`);
+      // Usuários que ficaram sem nenhum ambiente são desativados (não excluídos)
+      await db.execute(sql`
+        UPDATE users SET is_active = false
+        WHERE is_master = false AND is_active = true
+          AND NOT EXISTS (SELECT 1 FROM user_tenants ut WHERE ut.user_id = users.id)
+      `);
+      return res.json({ message: `Ambiente ${tenant.key} excluído definitivamente.` });
+    } catch (error) {
+      console.error("Hard delete tenant error:", error);
+      return res.status(500).json({ message: "Erro ao excluir ambiente" });
+    }
+  });
+
+  // GET /api/admin/tenants/:id/ficha — visão completa do ambiente
+  app.get("/api/admin/tenants/:id/ficha", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+      const { MODULOS_CATALOGO } = await import("@shared/modulos");
+
+      const [tenant] = (await db.execute(sql`SELECT * FROM tenants WHERE id = ${id}`)).rows as any[];
+      if (!tenant) return res.status(404).json({ message: "Ambiente não encontrado" });
+
+      const [dominios, assinatura, adicionais, modRows, contadores] = await Promise.all([
+        db.execute(sql`SELECT domain, is_primary FROM tenant_domains WHERE tenant_id = ${id}`).then(r => r.rows),
+        db.execute(sql`SELECT * FROM subscriptions WHERE tenant_id = ${id} LIMIT 1`).then(r => r.rows[0] || null),
+        db.execute(sql`
+          SELECT aa.id, p.nome AS produto, aa.created_at FROM assinatura_adicionais aa
+          LEFT JOIN produtos p ON p.id = aa.produto_id
+          WHERE aa.tenant_id = ${id} AND aa.ativo = true
+        `).then(r => r.rows),
+        db.execute(sql`SELECT modulo_key, ativo FROM tenant_modulos WHERE tenant_id = ${id}`).then(r => r.rows),
+        db.execute(sql`
+          SELECT
+            (SELECT COUNT(*)::int FROM user_tenants ut JOIN users u ON u.id = ut.user_id WHERE ut.tenant_id = ${id}) AS usuarios,
+            (SELECT COUNT(*)::int FROM user_tenants ut JOIN users u ON u.id = ut.user_id WHERE ut.tenant_id = ${id} AND u.is_active = true) AS usuarios_ativos,
+            (SELECT COUNT(*)::int FROM proposals WHERE tenant_id = ${id}) AS propostas,
+            (SELECT COALESCE(SUM(valor), 0) FROM cobrancas WHERE tenant_id = ${id} AND status = 'pago') AS total_pago
+        `).then(r => r.rows[0]),
+      ]);
+
+      // tenant_modulos vazio = todos ativos (retrocompat)
+      const overrides = new Map((modRows as any[]).map((m) => [m.modulo_key, m.ativo]));
+      const modulos = MODULOS_CATALOGO.map((m) => ({
+        key: m.key,
+        nome: m.nome,
+        ativo: overrides.size === 0 ? true : overrides.get(m.key) === true,
+      }));
+
+      return res.json({ tenant, dominios, assinatura, adicionais, modulos, metricas: contadores });
+    } catch (error) {
+      console.error("Ficha tenant error:", error);
+      return res.status(500).json({ message: "Erro ao carregar ficha do ambiente" });
+    }
+  });
+
+  // PUT /api/admin/tenants/:id/modulos — toggles de módulo do ambiente
+  app.put("/api/admin/tenants/:id/modulos", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { modulos } = req.body; // { [modulo_key]: boolean }
+      if (isNaN(id) || !modulos || typeof modulos !== "object") {
+        return res.status(400).json({ message: "Parâmetros inválidos" });
+      }
+      const { MODULO_KEYS } = await import("@shared/modulos");
+      // Materializa TODAS as chaves do catálogo: linhas parciais fariam o
+      // GET /api/tenant/modulos tratar os módulos ausentes como desligados.
+      const atuais = (await db.execute(
+        sql`SELECT modulo_key, ativo FROM tenant_modulos WHERE tenant_id = ${id}`,
+      )).rows as any[];
+      const semLinhas = atuais.length === 0; // vazio = todos ativos (retrocompat)
+      const estadoAtual = new Map(atuais.map((m) => [m.modulo_key, m.ativo === true]));
+      for (const key of MODULO_KEYS as string[]) {
+        const enviado = (modulos as Record<string, unknown>)[key];
+        const ativo =
+          typeof enviado === "boolean"
+            ? enviado
+            : semLinhas
+              ? true
+              : estadoAtual.get(key) === true;
+        await db.execute(sql`
+          INSERT INTO tenant_modulos (tenant_id, modulo_key, ativo)
+          VALUES (${id}, ${key}, ${ativo})
+          ON CONFLICT (tenant_id, modulo_key) DO UPDATE SET ativo = ${ativo}
+        `);
+      }
+      return res.json({ message: "Módulos atualizados" });
+    } catch (error) {
+      console.error("Update tenant modulos error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar módulos" });
     }
   });
 

@@ -36,6 +36,8 @@ export const tenants = pgTable("tenants", {
   themeJson: jsonb("theme_json"), // { primaryColor, secondaryColor, loginBgColor, etc }
   interno: boolean("interno").notNull().default(false), // Ambiente interno do dono do SaaS (não paga assinatura)
   asaasCustomerId: text("asaas_customer_id"), // Customer no gateway Asaas (só ambientes clientes)
+  status: varchar("status", { length: 20 }).notNull().default("ativo"), // ativo | suspenso | inativo | cancelado | excluido (soft delete)
+  ultimoAcesso: timestamp("ultimo_acesso"), // Último login de qualquer usuário do ambiente
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(), // Rastrear última modificação de branding

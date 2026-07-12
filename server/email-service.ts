@@ -59,6 +59,32 @@ async function sendEmail(subject: string, html: string): Promise<void> {
   }
 }
 
+// E-mail transacional genérico (Fase 5 — ex.: credenciais de novo ambiente).
+// Best-effort: sem SMTP configurado só loga e retorna false.
+export async function sendMailTo(
+  to: string,
+  subject: string,
+  html: string,
+  fromName?: string,
+): Promise<boolean> {
+  if (!transporter) {
+    console.warn(`[EMAIL] "${subject}" para ${to} não enviado (SMTP não configurado)`);
+    return false;
+  }
+  try {
+    await transporter.sendMail({
+      from: `"${fromName || "Capital CRM"}" <${process.env.SMTP_USER}>`,
+      to,
+      subject,
+      html,
+    });
+    return true;
+  } catch (err) {
+    console.error(`[EMAIL] Erro ao enviar "${subject}" para ${to}:`, err);
+    return false;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ALERTAS DE SEGURANÇA
 // ─────────────────────────────────────────────────────────────────────────────
