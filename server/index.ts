@@ -751,7 +751,53 @@ app.use((req, res, next) => {
           // Fase 0 (fechamento): módulo Funcionários removido; Fábio dispensou backup (11/07/2026).
           // CASCADE derruba só as FKs (users.employee_id / commercial_team_members.employee_id) — as colunas ficam.
           await saasDb.execute(saasSql`DROP TABLE IF EXISTS employees CASCADE`);
-          log("✓ Migração Admin SaaS (interno/planos/tenant_modulos/cobrancas) ok");
+          // Fase 3 — Serviços & Cobrança: catálogo de produtos vendáveis, promoções e adicionais de assinatura.
+          await saasDb.execute(saasSql`
+            CREATE TABLE IF NOT EXISTS produtos (
+              id          SERIAL PRIMARY KEY,
+              tenant_id   INTEGER,
+              nome        VARCHAR(255) NOT NULL,
+              descricao   TEXT,
+              tipo        VARCHAR(30) NOT NULL DEFAULT 'outro',
+              preco       DECIMAL(10,2) NOT NULL DEFAULT 0,
+              gratuito    BOOLEAN NOT NULL DEFAULT false,
+              cobravel    BOOLEAN NOT NULL DEFAULT true,
+              ativo       BOOLEAN NOT NULL DEFAULT true,
+              created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await saasDb.execute(saasSql`
+            CREATE TABLE IF NOT EXISTS promocoes (
+              id              SERIAL PRIMARY KEY,
+              produto_id      INTEGER REFERENCES produtos(id) ON DELETE CASCADE,
+              tipo            VARCHAR(30) NOT NULL,
+              valor           DECIMAL(10,2),
+              escopo          VARCHAR(20) NOT NULL DEFAULT 'global',
+              tenant_alvo     INTEGER,
+              vigencia_inicio DATE,
+              vigencia_fim    DATE,
+              ativo           BOOLEAN NOT NULL DEFAULT true,
+              created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await saasDb.execute(saasSql`
+            CREATE TABLE IF NOT EXISTS assinatura_adicionais (
+              id          SERIAL PRIMARY KEY,
+              tenant_id   INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              produto_id  INTEGER REFERENCES produtos(id) ON DELETE SET NULL,
+              cobranca_id INTEGER,
+              ativo       BOOLEAN NOT NULL DEFAULT true,
+              created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await saasDb.execute(saasSql`CREATE INDEX IF NOT EXISTS idx_assinatura_adicionais_tenant ON assinatura_adicionais(tenant_id)`);
+          // Vínculo do pedido de lista com produto/cobrança (pedidos existentes ficam com produto_id NULL = lead implícito)
+          await saasDb.execute(saasSql`
+            ALTER TABLE pedidos_lista
+              ADD COLUMN IF NOT EXISTS produto_id INTEGER,
+              ADD COLUMN IF NOT EXISTS cobranca_id INTEGER
+          `);
+          log("✓ Migração Admin SaaS (interno/planos/tenant_modulos/cobrancas/produtos) ok");
         } catch (e) {
           log(`⚠ Migração Admin SaaS falhou (non-fatal): ${e}`);
         }

@@ -11308,6 +11308,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
               console.error("[PedidoLista] Failed to update status on error:", e);
             }
           });
+        } else {
+          // Jarvis avisa o dono do SaaS que há um novo pedido aguardando aprovação
+          notificarDono({
+            title: "Jarvis · Novo pedido de lista",
+            message: `${req.user!.name} solicitou "${nomePacote}" (${quantidadeEfetiva.toLocaleString("pt-BR")} registros) — aguardando aprovação.`,
+            actionUrl: "/servicos-cobranca",
+          }).catch((e) => console.error("[Jarvis] notificarDono falhou:", e));
         }
 
         const corteFoiAplicado = quantidadeEfetiva < total;
@@ -20124,6 +20131,262 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
   // ===== TENANT MANAGEMENT ROUTES (Master Only) =====
 
+  // ===== ADMIN SAAS — SERVIÇOS & COBRANÇA (Fase 3) =====
+
+  // Jarvis: notifica TODOS os donos do SaaS (is_master=true), nunca masters de cliente.
+  async function notificarDono(params: { title: string; message: string; actionUrl?: string }) {
+    const donos = await db.execute(
+      sql`SELECT id FROM users WHERE is_master = true AND is_active = true`,
+    );
+    for (const d of donos.rows as any[]) {
+      await createNotification({
+        userId: Number(d.id),
+        title: params.title,
+        message: params.message,
+        type: "jarvis",
+        actionUrl: params.actionUrl,
+      });
+    }
+  }
+
+  const PRODUTO_TIPOS = ["lead", "consulta", "premium", "dominio_proprio", "outro"];
+  const PROMO_TIPOS = ["desconto_pct", "desconto_valor", "bonus", "beneficio"];
+
+  // --- Produtos ---
+  app.get("/api/servicos/produtos", requireAuth, requireMaster, async (_req, res) => {
+    try {
+      const result = await db.execute(sql`SELECT * FROM produtos ORDER BY ativo DESC, nome ASC`);
+      return res.json(result.rows);
+    } catch (error) {
+      console.error("List produtos error:", error);
+      return res.status(500).json({ message: "Erro ao listar produtos" });
+    }
+  });
+
+  app.post("/api/servicos/produtos", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { nome, descricao, tipo, preco, gratuito, cobravel, ativo } = req.body;
+      if (!nome || typeof nome !== "string") {
+        return res.status(400).json({ message: "Nome do produto é obrigatório" });
+      }
+      const tipoValue = PRODUTO_TIPOS.includes(tipo) ? tipo : "outro";
+      const result = await db.execute(sql`
+        INSERT INTO produtos (nome, descricao, tipo, preco, gratuito, cobravel, ativo)
+        VALUES (
+          ${nome}, ${descricao || null}, ${tipoValue}, ${Number(preco) || 0},
+          ${gratuito === true}, ${cobravel !== false}, ${ativo !== false}
+        )
+        RETURNING *
+      `);
+      return res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error("Create produto error:", error);
+      return res.status(500).json({ message: "Erro ao criar produto" });
+    }
+  });
+
+  app.put("/api/servicos/produtos/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+      const { nome, descricao, tipo, preco, gratuito, cobravel, ativo } = req.body;
+      const tipoValue = tipo != null && PRODUTO_TIPOS.includes(tipo) ? tipo : null;
+      const result = await db.execute(sql`
+        UPDATE produtos SET
+          nome = COALESCE(${nome ?? null}, nome),
+          descricao = ${descricao ?? null},
+          tipo = COALESCE(${tipoValue}, tipo),
+          preco = COALESCE(${preco != null ? Number(preco) : null}, preco),
+          gratuito = COALESCE(${typeof gratuito === "boolean" ? gratuito : null}, gratuito),
+          cobravel = COALESCE(${typeof cobravel === "boolean" ? cobravel : null}, cobravel),
+          ativo = COALESCE(${typeof ativo === "boolean" ? ativo : null}, ativo)
+        WHERE id = ${id}
+        RETURNING *
+      `);
+      if (result.rows.length === 0) return res.status(404).json({ message: "Produto não encontrado" });
+      return res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Update produto error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar produto" });
+    }
+  });
+
+  app.delete("/api/servicos/produtos/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+      await db.execute(sql`DELETE FROM produtos WHERE id = ${id}`);
+      return res.json({ message: "Produto removido" });
+    } catch (error) {
+      console.error("Delete produto error:", error);
+      return res.status(500).json({ message: "Erro ao remover produto" });
+    }
+  });
+
+  // --- Promoções ---
+  app.get("/api/servicos/promocoes", requireAuth, requireMaster, async (_req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT pr.*, p.nome AS produto_nome, t.name AS tenant_nome
+        FROM promocoes pr
+        LEFT JOIN produtos p ON p.id = pr.produto_id
+        LEFT JOIN tenants t ON t.id = pr.tenant_alvo
+        ORDER BY pr.ativo DESC, pr.id DESC
+      `);
+      return res.json(result.rows);
+    } catch (error) {
+      console.error("List promocoes error:", error);
+      return res.status(500).json({ message: "Erro ao listar promoções" });
+    }
+  });
+
+  app.post("/api/servicos/promocoes", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { produtoId, tipo, valor, escopo, tenantAlvo, vigenciaInicio, vigenciaFim, ativo } = req.body;
+      if (!PROMO_TIPOS.includes(tipo)) {
+        return res.status(400).json({ message: `Tipo inválido. Use: ${PROMO_TIPOS.join(", ")}` });
+      }
+      const escopoValue = escopo === "cliente" ? "cliente" : "global";
+      const result = await db.execute(sql`
+        INSERT INTO promocoes (produto_id, tipo, valor, escopo, tenant_alvo, vigencia_inicio, vigencia_fim, ativo)
+        VALUES (
+          ${produtoId || null}, ${tipo}, ${valor != null ? Number(valor) : null},
+          ${escopoValue}, ${escopoValue === "cliente" ? (tenantAlvo || null) : null},
+          ${vigenciaInicio || null}, ${vigenciaFim || null}, ${ativo !== false}
+        )
+        RETURNING *
+      `);
+      return res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error("Create promocao error:", error);
+      return res.status(500).json({ message: "Erro ao criar promoção" });
+    }
+  });
+
+  app.put("/api/servicos/promocoes/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+      const { produtoId, tipo, valor, escopo, tenantAlvo, vigenciaInicio, vigenciaFim, ativo } = req.body;
+      const tipoValue = tipo != null && PROMO_TIPOS.includes(tipo) ? tipo : null;
+      const escopoValue = escopo === "cliente" || escopo === "global" ? escopo : null;
+      const result = await db.execute(sql`
+        UPDATE promocoes SET
+          produto_id = ${produtoId ?? null},
+          tipo = COALESCE(${tipoValue}, tipo),
+          valor = ${valor != null ? Number(valor) : null},
+          escopo = COALESCE(${escopoValue}, escopo),
+          tenant_alvo = ${tenantAlvo ?? null},
+          vigencia_inicio = ${vigenciaInicio || null},
+          vigencia_fim = ${vigenciaFim || null},
+          ativo = COALESCE(${typeof ativo === "boolean" ? ativo : null}, ativo)
+        WHERE id = ${id}
+        RETURNING *
+      `);
+      if (result.rows.length === 0) return res.status(404).json({ message: "Promoção não encontrada" });
+      return res.json(result.rows[0]);
+    } catch (error) {
+      console.error("Update promocao error:", error);
+      return res.status(500).json({ message: "Erro ao atualizar promoção" });
+    }
+  });
+
+  app.delete("/api/servicos/promocoes/:id", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+      await db.execute(sql`DELETE FROM promocoes WHERE id = ${id}`);
+      return res.json({ message: "Promoção removida" });
+    } catch (error) {
+      console.error("Delete promocao error:", error);
+      return res.status(500).json({ message: "Erro ao remover promoção" });
+    }
+  });
+
+  // --- Cobranças avulsas (Asaas) ---
+  app.get("/api/servicos/cobrancas", requireAuth, requireMaster, async (_req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT c.*, t.name AS tenant_nome
+        FROM cobrancas c
+        LEFT JOIN tenants t ON t.id = c.tenant_id
+        ORDER BY c.created_at DESC
+        LIMIT 200
+      `);
+      return res.json(result.rows);
+    } catch (error) {
+      console.error("List cobrancas error:", error);
+      return res.status(500).json({ message: "Erro ao listar cobranças" });
+    }
+  });
+
+  // Gera uma cobrança avulsa no Asaas para um ambiente cliente + produto.
+  // Ambiente interno não é cobrado. Retorna o invoiceUrl (checkout hospedado).
+  app.post("/api/servicos/cobrancas", requireAuth, requireMaster, async (req, res) => {
+    try {
+      const { asaasConfigured, createCustomer, createCharge } = await import("./asaas");
+      if (!asaasConfigured()) {
+        return res.status(400).json({ message: "Asaas não configurado (defina ASAAS_API_KEY)." });
+      }
+      const { tenantId, produtoId, vencimento, descricao } = req.body;
+      const tid = parseInt(tenantId);
+      if (isNaN(tid)) return res.status(400).json({ message: "Ambiente (tenantId) obrigatório" });
+
+      const [tenant] = (await db.execute(
+        sql`SELECT id, name, interno, asaas_customer_id FROM tenants WHERE id = ${tid}`,
+      )).rows as any[];
+      if (!tenant) return res.status(404).json({ message: "Ambiente não encontrado" });
+      if (tenant.interno === true) {
+        return res.status(400).json({ message: "Ambiente interno não é cobrado." });
+      }
+
+      const [produto] = (await db.execute(
+        sql`SELECT id, nome, preco, cobravel FROM produtos WHERE id = ${parseInt(produtoId)}`,
+      )).rows as any[];
+      if (!produto) return res.status(404).json({ message: "Produto não encontrado" });
+      if (produto.cobravel === false) {
+        return res.status(400).json({ message: "Produto não é cobrável." });
+      }
+      const valor = Number(produto.preco) || 0;
+      if (valor <= 0) return res.status(400).json({ message: "Produto sem preço definido." });
+
+      // Garante um customer no Asaas para o ambiente
+      let customerId: string = tenant.asaas_customer_id;
+      if (!customerId) {
+        const customer = await createCustomer({
+          name: tenant.name,
+          externalReference: String(tenant.id),
+        });
+        customerId = customer.id;
+        await db.execute(sql`UPDATE tenants SET asaas_customer_id = ${customerId} WHERE id = ${tid}`);
+      }
+
+      const dueDate =
+        typeof vencimento === "string" && /^\d{4}-\d{2}-\d{2}$/.test(vencimento)
+          ? vencimento
+          : new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+
+      const charge = await createCharge({
+        customer: customerId,
+        value: valor,
+        dueDate,
+        description: descricao || produto.nome,
+        externalReference: `produto:${produto.id};tenant:${tid}`,
+      });
+
+      const [cobranca] = (await db.execute(sql`
+        INSERT INTO cobrancas (tenant_id, tipo, ref_id, asaas_id, valor, status, vencimento)
+        VALUES (${tid}, 'avulso', ${produto.id}, ${charge.id}, ${valor}, 'pendente', ${dueDate})
+        RETURNING *
+      `)).rows as any[];
+
+      return res.status(201).json({ ...cobranca, invoiceUrl: charge.invoiceUrl });
+    } catch (error: any) {
+      console.error("Create cobranca avulsa error:", error);
+      return res.status(500).json({ message: error?.message || "Erro ao gerar cobrança" });
+    }
+  });
+
   // ===== ADMIN SAAS — PLANOS & MÓDULOS (Fase 1) =====
 
   // GET /api/admin/planos - Lista planos com seus módulos (dono do SaaS)
@@ -20291,13 +20554,45 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         novoStatus = "cancelado";
       }
       if (novoStatus) {
-        await db.execute(sql`
+        const upd = (await db.execute(sql`
           UPDATE cobrancas SET
             status = ${novoStatus},
             pago_em = ${novoStatus === "pago" ? sql`NOW()` : sql`pago_em`}
           WHERE asaas_id = ${payment.id}
-        `);
+          RETURNING id, tenant_id, tipo, ref_id
+        `)).rows as any[];
         console.log(`[ASAAS-WEBHOOK] ${event} → cobranca ${payment.id} = ${novoStatus}`);
+
+        // Cobrança avulsa paga → libera o serviço e registra o adicional na assinatura
+        if (novoStatus === "pago" && upd[0]?.tipo === "avulso") {
+          const cob = upd[0];
+          try {
+            await db.execute(sql`
+              INSERT INTO assinatura_adicionais (tenant_id, produto_id, cobranca_id, ativo)
+              VALUES (${cob.tenant_id}, ${cob.ref_id || null}, ${cob.id}, true)
+            `);
+            // Se o produto for do tipo lead e houver um pedido de lista vinculado, dispara a geração do arquivo
+            const pedidos = (await db.execute(sql`
+              SELECT id FROM pedidos_lista WHERE cobranca_id = ${cob.id} AND status = 'aprovado'
+            `)).rows as any[];
+            for (const p of pedidos) {
+              const pedido = await storage.getPedidoLista(Number(p.id));
+              if (pedido) {
+                generatePedidoListaFile(pedido.id, pedido).catch((err) =>
+                  console.error("[ASAAS-WEBHOOK] geração pós-pagamento falhou:", err),
+                );
+              }
+            }
+            // Avisa o dono que a cobrança foi paga
+            notificarDono({
+              title: "Jarvis · Cobrança paga",
+              message: `Cobrança avulsa #${cob.id} confirmada — serviço liberado.`,
+              actionUrl: "/servicos-cobranca",
+            }).catch(() => {});
+          } catch (e) {
+            console.error("[ASAAS-WEBHOOK] liberação do avulso falhou:", e);
+          }
+        }
       }
       return res.status(200).json({ received: true });
     } catch (error) {
