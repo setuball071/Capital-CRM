@@ -1,14 +1,17 @@
 import type { Express, Request, Response, RequestHandler } from "express";
 import multer from "multer";
 import { db } from "./storage";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   kbArtigos,
   kbSugestoes,
   assistenteConversas,
   assistenteMensagens,
+  assistentePerguntas,
+  assistenteAvisos,
   aiPrompts,
   userPermissions,
+  users,
 } from "@shared/schema";
 import { ocrClient, ocrModel } from "./openaiClient";
 import { extractTextFromPdf } from "./roteiros-pdf-service";
@@ -116,13 +119,42 @@ async function obterPersona(): Promise<string> {
 // Variações do "não sei" (o Jarvis não chama o LLM nesse caminho — mantém a
 // personalidade sem arriscar inventar). Gira aleatoriamente pra não soar robótico.
 const NAO_SEI_VARIANTES = [
-  `Essa aí ainda não tá na minha base — e eu não chuto regra de banco, isso é jeito de queimar cliente. Confirma com seu gestor; se for útil pra equipe, pede pra ele me ensinar que eu guardo.`,
-  `Não tenho isso registrado aqui, e prefiro não inventar: regra errada é pior que "não sei". Fala com seu gestor — e se render, me ensina depois que eu memorizo.`,
-  `Essa me pegou — não está na minha base e não vou arriscar palpite. Confere com o gestor e, se valer pra equipe, cadastra que eu passo a responder.`,
-  `Hmm, essa eu ainda não aprendi. Sem vergonha de admitir — vergonha é inventar. 🙈 Pergunta pro seu gestor; se for bom pra todos, me ensina que fica guardado.`,
+  `Essa aí ainda não tá na minha base — e eu não chuto regra de banco. Já deixei sua pergunta registrada pro gestor; assim que responderem, te aviso aqui. 👌`,
+  `Não tenho isso registrado, e prefiro não inventar. Mandei sua pergunta pro plantão do gestor — fica de olho que a resposta chega por aqui.`,
+  `Essa me pegou. Registrei pro gestor responder; te aviso aqui assim que sair. Enquanto isso, se for urgente, chama ele direto.`,
+  `Ainda não aprendi essa. Sem vergonha de admitir — vergonha é inventar. 🙈 Sua pergunta já foi pro gestor; aviso você por aqui quando responderem.`,
 ];
 function respostaNaoSei(): string {
   return NAO_SEI_VARIANTES[Math.floor(Math.random() * NAO_SEI_VARIANTES.length)];
+}
+
+/** Registra a pergunta sem resposta na fila do plantão do gestor. Best-effort: NUNCA lança (roda dentro do stream SSE). */
+async function registrarPerguntaPendente(
+  tenantId: number,
+  corretorId: number,
+  pergunta: string,
+): Promise<void> {
+  try {
+    const p = (pergunta || "").trim().slice(0, 2000);
+    if (!p) return;
+    // dedupe: mesma pergunta pendente do mesmo corretor no mesmo tenant
+    const [existente] = await db
+      .select({ id: assistentePerguntas.id })
+      .from(assistentePerguntas)
+      .where(
+        and(
+          eq(assistentePerguntas.tenantId, tenantId),
+          eq(assistentePerguntas.corretorId, corretorId),
+          eq(assistentePerguntas.status, "pendente"),
+          sql`lower(${assistentePerguntas.pergunta}) = lower(${p})`,
+        ),
+      )
+      .limit(1);
+    if (existente) return;
+    await db.insert(assistentePerguntas).values({ tenantId, corretorId, pergunta: p });
+  } catch (err) {
+    console.error("[assistente/plantao] registrarPerguntaPendente falhou:", err);
+  }
 }
 
 /** Classifica conteúdo bruto em título/categoria/banco via LLM (JSON). */
@@ -504,6 +536,11 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
           .returning({ id: assistenteMensagens.id });
         enviar({ delta: naoSei });
         enviar({ done: true, conversaId: convId, mensagemId: msg.id, semResposta: true, fontes: [] });
+        try {
+          await registrarPerguntaPendente(req.tenantId, req.user.id, texto);
+        } catch {
+          // best-effort: nunca derruba o stream
+        }
         return res.end();
       }
 
@@ -577,6 +614,11 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
       if (semResposta) {
         resposta = respostaNaoSei();
         enviar({ delta: resposta }); // nenhum delta foi emitido — sem isso o cliente mostra bolha vazia
+        try {
+          await registrarPerguntaPendente(req.tenantId, req.user.id, texto);
+        } catch {
+          // best-effort: nunca derruba o stream
+        }
       }
 
       const fontesUnicas = Array.from(
@@ -875,4 +917,151 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
       res.status(500).json({ message: "Erro interno" });
     }
   });
+
+  // ---------- Plantão de perguntas (gestão) ----------
+  app.get("/api/assistente/perguntas", requireAuth, requireGestorKb, async (req: any, res) => {
+    try {
+      if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
+      const pendentes = await db
+        .select({
+          id: assistentePerguntas.id,
+          pergunta: assistentePerguntas.pergunta,
+          corretorId: assistentePerguntas.corretorId,
+          corretorNome: users.name,
+          createdAt: assistentePerguntas.createdAt,
+        })
+        .from(assistentePerguntas)
+        .innerJoin(users, eq(assistentePerguntas.corretorId, users.id))
+        .where(
+          and(
+            eq(assistentePerguntas.tenantId, req.tenantId),
+            eq(assistentePerguntas.status, "pendente"),
+          ),
+        )
+        .orderBy(asc(assistentePerguntas.id)) // mais antigas primeiro
+        .limit(50);
+      res.json(pendentes);
+    } catch (err) {
+      console.error("[assistente/perguntas] erro:", err);
+      res.status(500).json({ message: "Erro interno" });
+    }
+  });
+
+  app.post(
+    "/api/assistente/perguntas/:id/responder",
+    requireAuth,
+    requireGestorKb,
+    async (req: any, res) => {
+      try {
+        if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
+        const id = Number(req.params.id);
+        const { resposta, salvarNaBase } = req.body || {};
+        if (!resposta?.trim()) {
+          return res.status(422).json({ message: "resposta é obrigatória" });
+        }
+        const respostaTxt = String(resposta).trim();
+        const [perg] = await db
+          .select()
+          .from(assistentePerguntas)
+          .where(
+            and(
+              eq(assistentePerguntas.id, id),
+              eq(assistentePerguntas.tenantId, req.tenantId),
+              eq(assistentePerguntas.status, "pendente"),
+            ),
+          )
+          .limit(1);
+        if (!perg) return res.status(404).json({ message: "Pergunta pendente não encontrada" });
+
+        // salvarNaBase é best-effort: falha aqui NÃO impede a resposta ao corretor
+        let artigoId: number | null = null;
+        if (salvarNaBase === true) {
+          try {
+            const clas = await classificarConteudo(
+              `Pergunta: ${perg.pergunta}\nResposta do gestor: ${respostaTxt}`,
+            );
+            const [artigo] = await db
+              .insert(kbArtigos)
+              .values({
+                tenantId: req.tenantId,
+                titulo: clas.titulo,
+                conteudo: clas.conteudo,
+                categoria: clas.categoria,
+                banco: clas.banco,
+                status: "publicado",
+                origem: "plantao",
+                criadoPor: req.user.id,
+              })
+              .returning();
+            await indexarArtigo(artigo.id, artigo.titulo, artigo.conteudo);
+            artigoId = artigo.id;
+          } catch (e) {
+            console.error("[assistente/perguntas/responder] salvarNaBase falhou:", e);
+          }
+        }
+
+        await db
+          .update(assistentePerguntas)
+          .set({
+            status: "respondida",
+            resposta: respostaTxt,
+            respondidaPor: req.user.id,
+            respondidaEm: new Date(),
+            artigoId,
+          })
+          .where(eq(assistentePerguntas.id, id));
+
+        // aviso vai pro CORRETOR que perguntou (não pro gestor)
+        await db.insert(assistenteAvisos).values({
+          tenantId: req.tenantId,
+          userId: perg.corretorId,
+          tipo: "resposta_gestor",
+          titulo: "O gestor respondeu sua pergunta 💬",
+          mensagem: `Você perguntou: "${perg.pergunta}"\n\nResposta: ${respostaTxt}`,
+          proposalId: null,
+        });
+
+        res.json({ ok: true, artigoId });
+      } catch (err) {
+        console.error("[assistente/perguntas/responder] erro:", err);
+        res.status(500).json({ message: "Erro interno" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/assistente/perguntas/:id/descartar",
+    requireAuth,
+    requireGestorKb,
+    async (req: any, res) => {
+      try {
+        if (!req.tenantId) return res.status(401).json({ message: "Tenant não resolvido" });
+        const id = Number(req.params.id);
+        const [perg] = await db
+          .select({ id: assistentePerguntas.id })
+          .from(assistentePerguntas)
+          .where(
+            and(
+              eq(assistentePerguntas.id, id),
+              eq(assistentePerguntas.tenantId, req.tenantId),
+              eq(assistentePerguntas.status, "pendente"),
+            ),
+          )
+          .limit(1);
+        if (!perg) return res.status(404).json({ message: "Pergunta pendente não encontrada" });
+        await db
+          .update(assistentePerguntas)
+          .set({
+            status: "descartada",
+            respondidaPor: req.user.id,
+            respondidaEm: new Date(),
+          })
+          .where(eq(assistentePerguntas.id, id));
+        res.json({ ok: true });
+      } catch (err) {
+        console.error("[assistente/perguntas/descartar] erro:", err);
+        res.status(500).json({ message: "Erro interno" });
+      }
+    },
+  );
 }
