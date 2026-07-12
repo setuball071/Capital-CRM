@@ -140,8 +140,16 @@ if (isProduction) {
   app.use(
     express.static(nodePath.join(import.meta.dirname, "public"), {
       index: false,
-      maxAge: "1y",
-      immutable: true,
+      // Assets com hash no nome (JS/CSS/imgs em /assets) são imutáveis → cache longo.
+      // HTML (ex.: simuladores em client/public) NÃO pode ser immutable, senão o
+      // navegador trava numa versão por 1 ano e nem hard refresh atualiza.
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache");
+        } else {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
     }),
   );
 }
