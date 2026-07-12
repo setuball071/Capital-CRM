@@ -20598,19 +20598,27 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   app.get("/api/admin/planos", requireAuth, requireMaster, async (_req, res) => {
     try {
       const planosResult = await db.execute(
-        sql`SELECT * FROM planos ORDER BY preco_mensal ASC, id ASC`,
+        sql`SELECT * FROM planos ORDER BY valor ASC, id ASC`,
       );
       const modsResult = await db.execute(
         sql`SELECT plano_id, modulo_key FROM plano_modulos`,
+      );
+      const servResult = await db.execute(
+        sql`SELECT plano_id, produto_id, incluso FROM plano_produtos`,
       );
       const modulosPorPlano: Record<number, string[]> = {};
       for (const m of modsResult.rows as any[]) {
         (modulosPorPlano[m.plano_id] ||= []).push(m.modulo_key);
       }
+      const servicosPorPlano: Record<number, any[]> = {};
+      for (const s of servResult.rows as any[]) {
+        (servicosPorPlano[s.plano_id] ||= []).push({ produtoId: s.produto_id, incluso: s.incluso });
+      }
       return res.json(
         (planosResult.rows as any[]).map((p) => ({
           ...p,
           modulos: modulosPorPlano[p.id] || [],
+          servicos: servicosPorPlano[p.id] || [],
         })),
       );
     } catch (error) {
@@ -20619,45 +20627,67 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
-  // POST /api/admin/planos - Cria plano { nome, descricao, precoMensal, modulos[] }
+  // Helpers de planos (SP1): valida módulos e regrava módulos + serviços de um plano
+  async function gravarModulosEServicos(planoId: number, modulos: string[] | null, servicos: any[] | null) {
+    if (modulos) {
+      await db.execute(sql`DELETE FROM plano_modulos WHERE plano_id = ${planoId}`);
+      for (const key of modulos) {
+        await db.execute(sql`INSERT INTO plano_modulos (plano_id, modulo_key) VALUES (${planoId}, ${key}) ON CONFLICT DO NOTHING`);
+      }
+    }
+    if (servicos) {
+      await db.execute(sql`DELETE FROM plano_produtos WHERE plano_id = ${planoId}`);
+      for (const s of servicos) {
+        const pid = parseInt(s.produtoId);
+        if (isNaN(pid)) continue;
+        await db.execute(sql`
+          INSERT INTO plano_produtos (plano_id, produto_id, incluso) VALUES (${planoId}, ${pid}, ${s.incluso !== false})
+          ON CONFLICT (plano_id, produto_id) DO UPDATE SET incluso = ${s.incluso !== false}
+        `);
+      }
+    }
+  }
+
+  // POST /api/admin/planos - Cria plano { nome, descricao, ciclo, valor, maxUsuarios, limites, modulos[], servicos[] }
   app.post("/api/admin/planos", requireAuth, requireMaster, async (req, res) => {
     try {
       const { MODULO_KEYS } = await import("@shared/modulos");
-      const { nome, descricao, precoMensal, modulos } = req.body;
+      const { nome, descricao, ciclo, valor, maxUsuarios, limites, modulos, servicos } = req.body;
       if (!nome || typeof nome !== "string") {
         return res.status(400).json({ message: "Nome do plano é obrigatório" });
       }
+      const cicloValue = ciclo === "anual" ? "anual" : "mensal";
+      const valorNum = Number(valor) || 0;
       const mods: string[] = Array.isArray(modulos) ? modulos : [];
       const invalid = mods.filter((k) => !(MODULO_KEYS as string[]).includes(k));
       if (invalid.length > 0) {
         return res.status(400).json({ message: `Módulos inválidos: ${invalid.join(", ")}` });
       }
       const inserted = await db.execute(sql`
-        INSERT INTO planos (nome, descricao, preco_mensal)
-        VALUES (${nome}, ${descricao || null}, ${Number(precoMensal) || 0})
+        INSERT INTO planos (nome, descricao, ciclo, valor, preco_mensal, max_usuarios, limites)
+        VALUES (
+          ${nome}, ${descricao || null}, ${cicloValue}, ${valorNum}, ${valorNum},
+          ${maxUsuarios != null && maxUsuarios !== "" ? parseInt(maxUsuarios) : null},
+          ${limites ? JSON.stringify(limites) : "{}"}::jsonb
+        )
         RETURNING *
       `);
       const plano = inserted.rows[0] as any;
-      for (const key of mods) {
-        await db.execute(sql`
-          INSERT INTO plano_modulos (plano_id, modulo_key) VALUES (${plano.id}, ${key})
-          ON CONFLICT DO NOTHING
-        `);
-      }
-      return res.status(201).json({ ...plano, modulos: mods });
+      await gravarModulosEServicos(plano.id, mods, Array.isArray(servicos) ? servicos : null);
+      return res.status(201).json({ ...plano, modulos: mods, servicos: servicos || [] });
     } catch (error) {
       console.error("Create plano error:", error);
       return res.status(500).json({ message: "Erro ao criar plano" });
     }
   });
 
-  // PUT /api/admin/planos/:id - Atualiza plano e substitui a lista de módulos
+  // PUT /api/admin/planos/:id - Atualiza plano e substitui módulos/serviços
   app.put("/api/admin/planos/:id", requireAuth, requireMaster, async (req, res) => {
     try {
       const { MODULO_KEYS } = await import("@shared/modulos");
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
-      const { nome, descricao, precoMensal, ativo, modulos } = req.body;
+      const { nome, descricao, ciclo, valor, maxUsuarios, limites, ativo, modulos, servicos } = req.body;
       const existing = await db.execute(sql`SELECT id FROM planos WHERE id = ${id}`);
       if (existing.rows.length === 0) {
         return res.status(404).json({ message: "Plano não encontrado" });
@@ -20669,30 +20699,28 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           return res.status(400).json({ message: `Módulos inválidos: ${invalid.join(", ")}` });
         }
       }
+      const cicloValue = ciclo === "anual" || ciclo === "mensal" ? ciclo : null;
+      const valorNum = valor != null && valor !== "" ? Number(valor) : null;
       await db.execute(sql`
         UPDATE planos SET
           nome = COALESCE(${nome ?? null}, nome),
-          descricao = COALESCE(${descricao ?? null}, descricao),
-          preco_mensal = COALESCE(${precoMensal != null ? Number(precoMensal) : null}, preco_mensal),
+          descricao = ${descricao ?? null},
+          ciclo = COALESCE(${cicloValue}, ciclo),
+          valor = COALESCE(${valorNum}, valor),
+          preco_mensal = COALESCE(${valorNum}, preco_mensal),
+          max_usuarios = ${maxUsuarios != null && maxUsuarios !== "" ? parseInt(maxUsuarios) : null},
+          limites = COALESCE(${limites ? JSON.stringify(limites) : null}::jsonb, limites),
           ativo = COALESCE(${typeof ativo === "boolean" ? ativo : null}, ativo)
         WHERE id = ${id}
       `);
-      if (mods) {
-        await db.execute(sql`DELETE FROM plano_modulos WHERE plano_id = ${id}`);
-        for (const key of mods) {
-          await db.execute(sql`
-            INSERT INTO plano_modulos (plano_id, modulo_key) VALUES (${id}, ${key})
-            ON CONFLICT DO NOTHING
-          `);
-        }
-      }
+      await gravarModulosEServicos(id, mods, Array.isArray(servicos) ? servicos : null);
       const updated = await db.execute(sql`SELECT * FROM planos WHERE id = ${id}`);
-      const modsNow = await db.execute(
-        sql`SELECT modulo_key FROM plano_modulos WHERE plano_id = ${id}`,
-      );
+      const modsNow = await db.execute(sql`SELECT modulo_key FROM plano_modulos WHERE plano_id = ${id}`);
+      const servNow = await db.execute(sql`SELECT produto_id, incluso FROM plano_produtos WHERE plano_id = ${id}`);
       return res.json({
         ...(updated.rows[0] as any),
         modulos: (modsNow.rows as any[]).map((m) => m.modulo_key),
+        servicos: (servNow.rows as any[]).map((s) => ({ produtoId: s.produto_id, incluso: s.incluso })),
       });
     } catch (error) {
       console.error("Update plano error:", error);
@@ -20700,11 +20728,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     }
   });
 
-  // DELETE /api/admin/planos/:id - Remove plano (plano_modulos cai por cascade)
+  // DELETE /api/admin/planos/:id - Remove plano (bloqueia se houver assinatura usando)
   app.delete("/api/admin/planos/:id", requireAuth, requireMaster, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+      const emUso = await db.execute(sql`SELECT 1 FROM subscriptions WHERE plano_id = ${id} LIMIT 1`);
+      if (emUso.rows.length > 0) {
+        return res.status(400).json({ message: "Há assinaturas usando este plano. Inative-o em vez de excluir." });
+      }
       await db.execute(sql`DELETE FROM planos WHERE id = ${id}`);
       return res.json({ message: "Plano removido" });
     } catch (error) {
