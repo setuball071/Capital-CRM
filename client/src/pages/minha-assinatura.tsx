@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PLAN_LABELS, PLAN_PRICES } from "@shared/schema";
 import {
   CreditCard,
   CheckCircle,
@@ -9,23 +10,16 @@ import {
   RefreshCw,
   Calendar,
   Mail,
+  Package,
+  Receipt,
 } from "lucide-react";
 
-const PLAN_LABELS: Record<string, string> = {
-  trial: "Trial",
-  basico: "Básico",
-  profissional: "Profissional",
-  expert: "Expert",
-  enterprise: "Enterprise",
-};
-
-const PLAN_PRICES: Record<string, string> = {
-  trial: "Grátis",
-  basico: "R$ 127/mês",
-  profissional: "R$ 197/mês",
-  expert: "R$ 277/mês",
-  enterprise: "Sob consulta",
-};
+function formatPlanPrice(plan: string) {
+  const price = (PLAN_PRICES as Record<string, number | null | undefined>)[plan];
+  if (price == null) return "Sob consulta";
+  if (price === 0) return "Grátis";
+  return (price / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + "/mês";
+}
 
 const PLAN_FEATURES: Record<string, string[]> = {
   trial: ["Acesso completo por 7 dias", "Sem necessidade de cartão"],
@@ -94,6 +88,9 @@ export default function MinhaAssinaturaPage() {
   const trialLeft = sub.status === "trial" ? daysLeft(sub.trial_ends_at) : null;
   const periodLeft = sub.status === "active" ? daysLeft(sub.current_period_end) : null;
   const features = PLAN_FEATURES[sub.plan] || [];
+  const lastPayment = sub.payment_history?.length > 0
+    ? sub.payment_history[sub.payment_history.length - 1]
+    : null;
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -114,13 +111,13 @@ export default function MinhaAssinaturaPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="text-3xl font-bold">{PLAN_LABELS[sub.plan] || sub.plan}</span>
+                <span className="text-3xl font-bold">{(PLAN_LABELS as Record<string, string>)[sub.plan] || sub.plan}</span>
                 <Badge variant={statusCfg.variant} className="gap-1 text-sm">
                   <Icon className="h-3.5 w-3.5" />
                   {statusCfg.label}
                 </Badge>
               </div>
-              <div className="text-muted-foreground text-sm">{PLAN_PRICES[sub.plan] || ""}</div>
+              <div className="text-muted-foreground text-sm">{formatPlanPrice(sub.plan)}</div>
             </div>
 
             <div className="space-y-1 text-right">
@@ -196,6 +193,61 @@ export default function MinhaAssinaturaPage() {
                 </li>
               ))}
             </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Adicionais contratados */}
+      {sub.adicionais?.length > 0 && (
+        <Card data-testid="card-adicionais">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-4 w-4 text-primary" />
+              Adicionais contratados
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {sub.adicionais.map((a: any) => (
+                <li key={a.id} className="flex items-center justify-between text-sm" data-testid={`adicional-${a.id}`}>
+                  <span className="font-medium">{a.produto ?? "Serviço"}</span>
+                  <span className="text-muted-foreground text-xs">Contratado em {formatDate(a.created_at)}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Última fatura */}
+      {lastPayment && (
+        <Card data-testid="card-ultima-fatura">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-primary" />
+              Última fatura
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground">{formatDate(lastPayment.date)}</span>
+              <span className="font-medium">
+                {typeof lastPayment.amount === "number"
+                  ? lastPayment.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                  : "—"}
+              </span>
+              {lastPayment.invoiceUrl && (
+                <a
+                  href={lastPayment.invoiceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary font-medium hover:underline"
+                  data-testid="link-ver-fatura"
+                >
+                  Ver fatura
+                </a>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

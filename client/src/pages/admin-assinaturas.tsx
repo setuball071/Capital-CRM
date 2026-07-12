@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { PLAN_LABELS, PLAN_PRICES } from "@shared/schema";
 import {
   CreditCard,
   Plus,
@@ -41,21 +42,12 @@ import {
   Calendar,
 } from "lucide-react";
 
-const PLAN_LABELS: Record<string, string> = {
-  trial: "Trial",
-  basico: "Básico",
-  profissional: "Profissional",
-  expert: "Expert",
-  enterprise: "Enterprise",
-};
-
-const PLAN_PRICES: Record<string, string> = {
-  trial: "Grátis",
-  basico: "R$ 127/mês",
-  profissional: "R$ 197/mês",
-  expert: "R$ 277/mês",
-  enterprise: "Sob consulta",
-};
+function formatPlanPrice(plan: string) {
+  const price = (PLAN_PRICES as Record<string, number | null | undefined>)[plan];
+  if (price == null) return "Sob consulta";
+  if (price === 0) return "Grátis";
+  return (price / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + "/mês";
+}
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any }> = {
   trial: { label: "Trial", variant: "secondary", icon: RefreshCw },
@@ -81,6 +73,7 @@ export default function AdminAssinaturasPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
+  const [historySub, setHistorySub] = useState<any | null>(null);
   const [editingTenantId, setEditingTenantId] = useState<number | null>(null);
   const [form, setForm] = useState({
     tenantId: "",
@@ -106,10 +99,14 @@ export default function AdminAssinaturasPage() {
       }
       return apiRequest("POST", "/api/admin/subscriptions", data);
     },
-    onSuccess: () => {
+    onSuccess: async (res: Response) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/subscriptions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants-without-subscription"] });
       toast({ title: "Assinatura salva com sucesso" });
+      const data = await res.json().catch(() => ({}));
+      if (data?.asaasWarning) {
+        toast({ title: "Atenção (Asaas)", description: data.asaasWarning, variant: "destructive" });
+      }
       setModalOpen(false);
       resetForm();
     },
@@ -119,9 +116,13 @@ export default function AdminAssinaturasPage() {
   const actionMutation = useMutation({
     mutationFn: async ({ tenantId, action, plan }: { tenantId: number; action: string; plan?: string }) =>
       apiRequest("POST", `/api/admin/subscriptions/${tenantId}/${action}`, plan ? { plan } : {}),
-    onSuccess: () => {
+    onSuccess: async (res: Response) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/subscriptions"] });
       toast({ title: "Operação realizada com sucesso" });
+      const data = await res.json().catch(() => ({}));
+      if (data?.asaasWarning) {
+        toast({ title: "Atenção (Asaas)", description: data.asaasWarning, variant: "destructive" });
+      }
     },
     onError: () => toast({ title: "Erro na operação", variant: "destructive" }),
   });
@@ -220,6 +221,7 @@ export default function AdminAssinaturasPage() {
                   <TableHead>Tenant</TableHead>
                   <TableHead>Plano</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Adicionais</TableHead>
                   <TableHead>Vencimento</TableHead>
                   <TableHead>Trial até</TableHead>
                   <TableHead>Notas</TableHead>
@@ -241,14 +243,36 @@ export default function AdminAssinaturasPage() {
                         <div className="text-xs text-muted-foreground">{sub.tenant_key}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{PLAN_LABELS[sub.plan] || sub.plan}</div>
-                        <div className="text-xs text-muted-foreground">{PLAN_PRICES[sub.plan] || ""}</div>
+                        <div className="font-medium">{(PLAN_LABELS as Record<string, string>)[sub.plan] || sub.plan}</div>
+                        <div className="text-xs text-muted-foreground">{formatPlanPrice(sub.plan)}</div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={statusCfg.variant} className="gap-1">
-                          <Icon className="h-3 w-3" />
-                          {statusCfg.label}
-                        </Badge>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge variant={statusCfg.variant} className="gap-1">
+                            <Icon className="h-3 w-3" />
+                            {statusCfg.label}
+                          </Badge>
+                          {sub.gateway_subscription_id ? (
+                            <Badge variant="outline" className="text-xs" data-testid={`badge-asaas-${sub.tenant_id}`}>
+                              Asaas
+                            </Badge>
+                          ) : sub.status === "active" ? (
+                            <Badge variant="outline" className="text-xs text-muted-foreground" data-testid={`badge-manual-${sub.tenant_id}`}>
+                              manual
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {sub.adicionais?.length > 0 ? (
+                          <div className="flex flex-wrap gap-1" data-testid={`adicionais-${sub.tenant_id}`}>
+                            {sub.adicionais.map((a: any) => (
+                              <Badge key={a.id} variant="secondary" className="text-xs">
+                                {a.produto ?? "Serviço"}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : "—"}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">{formatDate(sub.current_period_end)}</div>
@@ -275,6 +299,16 @@ export default function AdminAssinaturasPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          {sub.payment_history?.length > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setHistorySub(sub)}
+                              data-testid={`button-historico-${sub.tenant_id}`}
+                            >
+                              Histórico
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -345,7 +379,7 @@ export default function AdminAssinaturasPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(PLAN_LABELS).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label} {PLAN_PRICES[key] ? `— ${PLAN_PRICES[key]}` : ""}</SelectItem>
+                    <SelectItem key={key} value={key}>{label} — {formatPlanPrice(key)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -398,6 +432,40 @@ export default function AdminAssinaturasPage() {
               {saveMutation.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de histórico de pagamentos */}
+      <Dialog open={!!historySub} onOpenChange={(v) => { if (!v) setHistorySub(null); }}>
+        <DialogContent className="max-w-md" data-testid="dialog-payment-history">
+          <DialogHeader>
+            <DialogTitle>Histórico de pagamentos — {historySub?.tenant_name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {(historySub?.payment_history || []).map((p: any, i: number) => (
+              <div key={i} className="flex items-center justify-between text-sm border-b pb-2 last:border-b-0" data-testid={`payment-row-${i}`}>
+                <span>{formatDate(p.date)}</span>
+                <span className="font-medium">
+                  {typeof p.amount === "number"
+                    ? p.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                    : "—"}
+                </span>
+                <span className="text-xs text-muted-foreground">{p.status || ""}</span>
+                {p.invoiceUrl ? (
+                  <a
+                    href={p.invoiceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary text-xs hover:underline"
+                  >
+                    fatura
+                  </a>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
