@@ -10,7 +10,15 @@ export type Aviso = {
   criadaEm: string;
 };
 
-export function useAssistenteAvisos(enabled: boolean) {
+export type Pergunta = {
+  id: number;
+  pergunta: string;
+  corretorId: number;
+  corretorNome: string | null;
+  createdAt: string;
+};
+
+export function useAssistenteAvisos(enabled: boolean, gestor: boolean) {
   const qc = useQueryClient();
 
   const { data: countData } = useQuery<{ count: number }>({
@@ -26,6 +34,12 @@ export function useAssistenteAvisos(enabled: boolean) {
     refetchInterval: 60000,
   });
 
+  const { data: perguntas = [] } = useQuery<Pergunta[]>({
+    queryKey: ["/api/assistente/perguntas"],
+    enabled: enabled && gestor,
+    refetchInterval: 60000,
+  });
+
   const marcarLidas = useMutation({
     mutationFn: async (ids?: number[]) => {
       const res = await apiRequest("POST", "/api/assistente/avisos/marcar-lidas", ids ? { ids } : {});
@@ -37,5 +51,25 @@ export function useAssistenteAvisos(enabled: boolean) {
     },
   });
 
-  return { count: countData?.count ?? 0, avisos, marcarLidas };
+  const responder = useMutation({
+    mutationFn: async ({ id, resposta, salvarNaBase }: { id: number; resposta: string; salvarNaBase?: boolean }) => {
+      const res = await apiRequest("POST", `/api/assistente/perguntas/${id}/responder`, { resposta, salvarNaBase });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/assistente/perguntas"] });
+    },
+  });
+
+  const descartar = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/assistente/perguntas/${id}/descartar`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/assistente/perguntas"] });
+    },
+  });
+
+  return { count: countData?.count ?? 0, avisos, marcarLidas, perguntas, responder, descartar };
 }

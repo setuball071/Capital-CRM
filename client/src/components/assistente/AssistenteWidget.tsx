@@ -23,6 +23,8 @@ export default function AssistenteWidget() {
   const [texto, setTexto] = useState("");
   const [modoCaptura, setModoCaptura] = useState(false);
   const [gravando, setGravando] = useState(false);
+  const [respostas, setRespostas] = useState<Record<number, string>>({});
+  const [salvarFlags, setSalvarFlags] = useState<Record<number, boolean>>({});
   const { mensagens, carregando, enviar, darFeedback, novaConversa } = useAssistenteChat();
   const fimRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -37,7 +39,10 @@ export default function AssistenteWidget() {
       ["master", "operacional"].includes(user.role) ||
       hasSubItemAccess("modulo_assistente", "chat"));
 
-  const { count, avisos, marcarLidas } = useAssistenteAvisos(podeUsarChat);
+  const { count, avisos, marcarLidas, perguntas, responder, descartar } = useAssistenteAvisos(
+    podeUsarChat,
+    podeCaptura,
+  );
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -94,9 +99,11 @@ export default function AssistenteWidget() {
             alt={NOME_MASCOTE}
             className="h-full w-full object-contain drop-shadow-lg"
           />
-          {count > 0 && (
+          {count + (podeCaptura ? perguntas.length : 0) > 0 && (
             <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white">
-              {count > 9 ? "9+" : count}
+              {count + (podeCaptura ? perguntas.length : 0) > 9
+                ? "9+"
+                : count + (podeCaptura ? perguntas.length : 0)}
             </span>
           )}
         </button>
@@ -124,6 +131,57 @@ export default function AssistenteWidget() {
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto p-3">
+            {podeCaptura && perguntas.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-muted-foreground">
+                  Perguntas da equipe ({perguntas.length})
+                </div>
+                {perguntas.map((p) => {
+                  const draft = respostas[p.id] ?? "";
+                  const salvar = salvarFlags[p.id] ?? true;
+                  return (
+                    <div key={p.id} className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                      <div className="font-medium">{p.corretorNome || "Corretor"} perguntou:</div>
+                      <div className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{p.pergunta}</div>
+                      <textarea
+                        value={draft}
+                        onChange={(e) => setRespostas((r) => ({ ...r, [p.id]: e.target.value }))}
+                        rows={2}
+                        placeholder="Escreva a resposta..."
+                        className="mt-2 w-full resize-none rounded-md border bg-background px-2 py-1.5 text-sm"
+                      />
+                      <label className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={salvar}
+                          onChange={(e) => setSalvarFlags((f) => ({ ...f, [p.id]: e.target.checked }))}
+                        />
+                        Salvar na base
+                      </label>
+                      <div className="mt-2 flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          disabled={!draft.trim() || responder.isPending}
+                          onClick={() =>
+                            responder.mutate({ id: p.id, resposta: draft.trim(), salvarNaBase: salvar })
+                          }
+                        >
+                          Responder
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={descartar.isPending}
+                          onClick={() => descartar.mutate(p.id)}
+                        >
+                          Descartar
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {avisos.length > 0 && (
               <div className="space-y-2">
                 {avisos.map((a) => (
