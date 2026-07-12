@@ -791,6 +791,13 @@ app.use((req, res, next) => {
             )
           `);
           await saasDb.execute(saasSql`CREATE INDEX IF NOT EXISTS idx_assinatura_adicionais_tenant ON assinatura_adicionais(tenant_id)`);
+          // Fase 4 — garante as colunas de gateway na subscriptions (schema já as declara; banco pode ser anterior)
+          await saasDb.execute(saasSql`
+            ALTER TABLE subscriptions
+              ADD COLUMN IF NOT EXISTS gateway_customer_id VARCHAR(255),
+              ADD COLUMN IF NOT EXISTS gateway_subscription_id VARCHAR(255),
+              ADD COLUMN IF NOT EXISTS payment_history JSONB DEFAULT '[]'::jsonb
+          `);
           // Vínculo do pedido de lista com produto/cobrança (pedidos existentes ficam com produto_id NULL = lead implícito)
           await saasDb.execute(saasSql`
             ALTER TABLE pedidos_lista

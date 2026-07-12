@@ -82,3 +82,8 @@ export async function getPayment(
 ): Promise<{ id: string; status: string; value: number; subscription?: string }> {
   return asaasRequest("GET", `/payments/${paymentId}`);
 }
+
+// Cancela a assinatura recorrente no Asaas (usado ao suspender/cancelar no painel)
+export async function cancelSubscription(subscriptionId: string): Promise<{ deleted: boolean }> {
+  return asaasRequest("DELETE", `/subscriptions/${subscriptionId}`);
+}

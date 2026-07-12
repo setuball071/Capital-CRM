@@ -20553,6 +20553,65 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       } else if (event === "PAYMENT_DELETED" || event === "PAYMENT_REFUNDED") {
         novoStatus = "cancelado";
       }
+      // Ramo de ASSINATURA RECORRENTE (Fase 4): pagamentos de subscription chegam
+      // com payment.subscription preenchido — sincroniza a subscriptions do tenant.
+      if (novoStatus && payment.subscription) {
+        const [assinatura] = (await db.execute(sql`
+          SELECT id, tenant_id FROM subscriptions
+          WHERE gateway_subscription_id = ${payment.subscription}
+        `)).rows as any[];
+        if (assinatura) {
+          if (novoStatus === "pago") {
+            // RECEIVED e CONFIRMED chegam ambos para a mesma fatura — o INSERT abaixo
+            // funciona como trava de idempotência: só o primeiro evento processa.
+            const inseriu = (await db.execute(sql`
+              INSERT INTO cobrancas (tenant_id, tipo, ref_id, asaas_id, valor, status, pago_em)
+              SELECT ${assinatura.tenant_id}, 'assinatura', ${assinatura.id}, ${payment.id}, ${payment.value ?? 0}, 'pago', NOW()
+              WHERE NOT EXISTS (SELECT 1 FROM cobrancas WHERE asaas_id = ${payment.id})
+              RETURNING id
+            `)).rows as any[];
+            if (inseriu.length > 0) {
+              // Renova o período a partir do vencimento da fatura paga (+1 mês)
+              const base = payment.dueDate ? new Date(payment.dueDate) : new Date();
+              const proximoFim = new Date(base.getFullYear(), base.getMonth() + 1, base.getDate());
+              const historicoEntry = JSON.stringify([{
+                date: new Date().toISOString(),
+                amount: payment.value ?? null,
+                status: "pago",
+                invoiceUrl: payment.invoiceUrl || null,
+              }]);
+              await db.execute(sql`
+                UPDATE subscriptions SET
+                  status = 'active',
+                  current_period_start = NOW(),
+                  current_period_end = ${proximoFim},
+                  payment_history = COALESCE(payment_history, '[]'::jsonb) || ${historicoEntry}::jsonb,
+                  updated_at = NOW()
+                WHERE id = ${assinatura.id}
+              `);
+              notificarDono({
+                title: "Jarvis · Mensalidade paga",
+                message: `Assinatura do ambiente #${assinatura.tenant_id} confirmada — período renovado.`,
+                actionUrl: "/admin/assinaturas",
+              }).catch(() => {});
+            }
+          } else if (novoStatus === "vencido") {
+            await db.execute(sql`
+              UPDATE subscriptions SET status = 'suspended', updated_at = NOW()
+              WHERE id = ${assinatura.id}
+            `);
+            notificarDono({
+              title: "Jarvis · Mensalidade vencida",
+              message: `Assinatura do ambiente #${assinatura.tenant_id} está vencida — acesso suspenso.`,
+              actionUrl: "/admin/assinaturas",
+            }).catch(() => {});
+          }
+          // cancelado (estorno/remoção de UMA fatura) não cancela a assinatura inteira
+          console.log(`[ASAAS-WEBHOOK] ${event} → subscription ${payment.subscription} (tenant ${assinatura.tenant_id})`);
+        }
+        return res.status(200).json({ received: true });
+      }
+
       if (novoStatus) {
         const upd = (await db.execute(sql`
           UPDATE cobrancas SET
@@ -30261,12 +30320,118 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   // ─────────────────────────────────────────────────────────────────────────
   const { subscriptions } = await import("@shared/schema");
 
+  // Fase 4 — cria/recria a subscription recorrente no Asaas ao ativar um plano.
+  // Ambiente interno, plano sem preço (trial/enterprise) ou Asaas sem chave → pula
+  // sem quebrar a ativação manual; retorna warning para a UI mostrar.
+  async function sincronizarAssinaturaAsaas(
+    tenantId: number,
+  ): Promise<{ warning?: string }> {
+    try {
+      const { asaasConfigured, createCustomer, createSubscription, cancelSubscription } =
+        await import("./asaas");
+      const { PLAN_PRICES, PLAN_LABELS } = await import("@shared/schema");
+
+      const [tenant] = (await db.execute(sql`
+        SELECT id, name, interno, asaas_customer_id FROM tenants WHERE id = ${tenantId}
+      `)).rows as any[];
+      if (!tenant) return { warning: "Ambiente não encontrado" };
+      if (tenant.interno === true) return {}; // interno não paga — nada a fazer
+
+      if (!asaasConfigured()) {
+        return { warning: "Asaas não configurado — assinatura ativada apenas manualmente." };
+      }
+
+      const [assinatura] = (await db.execute(sql`
+        SELECT plan, current_period_end, gateway_subscription_id FROM subscriptions
+        WHERE tenant_id = ${tenantId}
+      `)).rows as any[];
+      if (!assinatura) return { warning: "Assinatura não encontrada" };
+
+      const precoCentavos = (PLAN_PRICES as Record<string, number | null>)[assinatura.plan];
+      if (!precoCentavos) {
+        return { warning: `Plano ${assinatura.plan} sem preço fixo — cobrança não criada no Asaas.` };
+      }
+
+      // Recria do zero: cancela a subscription antiga (se houver) para o valor sempre bater com o plano
+      if (assinatura.gateway_subscription_id) {
+        try {
+          await cancelSubscription(assinatura.gateway_subscription_id);
+        } catch (e) {
+          console.warn("[ASSINATURA-ASAAS] cancelamento da antiga falhou (segue):", e);
+        }
+      }
+
+      // Customer: tenants.asaas_customer_id é a fonte de verdade (espelhado na subscription)
+      let customerId: string = tenant.asaas_customer_id;
+      if (!customerId) {
+        const customer = await createCustomer({
+          name: tenant.name,
+          externalReference: String(tenant.id),
+        });
+        customerId = customer.id;
+        await db.execute(sql`UPDATE tenants SET asaas_customer_id = ${customerId} WHERE id = ${tenantId}`);
+      }
+
+      const nextDue = assinatura.current_period_end
+        ? new Date(assinatura.current_period_end).toISOString().slice(0, 10)
+        : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
+      const subAsaas = await createSubscription({
+        customer: customerId,
+        value: precoCentavos / 100,
+        nextDueDate: nextDue,
+        description: `Assinatura ${(PLAN_LABELS as Record<string, string>)[assinatura.plan] || assinatura.plan} — Capital CRM`,
+        externalReference: `subscription:tenant:${tenantId}`,
+      });
+
+      await db.execute(sql`
+        UPDATE subscriptions SET
+          gateway_customer_id = ${customerId},
+          gateway_subscription_id = ${subAsaas.id},
+          updated_at = NOW()
+        WHERE tenant_id = ${tenantId}
+      `);
+      return {};
+    } catch (e: any) {
+      console.error("[ASSINATURA-ASAAS] sync falhou:", e);
+      return { warning: `Asaas: ${e?.message || "falha ao criar assinatura no gateway"}` };
+    }
+  }
+
+  // Cancela a recorrência no Asaas (suspend/cancel no painel) e limpa o vínculo
+  async function cancelarAssinaturaAsaas(tenantId: number): Promise<{ warning?: string }> {
+    try {
+      const { asaasConfigured, cancelSubscription } = await import("./asaas");
+      const [assinatura] = (await db.execute(sql`
+        SELECT gateway_subscription_id FROM subscriptions WHERE tenant_id = ${tenantId}
+      `)).rows as any[];
+      if (!assinatura?.gateway_subscription_id) return {};
+      if (asaasConfigured()) {
+        await cancelSubscription(assinatura.gateway_subscription_id);
+      }
+      await db.execute(sql`
+        UPDATE subscriptions SET gateway_subscription_id = NULL, updated_at = NOW()
+        WHERE tenant_id = ${tenantId}
+      `);
+      return {};
+    } catch (e: any) {
+      console.error("[ASSINATURA-ASAAS] cancelamento falhou:", e);
+      return { warning: `Asaas: ${e?.message || "falha ao cancelar recorrência no gateway"}` };
+    }
+  }
+
   // GET /api/admin/subscriptions — lista todas as assinaturas (master only)
   app.get("/api/admin/subscriptions", requireAuth, async (req: any, res) => {
     if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
     try {
       const rows = await db.execute(sql`
-        SELECT s.*, t.name AS tenant_name, t.key AS tenant_key
+        SELECT s.*, t.name AS tenant_name, t.key AS tenant_key,
+          (
+            SELECT COALESCE(json_agg(json_build_object('id', aa.id, 'produto', p.nome, 'created_at', aa.created_at)), '[]'::json)
+            FROM assinatura_adicionais aa
+            LEFT JOIN produtos p ON p.id = aa.produto_id
+            WHERE aa.tenant_id = s.tenant_id AND aa.ativo = true
+          ) AS adicionais
         FROM subscriptions s
         JOIN tenants t ON t.id = s.tenant_id
         ORDER BY s.created_at DESC
@@ -30283,7 +30448,13 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const tenantId = req.user?.tenantId;
       if (!tenantId) return res.json(null);
       const rows = await db.execute(sql`
-        SELECT s.*, t.name AS tenant_name
+        SELECT s.*, t.name AS tenant_name,
+          (
+            SELECT COALESCE(json_agg(json_build_object('id', aa.id, 'produto', p.nome, 'created_at', aa.created_at)), '[]'::json)
+            FROM assinatura_adicionais aa
+            LEFT JOIN produtos p ON p.id = aa.produto_id
+            WHERE aa.tenant_id = s.tenant_id AND aa.ativo = true
+          ) AS adicionais
         FROM subscriptions s
         JOIN tenants t ON t.id = s.tenant_id
         WHERE s.tenant_id = ${tenantId}
@@ -30324,7 +30495,13 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           updated_at = NOW()
       `);
 
-      res.json({ message: "Assinatura salva com sucesso" });
+      // Ativação direta na criação → liga a recorrência no Asaas
+      let asaasWarning: string | undefined;
+      if (status === "active") {
+        asaasWarning = (await sincronizarAssinaturaAsaas(parseInt(tenantId))).warning;
+      }
+
+      res.json({ message: "Assinatura salva com sucesso", asaasWarning });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao criar assinatura", error: err.message });
     }
@@ -30373,7 +30550,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         WHERE tenant_id = ${parseInt(tenantId)}
       `);
 
-      res.json({ message: "Assinatura ativada" });
+      // Liga a recorrência no Asaas (não bloqueia a ativação manual em caso de falha)
+      const { warning: asaasWarning } = await sincronizarAssinaturaAsaas(parseInt(tenantId));
+
+      res.json({ message: "Assinatura ativada", asaasWarning });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao ativar assinatura", error: err.message });
     }
@@ -30384,11 +30564,13 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
     try {
       const { tenantId } = req.params;
+      // Corta a recorrência no Asaas antes (senão continua cobrando)
+      const { warning: asaasWarning } = await cancelarAssinaturaAsaas(parseInt(tenantId));
       await db.execute(sql`
         UPDATE subscriptions SET status = 'suspended', updated_at = NOW()
         WHERE tenant_id = ${parseInt(tenantId)}
       `);
-      res.json({ message: "Assinatura suspensa" });
+      res.json({ message: "Assinatura suspensa", asaasWarning });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao suspender assinatura", error: err.message });
     }
@@ -30399,11 +30581,13 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
     try {
       const { tenantId } = req.params;
+      // Corta a recorrência no Asaas antes (senão continua cobrando)
+      const { warning: asaasWarning } = await cancelarAssinaturaAsaas(parseInt(tenantId));
       await db.execute(sql`
         UPDATE subscriptions SET status = 'cancelled', updated_at = NOW()
         WHERE tenant_id = ${parseInt(tenantId)}
       `);
-      res.json({ message: "Assinatura cancelada" });
+      res.json({ message: "Assinatura cancelada", asaasWarning });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao cancelar assinatura", error: err.message });
     }
