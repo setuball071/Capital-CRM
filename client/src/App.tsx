@@ -31,8 +31,7 @@ import CompraListaPage from "@/pages/compra-lista";
 import ConsultaClientePage from "@/pages/consulta-cliente";
 import BaseDashboardPage from "@/pages/base-dashboard";
 import EnriquecerBasePage from "@/pages/enriquecer-base";
-import AdminPedidosListaPage from "@/pages/admin-pedidos-lista";
-import ConfigPrecosPage from "@/pages/config-precos";
+import ServicosCobrancaPage from "@/pages/servicos-cobranca";
 import AcademiaFundamentosPage from "@/pages/academia-fundamentos";
 import AcademiaQuizPage from "@/pages/academia-quiz";
 import AcademiaRoleplayPage from "@/pages/academia-roleplay";
@@ -441,11 +440,8 @@ function Router() {
               <Route path="/enriquecer-base">
                 {() => <ModuleRoute component={EnriquecerBasePage} module="modulo_base_clientes" />}
               </Route>
-              <Route path="/admin-pedidos-lista">
-                {() => <ModuleRoute component={AdminPedidosListaPage} module="modulo_base_clientes" accessType="edit" />}
-              </Route>
-              <Route path="/config-precos">
-                {() => <ModuleRoute component={ConfigPrecosPage} module="modulo_config_usuarios" accessType="edit" />}
+              <Route path="/servicos-cobranca">
+                {() => <MasterRoute component={ServicosCobrancaPage} />}
               </Route>
               <Route path="/academia/fundamentos">
                 {() => <ModuleRoute component={AcademiaFundamentosPage} module="modulo_academia" />}
