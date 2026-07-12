@@ -1950,6 +1950,26 @@ export const insertUserPermissionSchema = createInsertSchema(
 export type UserPermission = typeof userPermissions.$inferSelect;
 export type InsertUserPermission = z.infer<typeof insertUserPermissionSchema>;
 
+// Modelos de permissão (salvar um conjunto de permissões por função para replicar)
+export const userPermissionTemplates = pgTable("user_permission_templates", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  nome: varchar("nome", { length: 120 }).notNull(),
+  role: varchar("role", { length: 50 }).notNull(),
+  permissions: jsonb("permissions").notNull(), // Array<{ module, canView, canEdit, canDelegate }>
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertUserPermissionTemplateSchema = createInsertSchema(
+  userPermissionTemplates,
+).omit({ id: true, createdAt: true });
+
+export type UserPermissionTemplate = typeof userPermissionTemplates.$inferSelect;
+export type InsertUserPermissionTemplate = z.infer<
+  typeof insertUserPermissionTemplateSchema
+>;
+
 // ===== LEAD SCHEDULES (AGENDAMENTOS) =====
 
 export const leadSchedules = pgTable("lead_schedules", {

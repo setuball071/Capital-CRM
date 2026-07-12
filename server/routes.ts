@@ -463,6 +463,7 @@ import {
   progressoLicoes,
   feedbacksIAHistorico,
   users,
+  userPermissionTemplates,
   tenants,
   tenantDomains,
   tenantAuditLog,
@@ -2142,6 +2143,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Create user error:", error);
         return res.status(500).json({ message: "Erro ao criar usuário" });
+      }
+    },
+  );
+
+  // GET /api/users/next-login - Sorteia um login de 4 dígitos que não exista
+  app.get(
+    "/api/users/next-login",
+    requireAuth,
+    requireUserManagementAccess,
+    async (_req, res) => {
+      try {
+        const all = await storage.getAllUsers();
+        const usados = new Set(all.map((u) => (u.email || "").trim()));
+        let login: string | null = null;
+        for (let i = 0; i < 200; i++) {
+          const cand = String(Math.floor(1000 + Math.random() * 9000)); // 1000-9999
+          if (!usados.has(cand)) {
+            login = cand;
+            break;
+          }
+        }
+        // Fallback determinístico se o sorteio não achou (base quase cheia)
+        if (!login) {
+          for (let n = 1000; n <= 9999; n++) {
+            if (!usados.has(String(n))) {
+              login = String(n);
+              break;
+            }
+          }
+        }
+        if (!login) {
+          return res.status(409).json({ message: "Sem códigos de 4 dígitos disponíveis" });
+        }
+        return res.json({ login });
+      } catch (error) {
+        console.error("Next login error:", error);
+        return res.status(500).json({ message: "Erro ao gerar login" });
+      }
+    },
+  );
+
+  // ===== MODELOS DE PERMISSÃO (salvar/replicar permissões por função) =====
+
+  // GET /api/users/permission-templates?role= - Lista modelos do ambiente atual
+  app.get(
+    "/api/users/permission-templates",
+    requireAuth,
+    requireUserManagementAccess,
+    async (req, res) => {
+      try {
+        const tenantId = (req as any).tenantId ?? null;
+        const roleFiltro = typeof req.query.role === "string" ? req.query.role : null;
+        const conds = [
+          tenantId != null
+            ? eq(userPermissionTemplates.tenantId, tenantId)
+            : sql`${userPermissionTemplates.tenantId} IS NULL`,
+        ];
+        if (roleFiltro) conds.push(eq(userPermissionTemplates.role, roleFiltro));
+        const modelos = await db
+          .select()
+          .from(userPermissionTemplates)
+          .where(and(...conds))
+          .orderBy(sql`${userPermissionTemplates.nome} ASC`);
+        return res.json(modelos);
+      } catch (error) {
+        console.error("List permission templates error:", error);
+        return res.status(500).json({ message: "Erro ao listar modelos" });
+      }
+    },
+  );
+
+  // POST /api/users/permission-templates - Cria um modelo
+  app.post(
+    "/api/users/permission-templates",
+    requireAuth,
+    requireUserManagementAccess,
+    async (req, res) => {
+      try {
+        const { nome, role, permissions } = req.body;
+        if (!nome || typeof nome !== "string" || !nome.trim()) {
+          return res.status(400).json({ message: "Informe um nome para o modelo" });
+        }
+        if (!role || typeof role !== "string") {
+          return res.status(400).json({ message: "Função (role) é obrigatória" });
+        }
+        if (!Array.isArray(permissions)) {
+          return res.status(400).json({ message: "Permissões inválidas" });
+        }
+        const [criado] = await db
+          .insert(userPermissionTemplates)
+          .values({
+            tenantId: (req as any).tenantId ?? null,
+            nome: nome.trim().slice(0, 120),
+            role,
+            permissions,
+            createdBy: req.user!.id,
+          })
+          .returning();
+        return res.status(201).json(criado);
+      } catch (error) {
+        console.error("Create permission template error:", error);
+        return res.status(500).json({ message: "Erro ao salvar modelo" });
+      }
+    },
+  );
+
+  // DELETE /api/users/permission-templates/:id - Remove um modelo do ambiente atual
+  app.delete(
+    "/api/users/permission-templates/:id",
+    requireAuth,
+    requireUserManagementAccess,
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+        const tenantId = (req as any).tenantId ?? null;
+        await db
+          .delete(userPermissionTemplates)
+          .where(
+            and(
+              eq(userPermissionTemplates.id, id),
+              tenantId != null
+                ? eq(userPermissionTemplates.tenantId, tenantId)
+                : sql`${userPermissionTemplates.tenantId} IS NULL`,
+            ),
+          );
+        return res.json({ success: true });
+      } catch (error) {
+        console.error("Delete permission template error:", error);
+        return res.status(500).json({ message: "Erro ao remover modelo" });
       }
     },
   );

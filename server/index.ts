@@ -332,6 +332,26 @@ app.use((req, res, next) => {
           console.error("Onboarding migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — Modelos de permissão (espelha migrations/user-permission-templates.sql)
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS user_permission_templates (
+              id          SERIAL PRIMARY KEY,
+              tenant_id   INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+              nome        VARCHAR(120) NOT NULL,
+              role        VARCHAR(50) NOT NULL,
+              permissions JSONB NOT NULL,
+              created_by  INTEGER REFERENCES users(id),
+              created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          log("Permission templates migration OK");
+        } catch (migErr) {
+          console.error("Permission templates migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — Contratos (status configuráveis, fases, ADE refin)
         try {
           const { db: migDb } = await import("./storage");
