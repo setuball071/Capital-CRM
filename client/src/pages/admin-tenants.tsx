@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,18 +70,26 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { 
-  Loader2, 
-  Plus, 
-  Globe, 
-  Users, 
-  Building2, 
-  Trash2, 
-  Edit, 
-  Link, 
-  UserPlus 
+import {
+  Loader2,
+  Plus,
+  Globe,
+  Users,
+  Building2,
+  Trash2,
+  Edit,
+  Link,
+  UserPlus,
+  MoreVertical,
+  Copy,
+  Download,
+  FileText,
+  AlertTriangle,
+  CheckCircle2,
+  Rocket,
 } from "lucide-react";
 import type { User } from "@shared/schema";
+import { SUBSCRIPTION_PLANS, PLAN_LABELS, PLAN_PRICES } from "@shared/schema";
 
 interface Tenant {
   id: number;
@@ -76,8 +100,115 @@ interface Tenant {
   themeJson?: Record<string, unknown>;
   isActive: boolean;
   interno?: boolean;
+  status?: string;
+  ultimoAcesso?: string | null;
   createdAt: string;
 }
+
+interface SaasConfig {
+  wildcardBaseDomain: string | null;
+  railwayConfigured: boolean;
+  asaasConfigured: boolean;
+}
+
+interface ProvisionResult {
+  tenantId: number;
+  adminUserId: number;
+  senhaTemporaria: string;
+  dominio: string | null;
+  cnameAlvo: string | null;
+  emailEnviado: boolean;
+  warnings: string[];
+}
+
+interface TenantFicha {
+  tenant: Tenant & Record<string, unknown>;
+  dominios: { domain: string; is_primary: boolean }[];
+  assinatura: {
+    plan: string;
+    status: string;
+    current_period_end: string | null;
+    gateway_subscription_id: string | null;
+  } | null;
+  adicionais: { id: number; produto: string; created_at: string }[];
+  modulos: { key: string; nome: string; ativo: boolean }[];
+  metricas: {
+    usuarios: number;
+    usuarios_ativos: number;
+    propostas: number;
+    total_pago: number;
+  };
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  ativo: "Ativo",
+  suspenso: "Suspenso",
+  inativo: "Inativo",
+  cancelado: "Cancelado",
+  excluido: "Excluído",
+};
+
+function tenantStatus(t: Tenant): string {
+  return t.status || (t.isActive ? "ativo" : "inativo");
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const label = STATUS_LABELS[status] || status;
+  if (status === "ativo") {
+    return <Badge className="bg-green-600 text-white hover:bg-green-600">{label}</Badge>;
+  }
+  if (status === "suspenso") {
+    return (
+      <Badge variant="secondary" className="bg-amber-500/20 text-amber-700 dark:text-amber-400">
+        {label}
+      </Badge>
+    );
+  }
+  if (status === "excluido") {
+    return <Badge variant="destructive">{label}</Badge>;
+  }
+  return <Badge variant="secondary">{label}</Badge>;
+}
+
+function formatDateTimeBR(value?: string | null): string {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "-";
+  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatDateBR(value?: string | null): string {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("pt-BR");
+}
+
+function formatPlanPrice(cents: number | null): string {
+  if (cents === null) return "Sob consulta";
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+const WIZARD_INITIAL = {
+  nome: "",
+  key: "",
+  adminNome: "",
+  adminEmail: "",
+  dominioTipo: "subdominio" as "subdominio" | "proprio" | "nenhum",
+  dominioProprio: "",
+  plano: "basico",
+  statusAssinatura: "trial" as "trial" | "active" | "nenhuma",
+  trialDays: "7",
+};
 
 interface TenantDomain {
   id: number;
@@ -120,6 +251,21 @@ export default function AdminTenantsPage() {
   const [domainError, setDomainError] = useState("");
   const [newUserAccess, setNewUserAccess] = useState({ userId: "", roleInTenant: "vendedor" });
 
+  // ===== Painel SaaS (Fase 5) =====
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizard, setWizard] = useState({ ...WIZARD_INITIAL });
+  const [keyEdited, setKeyEdited] = useState(false);
+  const [provisionResult, setProvisionResult] = useState<ProvisionResult | null>(null);
+  const [provisionedInfo, setProvisionedInfo] = useState<{ nome: string; adminEmail: string } | null>(null);
+  const [fichaTenantId, setFichaTenantId] = useState<number | null>(null);
+  const [modulosDraft, setModulosDraft] = useState<Record<string, boolean>>({});
+  const [tenantToSoftDelete, setTenantToSoftDelete] = useState<Tenant | null>(null);
+  const [tenantToHardDelete, setTenantToHardDelete] = useState<Tenant | null>(null);
+  const [hardDeleteConfirm, setHardDeleteConfirm] = useState("");
+  const [isDownloadingDump, setIsDownloadingDump] = useState(false);
+
   const validateDomain = (value: string): string => {
     if (value.includes("http://") || value.includes("https://")) {
       return "Digite apenas o domínio, ex: goldcarddigital.com.br (sem http ou https)";
@@ -157,6 +303,22 @@ export default function AdminTenantsPage() {
     queryKey: ["/api/admin/tenants", selectedTenant?.id, "users"],
     enabled: !!selectedTenant,
   });
+
+  const { data: saasConfig } = useQuery<SaasConfig>({
+    queryKey: ["/api/admin/saas-config"],
+    enabled: isMaster,
+  });
+
+  const { data: ficha, isLoading: isLoadingFicha } = useQuery<TenantFicha>({
+    queryKey: ["/api/admin/tenants", fichaTenantId, "ficha"],
+    enabled: fichaTenantId !== null,
+  });
+
+  useEffect(() => {
+    if (ficha?.modulos) {
+      setModulosDraft(Object.fromEntries(ficha.modulos.map((m) => [m.key, m.ativo])));
+    }
+  }, [ficha]);
 
   const createTenantMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -280,6 +442,148 @@ export default function AdminTenantsPage() {
     },
   });
 
+  const provisionMutation = useMutation({
+    mutationFn: async () => {
+      const body: Record<string, unknown> = {
+        nome: wizard.nome,
+        key: wizard.key,
+        adminNome: wizard.adminNome,
+        adminEmail: wizard.adminEmail,
+        plano: wizard.plano,
+        statusAssinatura: wizard.statusAssinatura,
+        dominioTipo: wizard.dominioTipo,
+      };
+      if (wizard.statusAssinatura === "trial") {
+        body.trialDays = parseInt(wizard.trialDays, 10) || 7;
+      }
+      if (wizard.dominioTipo === "proprio") {
+        body.dominioProprio = wizard.dominioProprio;
+      }
+      const res = await apiRequest("POST", "/api/admin/tenants/provisionar", body);
+      return (await res.json()) as ProvisionResult;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
+      setProvisionedInfo({ nome: wizard.nome, adminEmail: wizard.adminEmail });
+      setIsWizardOpen(false);
+      setWizard({ ...WIZARD_INITIAL });
+      setWizardStep(1);
+      setKeyEdited(false);
+      setProvisionResult(result);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao provisionar ambiente", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async (data: { id: number; status: string }) => {
+      return apiRequest("PATCH", `/api/admin/tenants/${data.id}/status`, { status: data.status });
+    },
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
+      setTenantToSoftDelete(null);
+      toast({ title: `Status alterado para "${STATUS_LABELS[vars.status] || vars.status}"` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao alterar status", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const saveModulosMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PUT", `/api/admin/tenants/${fichaTenantId}/modulos`, { modulos: modulosDraft });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", fichaTenantId, "ficha"] });
+      toast({ title: "Módulos salvos com sucesso" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao salvar módulos", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: async (data: { id: number; confirmKey: string }) => {
+      const res = await apiRequest("DELETE", `/api/admin/tenants/${data.id}/hard-delete`, {
+        confirmKey: data.confirmKey,
+      });
+      try {
+        return await res.json();
+      } catch {
+        return null;
+      }
+    },
+    onSuccess: (data: { message?: string } | null) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
+      setTenantToHardDelete(null);
+      setHardDeleteConfirm("");
+      toast({ title: data?.message || "Ambiente apagado definitivamente" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao apagar ambiente", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const downloadDump = async (tenant: Tenant) => {
+    setIsDownloadingDump(true);
+    try {
+      const res = await fetch(`/api/admin/tenants/${tenant.id}/export-dump`, { credentials: "include" });
+      if (!res.ok) throw new Error(`Falha ao exportar (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `backup-${tenant.key}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: "Backup baixado" });
+    } catch (error) {
+      toast({
+        title: "Erro ao baixar backup",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingDump(false);
+    }
+  };
+
+  const copyText = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: `${label} copiado` });
+    } catch {
+      toast({ title: `Não foi possível copiar`, variant: "destructive" });
+    }
+  };
+
+  const openWizard = () => {
+    setWizard({
+      ...WIZARD_INITIAL,
+      dominioTipo: saasConfig?.wildcardBaseDomain ? "subdominio" : "nenhum",
+    });
+    setWizardStep(1);
+    setKeyEdited(false);
+    setIsWizardOpen(true);
+  };
+
+  const wizardStep1Valid =
+    wizard.nome.trim() !== "" &&
+    wizard.key.trim() !== "" &&
+    wizard.adminNome.trim() !== "" &&
+    wizard.adminEmail.trim() !== "";
+  const wizardStep2Valid =
+    wizard.dominioTipo !== "proprio" || wizard.dominioProprio.trim() !== "";
+
+  const filteredTenants = tenants.filter((t) => {
+    const st = tenantStatus(t);
+    if (statusFilter === "todos") return st !== "excluido";
+    return st === statusFilter;
+  });
+
   const resetForm = () => {
     setFormData({ key: "", name: "", logoUrl: "", faviconUrl: "", themeJson: "" });
   };
@@ -320,10 +624,33 @@ export default function AdminTenantsPage() {
             Configure os ambientes white-label do sistema
           </p>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-tenant">
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Ambiente
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-tenant">
+            <Plus className="mr-2 h-4 w-4" />
+            Criar ambiente (avançado)
+          </Button>
+          <Button onClick={openWizard} data-testid="button-new-client-tenant">
+            <Rocket className="mr-2 h-4 w-4" />
+            Novo Ambiente Cliente
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Label className="text-sm text-muted-foreground">Status:</Label>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-48" data-testid="select-status-filter">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="ativo">Ativos</SelectItem>
+            <SelectItem value="suspenso">Suspensos</SelectItem>
+            <SelectItem value="inativo">Inativos</SelectItem>
+            <SelectItem value="cancelado">Cancelados</SelectItem>
+            <SelectItem value="excluido">Excluídos</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoadingTenants ? (
@@ -332,9 +659,11 @@ export default function AdminTenantsPage() {
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {tenants.map((tenant) => (
-            <Card 
-              key={tenant.id} 
+          {filteredTenants.map((tenant) => {
+            const st = tenantStatus(tenant);
+            return (
+            <Card
+              key={tenant.id}
               className="hover-elevate cursor-pointer"
               onClick={() => setSelectedTenant(tenant)}
               data-testid={`card-tenant-${tenant.id}`}
@@ -344,20 +673,96 @@ export default function AdminTenantsPage() {
                   <Building2 className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
                   <CardTitle className="text-lg truncate">{tenant.name}</CardTitle>
                 </div>
-                <Badge variant={tenant.isActive ? "default" : "secondary"}>
-                  {tenant.isActive ? "Ativo" : "Inativo"}
-                </Badge>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <StatusBadge status={st} />
+                  {tenant.interno === true && <Badge variant="outline">Interno</Badge>}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => e.stopPropagation()}
+                        data-testid={`button-tenant-actions-${tenant.id}`}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem
+                        onClick={() => setFichaTenantId(tenant.id)}
+                        data-testid={`menu-ficha-${tenant.id}`}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Ficha do ambiente
+                      </DropdownMenuItem>
+                      {st !== "excluido" && (
+                        <>
+                          {st === "ativo" ? (
+                            <DropdownMenuItem
+                              onClick={() => statusMutation.mutate({ id: tenant.id, status: "suspenso" })}
+                              data-testid={`menu-suspender-${tenant.id}`}
+                            >
+                              Suspender
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={() => statusMutation.mutate({ id: tenant.id, status: "ativo" })}
+                              data-testid={`menu-reativar-${tenant.id}`}
+                            >
+                              Reativar
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setTenantToSoftDelete(tenant)}
+                            data-testid={`menu-excluir-${tenant.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Excluir (soft)
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      {st === "excluido" && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() => statusMutation.mutate({ id: tenant.id, status: "ativo" })}
+                            data-testid={`menu-restaurar-${tenant.id}`}
+                          >
+                            Restaurar
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => {
+                              setHardDeleteConfirm("");
+                              setTenantToHardDelete(tenant);
+                            }}
+                            data-testid={`menu-hard-delete-${tenant.id}`}
+                          >
+                            <AlertTriangle className="h-4 w-4 mr-2" />
+                            Excluir DEFINITIVAMENTE
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <span className="font-mono bg-muted px-2 py-0.5 rounded">{tenant.key}</span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <span>Último acesso: {formatDateTimeBR(tenant.ultimoAcesso)}</span>
+                  </div>
                   {tenant.logoUrl && (
                     <div className="flex items-center gap-2">
-                      <img 
-                        src={tenant.logoUrl} 
-                        alt="Logo" 
+                      <img
+                        src={tenant.logoUrl}
+                        alt="Logo"
                         className="h-6 max-w-24 object-contain"
                       />
                     </div>
@@ -365,7 +770,8 @@ export default function AdminTenantsPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -871,6 +1277,653 @@ export default function AdminTenantsPage() {
             >
               Remover
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ===== Wizard: Novo Ambiente (cliente) ===== */}
+      <Dialog
+        open={isWizardOpen}
+        onOpenChange={(open) => {
+          setIsWizardOpen(open);
+          if (!open) {
+            setWizard({ ...WIZARD_INITIAL });
+            setWizardStep(1);
+            setKeyEdited(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Novo Ambiente Cliente</DialogTitle>
+            <DialogDescription>
+              Passo {wizardStep} de 4 —{" "}
+              {wizardStep === 1
+                ? "Dados"
+                : wizardStep === 2
+                ? "Domínio"
+                : wizardStep === 3
+                ? "Plano"
+                : "Confirmar"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {wizardStep === 1 && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="wiz-nome">Nome da empresa</Label>
+                <Input
+                  id="wiz-nome"
+                  value={wizard.nome}
+                  onChange={(e) => {
+                    const nome = e.target.value;
+                    setWizard((w) => ({
+                      ...w,
+                      nome,
+                      key: keyEdited ? w.key : slugify(nome),
+                    }));
+                  }}
+                  placeholder="Gold Card Digital"
+                  data-testid="input-wizard-nome"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wiz-key">Chave (slug)</Label>
+                <Input
+                  id="wiz-key"
+                  value={wizard.key}
+                  onChange={(e) => {
+                    setKeyEdited(true);
+                    setWizard((w) => ({
+                      ...w,
+                      key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""),
+                    }));
+                  }}
+                  placeholder="goldcard"
+                  data-testid="input-wizard-key"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wiz-admin-nome">Nome do administrador</Label>
+                <Input
+                  id="wiz-admin-nome"
+                  value={wizard.adminNome}
+                  onChange={(e) => setWizard((w) => ({ ...w, adminNome: e.target.value }))}
+                  placeholder="João da Silva"
+                  data-testid="input-wizard-admin-nome"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wiz-admin-email">E-mail do administrador</Label>
+                <Input
+                  id="wiz-admin-email"
+                  type="email"
+                  value={wizard.adminEmail}
+                  onChange={(e) => setWizard((w) => ({ ...w, adminEmail: e.target.value }))}
+                  placeholder="joao@empresa.com.br"
+                  data-testid="input-wizard-admin-email"
+                />
+              </div>
+            </div>
+          )}
+
+          {wizardStep === 2 && (
+            <div className="space-y-4">
+              <RadioGroup
+                value={wizard.dominioTipo}
+                onValueChange={(value) =>
+                  setWizard((w) => ({ ...w, dominioTipo: value as typeof w.dominioTipo }))
+                }
+                className="space-y-3"
+              >
+                <div className="flex items-start gap-2">
+                  <RadioGroupItem
+                    value="subdominio"
+                    id="wiz-dom-sub"
+                    disabled={!saasConfig?.wildcardBaseDomain}
+                    data-testid="radio-dominio-subdominio"
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="wiz-dom-sub" className={!saasConfig?.wildcardBaseDomain ? "opacity-50" : ""}>
+                      Subdomínio automático
+                    </Label>
+                    {saasConfig?.wildcardBaseDomain ? (
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {wizard.key || "<key>"}.{saasConfig.wildcardBaseDomain}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Domínio wildcard não configurado (WILDCARD_BASE_DOMAIN) — opção indisponível.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <RadioGroupItem value="proprio" id="wiz-dom-proprio" data-testid="radio-dominio-proprio" />
+                  <div className="space-y-1 flex-1">
+                    <Label htmlFor="wiz-dom-proprio">Domínio próprio</Label>
+                    {wizard.dominioTipo === "proprio" && (
+                      <div className="space-y-2">
+                        <Input
+                          value={wizard.dominioProprio}
+                          onChange={(e) => setWizard((w) => ({ ...w, dominioProprio: e.target.value }))}
+                          placeholder="crm.empresadocliente.com.br"
+                          data-testid="input-wizard-dominio-proprio"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          O cliente precisará apontar um CNAME do domínio para o servidor. O alvo será
+                          informado ao final do provisionamento.
+                        </p>
+                        {saasConfig && !saasConfig.railwayConfigured && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400">
+                            Railway não configurado — será necessário registrar o domínio manualmente no
+                            painel do Railway.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <RadioGroupItem value="nenhum" id="wiz-dom-nenhum" data-testid="radio-dominio-nenhum" />
+                  <Label htmlFor="wiz-dom-nenhum">Sem domínio agora</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
+
+          {wizardStep === 3 && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Plano</Label>
+                <Select
+                  value={wizard.plano}
+                  onValueChange={(value) => setWizard((w) => ({ ...w, plano: value }))}
+                >
+                  <SelectTrigger data-testid="select-wizard-plano">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUBSCRIPTION_PLANS.map((plan) => (
+                      <SelectItem key={plan} value={plan}>
+                        {PLAN_LABELS[plan]} — {formatPlanPrice(PLAN_PRICES[plan])}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Assinatura</Label>
+                <RadioGroup
+                  value={wizard.statusAssinatura}
+                  onValueChange={(value) =>
+                    setWizard((w) => ({ ...w, statusAssinatura: value as typeof w.statusAssinatura }))
+                  }
+                  className="space-y-3"
+                >
+                  <div className="flex items-start gap-2">
+                    <RadioGroupItem value="trial" id="wiz-ass-trial" data-testid="radio-assinatura-trial" />
+                    <div className="space-y-1">
+                      <Label htmlFor="wiz-ass-trial">Trial</Label>
+                      {wizard.statusAssinatura === "trial" && (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min={1}
+                            className="w-24"
+                            value={wizard.trialDays}
+                            onChange={(e) => setWizard((w) => ({ ...w, trialDays: e.target.value }))}
+                            data-testid="input-wizard-trial-days"
+                          />
+                          <span className="text-sm text-muted-foreground">dias</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <RadioGroupItem value="active" id="wiz-ass-active" data-testid="radio-assinatura-active" />
+                    <div className="space-y-1">
+                      <Label htmlFor="wiz-ass-active">Ativa (cobra via Asaas)</Label>
+                      {wizard.statusAssinatura === "active" && saasConfig && !saasConfig.asaasConfigured && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          Asaas não configurado — a cobrança não será criada automaticamente.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <RadioGroupItem value="nenhuma" id="wiz-ass-nenhuma" data-testid="radio-assinatura-nenhuma" />
+                    <Label htmlFor="wiz-ass-nenhuma">Sem assinatura</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            </div>
+          )}
+
+          {wizardStep === 4 && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-md border p-4 space-y-2">
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Empresa</span>
+                  <span className="font-medium">{wizard.nome}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Chave</span>
+                  <span className="font-mono">{wizard.key}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Administrador</span>
+                  <span>{wizard.adminNome} ({wizard.adminEmail})</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Domínio</span>
+                  <span>
+                    {wizard.dominioTipo === "subdominio"
+                      ? `${wizard.key}.${saasConfig?.wildcardBaseDomain || ""}`
+                      : wizard.dominioTipo === "proprio"
+                      ? wizard.dominioProprio
+                      : "Nenhum"}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Plano</span>
+                  <span>
+                    {PLAN_LABELS[wizard.plano as keyof typeof PLAN_LABELS] || wizard.plano} —{" "}
+                    {formatPlanPrice(PLAN_PRICES[wizard.plano as keyof typeof PLAN_PRICES] ?? null)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Assinatura</span>
+                  <span>
+                    {wizard.statusAssinatura === "trial"
+                      ? `Trial (${wizard.trialDays || 7} dias)`
+                      : wizard.statusAssinatura === "active"
+                      ? "Ativa (Asaas)"
+                      : "Sem assinatura"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => (wizardStep === 1 ? setIsWizardOpen(false) : setWizardStep(wizardStep - 1))}
+              data-testid="button-wizard-back"
+            >
+              {wizardStep === 1 ? "Cancelar" : "Voltar"}
+            </Button>
+            {wizardStep < 4 ? (
+              <Button
+                type="button"
+                onClick={() => setWizardStep(wizardStep + 1)}
+                disabled={(wizardStep === 1 && !wizardStep1Valid) || (wizardStep === 2 && !wizardStep2Valid)}
+                data-testid="button-wizard-next"
+              >
+                Avançar
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => provisionMutation.mutate()}
+                disabled={provisionMutation.isPending}
+                data-testid="button-wizard-provisionar"
+              >
+                {provisionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Provisionar
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Resultado do provisionamento ===== */}
+      <Dialog
+        open={!!provisionResult}
+        onOpenChange={(open) => {
+          if (!open) {
+            setProvisionResult(null);
+            setProvisionedInfo(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              Ambiente provisionado
+            </DialogTitle>
+            <DialogDescription>
+              {provisionedInfo?.nome || "Ambiente"} criado com sucesso. Guarde as credenciais abaixo.
+            </DialogDescription>
+          </DialogHeader>
+          {provisionResult && (
+            <div className="space-y-4 text-sm">
+              <div className="rounded-md border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-muted-foreground text-xs">Login</p>
+                    <p className="font-mono" data-testid="text-provision-login">
+                      {provisionedInfo?.adminEmail || "-"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => copyText(provisionedInfo?.adminEmail || "", "Login")}
+                    data-testid="button-copy-login"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-muted-foreground text-xs">Senha temporária</p>
+                    <p className="font-mono" data-testid="text-provision-senha">
+                      {provisionResult.senhaTemporaria}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => copyText(provisionResult.senhaTemporaria, "Senha")}
+                    data-testid="button-copy-senha"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {provisionResult.dominio && (
+                <div className="rounded-md border p-4 space-y-2">
+                  <p className="text-muted-foreground text-xs">Domínio</p>
+                  <p className="font-mono">{provisionResult.dominio}</p>
+                  {provisionResult.cnameAlvo && (
+                    <p className="text-xs text-muted-foreground">
+                      Aponte o CNAME do domínio para:{" "}
+                      <span className="font-mono text-foreground">{provisionResult.cnameAlvo}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                {provisionResult.emailEnviado ? (
+                  <p className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                    <CheckCircle2 className="h-4 w-4" /> E-mail com as credenciais enviado.
+                  </p>
+                ) : (
+                  <p className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <AlertTriangle className="h-4 w-4" /> E-mail não enviado — repasse as credenciais
+                    manualmente.
+                  </p>
+                )}
+              </div>
+
+              {provisionResult.warnings.length > 0 && (
+                <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 space-y-1">
+                  {provisionResult.warnings.map((w, i) => (
+                    <p key={i} className="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-1">
+                      <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" /> {w}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button
+              onClick={() => {
+                setProvisionResult(null);
+                setProvisionedInfo(null);
+              }}
+              data-testid="button-close-provision-result"
+            >
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Ficha do ambiente ===== */}
+      <Sheet open={fichaTenantId !== null} onOpenChange={(open) => { if (!open) setFichaTenantId(null); }}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          {isLoadingFicha || !ficha ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : (
+            <>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2 flex-wrap">
+                  {ficha.tenant.name}
+                  <StatusBadge status={tenantStatus(ficha.tenant)} />
+                  {ficha.tenant.interno === true && <Badge variant="outline">Interno</Badge>}
+                </SheetTitle>
+                <SheetDescription className="space-y-1">
+                  <span className="font-mono">{ficha.tenant.key}</span>
+                  <br />
+                  Criado em {formatDateBR(ficha.tenant.createdAt)} · Último acesso:{" "}
+                  {formatDateTimeBR(ficha.tenant.ultimoAcesso)}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="space-y-6 mt-6">
+                <div className="grid grid-cols-2 gap-3">
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground">Usuários (ativos/total)</p>
+                      <p className="text-xl font-bold" data-testid="text-ficha-usuarios">
+                        {ficha.metricas.usuarios_ativos}/{ficha.metricas.usuarios}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground">Propostas</p>
+                      <p className="text-xl font-bold" data-testid="text-ficha-propostas">
+                        {ficha.metricas.propostas}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="col-span-2">
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground">Total pago</p>
+                      <p className="text-xl font-bold" data-testid="text-ficha-total-pago">
+                        {Number(ficha.metricas.total_pago || 0).toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        })}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Globe className="h-4 w-4" /> Domínios
+                  </h3>
+                  {ficha.dominios.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum domínio configurado</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {ficha.dominios.map((d) => (
+                        <div key={d.domain} className="flex items-center gap-2 text-sm">
+                          <span className="font-mono">{d.domain}</span>
+                          {d.is_primary && <Badge variant="secondary">Principal</Badge>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold">Assinatura</h3>
+                  {ficha.assinatura ? (
+                    <div className="text-sm space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">
+                          {PLAN_LABELS[ficha.assinatura.plan as keyof typeof PLAN_LABELS] ||
+                            ficha.assinatura.plan}
+                        </span>
+                        <Badge variant="secondary">{ficha.assinatura.status}</Badge>
+                        {ficha.assinatura.gateway_subscription_id && <Badge>Asaas</Badge>}
+                      </div>
+                      <p className="text-muted-foreground">
+                        Vencimento: {formatDateBR(ficha.assinatura.current_period_end)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Sem assinatura</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold">Adicionais</h3>
+                  {ficha.adicionais.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum adicional</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {ficha.adicionais.map((a) => (
+                        <Badge key={a.id} variant="outline">
+                          {a.produto}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold">Módulos</h3>
+                  <div className="space-y-2">
+                    {ficha.modulos.map((m) => (
+                      <div key={m.key} className="flex items-center justify-between gap-2">
+                        <Label htmlFor={`modulo-${m.key}`} className="text-sm font-normal">
+                          {m.nome}
+                        </Label>
+                        <Switch
+                          id={`modulo-${m.key}`}
+                          checked={modulosDraft[m.key] ?? m.ativo}
+                          onCheckedChange={(checked) =>
+                            setModulosDraft((prev) => ({ ...prev, [m.key]: checked }))
+                          }
+                          data-testid={`switch-modulo-${m.key}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => saveModulosMutation.mutate()}
+                    disabled={saveModulosMutation.isPending}
+                    data-testid="button-salvar-modulos"
+                  >
+                    {saveModulosMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Salvar módulos
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* ===== Soft delete ===== */}
+      <AlertDialog open={!!tenantToSoftDelete} onOpenChange={(open) => { if (!open) setTenantToSoftDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir ambiente</AlertDialogTitle>
+            <AlertDialogDescription>
+              O ambiente "{tenantToSoftDelete?.name}" será marcado como excluído e ficará inacessível para os
+              usuários. Os dados são preservados e o ambiente pode ser restaurado depois.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                tenantToSoftDelete && statusMutation.mutate({ id: tenantToSoftDelete.id, status: "excluido" })
+              }
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-soft-delete"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ===== Hard delete (dupla confirmação) ===== */}
+      <AlertDialog
+        open={!!tenantToHardDelete}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTenantToHardDelete(null);
+            setHardDeleteConfirm("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Excluir DEFINITIVAMENTE
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação apaga PARA SEMPRE todos os dados do ambiente "{tenantToHardDelete?.name}". Não há
+              como desfazer. Baixe um backup antes de continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => tenantToHardDelete && downloadDump(tenantToHardDelete)}
+              disabled={isDownloadingDump}
+              data-testid="button-download-backup"
+            >
+              {isDownloadingDump ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Baixar backup (JSON)
+            </Button>
+            <div className="space-y-2">
+              <Label htmlFor="hard-delete-confirm">
+                Digite a chave <span className="font-mono font-bold">{tenantToHardDelete?.key}</span> para
+                confirmar:
+              </Label>
+              <Input
+                id="hard-delete-confirm"
+                value={hardDeleteConfirm}
+                onChange={(e) => setHardDeleteConfirm(e.target.value)}
+                placeholder={tenantToHardDelete?.key}
+                data-testid="input-hard-delete-confirm"
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={
+                hardDeleteConfirm !== tenantToHardDelete?.key || hardDeleteMutation.isPending
+              }
+              onClick={() =>
+                tenantToHardDelete &&
+                hardDeleteMutation.mutate({ id: tenantToHardDelete.id, confirmKey: hardDeleteConfirm })
+              }
+              data-testid="button-confirm-hard-delete"
+            >
+              {hardDeleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Apagar para sempre
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
