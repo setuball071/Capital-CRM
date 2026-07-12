@@ -187,7 +187,7 @@ export default function AssistenteWidget() {
                 {avisos.map((a) => (
                   <div key={a.id} className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
                     <div className="font-medium">{a.titulo}</div>
-                    <div className="text-muted-foreground">{a.mensagem}</div>
+                    <div className="whitespace-pre-wrap text-muted-foreground">{a.mensagem}</div>
                     <div className="mt-2 flex items-center gap-3 text-xs">
                       {a.proposalId && (
                         <a href={`/contratos/${a.proposalId}`} className="text-primary underline">
