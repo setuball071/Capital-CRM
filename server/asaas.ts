@@ -51,14 +51,15 @@ export async function createSubscription(params: {
   customer: string; // asaas customer id
   value: number;
   nextDueDate: string; // YYYY-MM-DD
+  cycle?: "MONTHLY" | "YEARLY";
   description?: string;
   billingType?: "UNDEFINED" | "BOLETO" | "CREDIT_CARD" | "PIX";
   externalReference?: string;
 }): Promise<{ id: string; status: string }> {
   return asaasRequest("POST", "/subscriptions", {
-    cycle: "MONTHLY",
     billingType: params.billingType || "UNDEFINED",
     ...params,
+    cycle: params.cycle || "MONTHLY",
   });
 }
 

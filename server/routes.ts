@@ -30562,16 +30562,42 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   // ─────────────────────────────────────────────────────────────────────────
   const { subscriptions } = await import("@shared/schema");
 
-  // Fase 4 — cria/recria a subscription recorrente no Asaas ao ativar um plano.
-  // Ambiente interno, plano sem preço (trial/enterprise) ou Asaas sem chave → pula
-  // sem quebrar a ativação manual; retorna warning para a UI mostrar.
+  // SP1 — registra uma linha no histórico de alterações da assinatura
+  async function registrarHistoricoAssinatura(
+    tenantId: number,
+    tipo: string,
+    descricao: string,
+    userId?: number,
+  ) {
+    await db.execute(sql`
+      INSERT INTO assinatura_historico (tenant_id, tipo, descricao, por_user_id)
+      VALUES (${tenantId}, ${tipo}, ${descricao}, ${userId ?? null})
+    `);
+  }
+
+  // SP1 — aplica os módulos do plano no ambiente (tenant_modulos), ligando os do plano
+  async function aplicarModulosDoPlano(tenantId: number, planoId: number) {
+    const mods = (await db.execute(
+      sql`SELECT modulo_key FROM plano_modulos WHERE plano_id = ${planoId}`,
+    )).rows as any[];
+    for (const m of mods) {
+      await db.execute(sql`
+        INSERT INTO tenant_modulos (tenant_id, modulo_key, ativo)
+        VALUES (${tenantId}, ${m.modulo_key}, true)
+        ON CONFLICT (tenant_id, modulo_key) DO UPDATE SET ativo = true
+      `);
+    }
+  }
+
+  // Fase 4 + SP1 — cria/recria a subscription recorrente no Asaas ao ativar um plano.
+  // Valor/ciclo vêm do PLANO vinculado (planos). Ambiente interno, plano sem preço
+  // ou Asaas sem chave → pula sem quebrar a ativação manual; retorna warning.
   async function sincronizarAssinaturaAsaas(
     tenantId: number,
   ): Promise<{ warning?: string }> {
     try {
       const { asaasConfigured, createCustomer, createSubscription, cancelSubscription } =
         await import("./asaas");
-      const { PLAN_PRICES, PLAN_LABELS } = await import("@shared/schema");
 
       const [tenant] = (await db.execute(sql`
         SELECT id, name, interno, asaas_customer_id FROM tenants WHERE id = ${tenantId}
@@ -30583,16 +30609,21 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         return { warning: "Asaas não configurado — assinatura ativada apenas manualmente." };
       }
 
+      // Valor/ciclo do PLANO vinculado (fonte de verdade); fallback pro enum legado
       const [assinatura] = (await db.execute(sql`
-        SELECT plan, current_period_end, gateway_subscription_id FROM subscriptions
-        WHERE tenant_id = ${tenantId}
+        SELECT s.plan, s.current_period_end, s.gateway_subscription_id,
+               p.nome AS plano_nome, p.valor AS plano_valor, p.ciclo AS plano_ciclo
+        FROM subscriptions s
+        LEFT JOIN planos p ON p.id = s.plano_id
+        WHERE s.tenant_id = ${tenantId}
       `)).rows as any[];
       if (!assinatura) return { warning: "Assinatura não encontrada" };
 
-      const precoCentavos = (PLAN_PRICES as Record<string, number | null>)[assinatura.plan];
-      if (!precoCentavos) {
-        return { warning: `Plano ${assinatura.plan} sem preço fixo — cobrança não criada no Asaas.` };
+      const valorReais = Number(assinatura.plano_valor) || 0;
+      if (valorReais <= 0) {
+        return { warning: `Plano ${assinatura.plano_nome || assinatura.plan} sem preço fixo — cobrança não criada no Asaas.` };
       }
+      const cycle = assinatura.plano_ciclo === "anual" ? "YEARLY" : "MONTHLY";
 
       // Recria do zero: cancela a subscription antiga (se houver) para o valor sempre bater com o plano
       if (assinatura.gateway_subscription_id) {
@@ -30620,9 +30651,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
       const subAsaas = await createSubscription({
         customer: customerId,
-        value: precoCentavos / 100,
+        value: valorReais,
         nextDueDate: nextDue,
-        description: `Assinatura ${(PLAN_LABELS as Record<string, string>)[assinatura.plan] || assinatura.plan} — Capital CRM`,
+        cycle,
+        description: `Assinatura ${assinatura.plano_nome || assinatura.plan} — Capital CRM`,
         externalReference: `subscription:tenant:${tenantId}`,
       });
 
@@ -30668,6 +30700,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     try {
       const rows = await db.execute(sql`
         SELECT s.*, t.name AS tenant_name, t.key AS tenant_key,
+          pl.nome AS plano_nome, pl.valor AS plano_valor, pl.ciclo AS plano_ciclo, pl.max_usuarios AS plano_max_usuarios,
           (
             SELECT COALESCE(json_agg(json_build_object('id', aa.id, 'produto', p.nome, 'created_at', aa.created_at)), '[]'::json)
             FROM assinatura_adicionais aa
@@ -30676,6 +30709,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           ) AS adicionais
         FROM subscriptions s
         JOIN tenants t ON t.id = s.tenant_id
+        LEFT JOIN planos pl ON pl.id = s.plano_id
         ORDER BY s.created_at DESC
       `);
       res.json(rows.rows);
@@ -30691,14 +30725,22 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       if (!tenantId) return res.json(null);
       const rows = await db.execute(sql`
         SELECT s.*, t.name AS tenant_name,
+          pl.nome AS plano_nome, pl.valor AS plano_valor, pl.ciclo AS plano_ciclo, pl.max_usuarios AS plano_max_usuarios,
           (
             SELECT COALESCE(json_agg(json_build_object('id', aa.id, 'produto', p.nome, 'created_at', aa.created_at)), '[]'::json)
             FROM assinatura_adicionais aa
             LEFT JOIN produtos p ON p.id = aa.produto_id
             WHERE aa.tenant_id = s.tenant_id AND aa.ativo = true
-          ) AS adicionais
+          ) AS adicionais,
+          (
+            SELECT COALESCE(json_agg(json_build_object('produto', pr.nome)), '[]'::json)
+            FROM plano_produtos pp
+            JOIN produtos pr ON pr.id = pp.produto_id
+            WHERE pp.plano_id = s.plano_id AND pp.incluso = true
+          ) AS servicos_inclusos
         FROM subscriptions s
         JOIN tenants t ON t.id = s.tenant_id
+        LEFT JOIN planos pl ON pl.id = s.plano_id
         WHERE s.tenant_id = ${tenantId}
         LIMIT 1
       `);
@@ -30712,8 +30754,19 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   app.post("/api/admin/subscriptions", requireAuth, async (req: any, res) => {
     if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
     try {
-      const { tenantId, plan, status, trialDays, notes } = req.body;
-      if (!tenantId || !plan) return res.status(400).json({ message: "tenantId e plan são obrigatórios" });
+      const { tenantId, planoId, plan, status, trialDays, notes } = req.body;
+      if (!tenantId) return res.status(400).json({ message: "tenantId é obrigatório" });
+
+      // Resolve o plano do catálogo (fonte de verdade). Mantém compat com `plan` (enum) legado.
+      let planoIdNum: number | null = planoId ? parseInt(planoId) : null;
+      let planNome = plan || "trial";
+      if (planoIdNum) {
+        const [pl] = (await db.execute(sql`SELECT id, nome FROM planos WHERE id = ${planoIdNum}`)).rows as any[];
+        if (!pl) return res.status(400).json({ message: "Plano não encontrado" });
+        planNome = String(pl.nome).toLowerCase();
+      } else if (!plan) {
+        return res.status(400).json({ message: "planoId (ou plan) é obrigatório" });
+      }
 
       const trialEndsAt = status === "trial" && trialDays
         ? new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000)
@@ -30725,9 +30778,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         : null;
 
       await db.execute(sql`
-        INSERT INTO subscriptions (tenant_id, plan, status, trial_ends_at, current_period_start, current_period_end, notes, updated_at)
-        VALUES (${tenantId}, ${plan}, ${status || "trial"}, ${trialEndsAt}, ${status === "active" ? now : null}, ${periodEnd}, ${notes || null}, NOW())
+        INSERT INTO subscriptions (tenant_id, plano_id, plan, status, trial_ends_at, current_period_start, current_period_end, notes, updated_at)
+        VALUES (${tenantId}, ${planoIdNum}, ${planNome}, ${status || "trial"}, ${trialEndsAt}, ${status === "active" ? now : null}, ${periodEnd}, ${notes || null}, NOW())
         ON CONFLICT (tenant_id) DO UPDATE SET
+          plano_id = EXCLUDED.plano_id,
           plan = EXCLUDED.plan,
           status = EXCLUDED.status,
           trial_ends_at = EXCLUDED.trial_ends_at,
@@ -30736,6 +30790,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           notes = EXCLUDED.notes,
           updated_at = NOW()
       `);
+
+      // Aplica os módulos do plano no ambiente
+      if (planoIdNum) await aplicarModulosDoPlano(parseInt(tenantId), planoIdNum);
+      await registrarHistoricoAssinatura(parseInt(tenantId), "criada", `Assinatura criada no plano ${planNome} (status ${status || "trial"})`, req.user?.id);
 
       // Ativação direta na criação → liga a recorrência no Asaas
       let asaasWarning: string | undefined;
@@ -30754,18 +30812,47 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
     try {
       const { tenantId } = req.params;
-      const { plan, status, notes, trialEndsAt, currentPeriodEnd } = req.body;
+      const tid = parseInt(tenantId);
+      const { planoId, plan, status, notes, trialEndsAt, currentPeriodEnd } = req.body;
+
+      // Estado atual (para detectar troca de plano/status e registrar histórico)
+      const [atual] = (await db.execute(sql`
+        SELECT s.plano_id, s.status, p.nome AS plano_nome
+        FROM subscriptions s LEFT JOIN planos p ON p.id = s.plano_id
+        WHERE s.tenant_id = ${tid}
+      `)).rows as any[];
+
+      let planoIdNum: number | null | undefined = undefined;
+      let planNome: string | undefined = undefined;
+      if (planoId !== undefined) {
+        planoIdNum = planoId ? parseInt(planoId) : null;
+        if (planoIdNum) {
+          const [pl] = (await db.execute(sql`SELECT nome FROM planos WHERE id = ${planoIdNum}`)).rows as any[];
+          if (!pl) return res.status(400).json({ message: "Plano não encontrado" });
+          planNome = String(pl.nome).toLowerCase();
+        }
+      }
 
       await db.execute(sql`
         UPDATE subscriptions SET
-          plan = COALESCE(${plan}, plan),
+          plano_id = ${planoIdNum !== undefined ? planoIdNum : sql`plano_id`},
+          plan = COALESCE(${planNome ?? plan ?? null}, plan),
           status = COALESCE(${status}, status),
           notes = COALESCE(${notes}, notes),
           trial_ends_at = COALESCE(${trialEndsAt ? new Date(trialEndsAt) : null}, trial_ends_at),
           current_period_end = COALESCE(${currentPeriodEnd ? new Date(currentPeriodEnd) : null}, current_period_end),
           updated_at = NOW()
-        WHERE tenant_id = ${parseInt(tenantId)}
+        WHERE tenant_id = ${tid}
       `);
+
+      // Troca de plano → aplica módulos + histórico
+      if (planoIdNum !== undefined && planoIdNum && planoIdNum !== atual?.plano_id) {
+        await aplicarModulosDoPlano(tid, planoIdNum);
+        await registrarHistoricoAssinatura(tid, "plano_alterado", `Plano alterado de ${atual?.plano_nome || atual?.plano_id || "—"} para ${planNome}`, req.user?.id);
+      }
+      if (status && status !== atual?.status) {
+        await registrarHistoricoAssinatura(tid, "status_alterado", `Status alterado de ${atual?.status || "—"} para ${status}`, req.user?.id);
+      }
 
       res.json({ message: "Assinatura atualizada" });
     } catch (err: any) {
@@ -30794,6 +30881,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
       // Liga a recorrência no Asaas (não bloqueia a ativação manual em caso de falha)
       const { warning: asaasWarning } = await sincronizarAssinaturaAsaas(parseInt(tenantId));
+      await registrarHistoricoAssinatura(parseInt(tenantId), "ativada", "Assinatura ativada", req.user?.id);
 
       res.json({ message: "Assinatura ativada", asaasWarning });
     } catch (err: any) {
@@ -30812,6 +30900,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         UPDATE subscriptions SET status = 'suspended', updated_at = NOW()
         WHERE tenant_id = ${parseInt(tenantId)}
       `);
+      await registrarHistoricoAssinatura(parseInt(tenantId), "suspensa", "Assinatura suspensa", req.user?.id);
       res.json({ message: "Assinatura suspensa", asaasWarning });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao suspender assinatura", error: err.message });
@@ -30829,9 +30918,29 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         UPDATE subscriptions SET status = 'cancelled', updated_at = NOW()
         WHERE tenant_id = ${parseInt(tenantId)}
       `);
+      await registrarHistoricoAssinatura(parseInt(tenantId), "cancelada", "Assinatura cancelada", req.user?.id);
       res.json({ message: "Assinatura cancelada", asaasWarning });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao cancelar assinatura", error: err.message });
+    }
+  });
+
+  // GET /api/admin/subscriptions/:tenantId/historico — histórico de alterações (master only)
+  app.get("/api/admin/subscriptions/:tenantId/historico", requireAuth, async (req: any, res) => {
+    if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
+    try {
+      const tid = parseInt(req.params.tenantId);
+      if (isNaN(tid)) return res.status(400).json({ message: "ID inválido" });
+      const rows = await db.execute(sql`
+        SELECT h.*, u.name AS por_nome
+        FROM assinatura_historico h
+        LEFT JOIN users u ON u.id = h.por_user_id
+        WHERE h.tenant_id = ${tid}
+        ORDER BY h.criado_em DESC
+      `);
+      res.json(rows.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao buscar histórico", error: err.message });
     }
   });
 
