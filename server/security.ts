@@ -150,6 +150,11 @@ export function botDetection(req: Request, res: Response, next: NextFunction) {
   // Usa originalUrl pois o middleware é montado em "/api" (req.path vem sem o prefixo).
   if (req.originalUrl.startsWith("/api/external/")) return next();
 
+  // Webhooks de gateways externos (ex.: Asaas) autenticam por token próprio no
+  // header e chegam servidor-a-servidor — o User-Agent costuma ser de lib HTTP
+  // (java/okhttp/etc) ou vazio, o que cairia no anti-bot abaixo. Isento.
+  if (req.originalUrl.startsWith("/api/webhooks/")) return next();
+
   // Lemit Worker usa chave própria — isento de detecção de bot
   if (req.headers["x-lemit-key"]) return next();
 
