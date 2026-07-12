@@ -1,4 +1,4 @@
-import { Users, FileText, Table, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, Rocket, ScrollText, BookMarked, Wrench, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard, KeyRound } from "lucide-react";
+import { Users, FileText, Table, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, Rocket, ScrollText, BookMarked, Wrench, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard, KeyRound, Layers } from "lucide-react";
 
 import { useLocation } from "wouter";
 import { useState, useEffect, useRef, Fragment } from "react";
@@ -81,6 +81,7 @@ const MS_ITEM: Record<string, string> = {
   "Dados Complementares": "post_add",
   "Observações por CPF": "sticky_note_2",
   // Administração
+  "Planos": "workspaces",
   "Assinaturas": "credit_card",
   "Minha Assinatura": "credit_card",
   "Serviços & Cobrança": "sell",
@@ -307,6 +308,7 @@ export function AppSidebar() {
       title: "Administração",
       icon: Settings,
       items: [
+        { title: "Planos", url: "/admin/planos", icon: Layers, masterOnly: true },
         { title: "Assinaturas", url: "/admin/assinaturas", icon: CreditCard, masterOnly: true },
         { title: "Minha Assinatura", url: "/assinatura", icon: CreditCard, clienteAdminOnly: true },
         { title: "Serviços & Cobrança", url: "/servicos-cobranca", icon: DollarSign, masterOnly: true },
