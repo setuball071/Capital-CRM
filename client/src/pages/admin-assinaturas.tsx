@@ -30,7 +30,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { PLAN_LABELS, PLAN_PRICES } from "@shared/schema";
 import {
   CreditCard,
   Plus,
@@ -40,13 +39,17 @@ import {
   RefreshCw,
   Building2,
   Calendar,
+  History,
 } from "lucide-react";
 
-function formatPlanPrice(plan: string) {
-  const price = (PLAN_PRICES as Record<string, number | null | undefined>)[plan];
-  if (price == null) return "Sob consulta";
-  if (price === 0) return "Grátis";
-  return (price / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + "/mês";
+function cicloSufixo(ciclo: string | null | undefined) {
+  return ciclo === "anual" ? "/ano" : "/mês";
+}
+
+function formatPlanoValor(valor: number | null | undefined, ciclo?: string | null) {
+  if (valor == null) return "—";
+  if (Number(valor) === 0) return "Grátis";
+  return Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + cicloSufixo(ciclo);
 }
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any }> = {
@@ -59,6 +62,17 @@ const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secon
 function formatDate(d: string | null) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("pt-BR");
+}
+
+function formatDateTime(d: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatDateDiff(d: string | null) {
@@ -74,10 +88,11 @@ export default function AdminAssinaturasPage() {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [historySub, setHistorySub] = useState<any | null>(null);
+  const [changeHistorySub, setChangeHistorySub] = useState<any | null>(null);
   const [editingTenantId, setEditingTenantId] = useState<number | null>(null);
   const [form, setForm] = useState({
     tenantId: "",
-    plan: "trial",
+    planoId: "",
     status: "trial",
     trialDays: "7",
     notes: "",
@@ -90,6 +105,17 @@ export default function AdminAssinaturasPage() {
   const { data: tenantsWithout = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/tenants-without-subscription"],
     enabled: modalOpen && !editingTenantId,
+  });
+
+  const { data: planos = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/planos"],
+    enabled: modalOpen,
+  });
+  const planosAtivos = planos.filter((p: any) => p.ativo);
+
+  const { data: changeHistory = [], isLoading: isLoadingChangeHistory } = useQuery<any[]>({
+    queryKey: ["/api/admin/subscriptions", changeHistorySub?.tenant_id, "historico"],
+    enabled: !!changeHistorySub,
   });
 
   const saveMutation = useMutation({
@@ -128,7 +154,7 @@ export default function AdminAssinaturasPage() {
   });
 
   function resetForm() {
-    setForm({ tenantId: "", plan: "trial", status: "trial", trialDays: "7", notes: "" });
+    setForm({ tenantId: "", planoId: "", status: "trial", trialDays: "7", notes: "" });
     setEditingTenantId(null);
   }
 
@@ -141,7 +167,7 @@ export default function AdminAssinaturasPage() {
     setEditingTenantId(sub.tenant_id);
     setForm({
       tenantId: String(sub.tenant_id),
-      plan: sub.plan,
+      planoId: sub.plano_id != null ? String(sub.plano_id) : "",
       status: sub.status,
       trialDays: "7",
       notes: sub.notes || "",
@@ -152,7 +178,7 @@ export default function AdminAssinaturasPage() {
   function handleSave() {
     saveMutation.mutate({
       tenantId: editingTenantId || parseInt(form.tenantId),
-      plan: form.plan,
+      planoId: form.planoId ? parseInt(form.planoId) : undefined,
       status: form.status,
       trialDays: parseInt(form.trialDays),
       notes: form.notes,
@@ -243,8 +269,8 @@ export default function AdminAssinaturasPage() {
                         <div className="text-xs text-muted-foreground">{sub.tenant_key}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{(PLAN_LABELS as Record<string, string>)[sub.plan] || sub.plan}</div>
-                        <div className="text-xs text-muted-foreground">{formatPlanPrice(sub.plan)}</div>
+                        <div className="font-medium">{sub.plano_nome || sub.plan}</div>
+                        <div className="text-xs text-muted-foreground">{formatPlanoValor(sub.plano_valor, sub.plano_ciclo)}</div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 flex-wrap">
@@ -306,9 +332,19 @@ export default function AdminAssinaturasPage() {
                               onClick={() => setHistorySub(sub)}
                               data-testid={`button-historico-${sub.tenant_id}`}
                             >
-                              Histórico
+                              Pagamentos
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1"
+                            onClick={() => setChangeHistorySub(sub)}
+                            data-testid={`button-historico-alteracoes-${sub.tenant_id}`}
+                          >
+                            <History className="h-3.5 w-3.5" />
+                            Alterações
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -373,13 +409,15 @@ export default function AdminAssinaturasPage() {
 
             <div>
               <Label>Plano</Label>
-              <Select value={form.plan} onValueChange={(v) => setForm({ ...form, plan: v })}>
-                <SelectTrigger>
-                  <SelectValue />
+              <Select value={form.planoId} onValueChange={(v) => setForm({ ...form, planoId: v })}>
+                <SelectTrigger data-testid="select-plano">
+                  <SelectValue placeholder="Selecione o plano" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(PLAN_LABELS).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label} — {formatPlanPrice(key)}</SelectItem>
+                  {planosAtivos.map((p: any) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.nome} — {formatPlanoValor(p.valor, p.ciclo)}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -465,6 +503,35 @@ export default function AdminAssinaturasPage() {
                 )}
               </div>
             ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de histórico de alterações */}
+      <Dialog open={!!changeHistorySub} onOpenChange={(v) => { if (!v) setChangeHistorySub(null); }}>
+        <DialogContent className="max-w-md" data-testid="dialog-change-history">
+          <DialogHeader>
+            <DialogTitle>Histórico de alterações — {changeHistorySub?.tenant_name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {isLoadingChangeHistory ? (
+              <div className="py-6 text-center text-muted-foreground text-sm">Carregando...</div>
+            ) : changeHistory.length === 0 ? (
+              <div className="py-6 text-center text-muted-foreground text-sm">Nenhuma alteração registrada.</div>
+            ) : (
+              changeHistory.map((h: any) => (
+                <div key={h.id} className="border-b pb-2 last:border-b-0 space-y-1" data-testid={`change-row-${h.id}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant="secondary" className="text-xs">{h.tipo}</Badge>
+                    <span className="text-xs text-muted-foreground">{formatDateTime(h.criado_em)}</span>
+                  </div>
+                  <div className="text-sm">{h.descricao}</div>
+                  {h.por_nome && (
+                    <div className="text-xs text-muted-foreground">por {h.por_nome}</div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PLAN_LABELS, PLAN_PRICES } from "@shared/schema";
+import { PLAN_LABELS } from "@shared/schema";
 import {
   CreditCard,
   CheckCircle,
@@ -14,11 +14,14 @@ import {
   Receipt,
 } from "lucide-react";
 
-function formatPlanPrice(plan: string) {
-  const price = (PLAN_PRICES as Record<string, number | null | undefined>)[plan];
-  if (price == null) return "Sob consulta";
-  if (price === 0) return "Grátis";
-  return (price / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + "/mês";
+function cicloSufixo(ciclo: string | null | undefined) {
+  return ciclo === "anual" ? "/ano" : "/mês";
+}
+
+function formatPlanoValor(valor: number | null | undefined, ciclo?: string | null) {
+  if (valor == null) return "—";
+  if (Number(valor) === 0) return "Grátis";
+  return Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + cicloSufixo(ciclo);
 }
 
 const PLAN_FEATURES: Record<string, string[]> = {
@@ -111,13 +114,13 @@ export default function MinhaAssinaturaPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="text-3xl font-bold">{(PLAN_LABELS as Record<string, string>)[sub.plan] || sub.plan}</span>
+                <span className="text-3xl font-bold" data-testid="text-plano-nome">{sub.plano_nome || (PLAN_LABELS as Record<string, string>)[sub.plan] || sub.plan}</span>
                 <Badge variant={statusCfg.variant} className="gap-1 text-sm">
                   <Icon className="h-3.5 w-3.5" />
                   {statusCfg.label}
                 </Badge>
               </div>
-              <div className="text-muted-foreground text-sm">{formatPlanPrice(sub.plan)}</div>
+              <div className="text-muted-foreground text-sm" data-testid="text-plano-valor">{formatPlanoValor(sub.plano_valor, sub.plano_ciclo)}</div>
             </div>
 
             <div className="space-y-1 text-right">
@@ -190,6 +193,28 @@ export default function MinhaAssinaturaPage() {
                 <li key={f} className="flex items-start gap-2 text-sm">
                   <CheckCircle className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
                   <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Serviços inclusos no plano */}
+      {sub.servicos_inclusos?.length > 0 && (
+        <Card data-testid="card-servicos-inclusos">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-4 w-4 text-primary" />
+              Serviços inclusos no seu plano
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {sub.servicos_inclusos.map((s: any, i: number) => (
+                <li key={i} className="flex items-start gap-2 text-sm" data-testid={`servico-incluso-${i}`}>
+                  <CheckCircle className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+                  <span>{s.produto}</span>
                 </li>
               ))}
             </ul>
