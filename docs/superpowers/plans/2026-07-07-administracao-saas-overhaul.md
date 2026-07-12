@@ -6,7 +6,8 @@
 > - ✅ **Fase 2** concluída (commit `6f7852a`).
 > - ✅ **Fase 6** concluída (commit `a549600`) — email-service ficou com TODO(fase6) documentado (alertas internos não têm tenant de contexto).
 > - ✅ **Fase 7** concluída (commit `e33670e`).
-> - ⛔ **Fases 3, 4 e 5** pendentes — dependem das pendências do Fábio (conta Asaas + ASAAS_API_KEY/ASAAS_WEBHOOK_TOKEN; domínio-curinga + RAILWAY_API_TOKEN).
+> - ✅ **Fase 3** concluída (commits `2a19fb0` backend + `680323a` frontend) — Serviços & Cobrança completa (com UI de promoções, opção A). Asaas configurado pelo Fábio (sandbox, webhook criado/desativado até religar). Testar: criar produto → gerar cobrança avulsa (invoiceUrl) → simular pagamento no sandbox → webhook libera.
+> - ⛔ **Fases 4 e 5** pendentes — Fase 4 (assinaturas Asaas recorrentes) e Fase 5 (painel de Ambientes) dependem do domínio-curinga + RAILWAY_API_TOKEN (Fase 5) e de exercitar o Asaas (Fase 4).
 
 > **Para o executor (Fable 5):** implemente **fase por fase, na ordem** (há dependências reais entre elas). Cada fase é um entregável que builda, deploya e é conferível sozinho. Marque os `- [ ]` conforme avança. Este repo **não tem suíte de testes automatizada** — a verificação de cada fase é **`npm run build` + deploy + conferência manual no app** (o fluxo que o time já usa). NÃO invente framework de teste.
 
