@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Margem Consignavel - SIAPE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
+<style>
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; margin: 0; padding: 0; background: #f4f6f9; color: #222; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+h1 { color: #1f4e78; margin: 0 0 6px 0; font-size: 24px; }
+.sub { color: #666; margin-bottom: 20px; font-size: 14px; }
+.card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.row { display: flex; gap: 16px; flex-wrap: wrap; }
+.field { flex: 1; min-width: 180px; }
+label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; font-weight: 600; }
+input, select { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+input:focus, select:focus { outline: none; border-color: #1f4e78; }
+.drop-zone { border: 2px dashed #1f4e78; background: #e7f1fa; border-radius: 10px; padding: 40px; text-align: center; cursor: pointer; transition: all .2s; }
+.drop-zone:hover, .drop-zone.dragover { background: #d4e6f7; border-color: #154065; }
+.drop-zone p { margin: 4px 0; color: #1f4e78; font-weight: 500; }
+.drop-zone .small { font-size: 12px; color: #666; font-weight: normal; }
+button { background: #1f4e78; color: #fff; border: 0; padding: 10px 18px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+button:hover { background: #154065; }
+button.secondary { background: #6c757d; }
+button.secondary:hover { background: #555; }
+button.success { background: #28a745; }
+button.success:hover { background: #1e7e34; }
+.results { display: none; }
+.results.show { display: block; }
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat { background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 4px solid #1f4e78; }
+.stat .label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .5px; }
+.stat .value { font-size: 18px; font-weight: bold; margin-top: 2px; color: #1f4e78; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e5e5e5; }
+th { background: #f0f4f8; font-weight: 600; color: #444; font-size: 12px; text-transform: uppercase; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.total td { font-weight: bold; background: #f8f9fa; border-top: 2px solid #1f4e78; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-yes { background: #d4edda; color: #155724; }
+.badge-no { background: #f8d7da; color: #721c24; }
+.badge-skip { background: #fff3cd; color: #856404; }
+.badge-unk { background: #e2e3e5; color: #383d41; }
+.margin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin: 16px 0; }
+.margin-card { padding: 16px; border-radius: 8px; border: 2px solid; }
+.margin-card.positive { border-color: #28a745; background: #e7f7ea; }
+.margin-card.negative { border-color: #dc3545; background: #fbeaea; }
+.margin-card h3 { margin: 0 0 8px 0; font-size: 14px; color: #444; }
+.margin-card .big { font-size: 22px; font-weight: bold; margin: 6px 0; }
+.margin-card.positive .big { color: #155724; }
+.margin-card.negative .big { color: #721c24; }
+.margin-card .small { font-size: 12px; color: #666; }
+.hist { margin-top: 20px; }
+.hist table { font-size: 12px; }
+.btn-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+#statusMsg { padding: 10px; border-radius: 6px; margin: 10px 0; display: none; }
+#statusMsg.info { display: block; background: #d1ecf1; color: #0c5460; }
+#statusMsg.error { display: block; background: #f8d7da; color: #721c24; }
+#statusMsg.success { display: block; background: #d4edda; color: #155724; }
+.editable { cursor: pointer; background: #fffbe6; }
+.editable:hover { background: #fff3b8; }
+@media (max-width: 600px) {
+  .row { flex-direction: column; }
+  table { font-size: 11px; }
+}
+.drag-handle { cursor: grab; color: #bbb; font-size: 15px; padding: 4px 6px !important; user-select: none; }
+.drag-handle:active { cursor: grabbing; }
+tr.drag-over { background: #d4e6f7 !important; outline: 2px dashed #1f4e78; }
+tr.drag-active { opacity: 0.45; }
+.btn-icon { padding: 2px 7px; font-size: 13px; border-radius: 4px; background: #6c757d; color: #fff; border: none; cursor: pointer; margin: 0 1px; line-height: 1.4; }
+.btn-icon:hover:not(:disabled) { background: #495057; }
+.btn-icon.btn-danger { background: #dc3545; }
+.btn-icon.btn-danger:hover:not(:disabled) { background: #b02a37; }
+.btn-icon:disabled { opacity: 0.28; cursor: default; }
+.btn-add { background: #1f4e78; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 10px; display: inline-block; }
+.btn-add:hover { background: #154065; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.45); z-index: 999; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal-box { background: #fff; border-radius: 10px; padding: 28px; min-width: 340px; max-width: 480px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,.22); }
+.modal-box h3 { margin: 0 0 18px; color: #1f4e78; font-size: 16px; }
+.modal-box .field { margin-bottom: 14px; }
+.modal-box label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+button.btn-pdf { background: #6f42c1; }
+button.btn-pdf:hover { background: #5a32a3; }
+.tab-nav { display: flex; gap: 4px; margin-bottom: -1px; flex-wrap: wrap; }
+.tab-btn { padding: 9px 20px; border-radius: 8px 8px 0 0; border: 1px solid #ddd; border-bottom: none; background: #e9eef4; color: #555; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s; }
+.tab-btn:hover { background: #d4e0ec; }
+.tab-btn.active { background: #fff; color: #1f4e78; border-color: #ccd8e4; border-bottom: 2px solid #fff; position: relative; z-index: 1; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.raimundo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 14px 0; }
+.r-card { padding: 18px; border-radius: 8px; border: 2px solid #1f4e78; background: #f0f5fb; }
+.r-card h3 { margin: 0 0 12px; font-size: 13px; color: #1f4e78; text-transform: uppercase; letter-spacing: .4px; }
+.r-card .r-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid #dde8f4; }
+.r-card .r-row:last-child { border-bottom: none; }
+.r-card .r-row .lbl { color: #555; }
+.r-card .r-row .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+.r-card .r-big { font-size: 22px; font-weight: bold; margin: 10px 0 4px; }
+.r-card.positive { border-color: #28a745; background: #e7f7ea; }
+.r-card.positive .r-big { color: #155724; }
+.r-card.negative { border-color: #dc3545; background: #fbeaea; }
+.r-card.negative .r-big { color: #721c24; }
+.r-card.highlight { border-color: #6f42c1; background: #f3eeff; }
+.r-card.highlight .r-big { color: #4b2a8a; }
+.r-limitador { margin: 8px 0; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+.r-limitador.ok { background: #d4edda; color: #155724; }
+.r-limitador.nok { background: #f8d7da; color: #721c24; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Simulador de Margem Consignavel - SIAPE</h1>
+  <p class="sub">Arraste o contracheque (PDF) aqui e o calculo das 3 margens (35% emprestimo + 5% cartao consignado + 5% cartao beneficio) e feito automaticamente.</p>
+
+  <div class="card">
+    <div class="row" style="align-items:flex-end;">
+      <div class="field" style="max-width:280px;">
+        <label for="vinculo">Vinculo <span style="font-weight:400;color:#888;">(detectado automaticamente do PDF)</span></label>
+        <select id="vinculo">
+          <option value="Ativo" selected>Ativo</option>
+          <option value="Redistribuido">Redistribuido</option>
+          <option value="Aposentado">Aposentado</option>
+          <option value="Pensionista">Pensionista</option>
+          <option value="Anistiado">Anistiado</option>
+          <option value="Reserva">Reserva</option>
+          <option value="Reforma">Reforma</option>
+          <option value="CLT Ans - Dec 6657/08">CLT Ans - Dec 6657/08</option>
+        </select>
+      </div>
+      <div style="font-size:12px;color:#888;padding-bottom:8px;">
+        Extraido do campo <strong>Situacao Funcional</strong> do contracheque. Corrija manualmente se necessario.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="drop-zone" id="dropZone">
+      <p style="font-size: 18px;">Solte o PDF do contracheque aqui</p>
+      <p class="small">ou clique para selecionar o arquivo</p>
+      <input type="file" id="fileInput" accept=".pdf" style="display:none">
+    </div>
+    <div id="statusMsg"></div>
+  </div>
+
+  <div class="results" id="results">
+    <div class="card">
+      <h2 style="margin-top:0;color:#1f4e78;">Dados do Contracheque</h2>
+      <div class="summary" id="summary"></div>
+    </div>
+
+    <div style="margin-bottom:0;">
+      <div class="card" style="margin-top:0;">
+        <div id="panel-geral">
+          <h2 style="margin-top:0;color:#1f4e78;">Resultado das Margens</h2>
+          <div class="margin-grid" id="marginGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;color:#1f4e78;">Rendimentos Extraidos</h2>
+      <p class="sub" style="margin:0 0 10px 0;">
+        Base de Calculo (automatica): <strong id="totalBase"></strong>
+        &nbsp;|&nbsp; Base usada no calculo: <strong id="baseUsada" style="color:#1f4e78;"></strong>
+      </p>
+      <div style="margin:8px 0 14px 0; padding:10px; background:#fff8e1; border-radius:6px; border-left: 3px solid #f9a825;">
+        <label style="display:inline-block;font-size:12px;color:#6b4e00;margin-right:10px;">
+          <input type="checkbox" id="overrideBaseChk" style="margin-right:4px;">
+          Usar base manual (do extrato)
+        </label>
+        <input type="number" id="overrideBaseInput" step="0.01" placeholder="Ex: 12609.22" style="width:160px;padding:4px 8px;" disabled>
+        <span style="font-size:11px;color:#6b4e00;margin-left:8px;">
+          Ative para digitar a base ou ajuste os checkboxes/frações abaixo
+        </span>
+      </div>
+      <table id="tableRend">
+        <thead>
+          <tr><th style="width:22px;"></th><th>#</th><th>Discriminacao</th><th>Prazo</th><th>Valor</th><th>Classificacao</th><th>Entra?</th><th>Fracao</th><th>Entra na Base</th><th style="width:90px;">Acoes</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <button class="btn-add" id="btnAddRend">+ Adicionar Rendimento</button>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;color:#1f4e78;">Descontos Extraidos</h2>
+      <table id="tableDesc">
+        <thead>
+          <tr><th style="width:22px;"></th><th>#</th><th>Discriminacao</th><th>Prazo</th><th>Valor</th><th>Consig 35%</th><th>Cart. Consig 5%</th><th>Cart. Benef 5%</th><th>Compuls. 70%</th><th style="width:90px;">Acoes</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <button class="btn-add" id="btnAddDesc">+ Adicionar Desconto</button>
+    </div>
+
+    <div class="btn-row">
+      <button id="btnExport" class="success">Exportar CSV</button>
+      <button id="btnExportPDF" class="btn-pdf">Exportar PDF</button>
+      <button id="btnSalvarHist" class="secondary">Salvar no Historico</button>
+      <button id="btnLimpar" class="secondary">Limpar / Novo Contracheque</button>
+    </div>
+  </div>
+
+  <div class="card hist" id="histCard" style="display:none;">
+    <h2 style="margin-top:0;color:#1f4e78;">Historico de Simulacoes</h2>
+    <table id="tableHist">
+      <thead>
+        <tr><th>Nome</th><th>Mes/Ano</th><th>Base</th><th>Consig 35% Livre</th><th>Cart Consig 5% Livre</th><th>Cart Benef 5% Livre</th><th>Acao</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="btn-row">
+      <button id="btnExportHist" class="success">Exportar Historico (CSV)</button>
+      <button id="btnLimparHist" class="secondary">Limpar Historico</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// pdf.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// Base de rubricas (SIAPE) - classificacao automatica
+const RUBRICAS = {"D_13 SALARIO":[0,0,0,0],"D_AACEP MENSALIDADE":[1,1,1,1],"D_AAFNSEB MENSALIDADE":[1,1,1,1],"D_AAFTESOURO NAC MENSALIDADE":[1,1,1,1],"D_AAGSP MENSALIDADE":[1,1,1,1],"D_AAIT DF MENSALIDADE":[1,1,1,1],"D_AAIT MG MENSALIDADE":[1,1,1,1],"D_AAIT MG PLANO DE SAUDE":[1,1,1,1],"D_AAIT MG SEGURO DE VIDA":[1,1,1,1],"D_AAIT MT MENSALIDADE":[1,1,1,1],"D_AAPA MENSALIDADE":[1,1,1,1],"D_AAPEA MENSALIDADE":[1,1,1,1],"D_AAPESESP MENSALIDADE":[1,1,1,1],"D_AAPFNS AL MENSALIDADE":[1,1,1,1],"D_AAPSESP MENSALIDADE":[1,1,1,1],"D_AASB MENSALIDADE":[1,1,1,1],"D_AASPEB MENSALIDADE":[1,1,1,1],"D_AAUFMA MENSALIDADE":[1,1,1,1],"D_AAVSUFRN MENSALIDADE":[1,1,1,1],"D_ABAM MENSALIDADE":[1,1,1,1],"D_ABAM PLANO DE SAUDE":[1,1,1,1],"D_ABAMSP MENSALIDADE":[1,1,1,1],"D_ABAMSP SEGURO DE VIDA":[1,1,1,1],"D_ABASB MENSALIDADE":[1,1,1,1],"D_ABASEB MENSALIDADE":[1,1,1,1],"D_ABASFEM MENSALIDADE":[1,1,1,1],"D_ABASP MENSALIDADE":[1,1,1,1],"D_ABASP PLANO DE SAUDE":[1,1,1,1],"D_ABATE TETO CF ART 37 AP":[1,1,1,1],"D_ABATE TETO CF ART 37 ATIVO":[0,0,0,0],"D_ABATE TETO CF ART 37 PENSION":[1,1,1,1],"D_ABATE TETO CF ART 37 RMI APOS":[0,0,1,1],"D_ABBASP MENSALIDADE":[1,1,1,1],"D_ABBASP PLANO DE SAUDE":[1,1,1,1],"D_ABEN DF MENSALIDADE":[1,1,1,1],"D_ABER MENSALIDADE":[1,1,1,1],"D_ABESP MENSALIDADE":[1,1,1,1],"D_ABFPS MENSALIDADE":[1,1,1,1],"D_ABM BRASIL MENSALIDADE":[1,1,1,1],"D_ABONO DE PERMANENCIA EC 41 03":[0,0,0,0],"D_ABRASP MENSALIDADE":[1,1,1,1],"D_ABRASP PLANO SAUDE":[1,1,1,1],"D_ABRASP SEGURO DE VIDA":[1,1,1,1],"D_ABRASPEG MENSALIDADE":[1,1,1,1],"D_ABS 16 DRF MENSALIDADE":[1,1,1,1],"D_ABS PER CAPITA PATROCINADOR":[0,0,0,0],"D_ABS PLANO DE SAUDE":[1,1,1,1],"D_ABSB MENSALIDADE":[1,1,1,1],"D_ABSP MENSALIDADE":[1,1,1,1],"D_ACABPREV MENSALIDADE":[1,1,1,1],"D_ACAO DE INDENIZACAO SENT JUD":[1,1,1,1],"D_ACERTO ABONO DE PERMANENCIA AP":[0,0,0,0],"D_ACERTO ADIC DE INSALUBRIDADE":[0,0,0,0],"D_ACERTO ADIC INSALUBRIDADE AP":[0,0,0,0],"D_ACERTO ADIC PERICULOSIDADE":[0,0,0,0],"D_ACERTO AUX ALIMENTACAO":[0,0,0,0],"D_ACERTO AUX IND TRANSPORTE AP":[0,0,0,0],"D_ACERTO AUX TRANSPORTE AT":[0,0,0,0],"D_ACERTO AUXILIO ALIMENTACAO AP":[0,0,0,0],"D_ACERTO DE APOSENTADORIA":[0,0,0,0],"D_ACERTO GSISTE GSISP GAEG":[0,0,0,0],"D_ACESLAF MENSALIDADE":[1,1,1,1],"D_ACPSB MENSALIDADE":[1,1,1,1],"D_ACPSB PER CAPITA PATROCINADOR":[0,0,0,0],"D_ACPSB PLANO SAUDE":[1,1,1,1],"D_ACSPC MENSALIDADE":[1,1,1,1],"D_ADAUFC MENSALIDADE":[1,1,1,1],"D_ADB MENSALIDADE":[1,1,1,1],"D_ADCEFET MENSALIDADE":[1,1,1,1],"D_ADCEFET RJ MENSALIDADE":[1,1,1,1],"D_ADCPII MENSALIDADE":[1,1,1,1],"D_ADESAN MENSALIDADE":[1,1,1,1],"D_ADETFOP MENSALIDADE":[1,1,1,1],"D_ADETFOP PLANO SAUDE":[1,1,1,1],"D_ADETFQ RJ MENSALIDADE":[1,1,1,1],"D_ADFMTM SSIND MENSALIDADE":[1,1,1,1],"D_ADIANT 13 SALARIO CLT":[0,0,0,0],"D_ADIANT GRAT NAT BENEF PENSAO":[0,0,0,0],"D_ADIANT GRAT NATALINA ANS36":[0,0,0,0],"D_ADIANT GRAT NATALINA MILITAR":[0,0,0,0],"D_ADIANT GRATIF NATALINA AP":[0,0,0,0],"D_ADIANT GRATIF NATALINA AT":[0,0,0,0],"D_ADIANT GRATIF NATALINA ATIVO":[0,0,0,0],"D_ADIANT GRATIFICACAO DE NATAL":[0,0,0,0],"D_ADIANT GRATIFICACAO NATAL RMI":[0,0,0,0],"D_ADIBC MENSALIDADE":[1,1,1,1],"D_ADIC DE INSALUBRIDADE":[0,0,0,0],"D_ADIC DE PERICULOSIDADE":[0,0,0,0],"D_ADIC GESTAO EDUCACIONAL AGE":[0,0,0,0],"D_ADICIONAIS OCUPAC NAO TRAN JUL":[0,1,0,1],"D_ADICIONAL 1 3 FERIAS JUDICIAL":[0,0,0,0],"D_ADICIONAL CERT PROFISSIONAL":[1,1,1,1],"D_ADINES MENSALIDADE":[1,1,1,1],"D_ADPF MENSALIDADE":[1,1,1,1],"D_ADPF PLANO DE SAUDE":[1,1,1,1],"D_ADSEG MENSALIDADE":[1,1,1,1],"D_ADSEG SEGURO DE VIDA":[1,1,1,1],"D_ADUA MENSALIDADE":[1,1,1,1],"D_ADUFAL MENSALIDADE":[1,1,1,1],"D_ADUFC MENSALIDADE":[1,1,1,1],"D_ADUFEPE MENSALIDADE":[1,1,1,1],"D_ADUFF MENSALIDADE":[1,1,1,1],"D_ADUFOP MENSALIDADE":[1,1,1,1],"D_ADUFPA MENSALIDADE":[1,1,1,1],"D_ADUFPI MENSALIDADE":[1,1,1,1],"D_ADUFRGS MENSALIDADE":[1,1,1,1],"D_ADUFRJ MENSALIDADE":[1,1,1,1],"D_ADUFS UFSE MENSALIDADE":[1,1,1,1],"D_ADUFS UFSE PLANO SAUDE":[1,1,1,1],"D_ADUFU MENSALIDADE":[1,1,1,1],"D_ADUNB MENSALIDADE":[1,1,1,1],"D_ADUNI RIO MENSALIDADE":[1,1,1,1],"D_ADUNIR MENSALIDADE":[1,1,1,1],"D_ADUR RJ S SINDICAL":[1,1,1,1],"D_ADURN MENSALIDADE":[1,1,1,1],"D_AESAB MENSALIDADE":[1,1,1,1],"D_AESAB PLANO SAUDE":[1,1,1,1],"D_AFAITERJ MENSALIDADE":[1,1,1,1],"D_AFAMA CE MENSALIDADE":[1,1,1,1],"D_AFAMA ES MENSALIDADE":[1,1,1,1],"D_AFAMA MENSALIDADE":[1,1,1,1],"D_AFAMA MG":[1,1,1,1],"D_AFAMA PE MENSALIDADE":[1,1,1,1],"D_AFAMA SC MENSALIDADE":[1,1,1,1],"D_AFC A MENSALIDADE":[1,1,1,1],"D_AFC B MENSALIDADE":[1,1,1,1],"D_AFC IL MENSALIDADE":[1,1,1,1],"D_AFC OP MENSALIDADE":[1,1,1,1],"D_AFCVM MENSALIDADE":[1,1,1,1],"D_AFECORP RJ MENSALIDADE":[1,1,1,1],"D_AFEN MENSALIDADE":[1,1,1,1],"D_AFESP PLANO DE SAUDE":[1,1,1,1],"D_AFFAMA GO MENSALIDADE":[1,1,1,1],"D_AFFAMA MA MENSALIDADE":[1,1,1,1],"D_AFFAMA PB MENSALIDADE":[1,1,1,1],"D_AFFUNASA MENSALIDADE":[1,1,1,1],"D_AFIMG MENSALIDADE":[1,1,1,1],"D_AFINCA MENSALIDADE":[1,1,1,1],"D_AFINES MENSALIDADE":[1,1,1,1],"D_AFIP AL MENSALIDADE":[1,1,1,1],"D_AFIP DF MENSALIDADE":[1,1,1,1],"D_AFIPEA MENSALIDADE":[1,1,1,1],"D_AFIPEB BA MENSALIDADE":[1,1,1,1],"D_AFIPERJ MENSALIDADE":[1,1,1,1],"D_AFIPES MENSALIDADE":[1,1,1,1],"D_AFIPPA MENSALIDADE":[1,1,1,1],"D_AFIPREMA MENSALIDADE":[1,1,1,1],"D_AFIPRESE MENSALIDADE":[1,1,1,1],"D_AFISEPA MENSALIDADE":[1,1,1,1],"D_AFISPAM AM MENSALIDADE":[1,1,1,1],"D_AFITEAL MENSALIDADE":[1,1,1,1],"D_AFP MENSALIDADE":[1,1,1,1],"D_AFP SEGURO DE VIDA":[1,1,1,1],"D_AFPAI MENSALIDADE":[1,1,1,1],"D_AFSPAI MENSALIDADE":[1,1,1,1],"D_AFUBRAS MENSALIDADE":[1,1,1,1],"D_AFUNSEP MENSALIDADE":[1,1,1,1],"D_AFURN MENSALIDADE":[1,1,1,1],"D_AFURN PLANO SAUDE":[1,1,1,1],"D_AGAFISP MENSALIDADE":[1,1,1,1],"D_AGASAI RS MENSALIDADE":[1,1,1,1],"D_AGASALAF MENSALIDADE":[1,1,1,1],"D_AGASENS MENSALIDADE":[1,1,1,1],"D_AGF BRASIL SEGURO DE VIDA":[1,1,1,1],"D_AGITEP PB MENSALIDADE":[1,1,1,1],"D_AGITEPE MENSALIDADE":[1,1,1,1],"D_AGITRA AM MENSALIDADE":[1,1,1,1],"D_AGITRA RS MENSALIDADE":[1,1,1,1],"D_AGITRA RS PLANO SAUDE":[1,1,1,1],"D_AGOFIP MENSALIDADE":[1,1,1,1],"D_AGROS PER CAPITA PATROCINADOR":[0,0,0,0],"D_AGROS PER CAPITA SAUDE SUPLEMENTAR":[0,0,0,0],"D_AITEMA MENSALIDADE":[1,1,1,1],"D_AITEPI MENSALIDADE":[1,1,1,1],"D_AITESC MENSALIDADE":[1,1,1,1],"D_ALUG IMOVEL FUNCIONAL":[0,1,0,1],"D_AMAL EMPRESTIMO":[1,1,1,1],"D_AMAL PREVIDENCIA":[1,1,1,1],"D_AMASP MENSALIDADE":[1,1,1,1],"D_AMB MENSALIDADE":[1,1,1,1],"D_AMB PLANO DE SAUDE":[1,1,1,1],"D_AMBRASP MENSALIDADE":[1,1,1,1],"D_AMBSERJ MENSALIDADE":[1,1,1,1],"D_AMBSERJ SEGURO DE VIDA":[1,1,1,1],"D_AMDNERCE MENSALIDADE":[1,1,1,1],"D_AME MENSALIDADE":[1,1,1,1],"D_AMECO":[1,1,1,1],"D_AMECO SEGURO DE VIDA":[1,1,1,1],"D_AMERICA LATINA SEGURO":[1,1,1,1],"D_AMIL PLANO SAUDE":[1,1,1,1],"D_AMIS MENSALIDADE":[1,1,1,1],"D_AMIS PLANO DE SAUDE":[1,1,1,1],"D_AMORT CARTAO":[0,1,0,1],"D_AMORT CARTAO BENEFICIO ATLANTA":[0,1,0,1],"D_AMORT CARTAO BENEFICIO BMG":[0,1,0,1],"D_AMORT CARTAO BENEFICIO CAPIT":[0,1,0,1],"D_AMORT CARTAO BENEFICIO CLICK CAPITAL":[0,1,0,1],"D_AMORT CARTAO BENEFICIO CLICKBA":[0,1,0,1],"D_AMORT CARTAO BENEFICIO CLICKBANK":[0,1,0,1],"D_AMORT CARTAO BENEFICIO DAYBC":[0,1,0,1],"D_AMORT CARTAO BENEFICIO DIGIMAIS":[0,1,0,1],"D_AMORT CARTAO BENEFICIO EAGLE":[0,1,0,1],"D_AMORT CARTAO BENEFICIO FACTA":[0,1,0,1],"D_AMORT CARTAO BENEFICIO LECCA":[0,1,0,1],"D_AMORT CARTAO BENEFICIO MASTER":[0,1,0,1],"D_AMORT CARTAO BENEFICIO MONBANK":[0,1,0,1],"D_AMORT CARTAO BENEFICIO PAN":[0,1,0,1],"D_AMORT CARTAO BENEFICIO PINE":[0,1,0,1],"D_AMORT CARTAO CREDITO AGIPLAN":[0,1,0,1],"D_AMORT CARTAO CREDITO ATLANTA":[0,1,0,1],"D_AMORT CARTAO CREDITO BANCO MASTER":[0,1,0,1],"D_AMORT CARTAO CREDITO BANRISUL":[0,1,0,1],"D_AMORT CARTAO CREDITO BIB":[0,1,0,1],"D_AMORT CARTAO CREDITO BMG":[0,1,0,1],"D_AMORT CARTAO CREDITO BONSUCESSO":[0,1,0,1],"D_AMORT CARTAO CREDITO CEF":[1,1,1,1],"D_AMORT CARTAO CREDITO CLICK CAPITAL":[0,1,0,1],"D_AMORT CARTAO CREDITO CLICKBANK":[0,1,0,1],"D_AMORT CARTAO CREDITO DAYBCO":[0,1,0,1],"D_AMORT CARTAO CREDITO DAYCOVAL":[0,1,0,1],"D_AMORT CARTAO CREDITO EAGLE S":[0,1,0,1],"D_AMORT CARTAO CREDITO INTERMEDIUM":[0,1,0,1],"D_AMORT CARTAO CREDITO OLE":[0,1,0,1],"D_AMORT CARTAO CREDITO OLE BONSUCESSO":[0,1,0,1],"D_AMORT CARTAO CREDITO PAN":[0,1,0,1],"D_AMORT CARTAO CREDITO SANTANDER OLE":[0,1,0,1],"D_AMOSP PLANO DE SAUDE":[1,1,1,1],"D_AMRN MENSALIDADE":[1,1,1,1],"D_ANAB MENSALIDADE":[1,1,1,1],"D_ANACEN MENSALIDADE":[1,1,1,1],"D_ANAJUR MENSALIDADE":[1,1,1,1],"D_ANAP MENSALIDADE":[1,1,1,1],"D_ANAPI MENSALIDADE":[1,1,1,1],"D_ANASPEF MENSALIDADE":[1,1,1,1],"D_ANASPREV MENSALIDADE":[1,1,1,1],"D_ANASPS MENSALIDADE":[1,1,1,1],"D_ANAUNI MENSALIDADE":[1,1,1,1],"D_ANESP MENSALIDADE":[1,1,1,1],"D_ANFEMP MENSALIDADE":[1,1,1,1],"D_ANFIP MENSALIDADE":[1,1,1,1],"D_ANFIP MS MENSALIDADE":[1,1,1,1],"D_ANFIT RN MENSALIDADE":[1,1,1,1],"D_ANOFIP MENSALIDADE":[1,1,1,1],"D_ANPAF MENSALIDADE":[1,1,1,1],"D_ANPPREV MENSALIDADE":[1,1,1,1],"D_ANPRF MENSALIDADE":[1,1,1,1],"D_ANPRF SEGURO DE VIDA":[1,1,1,1],"D_ANSA MENSALIDADE":[1,1,1,1],"D_ANSEF DF MENSALIDADE":[1,1,1,1],"D_ANSEF DPF MENSALIDADE":[1,1,1,1],"D_ANSEF DPF PLANO SAUDE":[1,1,1,1],"D_ANSEF DPF SEGURO DE VIDA":[1,1,1,1],"D_ANSEF GOIAS MENSALIDADE":[1,1,1,1],"D_ANSEF MENSALIDADE":[1,1,1,1],"D_ANSEF PLANO SAUDE":[1,1,1,1],"D_ANSP MENSALIDADE":[1,1,1,1],"D_ANSP SEGURO DE VIDA":[1,1,1,1],"D_ANSPB MENSALIDADE":[1,1,1,1],"D_ANSVS MENSALIDADE":[1,1,1,1],"D_ANUENIO ART 244 LEI 8112 90":[0,0,0,0],"D_APAFERJ MENSALIDADE":[1,1,1,1],"D_APAFISP MENSALIDADE":[1,1,1,1],"D_APAIMA MENSALIDADE":[1,1,1,1],"D_APCF MENSALIDADE":[1,1,1,1],"D_APCFERJ MENSALIDADE":[1,1,1,1],"D_APECH MENSALIDADE":[1,1,1,1],"D_APEP MENSALIDADE":[1,1,1,1],"D_APESC MENSALIDADE":[1,1,1,1],"D_APESC PLANO SAUDE":[1,1,1,1],"D_APESP MENSALIDADE":[1,1,1,1],"D_APFIP MENSALIDADE":[1,1,1,1],"D_APLUB PREVIDENCIA":[1,1,1,1],"D_APOFES MENSALIDADE":[1,1,1,1],"D_APOPEN MENSALIDADE":[1,1,1,1],"D_APOSEN MENSALIDADE":[1,1,1,1],"D_APOSFUB MENSALIDADE":[1,1,1,1],"D_APRESUL MENSALIDADE":[1,1,1,1],"D_APRESUL SEGURO DE VIDA":[1,1,1,1],"D_APRF BA MENSALIDADE":[1,1,1,1],"D_APRF GO TO DF MENSALIDADE":[1,1,1,1],"D_APRF MENSALIDADE":[1,1,1,1],"D_APROEFEI MENSALIDADE":[1,1,1,1],"D_APROFEPI MENSALIDADE":[1,1,1,1],"D_APRUMA MENSALIDADE":[1,1,1,1],"D_APSE MENSALIDADE":[1,1,1,1],"D_APSEF MENSALIDADE":[1,1,1,1],"D_APUB MENSALIDADE":[1,1,1,1],"D_APUFSC SSIND UFSC MENSALIDADE":[1,1,1,1],"D_APURN MENSALIDADE":[1,1,1,1],"D_ARC MENSALIDADE":[1,1,1,1],"D_ARC PLANO SAUDE":[1,1,1,1],"D_ARCESP EMPRESTIMO CRUZEIRO DO SUL":[1,1,1,1],"D_ARCESP MENSALIDADE":[1,1,1,1],"D_ARCESP PECULIO":[1,1,1,1],"D_AREA SUDAM MENSALIDADE":[1,1,1,1],"D_ARESP MA MENSALIDADE":[1,1,1,1],"D_ARSEJOF MENSALIDADE":[1,1,1,1],"D_ARSPB MENSALIDADE":[1,1,1,1],"D_ASA MARA RJ MENSALIDADE":[1,1,1,1],"D_ASA PORTOS RJ MENSALIDADE":[1,1,1,1],"D_ASAFIMIG MENSALIDADE":[1,1,1,1],"D_ASAFUNAS PB MENSALIDADE":[1,1,1,1],"D_ASALAF PE MENSALIDADE":[1,1,1,1],"D_ASALAF PR MENSALIDADE":[1,1,1,1],"D_ASAP CAP MENSALIDADE":[1,1,1,1],"D_ASAPAS MENSALIDADE":[1,1,1,1],"D_ASAPIN MENSALIDADE":[1,1,1,1],"D_ASAPS AL MENSALIDADE":[1,1,1,1],"D_ASAPS PE MENSALIDADE":[1,1,1,1],"D_ASAS MG MENSALIDADE":[1,1,1,1],"D_ASAS PA MENSALIDADE":[1,1,1,1],"D_ASBENE MENSALIDADE":[1,1,1,1],"D_ASBRAS MENSALIDADE":[1,1,1,1],"D_ASBRASEP MENSALIDADE":[1,1,1,1],"D_ASBRASP MENSALIDADE":[1,1,1,1],"D_ASCA MENSALIDADE":[1,1,1,1],"D_ASCAP MENSALIDADE":[1,1,1,1],"D_ASCAPES MENSALIDADE":[1,1,1,1],"D_ASCB MENSALIDADE":[1,1,1,1],"D_ASCB PLANO DE SAUDE":[1,1,1,1],"D_ASCB SEGURO DE VIDA":[1,1,1,1],"D_ASCCTEX MENSALIDADE":[1,1,1,1],"D_ASCEFET MENSALIDADE":[1,1,1,1],"D_ASCEFET MG MENSALIDADE":[1,1,1,1],"D_ASCEFET MG PLANO SAUDE":[1,1,1,1],"D_ASCEME MENSALIDADE":[1,1,1,1],"D_ASCIFE MENSALIDADE":[1,1,1,1],"D_ASCM MENSALIDADE":[1,1,1,1],"D_ASCM SEGURO DE VIDA":[1,1,1,1],"D_ASCON MENSALIDADE":[1,1,1,1],"D_ASCON PLANO SAUDE":[1,1,1,1],"D_ASDEC MENSALIDADE":[1,1,1,1],"D_ASDEC PLANO DE SAUDE":[1,1,1,1],"D_ASDEFA MENSALIDADE":[1,1,1,1],"D_ASDERT MT MENSALIDADE":[1,1,1,1],"D_ASDERT PB MENSALIDADE":[1,1,1,1],"D_ASDERT RS MENSALIDADE":[1,1,1,1],"D_ASDESAM SSD MENSALIDADE":[1,1,1,1],"D_ASDET SC MENSALIDADE":[1,1,1,1],"D_ASDFAARA ES MENSALIDADE":[1,1,1,1],"D_ASDIN MENSALIDADE":[1,1,1,1],"D_ASDNER MENSALIDADE":[1,1,1,1],"D_ASDNER MG MENSALIDADE":[1,1,1,1],"D_ASDNER MG PLANO SAUDE":[1,1,1,1],"D_ASDNER PLANO DE SAUDE":[1,1,1,1],"D_ASDNER SEGURO DE VIDA":[1,1,1,1],"D_ASDNERU MENSALIDADE":[1,1,1,1],"D_ASEAF MENSALIDADE":[1,1,1,1],"D_ASEMARGS MENSALIDADE":[1,1,1,1],"D_ASENAS MENSALIDADE":[1,1,1,1],"D_ASERF PB MENSALIDADE":[1,1,1,1],"D_ASERF RS MENSALIDADE":[1,1,1,1],"D_ASERMA MENSALIDADE":[1,1,1,1],"D_ASERMA PR MENSALIDADE":[1,1,1,1],"D_ASERMA SE MENSALIDADE":[1,1,1,1],"D_ASERPUB MENSALIDADE":[1,1,1,1],"D_ASERU MENSALIDADE":[1,1,1,1],"D_ASERV MENSALIDADE":[1,1,1,1],"D_ASETFMT MENSALIDADE":[1,1,1,1],"D_ASETFRN MENSALIDADE":[1,1,1,1],"D_ASF DRT PE MENSALIDADE":[1,1,1,1],"D_ASFAGRO MENSALIDADE":[1,1,1,1],"D_ASFAM MENSALIDADE":[1,1,1,1],"D_ASFAMA RO MENSALIDADE":[1,1,1,1],"D_ASFB MENSALIDADE":[1,1,1,1],"D_ASFCBIA MENSALIDADE":[1,1,1,1],"D_ASFESP MENSALIDADE":[1,1,1,1],"D_ASFESP SEGURO DE VIDA":[1,1,1,1],"D_ASFIPE MENSALIDADE":[1,1,1,1],"D_ASFNASA AL MENSALIDADE":[1,1,1,1],"D_ASFNDE MENSALIDADE":[1,1,1,1],"D_ASFNS GO MENSALIDADE":[1,1,1,1],"D_ASFNSJ MENSALIDADE":[1,1,1,1],"D_ASFNSP MA MENSALIDADE":[1,1,1,1],"D_ASFOC MENSALIDADE":[1,1,1,1],"D_ASFOC SEGURO DE VIDA":[1,1,1,1],"D_ASFUB MENSALIDADE":[1,1,1,1],"D_ASFUB PLANO DE SAUDE":[1,1,1,1],"D_ASFUNASA MENSALIDADE":[1,1,1,1],"D_ASFUNSAF MENSALIDADE":[1,1,1,1],"D_ASFUNSAP MENSALIDADE":[1,1,1,1],"D_ASFUNSC MENSALIDADE":[1,1,1,1],"D_ASFUNSESP MENSALIDADE":[1,1,1,1],"D_ASFUNSPI MENSALIDADE":[1,1,1,1],"D_ASFURNS RN MENSALIDADE":[1,1,1,1],"D_ASHCLIN MENSALIDADE":[1,1,1,1],"D_ASHOL MENSALIDADE":[1,1,1,1],"D_ASHSE MENSALIDADE":[1,1,1,1],"D_ASIBAMA CE MENSALIDADE":[1,1,1,1],"D_ASIBAMA DF MENSALIDADE":[1,1,1,1],"D_ASIBC RJ MENSALIDADE":[1,1,1,1],"D_ASINPAS MENSALIDADE":[1,1,1,1],"D_ASIP UFS MENSALIDADE":[1,1,1,1],"D_ASIPEM MENSALIDADE":[1,1,1,1],"D_ASIPEM PLANO SAUDE":[1,1,1,1],"D_ASISC MENSALIDADE":[1,1,1,1],"D_ASLAF GO TO MENSALIDADE":[1,1,1,1],"D_ASLAF PA AP MENSALIDADE":[1,1,1,1],"D_ASLAFIMA MENSALIDADE":[1,1,1,1],"D_ASLAFP MENSALIDADE":[1,1,1,1],"D_ASLAFP RN MENSALIDADE":[1,1,1,1],"D_ASMAG GO MENSALIDADE":[1,1,1,1],"D_ASMAPA PB MENSALIDADE":[1,1,1,1],"D_ASMAPE MENSALIDADE":[1,1,1,1],"D_ASMAPE PLANO SAUDE":[1,1,1,1],"D_ASMAPI MENSALIDADE":[1,1,1,1],"D_ASMARA RN MENSALIDADE":[1,1,1,1],"D_ASMC MENSALIDADE":[1,1,1,1],"D_ASMEC DF MENSALIDADE":[1,1,1,1],"D_ASMED MENSALIDADE":[1,1,1,1],"D_ASMETRO SEGURO DE VIDA":[1,1,1,1],"D_ASMEX MENSALIDADE":[1,1,1,1],"D_ASMEX PLANO SAUDE":[1,1,1,1],"D_ASMINT MENSALIDADE":[1,1,1,1],"D_ASMISA MENSALIDADE":[1,1,1,1],"D_ASMISA RJ MENSALIDADE":[1,1,1,1],"D_ASMITAR MENSALIDADE":[1,1,1,1],"D_ASMITEGO MENSALIDADE":[1,1,1,1],"D_ASMITEPI MENSALIDADE":[1,1,1,1],"D_ASMITRA PA AP MENSALIDADE":[1,1,1,1],"D_ASMRE MENSALIDADE":[1,1,1,1],"D_ASMT MENSALIDADE":[1,1,1,1],"D_ASNARF MENSALIDADE":[1,1,1,1],"D_ASOF MENSALIDADE":[1,1,1,1],"D_ASP MENSALIDADE":[1,1,1,1],"D_ASPAG MENSALIDADE":[1,1,1,1],"D_ASPAS CE MENSALIDADE":[1,1,1,1],"D_ASPBRAS MENSALIDADE":[1,1,1,1],"D_ASPEB SEGURO DE VIDA":[1,1,1,1],"D_ASPECIR EMPRESTIMO":[1,1,1,1],"D_ASPECIR PREVIDENCIA":[1,1,1,1],"D_ASPI MENSALIDADE":[1,1,1,1],"D_ASPL FBN MENSALIDADE":[1,1,1,1],"D_ASPL FBN PLANO SAUDE":[1,1,1,1],"D_ASPLAF MENSALIDADE":[1,1,1,1],"D_ASPLUB MENSALIDADE":[1,1,1,1],"D_ASPN MENSALIDADE":[1,1,1,1],"D_ASPOFECE":[1,1,1,1],"D_ASPP MENSALIDADE":[1,1,1,1],"D_ASPREN MENSALIDADE":[1,1,1,1],"D_ASPREV MENSALIDADE":[1,1,1,1],"D_ASPREVI MENSALIDADE":[1,1,1,1],"D_ASPRF PR MENSALIDADE":[1,1,1,1],"D_ASPS MENSALIDADE":[1,1,1,1],"D_ASPUB MENSALIDADE":[1,1,1,1],"D_ASPUB PLANO DE SAUDE":[1,1,1,1],"D_ASPUFE MENSALIDADE":[1,1,1,1],"D_ASPUV MENSALIDADE":[1,1,1,1],"D_ASS APO MAR MERCANTE MENSAL":[1,1,1,1],"D_ASS ASS SERV MENSALIDADE":[1,1,1,1],"D_ASS ATL VOL UFSC MENSALIDADE":[1,1,1,1],"D_ASS FER NORD MENSALIDADE":[1,1,1,1],"D_ASS FERROV BA MENSALIDADE":[1,1,1,1],"D_ASS MENSALIDADE":[1,1,1,1],"D_ASS MUS MIL BRASIL MENSALIDADE":[1,1,1,1],"D_ASS PAT ROD FED PR MENSALIDADE":[1,1,1,1],"D_ASS PLANO DE SAUDE":[1,1,1,1],"D_ASS SEG BR ASB MENSALIDADE":[1,1,1,1],"D_ASS SERV MS CE MENSALIDADE":[1,1,1,1],"D_ASS SERV SERV INSP FED MENSAL":[1,1,1,1],"D_ASSAF MENSALIDADE":[1,1,1,1],"D_ASSAN MENSALIDADE":[1,1,1,1],"D_ASSC CE PLANO SAUDE":[1,1,1,1],"D_ASSEAF MENSALIDADE":[1,1,1,1],"D_ASSEAF UDI MENSALIDADE":[1,1,1,1],"D_ASSEAFEC MENSALIDADE":[1,1,1,1],"D_ASSEAGRO MENSALIDADE":[1,1,1,1],"D_ASSEBRASP MENSALIDADE":[1,1,1,1],"D_ASSEC CAESA MENSALIDADE":[1,1,1,1],"D_ASSEC MENSALIDADE":[1,1,1,1],"D_ASSEC MG MENSALIDADE":[1,1,1,1],"D_ASSEC PC MENSALIDADE":[1,1,1,1],"D_ASSECAS PLANO DE SAUDE":[1,1,1,1],"D_ASSECOR MENSALIDADE":[1,1,1,1],"D_ASSECOR PLANO DE SAUDE":[1,1,1,1],"D_ASSEDE DNPM MENSALIDADE":[1,1,1,1],"D_ASSEDERTES MENSALIDADE":[1,1,1,1],"D_ASSEDET MENSALIDADE":[1,1,1,1],"D_ASSEFAZ MENSALIDADE":[1,1,1,1],"D_ASSEFAZ PER CAPITA PATROC":[0,0,0,0],"D_ASSEFAZ PLANO DE SAUDE":[1,1,1,1],"D_ASSEFAZ SEGURO DE VIDA":[1,1,1,1],"D_ASSEFEI MENSALIDADE":[1,1,1,1],"D_ASSEFUNS DF MENSALIDADE":[1,1,1,1],"D_ASSEGUP MENSALIDADE":[1,1,1,1],"D_ASSEJOP RO":[1,1,1,1],"D_ASSELBA MENSALIDADE":[1,1,1,1],"D_ASSEMA CE MENSALIDADE":[1,1,1,1],"D_ASSEMA CE PLANO SAUDE":[1,1,1,1],"D_ASSEMA MA MENSALIDADE":[1,1,1,1],"D_ASSEMA SC MENSALIDADE":[1,1,1,1],"D_ASSEMIT MENSALIDADE":[1,1,1,1],"D_ASSEMTUR MENSALIDADE":[1,1,1,1],"D_ASSEN MENSALIDADE":[1,1,1,1],"D_ASSENM MF PE MENSALIDADE":[1,1,1,1],"D_ASSENODI MENSALIDADE":[1,1,1,1],"D_ASSEPAI MENSALIDADE":[1,1,1,1],"D_ASSEPAI PLANO DE SAUDE":[1,1,1,1],"D_ASSER CEFET RJ MENSALIDADE":[1,1,1,1],"D_ASSERA BR MENSALIDADE":[1,1,1,1],"D_ASSEREF MG MENSALIDADE":[1,1,1,1],"D_ASSEREF MG SEGURO DE VIDA":[1,1,1,1],"D_ASSERERJ MS MENSALIDADE":[1,1,1,1],"D_ASSERFESA MENSALIDADE":[1,1,1,1],"D_ASSERFESA PLANO SAUDE":[1,1,1,1],"D_ASSERJ MENSALIDADE":[1,1,1,1],"D_ASSERMA AL MENSALIDADE":[1,1,1,1],"D_ASSERTRA CE MENSALIDADE":[1,1,1,1],"D_ASSERV EAFAJT BA MENSALIDADE":[1,1,1,1],"D_ASSESAP MENSALIDADE":[1,1,1,1],"D_ASSESP ES MENSALIDADE":[1,1,1,1],"D_ASSESP MA MENSALIDADE":[1,1,1,1],"D_ASSESP MG MENSALIDADE":[1,1,1,1],"D_ASSESPA MENSALIDADE":[1,1,1,1],"D_ASSESPB MENSALIDADE":[1,1,1,1],"D_ASSET ASSOC SERV DA ETFPB":[1,1,1,1],"D_ASSETEC MENSALIDADE":[1,1,1,1],"D_ASSETEF MENSALIDADE":[1,1,1,1],"D_ASSETEF PLANO DE SAUDE":[1,1,1,1],"D_ASSETEFEPE MENSALIDADE":[1,1,1,1],"D_ASSETEFEPE PLANO DE SAUDE":[1,1,1,1],"D_ASSETEFEQ MENSALIDADE":[1,1,1,1],"D_ASSETFERR MENSALIDADE":[1,1,1,1],"D_ASSETFES MENSALIDADE":[1,1,1,1],"D_ASSETFOP MENSALIDADE":[1,1,1,1],"D_ASSIBGE MENSALIDADE":[1,1,1,1],"D_ASSIF SC MENSALIDADE":[1,1,1,1],"D_ASSIM MENSALIDADE":[1,1,1,1],"D_ASSIMA MENSALIDADE":[1,1,1,1],"D_ASSIN MENSALIDADE":[1,1,1,1],"D_ASSINAGRO MENSALIDADE":[1,1,1,1],"D_ASSINAMPS MENSALIDADE":[1,1,1,1],"D_ASSINCRA AC MENSALIDADE":[1,1,1,1],"D_ASSINCRA AL MENSALIDADE":[1,1,1,1],"D_ASSINCRA BA MENSALIDADE":[1,1,1,1],"D_ASSINCRA CE MENSALIDADE":[1,1,1,1],"D_ASSINCRA ES MENSALIDADE":[1,1,1,1],"D_ASSINCRA MA MENSALIDADE":[1,1,1,1],"D_ASSINCRA MENSALIDADE":[1,1,1,1],"D_ASSINCRA MG MENSALIDADE":[1,1,1,1],"D_ASSINCRA MS MENSALIDADE":[1,1,1,1],"D_ASSINCRA MT MENSALIDADE":[1,1,1,1],"D_ASSINCRA PB MENSALIDADE":[1,1,1,1],"D_ASSINCRA PF CO MENSALIDADE":[1,1,1,1],"D_ASSINCRA PI MENSALIDADE":[1,1,1,1],"D_ASSINCRA RJ MENSALIDADE":[1,1,1,1],"D_ASSINCRA RO MENSALIDADE":[1,1,1,1],"D_ASSINCRA RR":[1,1,1,1],"D_ASSINCRA RS MENSALIDADE":[1,1,1,1],"D_ASSINCRA SC MENSALIDADE":[1,1,1,1],"D_ASSINCRA SE MENSALIDADE":[1,1,1,1],"D_ASSINCRA SP MENSALIDADE":[1,1,1,1],"D_ASSINCRA TO MENSALIDADE":[1,1,1,1],"D_ASSINPA MENSALIDADE":[1,1,1,1],"D_ASSINSP RJ MENSALIDADE":[1,1,1,1],"D_ASSINSS ES MENSALIDADE":[1,1,1,1],"D_ASSINT MENSALIDADE":[1,1,1,1],"D_ASSINT PLANO DE SAUDE":[1,1,1,1],"D_ASSINTRA PA MENSALIDADE":[1,1,1,1],"D_ASSINTRA PA SEGURO DE VIDA":[1,1,1,1],"D_ASSIPEN MENSALIDADE":[1,1,1,1],"D_ASSIST MED HOSPITALAR DNER":[1,1,1,1],"D_ASSIST MED ODONTO":[1,1,1,1],"D_ASSIST MENSALIDADE":[1,1,1,1],"D_ASSISTENCIA MEDICA":[1,1,1,1],"D_ASSISTENCIA ODONTOLOGICA":[1,1,1,1],"D_ASSOC DOS ENFERMEIROS AEHCPA":[1,1,1,1],"D_ASSOC DOS FUNC DO DNPM 5 DISTR":[1,1,1,1],"D_ASSOC DOS SERV HOSP B LUCENA":[1,1,1,1],"D_ASSOC SERV ESC AGRO COLATINA":[1,1,1,1],"D_ASSOC SERV HOSP JACAREPAGUA":[1,1,1,1],"D_ASSOCFUNC MENSALIDADE":[1,1,1,1],"D_ASSOCIACAO EMPREGADOS AEP":[0,0,0,0],"D_ASSOFEDERAL MENSALIDADE":[1,1,1,1],"D_ASSOMASP MENSALIDADE":[1,1,1,1],"D_ASSRF MENSALIDADE":[1,1,1,1],"D_ASSTO MENSALIDADE":[1,1,1,1],"D_ASSUA AM MENSALIDADE":[1,1,1,1],"D_ASSUA AM PLANO SAUDE":[1,1,1,1],"D_ASSUCAC MENSALIDADE":[1,1,1,1],"D_ASSUCAM CO MENSALIDADE":[1,1,1,1],"D_ASSUCE MENSALIDADE":[1,1,1,1],"D_ASSUERJ MENSALIDADE":[1,1,1,1],"D_ASSUERJ PLANO DE SAUDE":[1,1,1,1],"D_ASSUF MENSALIDADE":[1,1,1,1],"D_ASSUFBA MENSALIDADE":[1,1,1,1],"D_ASSUFEMG MENSALIDADE":[1,1,1,1],"D_ASSUFOP MENSALIDADE":[1,1,1,1],"D_ASSUFRGS MENSALIDADE":[1,1,1,1],"D_ASSUFRGS PLANO SAUDE":[1,1,1,1],"D_ASSUL MENSALIDADE":[1,1,1,1],"D_ASSUMA MENSALIDADE":[1,1,1,1],"D_ASSUMO MENSALIDADE":[1,1,1,1],"D_ASSUMOC MENSALIDADE":[1,1,1,1],"D_ASSUPA MENSALIDADE":[1,1,1,1],"D_ASSUPE MA MENSALIDADE":[1,1,1,1],"D_ASSURE SEGURO DE VIDA":[1,1,1,1],"D_ASSURON MT MENSALIDADE":[1,1,1,1],"D_ASSUSG MENSALIDADE":[1,1,1,1],"D_ASSUSP MT MENSALIDADE":[1,1,1,1],"D_ASTERJ MENSALIDADE":[1,1,1,1],"D_ASTRA MENSALIDADE":[1,1,1,1],"D_ASTRAMS PB MENSALIDADE":[1,1,1,1],"D_ASTRAPS MENSALIDADE":[1,1,1,1],"D_ASTRAS DVL MENSALIDADE":[1,1,1,1],"D_ASUEM MENSALIDADE":[1,1,1,1],"D_ASUEM SEGURO DE VIDA":[1,1,1,1],"D_ASUFUB MENSALIDADE":[1,1,1,1],"D_ASUNIRIO MENSALIDADE":[1,1,1,1],"D_ATECERJ MENSALIDADE":[1,1,1,1],"D_ATEFCE MENSALIDADE":[1,1,1,1],"D_ATEMF MENSALIDADE":[1,1,1,1],"D_ATEMF PLANO DE SAUDE":[1,1,1,1],"D_ATLANT S MENSALIDADE":[1,1,1,1],"D_ATM DIAGNOSTICO PLANO SAUDE":[1,1,1,1],"D_ATPDB MENSALIDADE":[1,1,1,1],"D_ATRASOS EST":[0,0,0,0],"D_ATUFAL MENSALIDADE":[1,1,1,1],"D_AUX MORADIA L 10486 02 AT RMI":[0,0,1,1],"D_AUXILIO ALIMENTACAO":[0,0,0,0],"D_AUXILIO ALIMENTACAO CDT":[0,0,0,0],"D_AUXILIO FARDAMENTO":[0,0,0,0],"D_AUXILIO INVALIDEZ INATIVO RMI":[0,1,0,1],"D_AUXILIO TRANSPORTE":[0,0,0,0],"D_AUXILIO TRANSPORTE CDT":[0,0,0,0],"D_AUXILIO TRANSPORTE ESTAGIARIO":[0,0,0,0],"D_AUXILIO TRANSPORTE SELETIVO":[0,0,0,0],"D_BAMERINDUS PLANO DE SAUDE":[1,1,1,1],"D_BAMERINDUS SEGURO DE VIDA":[1,1,1,1],"D_BANCLUB DO BRASIL MENSALIDADE":[1,1,1,1],"D_BANCO DO BRASIL EMPRESTIMO":[1,1,1,1],"D_BEMFAZ MENSALIDADE":[1,1,1,1],"D_BENEF CAMILIANA PLANO DE SAUDE":[1,1,1,1],"D_BLUE LIFE":[1,1,1,1],"D_BOLSA DE ESTAGIO":[0,0,0,0],"D_BOLSA FUNDACAO OSORIO":[1,1,1,1],"D_BONUS DE EFICIENCIA AT":[0,0,0,0],"D_BRADESCO PLANO DE SAUDE":[1,1,1,1],"D_BRADESCO SEGURO DE VIDA":[1,1,1,1],"D_BRASIL VIDA SEGURO":[1,1,1,1],"D_BREHM LIFE EMPRESTIMO":[1,1,1,1],"D_BREHM LIFE SEGURO DE VIDA":[1,1,1,1],"D_C PREV 11 LC 1012 07 ANT 13 SAL AJ":[0,0,0,0],"D_CAARN MENSALIDADE":[1,1,1,1],"D_CABES UFPE MENSALIDADE":[1,1,1,1],"D_CABURE VIDA CLUBE SEGUROS":[1,1,1,1],"D_CAIXA ECON FED CEF MG":[1,1,1,1],"D_CAMED PLANO DE SAUDE":[1,1,1,1],"D_CAPELBRAS MENSALIDADE":[1,1,1,1],"D_CAPEMI EMPRESTIMO":[1,1,1,1],"D_CAPEMI PREVIDENCIA":[1,1,1,1],"D_CAPEMI SEGURO DE VIDA":[1,1,1,1],"D_CAPESESP EMPRESTIMO":[1,1,1,1],"D_CAPESESP PER CAPITA PATROC":[0,0,0,0],"D_CAPESESP PLANO DE SAUDE":[1,1,1,1],"D_CAPREVI MENSALIDADE":[1,1,1,1],"D_CARGO DE DIRECAO CD":[0,0,0,0],"D_CASA PREV SERV ANEXOS MENSAL":[1,1,1,1],"D_CASEBRAS MENSALIDADE":[1,1,1,1],"D_CASU UFMG PER CAPITA PATROCINA":[0,0,0,0],"D_CAURN PER CAPITA PATROCINADOR":[0,0,0,0],"D_CAURN PLANO DE SAUDE":[1,1,1,1],"D_CCCPM DECISAO JUDICIAL":[0,0,0,0],"D_CERES PREVIDENCIA":[1,1,1,1],"D_CERES PREVIDENCIA 13 SAL":[0,0,0,0],"D_CIBRIUS MENSALIDADE":[1,1,1,1],"D_CO PARTIC AUTOGESTAO ASSEFAZ":[1,1,1,1],"D_CO PARTIC AUTOGESTAO CASEC":[1,1,1,1],"D_CO PARTIC AUTOGESTAO CASEMBR":[1,1,1,1],"D_CO PARTIC AUTOGESTAO FASSINC":[1,1,1,1],"D_CO PARTIC AUTOGESTAO FIOSAUDE":[1,1,1,1],"D_CO PARTIC AUTOGESTAO GEAP":[1,1,1,1],"D_CO PARTIC PS MERCADO AGROS":[1,1,1,1],"D_CO PARTIC PS MERCADO ALIANCA":[1,1,1,1],"D_CO PARTIC PS MERCADO CAPESESP":[1,1,1,1],"D_CO PARTIC PS MERCADO GCAISLTDA":[1,1,1,1],"D_CO PARTIC PS MERCADO INTERODONT":[1,1,1,1],"D_CO PARTIC PS MERCADO METROP":[1,1,1,1],"D_CO PARTIC PS MERCADO ODONTOGROU":[1,1,1,1],"D_CO PARTIC PS MERCADO UNIMED":[1,1,1,1],"D_COMPLEMENTO SOLDO":[0,0,0,0],"D_CONT ADIC SPPREVCOM 13O SAL ANTECIP":[0,0,0,0],"D_CONT FAC SPPREVCOM 13OSAL ANTECIP":[0,0,0,0],"D_CONT P SEGURIDADE SOCIAL AP":[0,1,0,1],"D_CONT P SEGURIDADE SOCIAL APOS":[0,1,0,1],"D_CONT PLANO SEG SOCIAL PENSION":[0,0,0,0],"D_CONT PLANO SEGURIDADE SOCIAL":[0,1,0,0],"D_CONT PLANO SEGURIDADE SOCIAL AP":[0,0,0,0],"D_CONT PLANO SEGURIDADE SOCIAL APOS":[0,0,0,0],"D_CONT PREV 11 LC1013 07 13 SAL PM":[0,0,0,0],"D_CONT PREV 11 LC1013 07 ANT 13 SAL":[0,0,0,0],"D_CONT SPPREVCOM 13 SAL ANTECIPACAO":[0,0,0,0],"D_CONT TEMPOR ART 37 C F PROFES":[0,1,0,1],"D_CONTR PENSAO MILITAR ADICIONAL":[0,1,0,1],"D_CONTR PREV 11 LC 1012 07 13 SAL":[0,0,0,0],"D_CONTR PREV 11 LC 1012 07 13 SAL AJ":[0,0,0,0],"D_CONTR PREV 11 LC1012 07 ANT 13 SAL":[0,0,0,0],"D_CONTR PSS GRATIF NATALINA":[0,0,0,0],"D_CONTR PSS GRATIF NATALINA AP":[0,0,0,0],"D_CONTR PSS GRATIF NATALINA PENS":[0,0,0,0],"D_CONTRIB ADICIONAL SPPREVCOM 13O SAL":[0,0,0,0],"D_CONTRIB ASSOCIATIVA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AACEP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AAFITEGO":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AAGPC":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AAPEA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AAPFNS A":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AAPSESP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AASP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AASPEB":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ABER":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ABFPS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ABRAPOL":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ABRASPFE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ABSP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ABSPU":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ACS ASPRA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ADC INPE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ADPF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AEDNIT":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AFINCA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AFINPI":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AFIPERJ":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AFP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AFURN":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AGAFISP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AGEPOL":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AGITRA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ALIANCA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA AMME":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANAFE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANAFP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANAJUR":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANASP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANASPS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANER":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANFFEMA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANFIP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANMP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANPPREV":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANPRF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANSA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANSDNPM":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANSEF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANSEF GO":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANSEF NAC":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANSEFFUNAI":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANSEFSP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANSEV SALV":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANSP BRASI":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ANTEFFA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA APAFISP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA APCAP DF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA APCF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA APIPMCBDF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA APOSFUB":[0,1,0,1],"D_CONTRIB ASSOCIATIVA APRESUL":[0,1,0,1],"D_CONTRIB ASSOCIATIVA APRFRS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA APSEF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA APUFPEL":[0,1,0,1],"D_CONTRIB ASSOCIATIVA APURN":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASAGUAS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASAPIN":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASAS MG":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASAUFES":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASAV":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASBEN":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASCEFET":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASCEFETEPE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASCM":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASDEC":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASDIN":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASDNER":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASERPUB":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASFA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASFEP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASFEUNI":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASFMG":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASFNS GO":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASHU":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASIBAMA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASIBAMA RS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASIFRN":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASIP UFPB":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASMC":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASMED":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASMS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASMT":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASNAB":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASPF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASPHAN":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASPOMETERF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASPOMETRON":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASPP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASPS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSC CE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSECAS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSECOR":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSER":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSERTRA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSFERNORD":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSINCR":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSINCRAGP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSINEP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSOR DF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSPMETFRR":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSUA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASSUFMS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASTECAA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASUEM":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASUFEPAR":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ASUNIRIO":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ATUFAL":[0,1,0,1],"D_CONTRIB ASSOCIATIVA BRASILCENT":[0,1,0,1],"D_CONTRIB ASSOCIATIVA BRASILINTE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CABE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CABEN":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CABES UFPE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CAP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CBASF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CBMDF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CGSSEGUROS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CIFAIS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CIRGS":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CLASP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CNPQ":[0,1,0,1],"D_CONTRIB ASSOCIATIVA COPM":[0,1,0,1],"D_CONTRIB ASSOCIATIVA CPP":[0,1,0,1],"D_CONTRIB ASSOCIATIVA DAPIBGE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA DIREF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA FLAMENGO":[0,1,0,1],"D_CONTRIB ASSOCIATIVA GREMIO":[0,1,0,1],"D_CONTRIB ASSOCIATIVA INTERLIFE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ITAVIDA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA NUCLEO":[0,1,0,1],"D_CONTRIB ASSOCIATIVA NURP DF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA OAP UFMG":[0,1,0,1],"D_CONTRIB ASSOCIATIVA ORSEG":[0,1,0,1],"D_CONTRIB ASSOCIATIVA OSIDEMCI":[0,1,0,1],"D_CONTRIB ASSOCIATIVA PASUFSM":[0,1,0,1],"D_CONTRIB ASSOCIATIVA PCA":[0,1,0,1],"D_CONTRIB ASSOCIATIVA PROASFE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA UCPSB":[0,1,0,1],"D_CONTRIB ASSOCIATIVA UFB":[0,1,0,1],"D_CONTRIB ASSOCIATIVA UFVCREDI":[0,1,0,1],"D_CONTRIB ASSOCIATIVA UNACON":[0,1,0,1],"D_CONTRIB ASSOCIATIVA UNAFE":[0,1,0,1],"D_CONTRIB ASSOCIATIVA UNAFISCO":[0,1,0,1],"D_CONTRIB ASSOCIATIVA UNARH":[0,1,0,1],"D_CONTRIB ASSOCIATIVA UNASLAF":[0,1,0,1],"D_CONTRIB ASSOCIATIVA UPRB":[0,1,0,1],"D_CONTRIB FACUL SPPREVCOM 13O SAL":[0,0,0,0],"D_CONTRIB PREV ABERTA ASPECIR":[1,1,1,1],"D_CONTRIB PREV ABERTA CAPEMISA":[1,1,1,1],"D_CONTRIB PREV ABERTA COMPREV":[1,1,1,1],"D_CONTRIB PREV ABERTA EQUATORI":[1,1,1,1],"D_CONTRIB PREV ABERTA FBPP":[1,1,1,1],"D_CONTRIB PREV ABERTA FUTURO":[1,1,1,1],"D_CONTRIB PREV ABERTA GBOEX":[1,1,1,1],"D_CONTRIB PREV ABERTA HOJE":[1,1,1,1],"D_CONTRIB PREV ABERTA MBM":[1,1,1,1],"D_CONTRIB PREV ABERTA MG SEGUR":[1,1,1,1],"D_CONTRIB PREV ABERTA MG SEGUROS":[1,1,1,1],"D_CONTRIB PREV ABERTA MONGERAL":[1,1,1,1],"D_CONTRIB PREV ABERTA PREVIMIL":[1,1,1,1],"D_CONTRIB PREV ABERTA RECIPROC":[1,1,1,1],"D_CONTRIB PREV ABERTA SABEMI":[1,1,1,1],"D_CONTRIB PREV ABERTA SCMS":[1,1,1,1],"D_CONTRIB PREV ABERTA UNIAO":[1,1,1,1],"D_CONTRIB PREV ABERTA UPOFA":[1,1,1,1],"D_CONTRIB PREV ABERTA VIVER P":[1,1,1,1],"D_CONTRIB PREV ABERTA VIVER PR":[1,1,1,1],"D_CONTRIB PREV FECHADA AGROS":[1,1,1,1],"D_CONTRIB PREV FECHADA CAPESES":[1,1,1,1],"D_CONTRIB PREV FECHADA CIASPRE":[1,1,1,1],"D_CONTRIB PREV FECHADA GEAPPRE":[1,1,1,1],"D_CONTRIB PREV FECHADA SIAS":[1,1,1,1],"D_CONTRIB PREVID 11 13 SAL RRA":[0,0,0,0],"D_CONTRIB PREVID ANTEC 13 SAL 11":[0,0,0,0],"D_CONTRIB SPPREVCOM 13O SALARIO":[0,0,0,0],"D_CONTRIBUICAO ASSOCIATIVA ANSEF":[1,1,1,1],"D_CONTRIBUICAO PENSAO MILITAR":[0,1,0,1],"D_CONTRIBUICAO PENSAO MILITAR PE":[0,1,0,1],"D_CONTRIBUICAO PREVIDENCIARIA 11 RRA":[0,1,0,1],"D_CONVENIO PLANO ODONTOLOGICO":[1,1,1,1],"D_CONVENIO RECIPROCIDADE CASSI":[1,1,1,1],"D_COOPDNER PA MENSALIDADE":[1,1,1,1],"D_COOPERUFP MENSALIDADE":[1,1,1,1],"D_COOPESCO MENSALIDADE":[1,1,1,1],"D_COOPESTADO EMPRESTIMO":[1,1,1,1],"D_COOPESTADO MENSALIDADE":[1,1,1,1],"D_COOPETFC EMPRESTIMO":[1,1,1,1],"D_COOPFUNTEVE EMPRESTIMO":[1,1,1,1],"D_COOPQUALITA S EMPRESTIMO":[1,1,1,1],"D_COOPREV EMPRESTIMO":[1,1,1,1],"D_COOPREV MENSALIDADE":[1,1,1,1],"D_COOPSEF ES EMPRESTIMO":[1,1,1,1],"D_COOPSEF ES MENSALIDADE":[1,1,1,1],"D_COOSEMS MENSALIDADE":[1,1,1,1],"D_COOSUFF EMPRESTIMO":[1,1,1,1],"D_COOSUFF MENSALIDADE":[1,1,1,1],"D_COPOL EMPRESTIMO":[1,1,1,1],"D_COPOL GO MENSALIDADE":[1,1,1,1],"D_CORFEPA MENSALIDADE":[1,1,1,1],"D_CORRFA PP EMPRESTIMO":[1,1,1,1],"D_CORSEC SEGURO DE VIDA":[1,1,1,1],"D_COSEMTRA MENSALIDADE":[1,1,1,1],"D_COSJUB MENSALIDADE":[1,1,1,1],"D_COSMEC EMPRESTIMO":[1,1,1,1],"D_COSSINCRA EMPRESTIMO":[1,1,1,1],"D_COSSINCRA MENSALIDADE":[1,1,1,1],"D_COTA PARTE AUXILIO ALIMENTACAO":[0,0,0,0],"D_COTA PARTE PRE ESCOLAR":[0,0,0,0],"D_COTA PARTE PRE ESCOLAR CDT":[0,1,0,1],"D_COTA PARTE PRE ESCOLAR RMI":[0,0,0,0],"D_CPP MENSALIDADE":[1,1,1,1],"D_CPP PB MENSALIDADE":[1,1,1,1],"D_CPP PI MENSALIDADE":[1,1,1,1],"D_CPP SEGURO DE VIDA":[1,1,1,1],"D_CR1 DRF MENSALIDADE":[1,1,1,1],"D_CRECHE":[1,1,1,1],"D_CRED FUB EMPRESTIMO":[1,1,1,1],"D_CRED FUB MENSALIDADE":[1,1,1,1],"D_CRED UFU EMPRESTIMO":[1,1,1,1],"D_CREDFAZ EMPRESTIMO":[1,1,1,1],"D_CREDFAZ MENSALIDADE":[1,1,1,1],"D_CREDIBOM EMPRESTIMO":[1,1,1,1],"D_CREDIBOM MENSALIDADE":[1,1,1,1],"D_CREDIEMBRAPA MENSALIDADE":[0,0,0,0],"D_CREDIESAL EMPRESTIMO":[1,1,1,1],"D_CREDIESAL MENSALIDADE":[1,1,1,1],"D_CREDIFISCO EMPRESTIMO":[1,1,1,1],"D_CREDIFISCO MENSALIDADE":[1,1,1,1],"D_CREDIFORTE EMPRESTIMO":[1,1,1,1],"D_CREDIFORTE MENSALIDADE":[1,1,1,1],"D_CREDIMISTRA MENSALIDADE":[1,1,1,1],"D_CREDIPEA EMPRESTIMO":[1,1,1,1],"D_CREDIPEA MENSALIDADE":[1,1,1,1],"D_CREDISAU EMPRESTIMO":[1,1,1,1],"D_CREDISAU MENSALIDADE":[1,1,1,1],"D_CREDISERV PB EMPRESTIMO":[1,1,1,1],"D_CREDISERV PB MENSALIDADE":[1,1,1,1],"D_CREDSUPER EMPRESTIMO":[1,1,1,1],"D_CREDTEC EMPRESTIMO":[1,1,1,1],"D_CREDTEC MENSALIDADE":[1,1,1,1],"D_CREDUNI MENSALIDADE":[1,1,1,1],"D_CRL MENSALIDADE":[1,1,1,1],"D_CRLMS MENSALIDADE":[1,1,1,1],"D_CSB MENSALIDADE":[1,1,1,1],"D_CSP MENSALIDADE":[1,1,1,1],"D_CVSULAMERICA SEGURO":[1,1,1,1],"D_DEC JUD FHE EMPRESTIMO":[1,1,1,1],"D_DEC JUD N TRANS JUG AUX TRANSP":[0,0,0,0],"D_DEC JUD NTRANJUD ABONO PEC FER":[0,0,0,0],"D_DEC JUD PAGTO VARIAVEL IS IR":[1,1,1,1],"D_DEC JUD TRANS JULG AUX TRANSP":[0,0,0,0],"D_DEC JUDIC AUX TRANSP SUBS":[0,0,0,0],"D_DEC JUDICIAL ADMINISTRATIVA":[0,0,0,0],"D_DECISAO JUDICIAL ADMINISTRATIV":[1,1,1,1],"D_DECISAO JUDICIAL DEP EM JUIZO":[0,1,0,1],"D_DECISAO JUDICIAL N TRAN JUG AP":[0,0,0,0],"D_DENT CARD PLANO DE SAUDE":[1,1,1,1],"D_DENTAL CENTER PLANO SAUDE":[1,1,1,1],"D_DEP JUIZO ART 4 L10887 04 PSS":[0,0,0,0],"D_DESC PENSAO ALIMENT 13 SAL ANTECIP":[0,0,0,0],"D_DESC PENSAO ALIMENTICIA 13 SALARIO":[0,0,0,0],"D_DESCONTO ASHCLIN":[1,1,1,1],"D_DESCONTO FOLHA SERVIDOR SENT":[1,1,1,1],"D_DESCONTO PENS ALIMENTICIA S FERIAS":[0,0,0,0],"D_DESCONTOS EMPREST BCO OFICIAL BANRISUL":[1,1,1,1],"D_DEVIR":[1,1,1,1],"D_DIF PISO SALAR TEC ENFERM AT":[0,0,0,0],"D_DPU AS DEF PUB UNIAO MENSALI":[1,1,1,1],"D_DPU AS DEF PUB UNIAO PL SAUD":[1,1,1,1],"D_DSS AMN ASSIST RESIDENCIAL":[1,1,1,1],"D_DSS AMN ASSISTENCIA POSTUMA":[1,1,1,1],"D_DSS AMN BOLSA DE ESTUDO":[1,1,1,1],"D_DSS AMN CONSRCIO CN":[1,1,1,1],"D_DSS AMN EMPRESTIMO":[1,1,1,1],"D_DSS AMN SEG AUTO PA":[1,1,1,1],"D_DSS AMN SEG SAUDE":[1,1,1,1],"D_DSS AMN SEG SAUDE DENTAL":[1,1,1,1],"D_EMPREST BCO OFICIAL BANRISUL":[1,1,1,1],"D_EMPREST BCO OFICIAL BCO BRAS":[1,1,1,1],"D_EMPREST BCO OFICIAL BRB":[1,1,1,1],"D_EMPREST BCO OFICIAL BRB CFI":[1,1,1,1],"D_EMPREST BCO OFICIAL CCCPM":[1,1,1,1],"D_EMPREST BCO OFICIAL CEF":[1,1,1,1],"D_EMPREST BCO OFICIAL FHE":[1,1,1,1],"D_EMPREST BCO PRIVADOS 626":[1,1,1,1],"D_EMPREST BCO PRIVADOS ALFA":[1,1,1,1],"D_EMPREST BCO PRIVADOS ALFA FI":[1,1,1,1],"D_EMPREST BCO PRIVADOS AMAGGI SF":[1,1,1,1],"D_EMPREST BCO PRIVADOS ARBI":[1,1,1,1],"D_EMPREST BCO PRIVADOS B ORIGI":[1,1,1,1],"D_EMPREST BCO PRIVADOS BANCO MASTER":[1,1,1,1],"D_EMPREST BCO PRIVADOS BANCOOB":[1,1,1,1],"D_EMPREST BCO PRIVADOS BANS":[1,1,1,1],"D_EMPREST BCO PRIVADOS BANSICREDI":[1,1,1,1],"D_EMPREST BCO PRIVADOS BARIGUI":[1,1,1,1],"D_EMPREST BCO PRIVADOS BCO SAF":[1,1,1,1],"D_EMPREST BCO PRIVADOS BCREF":[1,1,1,1],"D_EMPREST BCO PRIVADOS BF":[1,1,1,1],"D_EMPREST BCO PRIVADOS BIB":[1,1,1,1],"D_EMPREST BCO PRIVADOS BICBANC":[1,1,1,1],"D_EMPREST BCO PRIVADOS BMB":[1,1,1,1],"D_EMPREST BCO PRIVADOS BMG":[1,1,1,1],"D_EMPREST BCO PRIVADOS BNPP":[1,1,1,1],"D_EMPREST BCO PRIVADOS BONSUCESSO":[1,1,1,1],"D_EMPREST BCO PRIVADOS BRADESC":[1,1,1,1],"D_EMPREST BCO PRIVADOS C6 CONSIG":[1,1,1,1],"D_EMPREST BCO PRIVADOS CETELEM":[1,1,1,1],"D_EMPREST BCO PRIVADOS CREFF":[1,1,1,1],"D_EMPREST BCO PRIVADOS DAYBCO":[1,1,1,1],"D_EMPREST BCO PRIVADOS DIGIMAIS":[1,1,1,1],"D_EMPREST BCO PRIVADOS DIGIO":[1,1,1,1],"D_EMPREST BCO PRIVADOS EAGLE S":[1,1,1,1],"D_EMPREST BCO PRIVADOS FACTA":[1,1,1,1],"D_EMPREST BCO PRIVADOS FACTA FIN":[1,1,1,1],"D_EMPREST BCO PRIVADOS FIBRA":[1,1,1,1],"D_EMPREST BCO PRIVADOS INBURSA":[1,1,1,1],"D_EMPREST BCO PRIVADOS INTERME":[1,1,1,1],"D_EMPREST BCO PRIVADOS ITAU BM":[1,1,1,1],"D_EMPREST BCO PRIVADOS N A":[1,1,1,1],"D_EMPREST BCO PRIVADOS NUBANK":[1,1,1,1],"D_EMPREST BCO PRIVADOS OLE":[1,1,1,1],"D_EMPREST BCO PRIVADOS PAN":[1,1,1,1],"D_EMPREST BCO PRIVADOS PICPAY":[1,1,1,1],"D_EMPREST BCO PRIVADOS PRB":[1,1,1,1],"D_EMPREST BCO PRIVADOS QI SCD":[1,1,1,1],"D_EMPREST BCO PRIVADOS SANTAND":[1,1,1,1],"D_EMPREST BCO PRIVADOS SANTANDER OLE":[1,1,1,1],"D_EMPREST BCO PRIVADOS SEMEAR":[1,1,1,1],"D_EMPREST BCO PRIVADOS SP":[1,1,1,1],"D_EMPREST BCO PRIVADOS VOTORANTIM":[1,1,1,1],"D_EMPREST PREV PRIVADA ASPECIR":[1,1,1,1],"D_EMPREST PREV PRIVADA CAPEMISA":[1,1,1,1],"D_EMPREST PREV PRIVADA CIASPRE":[1,1,1,1],"D_EMPREST PREV PRIVADA COMPREV":[1,1,1,1],"D_EMPREST PREV PRIVADA EQUATOR":[1,1,1,1],"D_EMPREST PREV PRIVADA FUNPRESP":[1,1,1,1],"D_EMPREST PREV PRIVADA FUTURO":[1,1,1,1],"D_EMPREST PREV PRIVADA HOJE":[1,1,1,1],"D_EMPREST PREV PRIVADA PREVIMI":[1,1,1,1],"D_EMPREST PREV PRIVADA SABEMI":[1,1,1,1],"D_EMPREST PREV PRIVADA VIVER P":[1,1,1,1],"D_EMPRESTIMO CIBRIUS":[1,1,1,1],"D_EMPRESTIMO COOP SICREDI AL":[1,1,1,1],"D_EMPRESTIMO COOPERAT ARACOOP":[1,1,1,1],"D_EMPRESTIMO COOPERAT BORBOREMA":[1,1,1,1],"D_EMPRESTIMO COOPERAT CABECRED":[1,1,1,1],"D_EMPRESTIMO COOPERAT CCMSUEAS":[1,1,1,1],"D_EMPRESTIMO COOPERAT COOPEC":[1,1,1,1],"D_EMPRESTIMO COOPERAT COOPEMES":[1,1,1,1],"D_EMPRESTIMO COOPERAT COOPERCR":[1,1,1,1],"D_EMPRESTIMO COOPERAT COOPERPLAN":[1,1,1,1],"D_EMPRESTIMO COOPERAT COOPERUF":[1,1,1,1],"D_EMPRESTIMO COOPERAT COOPJUSTIC":[1,1,1,1],"D_EMPRESTIMO COOPERAT COOPSEFE":[1,1,1,1],"D_EMPRESTIMO COOPERAT COOSUFF":[1,1,1,1],"D_EMPRESTIMO COOPERAT COSMIPA":[1,1,1,1],"D_EMPRESTIMO COOPERAT CREDES":[1,1,1,1],"D_EMPRESTIMO COOPERAT CREDIEMB":[1,1,1,1],"D_EMPRESTIMO COOPERAT CREDIMED":[1,1,1,1],"D_EMPRESTIMO COOPERAT CREDIMEPI":[1,1,1,1],"D_EMPRESTIMO COOPERAT CREDSUPE":[1,1,1,1],"D_EMPRESTIMO COOPERAT CREDUFES":[1,1,1,1],"D_EMPRESTIMO COOPERAT CREDUFU":[1,1,1,1],"D_EMPRESTIMO COOPERAT CREDUNI":[1,1,1,1],"D_EMPRESTIMO COOPERAT FEDERALC":[1,1,1,1],"D_EMPRESTIMO COOPERAT NOSSACOOP":[1,1,1,1],"D_EMPRESTIMO COOPERAT PERNAMBU":[1,1,1,1],"D_EMPRESTIMO COOPERAT SAUDECRED":[1,1,1,1],"D_EMPRESTIMO COOPERAT SICOOB C":[1,1,1,1],"D_EMPRESTIMO COOPERAT SICOOB E":[1,1,1,1],"D_EMPRESTIMO COOPERAT SICOOB J":[1,1,1,1],"D_EMPRESTIMO COOPERAT SICREDI":[1,1,1,1],"D_EMPRESTIMO COOPERAT SICREDIAJU":[1,1,1,1],"D_EMPRESTIMO COOPERAT SICREDIPOL":[1,1,1,1],"D_EMPRESTIMO COOPERAT UFVCREDI":[1,1,1,1],"D_EMPRESTIMO COOPERAT UNICRECI":[1,1,1,1],"D_EMPRESTIMO COOPERAT UNICRED":[1,1,1,1],"D_EMPRESTIMOS":[1,1,1,1],"D_EQUATORIAL SEGURO DE VIDA":[1,1,1,1],"D_ESOCIAL PAGAMENTO PARCIAL":[0,0,0,0],"D_ETAPA ALIMENTACAO":[1,1,1,1],"D_FALTAS CDT":[0,0,0,0],"D_FALTAS CDT CUSTEIO":[0,0,0,0],"D_FALTAS CLT":[0,0,0,0],"D_FALTAS E ATRASOS":[0,0,0,0],"D_FALTAS EST":[0,0,0,0],"D_FALTAS NOMEADO":[0,0,0,0],"D_FALTAS PARALISACAO GREVE":[0,0,0,0],"D_FEDERAL CRED MENSALIDADE":[1,1,1,1],"D_FEDERAL PROTEGE MENSALIDADE":[1,1,1,1],"D_FEDERAL SEGURO SEGUROS":[1,1,1,1],"D_FEDERAL SEGUROS SEGURO":[1,1,1,1],"D_FEDERALCRED EMPRESTIMO":[1,1,1,1],"D_FEDERALCRED MENSALIDADE":[1,1,1,1],"D_FENAPEF MENSALIDADE":[1,1,1,1],"D_FERIAS ADICIONAL 1 3":[0,0,0,0],"D_FERIAS ANTECIPACAO":[0,0,0,0],"D_FERIAS ANTECIPACAO REMUN CARGO":[0,0,0,0],"D_FERIAS INDENIZ ADIC 1 3 AT":[0,0,0,0],"D_FERIAS INDENIZ PROPORC AT":[0,0,0,0],"D_FERIAS INDENIZ VENCIDAS AT":[0,0,0,0],"D_FERIAS INDENIZADAS PROPORC":[0,0,0,0],"D_FERIAS RESTITUICAO":[0,0,0,0],"D_FEVIDA PREMIO DE SEGURO DE VIDA":[1,1,1,1],"D_FG IFE S DECISAO JUDICIAL":[0,0,0,0],"D_FGR FUNC GRATIFICADA L 8216 91":[0,0,0,0],"D_FHE EMPRESTIMO":[1,1,1,1],"D_FHE FUNDO A MORADIA":[1,1,1,1],"D_FHE POUPANCA":[1,1,1,1],"D_FINANC IMOB BANCO POUPEX":[1,1,1,1],"D_FINANC SIMPLIFICADO CCCPM":[1,1,1,1],"D_FIOPREV PLANO DE SAUDE":[1,1,1,1],"D_FIOSAUDE PER CAPITA PATROCINA":[0,0,0,0],"D_FIPECQ EMPRESTIMO":[1,1,1,1],"D_FIPECQ PLANO DE SAUDE":[1,1,1,1],"D_FIPECQ PREVIDENCIA":[1,1,1,1],"D_FIPECQ SEGURO DE VIDA":[1,1,1,1],"D_FUB SEGURO DE VIDA":[1,1,1,1],"D_FUC FUNCAO COMIS COORD CURSO":[0,0,0,0],"D_FUNCAO GRATIFICADA FG IFES":[0,0,0,0],"D_FUND UNIV FED SE P DE SAUDE":[1,1,1,1],"D_FUNDACAO SAO FRANCISCO PREV":[1,1,1,1],"D_FUNDALC MENSALIDADE":[1,1,1,1],"D_FUNDALC SEGURO DE VIDA":[1,1,1,1],"D_FUNDO DE SAUDE":[0,1,0,1],"D_FUNDO DE SAUDE ADICIONAL":[0,1,0,1],"D_FUNPRESP CONTR MENSAL ALTERNAT":[0,1,0,1],"D_FUNPRESP CONTR MENSAL NORMAL":[0,1,0,1],"D_FUNPRESP CONTRIB FACULTATIVA":[0,1,0,1],"D_FUNPRESP GRAT NATALINA ALTERNA":[0,0,0,0],"D_FUNPRESP GRAT NATALINA NORMAL":[0,0,0,0],"D_GACEN LEI 11 784 08 AT":[0,0,0,0],"D_GASJUS MENSALIDADE":[1,1,1,1],"D_GBOEX EMPRESTIMO":[1,1,1,1],"D_GBOEX SEGURO DE VIDA":[1,1,1,1],"D_GDACT MP 2 229 43 01 AT":[0,0,0,0],"D_GDADNIT LEI 11 907 09 AT":[0,0,0,0],"D_GDAIE LEI 11 539 07 AT":[0,0,0,0],"D_GDAPDNPM LEI 11 907 09 AT":[0,0,0,0],"D_GDARA LEI 11 090 05 AT":[0,0,0,0],"D_GDIBGE LEI 11 355 06 AT":[0,0,0,0],"D_GDPST LEI 11 784 2008 AT":[0,0,0,0],"D_GDTAF LEI 13 324 16 AT":[0,0,0,0],"D_GEAP PLANO SAUDE MENSALIDADE":[1,1,1,1],"D_GEAP PREVIDENCIA":[1,1,1,1],"D_GEAP SEGURO DE VIDA":[1,1,1,1],"D_GEBASP MENSALIDADE":[1,1,1,1],"D_GED PLANO DE AVALIACAO MEC AP":[1,1,1,1],"D_GED PLANO DE AVALIACAO MEC AT":[1,1,1,1],"D_GEDARA ART 15 MP 216 04":[1,1,1,1],"D_GENERAL ACC SEGURO DE VIDA":[1,1,1,1],"D_GENERALI SEGURO DE VIDA":[1,1,1,1],"D_GEPLAN EMPRESTIMO":[1,1,1,1],"D_GEPLAN PREVIDENCIA":[1,1,1,1],"D_GOLDEN CROSS":[1,1,1,1],"D_GOLDEN CROSS PLANO DE SAUDE":[1,1,1,1],"D_GQ I DNIT LEI 12 186 09 AT":[0,0,0,0],"D_GQ I INFRAESTRUT LEI 11539 07":[0,0,0,0],"D_GQ IBGE LEI 11 355 06 AT":[0,0,0,0],"D_GR ITABAIANENSE MENSALIDADE":[1,1,1,1],"D_GRAMA MENSALIDADE":[1,1,1,1],"D_GRAMIG MENSALIDADE":[1,1,1,1],"D_GRAMIG PLANO SAUDE":[1,1,1,1],"D_GRAT DES ATIV RODOV GDAR AT ART16 LEI 10871 04":[1,1,1,1],"D_GRAT DESEMP FUNCAO GADF LD 13":[0,0,0,0],"D_GRAT PROD SUPLEMENTAR JUDICIAL":[0,0,0,0],"D_GRATIFICACAO NATALINA AP":[0,0,0,0],"D_GRE SERV H DE SC MENSALIDADE":[1,1,1,1],"D_GREIC MENSALIDADE":[1,1,1,1],"D_GREISFE CG MENSALIDADE":[1,1,1,1],"D_GREMIO CDS UFSC MENSALIDADE":[1,1,1,1],"D_GREMIO FUNAI MS MENSALIDADE":[1,1,1,1],"D_GREMIO PU UFSC MENSALIDADE":[1,1,1,1],"D_GREMIO SERV CCJ MENSALIDADE":[1,1,1,1],"D_GREMIO UNICAMPUS MENSALIDADE":[1,1,1,1],"D_GRENAFAM MENSALIDADE":[1,1,1,1],"D_GSISTE SISG LEI NO 11 356 06":[0,0,0,0],"D_HAPVIDA ASSISTENCIA MEDICA":[1,1,1,1],"D_HONORARIOS ADVOGATICIOS ATIVO":[1,1,1,1],"D_HORA NEGATIVA":[0,0,0,0],"D_IAMSPE S 1 3 DE FERIAS":[0,0,0,0],"D_IAMSPE S FERIAS LEI 11456 2003":[0,0,0,0],"D_IMP DE RENDA NA FONTE S 13 SALARIO":[0,0,0,0],"D_IMP DE RENDA NA FONTE S FERIAS":[0,0,0,0],"D_IMPOSTO DE RENDA 13O SAL RRA":[0,0,0,0],"D_IMPOSTO DE RENDA APO PENSIONIS":[0,0,0,1],"D_IMPOSTO DE RENDA GDAG":[0,0,0,0],"D_IMPOSTO DE RENDA JUD S FERIAS":[0,0,0,0],"D_IMPOSTO DE RENDA JUDICIAL":[0,0,0,1],"D_IMPOSTO DE RENDA RETIDO FONTE":[0,1,0,1],"D_IND TEMP EMERG LEI 13712 18":[0,0,0,0],"D_INDENIZ AO ERARIO 8 112 ART 46":[0,1,0,1],"D_INDENIZ AO ERARIO LEI 8 112 90":[0,1,0,1],"D_INDENIZACAO DE TRANSP GDF":[1,1,1,1],"D_INDENIZACAO DE TRANSP GDF RMI":[1,1,1,1],"D_INSS S 13 SALARIO":[0,0,0,0],"D_INSS SOBRE SALARIO MATERNIDADE":[0,1,0,1],"D_INTEGR QUOTA PARTE CABECRED":[1,1,1,1],"D_INTEGR QUOTA PARTE CCMSUEASB":[1,1,1,1],"D_INTEGR QUOTA PARTE CODISMA":[1,1,1,1],"D_INTEGR QUOTA PARTE COOPCP2":[1,1,1,1],"D_INTEGR QUOTA PARTE COOPEC":[1,1,1,1],"D_INTEGR QUOTA PARTE COOPEMESP":[1,1,1,1],"D_INTEGR QUOTA PARTE COOPERCRET":[1,1,1,1],"D_INTEGR QUOTA PARTE COOPERPLAN":[1,1,1,1],"D_INTEGR QUOTA PARTE COOPERUFPA":[1,1,1,1],"D_INTEGR QUOTA PARTE COOPJUS":[1,1,1,1],"D_INTEGR QUOTA PARTE COOPJUSTIC":[1,1,1,1],"D_INTEGR QUOTA PARTE COOPREV":[1,1,1,1],"D_INTEGR QUOTA PARTE COOPSEFES":[1,1,1,1],"D_INTEGR QUOTA PARTE COOSUFF":[1,1,1,1],"D_INTEGR QUOTA PARTE CREDES":[1,1,1,1],"D_INTEGR QUOTA PARTE CREDFEDERA":[1,1,1,1],"D_INTEGR QUOTA PARTE CREDIFORTE":[1,1,1,1],"D_INTEGR QUOTA PARTE CREDIMED":[1,1,1,1],"D_INTEGR QUOTA PARTE CREDSUPER":[1,1,1,1],"D_INTEGR QUOTA PARTE CREDUFES":[1,1,1,1],"D_INTEGR QUOTA PARTE CREDUFU":[1,1,1,1],"D_INTEGR QUOTA PARTE CREDUNI":[1,1,1,1],"D_INTEGR QUOTA PARTE FEDERALCRE":[1,1,1,1],"D_INTEGR QUOTA PARTE NOSSACOOP":[1,1,1,1],"D_INTEGR QUOTA PARTE PERNAMBUCR":[1,1,1,1],"D_INTEGR QUOTA PARTE SICOOB CENTRO NORD":[1,1,1,1],"D_INTEGR QUOTA PARTE SICOOB CRE":[1,1,1,1],"D_INTEGR QUOTA PARTE SICOOB EXE":[1,1,1,1],"D_INTEGR QUOTA PARTE SICOOB JUD":[1,1,1,1],"D_INTEGR QUOTA PARTE SICRED":[1,1,1,1],"D_INTEGR QUOTA PARTE SICREDI":[1,1,1,1],"D_INTEGR QUOTA PARTE SICREDI EVOLUCAO":[1,1,1,1],"D_INTEGR QUOTA PARTE SICREDIPOL":[1,1,1,1],"D_INTEGR QUOTA PARTE UFVCREDI":[1,1,1,1],"D_INTEGR QUOTA PARTE UNICRECIF":[1,1,1,1],"D_INTEGR QUOTA PARTE UNICRED JP":[1,1,1,1],"D_INTEGRA QUOTA PARTE SICREDI AL":[1,1,1,1],"D_IQ 15 LEI 11 091 05 AT":[0,0,0,0],"D_IQ 25 LEI 11 091 05 AT":[0,0,0,0],"D_IQ 30 LEI 11 091 05 AT":[0,0,0,0],"D_IQ 52 LEI 11 091 05 AT":[0,0,0,0],"D_IQ 75 LEI 11 091 05 AT":[0,0,0,0],"D_IQ INCENT A QUALIFICACAO 30":[1,1,1,1],"D_IR 13 SAL EXERC ANTERIORES A JUD":[0,0,0,0],"D_IR 13 SALARIO DEPOSITO JUDICIAL":[0,0,0,0],"D_IRRF 13I SAL GRA NATALINA":[0,0,0,0],"D_IRRF 13O SAL GRAT NATALINA":[0,0,0,0],"D_IRRF CDT DESPESA PESSOAL":[0,0,0,1],"D_IRRF EXERC ANTERIOR RRA":[0,0,0,1],"D_IRRF FERIAS":[0,0,0,0],"D_ITALIA SEGUROS":[1,1,1,1],"D_ITAU SEGURO DE VIDA":[1,1,1,1],"D_ITAVIDA SEGUROS":[1,1,1,1],"D_LABOR SEGURO":[1,1,1,1],"D_MB DSS AMN SAUDE SUL AMERICA":[1,1,1,1],"D_MB DSS AMN SAUDE UNIMED":[1,1,1,1],"D_MB EMP CCCPMM":[1,1,1,1],"D_MB IND HOSPITALAR HNBRA":[1,1,1,1],"D_MB PHM ALCANTARA":[1,1,1,1],"D_MB SASM SEGURO VIDA ESPECIAL":[1,1,1,1],"D_MBM EMPRESTIMO":[1,1,1,1],"D_MBM PREVIDENCIA":[1,1,1,1],"D_MBM SEGURO DE VIDA":[1,1,1,1],"D_MC 9253895 9 84 32 AT":[1,1,1,1],"D_MED ODONTO PLANO DE SAUDE":[1,1,1,1],"D_MEDIAL PLANO DE SAUDE":[1,1,1,1],"D_MEDIAL SAUDE PLANO DE SAUDE":[1,1,1,1],"D_MENSAL SINDICAL SINDITEST P":[0,1,0,1],"D_MENSAL SINDICAL SINDITEST PR":[0,1,0,1],"D_MENSALIDADE":[1,1,1,1],"D_MENSALIDADE SIND DOS ENFER RJ":[0,1,0,1],"D_MENSALIDADE SIND SAUDE":[0,1,0,1],"D_MENSALIDADE SINDICAL":[0,1,0,1],"D_MENSALIDADE SINDICAL ADCEFET":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUC":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFAC":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFAL":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFC":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFEPE":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFES":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFF":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFG":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFLA":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFMAT":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFMS":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFPA":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFPB":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFPI":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFRGS":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFRJ":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFSCA":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUFU":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUNBSS":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUNIR":[0,1,0,1],"D_MENSALIDADE SINDICAL ADUR RJ":[0,1,0,1],"D_MENSALIDADE SINDICAL ADURN S":[0,1,0,1],"D_MENSALIDADE SINDICAL ANFFASI":[0,1,0,1],"D_MENSALIDADE SINDICAL APESJF":[0,1,0,1],"D_MENSALIDADE SINDICAL APROFUR":[0,1,0,1],"D_MENSALIDADE SINDICAL APRUMA":[0,1,0,1],"D_MENSALIDADE SINDICAL APTAFUR":[0,1,0,1],"D_MENSALIDADE SINDICAL APUB":[0,1,0,1],"D_MENSALIDADE SINDICAL APUFCSS":[0,1,0,1],"D_MENSALIDADE SINDICAL APUFPR":[0,1,0,1],"D_MENSALIDADE SINDICAL ASFOC S":[0,1,0,1],"D_MENSALIDADE SINDICAL ASMETRO":[0,1,0,1],"D_MENSALIDADE SINDICAL ASSIBGE":[0,1,0,1],"D_MENSALIDADE SINDICAL ASSUFBA":[0,1,0,1],"D_MENSALIDADE SINDICAL ASSUFRG":[0,1,0,1],"D_MENSALIDADE SINDICAL ASSUFSM":[0,1,0,1],"D_MENSALIDADE SINDICAL ASUFPEL":[0,1,0,1],"D_MENSALIDADE SINDICAL ATENS":[0,1,0,1],"D_MENSALIDADE SINDICAL SEDUFSM":[0,1,0,1],"D_MENSALIDADE SINDICAL SESDUF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINAGEN":[0,1,0,1],"D_MENSALIDADE SINDICAL SINAIT":[0,1,0,1],"D_MENSALIDADE SINDICAL SINASEF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINASUS":[0,1,0,1],"D_MENSALIDADE SINDICAL SINATEF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDAGR":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDCT":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDCVM":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDECO":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDEPO":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDFAZ":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDFRA":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDIED":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDIFE":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDIFI":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDIFISCO":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDIPO":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDISCO":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDISE":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDISEPRJ":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDISP":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDIST":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDPF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDPFA":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDPOL":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDPR":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDPRE":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDPRF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDS U":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDSEF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDSEP":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDSFU":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDSPR":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDTF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDTIF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDUFL":[0,1,0,1],"D_MENSALIDADE SINDICAL SINDUTF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINFA R":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPCET":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPECP":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPEF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPEF MA":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPEFG":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPF TO":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPFET":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPOFE":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPOL":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPREC":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPRF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPRFB":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPRFD":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPRFM":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPRFP":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPRFS":[0,1,0,1],"D_MENSALIDADE SINDICAL SINPRFT":[0,1,0,1],"D_MENSALIDADE SINDICAL SINRECE":[0,1,0,1],"D_MENSALIDADE SINDICAL SINSEPEAP":[0,1,0,1],"D_MENSALIDADE SINDICAL SINSEPM":[0,1,0,1],"D_MENSALIDADE SINDICAL SINSPRE":[0,1,0,1],"D_MENSALIDADE SINDICAL SINSSP":[0,1,0,1],"D_MENSALIDADE SINDICAL SINSUV":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTE M":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTEF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTEFP":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTEMA":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTER":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTERO":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTESA":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTESEF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTESP":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTEST":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTEST RN":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTESU":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTET":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTFAM":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTFES":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTFUB":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTIFE":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTRAS":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTSAU":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTSEF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTSEP":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTSER":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTSPR":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTUFA":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTUFC":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTUFE":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTUFF":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTUFP":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTUFR":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTUFS":[0,1,0,1],"D_MENSALIDADE SINDICAL SINTUNI":[0,1,0,1],"D_MENSALIDADE SINDICAL SISTA M":[0,1,0,1],"D_MENSALIDADE SINDICAL SSDPF P":[0,1,0,1],"D_MENSALIDADE SINDICAL SSDPFRJ":[0,1,0,1],"D_MENSALIDADE SINTIARGS":[0,1,0,1],"D_MINAS BRASIL SEGURO DE VIDA":[1,1,1,1],"D_MONGERAL PREVIDENCIA":[1,1,1,1],"D_MONGERAL SEGURO DE VIDA":[1,1,1,1],"D_MS 945059 3 6V CE PARC FERIAS":[0,0,0,0],"D_MULTA DE TRANSITO":[1,1,1,1],"D_NATIONWIDE SEGUROS":[1,1,1,1],"D_NH SEGUROS":[1,1,1,1],"D_NOBRE SEGURO DE VIDA":[1,1,1,1],"D_NORCLINICAS PLANO SAUDE":[1,1,1,1],"D_NOVO HAMBURGO SEG DE VIDA":[1,1,1,1],"D_NOVO HAMBURGO SEGURO DE VIDA":[1,1,1,1],"D_NUCLEOS PREV DEFICIT EQUACIONA":[1,1,1,1],"D_NUCLEOS PREVIDENCIA":[1,1,1,1],"D_ODONT SYSTEM PLANO SAUDE":[1,1,1,1],"D_ODONTOFACE PLANO DE SAUDE":[1,1,1,1],"D_ODONTOGROUP PLANO DE SAUDE":[1,1,1,1],"D_ONIODONTO PLANO DE SAUDE":[1,1,1,1],"D_ORSEG CLUB SEGURO DE VIDA":[1,1,1,1],"D_P A S PLANO DE SAUDE":[1,1,1,1],"D_PARTICIP ASSISTENCIA A SAUDE":[1,1,1,1],"D_PARTICIPACAO AUX ALIMENTACAO":[0,0,0,0],"D_PECULIO GBOEX":[1,1,1,1],"D_PECULIO UNIAO EMPRESTIMO":[1,1,1,1],"D_PECULIO UNIAO PREVIDENCIA":[1,1,1,1],"D_PENSAO ALIM VOL DEC 3297 ART 4":[0,0,0,0],"D_PENSAO ALIMENT 13 SAL ANTECIP BENEF":[0,0,0,0],"D_PENSAO ALIMENT 13 SAL ANTECIPACAO":[0,0,0,0],"D_PENSAO ALIMENT 13 SAL BENEFICIARIA":[0,0,0,0],"D_PENSAO ALIMENT AD 13 GRAT NATA":[0,0,0,0],"D_PENSAO ALIMENT ASS PRE ESCOLAR":[0,1,0,1],"D_PENSAO ALIMENTICIA":[0,1,0,1],"D_PENSAO ALIMENTICIA 13 GRAT NAT":[0,0,0,0],"D_PENSAO ALIMENTICIA 13O SALARIO":[0,0,0,0],"D_PENSAO ALIMENTICIA ASS PRE ESCOLAR":[0,0,0,0],"D_PENSAO ALIMENTICIA S FERIAS":[0,0,0,0],"D_PENSAO MILITAR ADICIONAL PE":[0,1,0,1],"D_PER CAPITA SAUDE SUPLEMENTAR":[0,0,0,0],"D_PINEL MENSALIDADE":[1,1,1,1],"D_PLAMEB MENSALIDADE":[1,1,1,1],"D_PLAMEB PLANO SAUDE":[1,1,1,1],"D_PLANAJUR MENSALIDADE":[1,1,1,1],"D_PLANO DE SAUDE":[1,1,1,1],"D_PLANO DE SAUDE AEHCPA":[1,1,1,1],"D_PLANO MEDICO CREDENCIADO CLT":[1,1,1,1],"D_PLANO SAUDE ORG PER CAPITA PAT":[0,0,0,0],"D_PLANSERP PLANO DE SAUDE":[1,1,1,1],"D_PREMIO SEGURO VIDA AMERICAN":[1,1,1,1],"D_PREMIO SEGURO VIDA BREHML":[1,1,1,1],"D_PREMIO SEGURO VIDA BVP":[1,1,1,1],"D_PREMIO SEGURO VIDA CAPEMISA":[1,1,1,1],"D_PREMIO SEGURO VIDA FHE":[1,1,1,1],"D_PREMIO SEGURO VIDA HSBC":[1,1,1,1],"D_PREMIO SEGURO VIDA INVESTPREV":[1,1,1,1],"D_PREMIO SEGURO VIDA MAPFRE":[1,1,1,1],"D_PREMIO SEGURO VIDA MBM":[1,1,1,1],"D_PREMIO SEGURO VIDA METLIFE":[1,1,1,1],"D_PREMIO SEGURO VIDA MONGERAL":[1,1,1,1],"D_PREMIO SEGURO VIDA PREVISUL":[1,1,1,1],"D_PREMIO SEGURO VIDA SABEMI":[1,1,1,1],"D_PREMIO SEGURO VIDA TOKIO SEG":[1,1,1,1],"D_PREMIO SEGURO VIDA ZURICH SEG":[1,1,1,1],"D_PREV SOC LEI 8647 93":[0,1,0,1],"D_PREV SOCIAL 13 SALARIO":[0,0,0,0],"D_PREV SOCIAL CLT 13 SALARIO":[0,0,0,0],"D_PREVBRAS EMPRESTIMO":[1,1,1,1],"D_PREVBRAS PREVIDENCIA":[1,1,1,1],"D_PREVCAIXA MENSALIDADE":[1,1,1,1],"D_PREVCAIXA SEGURO DE VIDA":[1,1,1,1],"D_PREVENCE SEGUROS":[1,1,1,1],"D_PREVI CLUBE DO AMAZONAS MENSA":[1,1,1,1],"D_PREVICLUBE SEGURO DE VIDA":[1,1,1,1],"D_PREVICORP PECULIO":[1,1,1,1],"D_PREVIDENCIA SOCIAL":[1,1,1,1],"D_PREVIDENCIA SOCIAL CDT PESSOAL":[0,1,0,1],"D_PREVIMIL SEGURO DE VIDA":[1,1,1,1],"D_PREVISP MENSALIDADE":[1,1,1,1],"D_PREVISUL SEGURO DE VIDA":[1,1,1,1],"D_PREVOCORP EMPRESTIMO":[1,1,1,1],"D_PROASP MENSALIDADE":[1,1,1,1],"D_PRODENT PER CAPITA PATROCINAD":[0,0,0,0],"D_PRONTOASP MENSALIDADE":[1,1,1,1],"D_PROVENTO BASICO":[0,0,0,0],"D_PROVISIONAMENTO INSS ANT FERIAS CLT":[0,0,0,0],"D_PSAUDE AUTOGESTAO CAURN":[1,1,1,1],"D_PSAUDE AUTOGESTAO FIOSAUDE":[1,1,1,1],"D_PSAUDE AUTOGESTAO GEAP":[1,1,1,1],"D_PSAUDE AUTOGESTAO SINDIFISCO":[1,1,1,1],"D_PSAUDE OP MERCADO AGROS":[1,1,1,1],"D_PSAUDE OP MERCADO CAPESESP":[1,1,1,1],"D_PSAUDE OP MERCADO JAR":[1,1,1,1],"D_PSAUDE OP MERCADO METROP":[1,1,1,1],"D_PSAUDE OP MERCADO ODONTOGROU":[1,1,1,1],"D_PSAUDE OP MERCADO PRIMA VIDA":[1,1,1,1],"D_PSAUDE OP MERCADO PRODENT":[1,1,1,1],"D_PSAUDE OP MERCADO QUALICORP":[1,1,1,1],"D_PSAUDE OP MERCADO TOPDONTO":[1,1,1,1],"D_PSAUDE OP MERCADO UNIMED":[1,1,1,1],"D_PSAUDE OP MERCADO UNIODONTO":[1,1,1,1],"D_PSS EXERC ANTERIOR RRA AT":[0,1,0,1],"D_PSS MESES ANTER DIARIAS 50":[1,1,1,1],"D_PTTC PREST TAREFA TEMPO CERTO":[0,0,0,0],"D_RAASMTERJ MENSALIDADE":[1,1,1,1],"D_REAL PREVIDENCIA PREVIDENCIA":[1,1,1,1],"D_RECIPROCA EMPRESTIMO":[1,1,1,1],"D_RECIPROCA PREVIDENCIA":[1,1,1,1],"D_REDUTOR 13 SALARIO ART 16 L 6995 90":[0,0,0,0],"D_REDUTOR 13 SALARIO EC 41 2003":[0,0,0,0],"D_REDUTOR 13 SALARIO EC 41 CUMULATIVO":[0,0,0,0],"D_REDUTOR ART 24 2OEC 103 19 PE":[0,0,0,0],"D_REFEICAO ALIMENTACAO":[1,1,1,1],"D_REFEICAO LANCHE":[1,1,1,1],"D_REP ERARIO L 8112 90 10486 02":[0,1,0,1],"D_REP ERARIO L 8112 90 CUSTEIO":[0,1,0,1],"D_REP ERARIO L8112 SEM INC PSS":[0,0,0,0],"D_REPASSE PENSAO AO INSS GPS":[0,0,0,1],"D_RESSARC ASSISTENCIA A SAUDE":[1,1,1,1],"D_RN METROPOLITAN PER CAPITA PAT":[0,0,0,0],"D_RSPP EMPRESTIMO":[1,1,1,1],"D_RSPP PREVIDENCIA":[1,1,1,1],"D_RT FIOCRUZ LEI 11355 06 AT":[0,0,0,0],"D_RT RETRIB POR TITULACAO AT":[0,0,0,0],"D_RT RSC LEI 12 772 12 AT":[0,0,0,0],"D_SAAB MENSALIDADE":[1,1,1,1],"D_SAASP MENSALIDADE":[1,1,1,1],"D_SABEMI PP EMPRESTIMO":[1,1,1,1],"D_SABEMI PP PLANO DE SAUDE":[1,1,1,1],"D_SABEMI PP PREVIDENCIA":[1,1,1,1],"D_SABEMI SEG SEGURO DE VIDA":[1,1,1,1],"D_SABEMI SEGUROS":[1,1,1,1],"D_SAUDE CRED EMPRESTIMO":[1,1,1,1],"D_SAUDECRED MENSALIDADE":[1,1,1,1],"D_SEGURO VIDA GRUPO NUCLEBRAS":[0,0,0,0],"D_SERV VOLUNTARIO DEC 39 627 19":[0,0,0,0],"D_SICOOB DFMIL CAPITAL":[1,1,1,1],"D_SICOOB DFMIL EMPRESTIMO":[1,1,1,1],"D_SINDICAL SINRECE":[0,1,0,1],"D_SINDIFES MG MENSALIDADE":[1,1,1,1],"D_SINDSAUDE RO MENSALIDADE":[1,1,1,1],"D_SINSPREV MENSALIDADE":[1,1,1,1],"D_SINTEF GO MENSALIDADE":[1,1,1,1],"D_SINTUFRJ MENSALIDADE":[1,1,1,1],"D_SINTUFSC JUDICIAL":[0,1,0,1],"D_SISPFEM MENSALIDADE":[1,1,1,1],"D_SMJ SEGUROS SEGURO DE VIDA":[1,1,1,1],"D_SOASB MENSALIDADE":[1,1,1,1],"D_SOBRASEG MENSALIDADE":[1,1,1,1],"D_SOBRASEG SEGURO":[1,1,1,1],"D_SOC CAX MUT SOC PREVIDENCIA":[1,1,1,1],"D_SOC CAXENSE MUT SOC SEGURO":[1,1,1,1],"D_SOC CAXIEN MUT SOC EMPRESTIMO":[1,1,1,1],"D_SOCEPMI MENSALIDADE":[1,1,1,1],"D_SOCIBENE AC MENSALIDADE":[1,1,1,1],"D_SOCIED AMIGOS NPD MENSALID":[1,1,1,1],"D_SOMAC PLANO DE SAUDE":[1,1,1,1],"D_SOSMAPA MENSALIDADE":[1,1,1,1],"D_SSDPF PI MENSALIDADE":[1,1,1,1],"D_SSDPF RJ MENSALIDADE":[1,1,1,1],"D_SSDUF UFSCAR MENSALIDADE":[1,1,1,1],"D_SSDUF UFSCAR PLANO DE SAUDE":[1,1,1,1],"D_SSUFRN MENSALIDADE":[1,1,1,1],"D_STAC MENSALIDADE":[1,1,1,1],"D_STIU RR MENSALIDADE":[1,1,1,1],"D_SUBSTITUICAO":[0,0,0,0],"D_SUCRED MENSALIDADE":[1,1,1,1],"D_SUDAMERICA SEGURO DE VIDA":[1,1,1,1],"D_SUL AMER BAND SEGUR SEG VIDA":[1,1,1,1],"D_SUL AMERICA AETNA SEGURO":[1,1,1,1],"D_SUL AMERICA PLANO DE SAUDE":[1,1,1,1],"D_SUL AMERICA SEGURO DE VIDA":[1,1,1,1],"D_SUL BRASIL SEGURO DE VIDA":[1,1,1,1],"D_TAXA CONSERV COND IMOVEL FUNC":[0,1,0,1],"D_TAXA DE OCUPACAO":[1,1,1,1],"D_TAXA OCUPACAO ALUG IMOV FUNC":[0,1,0,1],"D_TAXA OCUPACAO IMOVEL FUNCIONAL":[0,1,0,1],"D_TICKET ALIMENTACAO":[0,0,0,0],"D_UASP MENSALIDADE":[1,1,1,1],"D_UBEASP MENSALIDADE":[1,1,1,1],"D_UBSPT BA MENSALIDADE":[1,1,1,1],"D_UBSPT CE MENSALIDADE":[1,1,1,1],"D_UBSPT PE MENSALIDADE":[1,1,1,1],"D_UBSPT PE PLANO SAUDE":[1,1,1,1],"D_UBSSFA MENSALIDADE":[1,1,1,1],"D_UCCP MENSALIDADE":[1,1,1,1],"D_UCPSB MENSALIDADE":[1,1,1,1],"D_UCPSB PLANO DE SAUDE":[1,1,1,1],"D_UCPSB SEGURO DE VIDA":[1,1,1,1],"D_UFAL PLANO DE SAUDE":[1,1,1,1],"D_UISP MENSALIDADE":[1,1,1,1],"D_UISP SEGURO DE VIDA":[1,1,1,1],"D_UMASP MENSALIDADE":[1,1,1,1],"D_UNAFISCO ASSOC NAC MENSALIDADE":[1,1,1,1],"D_UNAFISCO P DE SAUDE CO PARTIC":[1,1,1,1],"D_UNAFISCO SIND PER CAPITA PATR":[0,0,0,0],"D_UNAFISCO SINDICAL SAUDE":[1,1,1,1],"D_UNIMED J F PER CAPITA PATROCI":[0,0,0,0],"D_UNIMED RS PER CAPITA PATROC":[0,0,0,0],"D_UNIMED RS PLANO DE SAUDE":[1,1,1,1],"D_UNIMED SC PER CAPITA PATROCIN":[0,0,0,0],"D_UNIMED UBERLANDIA PER CAP PAT":[0,0,0,0],"D_UNIMED UBERLANDIA PL SAUDE":[1,1,1,1],"D_UNIODONTO JP PB PLANO SAUDE":[1,1,1,1],"D_VALE ALIMENTACAO REFEICAO":[0,0,0,0],"D_VENCIMENTO BASICO":[0,0,0,0],"D_VPE ART 1 LEI 11 134 2005 AT":[0,0,0,0],"V_1 12 AVOS DE 13 SAL SOBRE AVISO":[0,0,0,0],"V_1 12 AVOS DE FERIAS SOBRE AVISO":[0,0,0,0],"V_1 DECIMO MP 1160 95 ATIVO":[1,1,1,1],"V_13 ACIDENTE TRAB COMPLEM CLT":[0,0,0,0],"V_13 SAL S HORAS EXTRAS HAB":[0,0,0,0],"V_13 SALARIO":[0,0,0,0],"V_13 SALARIO ADIANT CLT PIP 1211 13":[0,0,0,0],"V_13 SALARIO ADIANT CLT PPM 1193 13":[0,0,0,0],"V_13 SALARIO ADIANTAMENTO CLT":[0,0,0,0],"V_13 SALARIO ANTEC LC 817 96":[0,0,0,0],"V_13 SALARIO ANTEC PPM LC 1193 2013":[0,0,0,0],"V_13 SALARIO CLT":[0,0,0,0],"V_13 SALARIO CLT PPM LC 1193 2013 13":[0,0,0,0],"V_13 SALARIO COMPL PENSAO APOS":[0,0,0,0],"V_13 SALARIO DISP EXON FALEC":[0,0,0,0],"V_13 SALARIO EFP":[0,0,0,0],"V_13 SALARIO PENSAO JUDICIAL":[0,0,0,0],"V_13 SALARIO PIP LC 1211 2013":[0,0,0,0],"V_13 SALARIO PIPQ":[0,0,0,0],"V_13 SALARIO PIPQ ADIANTAMENTO CLT":[0,0,0,0],"V_13 SALARIO PIPQ ANTECIPACAO":[0,0,0,0],"V_13 SALARIO PIQ ASU":[0,0,0,0],"V_13 SALARIO PIQ ASU ADIANTAMENTO CLT":[0,0,0,0],"V_13 SALARIO PIQ ASU ANTECIPACAO":[0,0,0,0],"V_13 SALARIO PPM LC 1193 2013 RRA":[0,0,0,0],"V_13 SALARIO PPM LC 1193 201313 13":[0,0,0,0],"V_13 SALARIO PROPORCIONAL":[0,0,0,0],"V_13 SALARIO RESC CONTRATO CLT":[0,0,0,0],"V_13 SALARIO RRA":[0,0,0,0],"V_13 SALARIO SALARIO MATERNIDADE":[0,0,0,0],"V_14 SALARIO PENSAO INDENIZATORIA AJ":[0,0,0,0],"V_2 DECIMO MP 1160 95 APOS":[1,1,1,1],"V_26 05 NTJ AT":[0,0,0,0],"V_4 DECIMO MP 1160 95 APOS":[1,1,1,1],"V_6 DECIMO MP 1160 95 APOS":[1,1,1,1],"V_8 DECIMO MP 1160 95 APOS":[1,1,1,1],"V_A EXC 699000223 9 VC RO DESC":[0,0,1,1],"V_ABATE TETO CF ART 37 AP":[0,0,0,0],"V_ABONO 1 3 S ABONO PECUN FER COLET":[0,0,0,0],"V_ABONO 1 3 SOBREE ABONO PECUNIARIO":[0,0,1,1],"V_ABONO DE PERM EC 41 DEC JUD":[1,1,0,1],"V_ABONO DE PERM EC41 DEC JUDIC":[1,1,0,1],"V_ABONO DE PERMAN EC 41 PCDF GDF":[0,0,0,0],"V_ABONO DE PERMAN JUD SUBSIDIO":[1,1,0,1],"V_ABONO DE PERMANC DEC JUDICIAL":[1,1,0,1],"V_ABONO DE PERMANENCIA EC 41 03":[1,1,1,1],"V_ABONO FARDAMENTO PM":[0,0,1,1],"V_ABONO FERIAS 1 3":[0,0,0,0],"V_ABONO FERIAS 1 3 FERIAS COLETIVAS":[0,0,0,0],"V_ABONO FERIAS CLT":[0,0,0,0],"V_ABONO FERIAS CLT PPM LC 1193 2013":[0,0,0,0],"V_ABONO FERIAS PIP LC 1211 2013":[0,0,0,0],"V_ABONO PECUNIARIO":[0,0,1,1],"V_ABONO PECUNIARIO FERIAS COLETIVAS":[0,0,0,0],"V_ABONO PECUNIARIO S IR JUDICIAL":[0,0,1,1],"V_ABONO PERMAN EC 41 03 GRAT NAT":[0,0,0,0],"V_ABONO PERMANENCIA 11 13 SAL RRA":[0,0,0,0],"V_ABONO PERMANENCIA 11 RRA":[0,0,0,0],"V_ABONO PERMANENCIA 2 13 SAL 11":[0,0,0,0],"V_ABONO PERMANENCIA ANTEC 13 SAL 11":[0,0,0,0],"V_ABONO PERMANENCIA EXERC ANT PC":[1,1,1,1],"V_ABONO PERMANENCIA PR RRA":[1,1,1,1],"V_ABONO PERMANENCIA SUBSIDIO AT":[1,1,1,1],"V_ABONO RENDIMENTOS PIS PASEP":[0,0,1,1],"V_AC 725 89 26 05 ATIVO":[1,1,0,0],"V_ACERTO AUX TRANSPORTE AT":[0,0,1,1],"V_ACERTO AUXILIO ALIMENTACAO":[0,0,0,0],"V_ACERTO DE APOSENTADORIA":[0,0,0,0],"V_ACERTO DE FERIAS APOSENTADO":[0,0,0,0],"V_ACERTO DE SUBSTITUICAO":[0,0,0,0],"V_ACERTO GSISTE GSISP GAEG":[0,0,1,1],"V_ACERTOS EXONERACAO DE FUNCAO":[0,0,1,1],"V_ACORDO JUD HORAS IN ITINERE":[0,0,0,0],"V_ACRESCIMO 15 L C 845 98":[0,0,1,1],"V_AD 2261999862 4 VC PE DESCONTO":[0,0,1,1],"V_AD CERT PROF APERFEICOAMENTO":[1,1,1,1],"V_AD CERT PROF ESPECIALIZACAO":[1,1,1,1],"V_AD CERT PROF FORMACAO":[1,1,1,1],"V_AD CERTIF PROF ALTO ESTUDO":[0,0,1,1],"V_AD TEMPO SERVICO ART 192 I APO":[1,1,1,1],"V_ADIANT 13 SALARIO":[0,0,0,0],"V_ADIANT 13 SALARIO CLT":[0,0,0,0],"V_ADIANT AUX DOENCA CLT":[0,0,1,1],"V_ADIANT DIF REMUNERACAO CLT":[0,0,1,1],"V_ADIANT GRAT NAT BENEF PENSAO":[0,0,0,0],"V_ADIANT GRAT NATALINA ANS36":[0,0,0,0],"V_ADIANT GRAT NATALINA MILITAR":[0,0,0,0],"V_ADIANT GRATIF NATALINA AP":[0,0,0,0],"V_ADIANT GRATIF NATALINA AT":[0,0,0,0],"V_ADIANT GRATIF NATALINA ATIVO":[0,0,0,0],"V_ADIANT GRATIFICACAO DE NATAL":[0,0,0,0],"V_ADIANT GRATIFICACAO NATAL RMI":[0,0,0,0],"V_ADIANTAMENTO A PESSOAL CLT":[0,0,1,1],"V_ADIC DE INSALUBRIDADE":[1,1,1,1],"V_ADIC DE IRRADIACAO IONIZANTE":[1,1,1,1],"V_ADIC DE PERICULOSIDADE":[0,0,1,1],"V_ADIC DE PERICULOSIDADE CDT":[0,0,1,1],"V_ADIC GESTAO EDUCACIONAL AGE":[1,1,1,1],"V_ADIC INSALUBRIDADE REQ LOTPROV":[0,0,1,1],"V_ADIC INSTRUTOR MONITOR CLT":[0,0,1,1],"V_ADIC NOTURNO JUD SUBSIDIO AT":[0,0,1,1],"V_ADIC NOTURNO MEDIA LIC MATERNIDADE":[0,0,1,1],"V_ADIC OPERACOES MILITARES":[1,1,1,1],"V_ADIC OPERACOES MILITARES AT":[1,1,0,0],"V_ADIC OPERACOES MILITARES INAT":[0,0,1,1],"V_ADIC P SERV EXTRAORD CDT":[0,0,1,1],"V_ADIC P SERV EXTRAORDINARIO":[0,0,0,0],"V_ADIC P SERV EXTRAORDINARIO CLT":[0,0,1,1],"V_ADIC P SERV EXTRAORDINARIO EST":[0,0,1,1],"V_ADIC PART LUC PLR ANS INDENIZ":[0,0,1,1],"V_ADIC PART LUCROS RESUL PLR ANS":[0,0,1,1],"V_ADIC PERICULOSIDADE CLT":[0,0,1,1],"V_ADIC PLANTAO HOSP APH JUD AT":[0,0,1,1],"V_ADIC PLANTAO HOSPITALAR APH":[0,0,1,1],"V_ADIC POR SERV EXTRAORD NOTURNO":[0,0,1,1],"V_ADIC POSTO OU GRADUACAO INAT":[0,0,1,1],"V_ADIC SERV EXTRAOR JUD SUBSIDIO":[0,0,1,1],"V_ADIC SOBREAVISO PRONTIDAO CLT":[0,0,0,1],"V_ADIC TEMP SERVICO MILITAR INAT":[0,0,1,1],"V_ADIC TEMPO DE SERVICO CBM PM":[1,1,1,1],"V_ADIC TEMPO SERV L 8112 90 APOS":[1,1,1,1],"V_ADIC TEMPO SERVICO LEI 8112 90":[1,1,1,1],"V_ADIC VARIAVEL ART 8 LEI 10973":[0,0,1,1],"V_ADICIONAIS OCUPAC NAO TRAN JUL":[0,0,0,0],"V_ADICIONAIS OCUPAC TRAN JULGADO":[0,0,0,0],"V_ADICIONAL 1 3 FERIAS JUDICIAL":[0,0,0,0],"V_ADICIONAL CERT PROFISSIONAL":[1,1,1,1],"V_ADICIONAL DE CAMPO CLT":[0,0,1,1],"V_ADICIONAL DE INSALUBRIDADE":[0,0,1,1],"V_ADICIONAL DE INSALUBRIDADE CDT":[0,0,1,1],"V_ADICIONAL DE MISSAO":[0,0,1,1],"V_ADICIONAL DE NATALIDADE":[0,0,0,0],"V_ADICIONAL DE SOBREAVISO":[0,0,1,1],"V_ADICIONAL DE TITULACAO DA LEI 11355 06":[1,1,1,1],"V_ADICIONAL DE TRANSPORTE AFR":[0,0,0,1],"V_ADICIONAL DE TRANSPORTE QM":[0,0,0,1],"V_ADICIONAL DE TRANSPORTE SE MS":[0,0,0,1],"V_ADICIONAL NOTURNO":[0,0,1,1],"V_ADICIONAL NOTURNO CDT":[0,0,1,1],"V_ADICIONAL NOTURNO CLT":[0,0,1,1],"V_ADICIONAL NOTURNO REQUISIT CLT":[0,0,1,1],"V_ADICIONAL POSTO OU GRADUACAO":[1,1,1,1],"V_ADICIONAL REGIONAL":[0,0,0,0],"V_ADICIONAL RISCO DE VIDA CLT":[0,0,1,1],"V_ADICIONAL TRANSFERENCIA CLT":[0,0,1,1],"V_AER CENTRO MEDIC AEROESPACIAL":[1,1,1,1],"V_AEX 943003118 0 2VC MS DESCONT":[0,0,1,1],"V_AGS 9492 95 1VF AL 5 ATIVO":[0,0,1,1],"V_AGS 9492 95 1VF AL DEP POUP AT":[0,0,1,1],"V_AJ CUSTO ALIMENT CARREIRA POL PM":[0,0,1,1],"V_AJ DE CUSTO TIT REPRESENT VASP":[0,0,1,1],"V_AJUDA CUSTO ALIM PLANTAO INF 12HS":[0,0,1,1],"V_AJUDA CUSTO ALIM PLANTAO SUP 12HS":[0,0,1,1],"V_AJUDA DE CUSTO":[0,0,1,1],"V_AJUDA DE CUSTO CLT":[0,0,1,1],"V_AJUDA DE CUSTO PESSOAL MILITAR":[0,0,1,1],"V_AJUDA P ESTUDOS":[0,0,1,1],"V_ALE SUBS VICE DIRETOR ESCOLA":[0,0,1,1],"V_ALVARA JUDICIAL 28 86":[0,0,1,1],"V_ALVARA JUDICIAL 3 17":[0,0,1,1],"V_ALVARA JUDICIAL ATS":[0,0,1,1],"V_ALVARA JUDICIAL PASS 28 86 AP":[0,0,1,1],"V_ALVARA JUDICIAL PASS 28 86 AT":[0,0,1,1],"V_AM 420 97 JCJ PE DESC FOLHA":[0,0,1,1],"V_ANTEC RETR ANS ART 5 L11354 06":[0,0,1,1],"V_ANTECIP BONUS MERECIMENTO QAE QSE":[0,0,1,1],"V_ANTECIP BONUS QUADRO DO MAGISTERIO":[0,0,1,1],"V_ANTECIP SALARIO FERIAS COLETIVAS":[0,0,0,0],"V_ANTECIPACAO FERIAS CLT":[0,0,0,0],"V_ANTECIPACAO SALARIO FERIAS DOCENTE":[0,0,0,0],"V_ANUENIO ART 1 LEI 11 134 2005 AP":[1,1,1,1],"V_ANUENIO ART 244 LEI 8112 90":[1,1,1,1],"V_ANUENIO ART 244 LEI 8112 90 AP":[1,1,1,1],"V_ANUENIO ART 244 LEI 8112 90 AT":[1,1,1,1],"V_ANUENIO ART244 LEI 8112 90 AT":[1,1,1,1],"V_ANUENIO DIF PISO PROF AT":[1,1,1,1],"V_ANUENIOS QUINQ TRIENIOS":[1,1,1,1],"V_ANUENIOS QUINQ TRIENIOS CLT":[1,1,1,1],"V_AO 5957699 9VF RJ BIENAL":[1,1,1,1],"V_AO 6079865 9VF RJ GRAT BIENAL":[1,1,1,1],"V_AO 6248632 BIENAL JUD AP":[1,1,1,1],"V_AO 7015640 85 QUINQUENIO AP":[1,1,1,1],"V_AO 849763 7 2VF DF BIENAL":[1,1,1,1],"V_AO 924797 1 9VF RJ BIENAL":[1,1,1,1],"V_AOM ADICIONAL DE OPERACOES MILITARES":[1,1,1,1],"V_APH PLANTAO HOSP N T J AT":[0,0,0,0],"V_APH PLANTAO HOSPITALAR":[0,0,0,0],"V_APH PLANTAO HOSPITALAR JUD":[0,0,0,0],"V_ART 184 LEI 1711 52 ANUENIO":[1,1,1,1],"V_ART193 8112 90 FG REPRESENTACA":[0,0,1,1],"V_ART193 8112 90 FUNCAO INTEGRAL":[0,0,1,1],"V_ASSEFAZ PER CAPITA PATROC":[0,0,0,0],"V_ASSISTENCIA MEDICA":[0,0,0,0],"V_ASSISTENCIA PRE ESCOLAR":[0,0,1,1],"V_ASSISTENCIA PRE ESCOLAR CDT":[0,0,0,0],"V_ATRASOS CDT":[0,0,1,1],"V_ATRASOS CDT CUSTEIO":[0,0,1,1],"V_ATRASOS EST":[0,0,1,1],"V_AUX ALIMENT PORT 133 86 CLT":[0,0,0,0],"V_AUX DEFICIENTE ACORDO COLETI":[0,0,1,1],"V_AUX DEP TIPICOS PRT NEC ESPECI":[0,0,1,1],"V_AUX MORADIA L 10486 02 AT RMI":[1,1,1,1],"V_AUX PRE ESCOLAR JUD SUBSIDIO":[0,0,1,1],"V_AUXILIO ALIMENTACAO":[0,0,0,0],"V_AUXILIO ALIMENTACAO CDT":[0,0,0,0],"V_AUXILIO ALIMENTACAO DPU":[0,0,1,1],"V_AUXILIO CRECHE":[0,0,0,0],"V_AUXILIO CRIANCA":[0,0,1,1],"V_AUXILIO FARDAMENTO":[0,0,1,1],"V_AUXILIO FUNERAL":[0,0,1,1],"V_AUXILIO INVALIDEZ INATIVO":[1,1,1,1],"V_AUXILIO INVALIDEZ INATIVO RMI":[1,1,1,1],"V_AUXILIO MORADIA":[0,0,1,1],"V_AUXILIO MORADIA L 10486 02 AP":[0,0,1,1],"V_AUXILIO MORADIA L 10486 02 AT":[0,0,1,1],"V_AUXILIO NATALIDADE":[0,0,0,0],"V_AUXILIO NATALIDADE CLT":[0,0,0,0],"V_AUXILIO NATALIDADE MILITAR":[0,0,0,0],"V_AUXILIO PESSOA COM DEFICIENCIA":[0,0,0,0],"V_AUXILIO PRE ESCOLAR":[0,0,1,1],"V_AUXILIO RECLUSAO":[0,0,1,1],"V_AUXILIO TRANSPORTE":[0,0,0,0],"V_AUXILIO TRANSPORTE CDT":[0,0,0,0],"V_AUXILIO TRANSPORTE ESTAGIARIO":[0,0,0,0],"V_AUXILIO TRANSPORTE SELETIVO":[0,0,0,0],"V_AVISO PREVIO CLT":[0,0,1,1],"V_B R ADIC ART 9 4 LC 1079 08 SEPLAN":[0,0,1,1],"V_B R RES CONJ SF SEP 6 09 SEPLAN":[0,0,1,1],"V_BESP BONUS ESP DESEMP INST":[0,0,1,1],"V_BOLSA AUXILIO":[0,0,1,1],"V_BOLSA AUXILIO PEAD PEQ":[0,0,1,1],"V_BOLSA DE ESTAGIO":[0,0,0,0],"V_BOLSA DE ESTUDOS":[0,0,1,1],"V_BOLSA ESTUDO SNPA SIBRAT CLT":[0,0,1,1],"V_BOLSA MONITOR":[0,0,1,1],"V_BONIF POR RESULT LC 1079 08 SEPLAN":[0,0,1,1],"V_BONIF RES ADIC ART 12 4 LC 1104 10":[0,0,1,1],"V_BONIF RES ADIC ART 9 4 LC 1079 08":[0,0,1,1],"V_BONIF RES LC 1079 08 QUADRO DETRAN":[0,0,1,1],"V_BONIF RESULT ADIC ART 82 LC1245 14":[0,0,1,1],"V_BONIF RESULT LC 1079 08 QUAD ESP":[0,0,1,1],"V_BONIF RESULT RES CONJ SF SEP 6 2009":[0,0,1,1],"V_BONIF RESULTADOS LC 1121 2010":[0,0,1,1],"V_BONIFIC POR RESULT LC 1078 08":[0,0,1,1],"V_BONIFIC POR RESULT LC 1079 08":[0,0,1,1],"V_BONIFIC POR RESULT LC 1104 10":[0,0,1,1],"V_BONIFIC POR RESULTADO LC 1245 2014":[0,0,1,1],"V_BONIFIC RESULTADO LC 1104 2010":[0,0,1,1],"V_BONIFICACAO POR RESULTADO":[0,0,1,1],"V_BONUS DE DESEMPENHO BMOB":[0,0,0,0],"V_BONUS DE EFICIENCIA AP":[0,0,0,0],"V_BONUS DE EFICIENCIA AT":[1,1,1,1],"V_BONUS DE EFICIENCIA PENSAO":[0,0,0,0],"V_BONUS DOCENTE":[0,0,1,1],"V_BONUS DOCENTE CPM":[0,0,1,1],"V_BONUS GESTOR":[0,0,1,1],"V_BONUS MERECIMENTO QAE QSE":[0,0,1,1],"V_BONUS MERITO PARCELA 1":[0,0,1,1],"V_BONUS MERITO PARCELA 2":[0,0,1,1],"V_BONUS MERITO PARCELA 3":[0,0,1,1],"V_BONUS MERITO PARCELA 4":[0,0,1,1],"V_BONUS QUADRO DO MAGISTERIO":[0,0,1,1],"V_BR RES CONJ CC SEP LC 1104 10":[0,0,1,1],"V_CARGO COMISS ASSESSORIA L9986":[0,0,1,1],"V_CARGO COMISS ASSISTENCIA L9986":[0,0,1,1],"V_CARGO COMISS DE DIRECAO L9986":[0,0,1,1],"V_CARGO COMISS GEREN EXEC L9986":[0,0,1,1],"V_CARGO COMISS TECNICO L9986":[0,0,1,1],"V_CARGO COMISSIONADO A P O":[0,0,1,1],"V_CARGO COMISSIONADO APO":[0,0,1,1],"V_CARGO COMISSIONADO HNSC 36HS":[0,0,1,1],"V_CARGO COMISSIONADO HNSC 44HS":[0,0,1,1],"V_CARGO COMISSIONADO TEMPORARIO":[0,0,1,1],"V_CARGO CONF DIF SB 4 5 PCS 90":[0,0,1,1],"V_CARGO DE CONFIANCA ITEM 4 5 PC":[0,0,1,1],"V_CARGO DE DIRECAO CD":[0,0,1,1],"V_CARGO DE DIRECAO CD APOSENT":[0,0,1,1],"V_CARGO DE DIRECAO EST04":[0,0,1,1],"V_CARGO EM COMISSAO CC":[0,0,1,1],"V_CCCPM DECISAO JUDICIAL":[0,0,1,1],"V_CCE CARGO COMIS EXECUT OPCAO":[0,0,1,1],"V_CCE CARGO COMIS EXECUT SERV":[0,0,1,1],"V_COMPENSACAO ORGANICA":[0,0,1,1],"V_COMPENSACAO SALARIO MATERNIDADE":[0,0,1,1],"V_COMPLEMENTACAO DE BOLSA DE ESTUDOS":[0,0,1,1],"V_COMPLEMENTACAO SALARIAL AT":[0,0,1,1],"V_COMPLEMENTACAO SALARIAL CLT":[0,0,1,1],"V_COMPLEMENTO APOSENT SUBS JUD":[0,0,1,1],"V_COMPLEMENTO AUXILIO DOENCA CLT":[0,0,1,1],"V_COMPLEMENTO DE SOLDO":[1,1,1,1],"V_COMPLEMENTO JORN ADVOGADOS CLT":[0,0,1,1],"V_COMPLEMENTO SAL MINIMO APOS":[1,1,1,1],"V_COMPLEMENTO SOLDO":[1,1,1,1],"V_CONT P SEGURIDADE SOCIAL APOS":[0,0,0,0],"V_CONT TEMPOR ART 37 C F PROFES":[1,1,1,1],"V_CONT TEMPOR ART 37 NAT INDUST":[0,0,1,1],"V_CONTR PSS GRATIF NATALINA":[0,0,0,0],"V_CORRECAO MONETARIA":[0,0,1,1],"V_CORRECAO MONETARIA 13O SALARIO":[0,0,0,0],"V_CORRECAO MONETARIA DEC 50 947 2006":[0,0,1,1],"V_CORRECAO MONETARIA DESCONTO":[0,0,1,1],"V_CORRECAO MONETARIA PR":[0,0,1,1],"V_CORRECAO MONETARIA S INC CONTR PREV":[0,0,1,1],"V_DEBITO PENDENTE":[0,0,1,1],"V_DEC JUD 28 86 AP TRAN JULG":[0,0,1,1],"V_DEC JUD 28 86 AT N TRAN JULG":[0,0,1,1],"V_DEC JUD ANUENIOS AP TRAN JULG":[1,1,1,1],"V_DEC JUD ANUENIOS AT N TRANS JU":[1,1,1,1],"V_DEC JUD ANUENIOS AT TRAN JULG":[1,1,1,1],"V_DEC JUD AUX MORADIA":[0,0,1,1],"V_DEC JUD DEV COTA PRE ESCOLA":[0,0,0,0],"V_DEC JUD DIF VENC ART17 9624 98":[0,0,1,1],"V_DEC JUD INDENIZ FRONT IS IR":[0,0,0,0],"V_DEC JUD IS IR PSS N TRANS AT":[0,0,1,1],"V_DEC JUD IS IR PSS N TRANS PEN":[0,0,1,1],"V_DEC JUD ISENTA IR PSS AT AP":[0,0,0,0],"V_DEC JUD N TRAN JUD ABONO PEC FER":[0,0,1,1],"V_DEC JUD N TRAN JUG IS PSS AP":[0,0,1,1],"V_DEC JUD N TRAN JUG IS PSS AT":[0,0,1,1],"V_DEC JUD N TRAN JUG IS PSS PE":[0,0,1,1],"V_DEC JUD N TRANS JUG AUX TRANSP":[0,0,1,1],"V_DEC JUD N TRANS JUG SUBS APO":[0,0,1,1],"V_DEC JUD N TRANS JUG SUBS AT":[0,0,1,1],"V_DEC JUD N TRANS JUG SUBS PESN":[0,0,1,1],"V_DEC JUD N TRANS JULG DEV IR":[0,0,1,1],"V_DEC JUD N TRANSIT JULG IS IR":[0,0,1,1],"V_DEC JUD PARIDADE PENS":[0,0,1,1],"V_DEC JUD PARIDADE PENS CALC MAN":[0,0,1,1],"V_DEC JUD PEND CALC MANUAL":[0,0,1,1],"V_DEC JUD PENS CALC MANUAL":[0,0,1,1],"V_DEC JUD PENSION NAO TRANS JUG":[0,0,1,1],"V_DEC JUD PENSION TRANS JUL":[0,0,1,1],"V_DEC JUD PROLABORE VPNI SUB APO":[0,0,1,1],"V_DEC JUD PROLABORE VPNI SUB ATI":[0,0,1,1],"V_DEC JUD PROLABORE VPNI SUB PEN":[0,0,1,1],"V_DEC JUD T JULG DEV IR GACEN":[0,0,0,0],"V_DEC JUD TRAN JUG IS PSS AT":[0,0,0,0],"V_DEC JUD TRANS JULG AUX TRANSP":[0,0,1,1],"V_DEC JUD TRANS JULG DEV IR":[1,1,1,1],"V_DEC JUDIC AUX TRANSP SUBS":[0,0,0,1],"V_DECISAO JUD IPC MAR 90 84 32":[0,0,0,0],"V_DECISAO JUD TRAN JUG IS PSS AT":[1,1,1,1],"V_DECISAO JUDICIAL N TRAN JUG AP":[0,0,1,1],"V_DECISAO JUDICIAL N TRAN JUG AT":[0,0,1,1],"V_DECISAO JUDICIAL N TRAN JUG PE":[0,0,1,1],"V_DECISAO JUDICIAL NAO TRANSITADA":[0,0,1,1],"V_DECISAO JUDICIAL SOLDO EB":[0,0,1,1],"V_DECISAO JUDICIAL TRAN JUG AT":[1,1,1,1],"V_DECISAO JUDICIAL TRANS JUG APO":[0,0,1,1],"V_DECISAO JUDICIAL TRANS JUG PEN":[0,0,1,1],"V_DEJEP DIARIA ESP J EXT TRAB PENIT":[0,0,1,1],"V_DEP JUIZO DEC JUC 14A APOSEN":[0,0,0,0],"V_DEP JUIZO DEC JUC 14A ATIVO":[0,0,0,0],"V_DESCONTO RESCISAO OUTRO VINCULO":[0,0,1,1],"V_DEV ABATE TETO DEC JUD PENSAO":[0,0,0,0],"V_DEV GRAT NATALINA JUDICIAL AT":[0,0,0,0],"V_DEV IR S ABONO PERMAN GRAT NAT":[0,0,0,0],"V_DEVOL CONTRIB PENSAO MILITAR":[0,0,1,1],"V_DIARIAS EXCEDENTE A 50 EM CLT":[0,0,1,1],"V_DIARIAS MAIOR 50":[0,0,1,1],"V_DIARIAS PESSOAL MILITAR":[0,0,1,1],"V_DIF INDIVIDUAL L 12998 14 AP":[0,0,1,1],"V_DIF PISO MAGISTERIO CDT":[1,1,1,1],"V_DIF PISO SALAR AUX ENFERM AT":[1,1,1,1],"V_DIF PROV ART 192 INC I L 8112":[1,1,1,1],"V_DIF PROV ART 192 INC II L 8112":[1,1,1,1],"V_DIF PROVENTOS APOS EC 41 JUDIC":[1,1,1,1],"V_DIF REM DECISAO JUDICIAL":[0,0,0,0],"V_DIF REM DECISAO JUDICIAL CLT":[0,0,1,1],"V_DIF REMUNER ART 2 MP386 2007":[1,1,1,1],"V_DIF REMUNER ART 2O MP386 07 AT":[1,1,1,1],"V_DIF VENC DEC JUDICIAL CDT":[0,0,1,1],"V_DIF VENC DECISAO TCU 068 98":[0,0,0,0],"V_DIFERENCA INDIVIDUAL L 12998":[0,0,1,1],"V_DIFERENCA PISO SALARIAL AT":[1,1,1,1],"V_DIFERENCA REMUNERACAO":[0,0,0,0],"V_DSR CONVENIO CEETEPS PREFEITURA":[0,0,1,1],"V_EMPREGO COMISSIONADOS FUNPRESP":[0,0,1,1],"V_EMPREGO EM COMISSAO EC":[0,0,1,1],"V_ETAPA ALIMENTACAO":[1,1,1,1],"V_ETAPA ALIMENTACAO JUDICIAL":[0,0,1,1],"V_EXER ANTER GRAT CURSO CONCURSO":[0,0,1,1],"V_EXERC ANT ABONO PERMAN AP":[0,0,1,1],"V_EXERC ANT ABONO PERMANENCIA":[1,1,1,1],"V_EXERC ANT DEC JUDIC AP":[0,0,1,1],"V_EXERC ANT DEC JUDIC PENS SUBSI":[0,0,1,1],"V_EXERC ANT DECISAO JUD PENSION":[0,0,1,1],"V_EXERC ANT DECISAO JUDIC ATIVO":[0,0,1,1],"V_EXERC ANT GRAT NATALINA AT":[0,0,0,0],"V_EXERC ANT GSISP MP 441":[0,0,1,1],"V_EXERC ANT INDENIZ ART 16 L8216":[0,0,1,1],"V_EXERC ANTERIOR APOSENTADOS":[0,0,1,1],"V_EXERC ANTERIOR ATIVO":[0,0,1,1],"V_EXERC ANTERIOR AUX ALIMENTACA":[0,0,0,0],"V_EXERC ANTERIOR IND LOCAL ESTR":[0,0,0,0],"V_EXERC ANTERIOR INDENIZ PRIV":[0,0,1,1],"V_EXERC ANTERIOR INDENIZ PUBL":[0,0,1,1],"V_EXERC ANTERIOR JUD SUBS APOS":[0,0,1,1],"V_EXERC ANTERIOR JUD SUBSIDIO":[0,0,1,1],"V_EXERC ANTERIOR LIC INCENT":[0,0,1,1],"V_EXERC ANTERIOR PENSAO INDENIZA":[0,0,1,1],"V_EXERC ANTERIOR PENSIONISTA":[0,0,1,1],"V_EXERC ANTERIOR PER CAPITA":[0,0,1,1],"V_EXERC ANTERIOR RESID NULTIPRO":[0,0,1,1],"V_EXERC ANTERIOR S INCID PSS AT":[0,0,0,0],"V_EXERCICIO ANTER JUROS PCDF PEN":[0,0,1,1],"V_EXERCICIO ANTERIOR AP":[0,0,1,1],"V_EXERCICIO ANTERIOR AT":[0,0,1,1],"V_EXERCICIO ANTERIOR JUROS AT":[0,0,1,1],"V_EXERCICIO ANTERIOR JUROS PEN":[0,0,1,1],"V_EXERCICIO ANTERIOR PENS":[0,0,1,1],"V_EXERCICIO ANTERIOR RMI AP":[0,0,1,1],"V_EXERCICIO ANTERIOR RMI AT":[0,0,1,1],"V_EXERCICIO ANTERIOR RMI GDF":[0,0,0,0],"V_EXERCICIO ANTERIOR RMI OUTROS":[0,0,1,1],"V_EXERCICIO ANTERIOR RMI PENS":[0,0,1,1],"V_EXERCICIO ANTERIOR RRA":[0,0,1,1],"V_EXERCICIOS ANTER JUROS PCDF AP":[0,0,1,1],"V_FCA FUNCAO COMISSAO ASSESSORIA":[0,0,1,1],"V_FCDNIT FUNC COMISSIONADA DNIT":[0,0,1,1],"V_FCDNPM FUNC COMISSIONADA DNPM":[0,0,1,1],"V_FCDPU FUNCAO CONFIANCA DPU":[0,0,1,1],"V_FCE FUNCAO COMISSIONADA EXECUT":[1,1,1,1],"V_FCFNDE FUNCAO COMISS FNDE":[0,0,1,1],"V_FCL FUNCAO COMISSAO DE LINHA":[0,0,1,1],"V_FCPE FUNC COMIS PODER EXECUTI":[0,0,0,0],"V_FCPE LEI 13 346 16":[0,0,0,0],"V_FCT FUNCAO COMIS TECNICA":[0,0,1,1],"V_FERIAS":[0,0,0,0],"V_FERIAS 1 3 ABONO CLT DEC 29439 88":[0,0,0,0],"V_FERIAS 1 3 ABONO CLT PPM 1193 2013":[0,0,0,0],"V_FERIAS 1 3 ABONO PIP LC 1211 2013":[0,0,0,0],"V_FERIAS 1 3 CLT DEC 29439 88":[0,0,0,0],"V_FERIAS 1 3 CLT TEC RADIOLOGIA":[0,0,0,0],"V_FERIAS 1 3 DOCENTE DEC 29439 88":[0,0,0,0],"V_FERIAS 1 3 EFP DEC 29439 88":[0,0,0,0],"V_FERIAS 1 3 EFP TEC RADIOLOGIA":[0,0,0,0],"V_FERIAS 1 3 PENSAO INDENIZATORIA AJ":[0,0,0,0],"V_FERIAS 1 3 PIP LC 1211 2013":[0,0,0,0],"V_FERIAS 1 3 PPM LC 1193 2013":[0,0,0,0],"V_FERIAS 1 3 PPM LC 1193 2013 CLT":[0,0,0,0],"V_FERIAS ABONO PECUNIARIO":[0,0,0,0],"V_FERIAS ADICIONAL 1 3":[0,0,0,0],"V_FERIAS ADICIONAL 1 3 CDT":[0,0,0,0],"V_FERIAS ADICIONAL 1 3 MILITAR":[0,0,0,0],"V_FERIAS ANTECIPACAO":[0,0,0,0],"V_FERIAS ANTECIPACAO REMUN CARGO":[0,0,0,0],"V_FERIAS DEC 25013 E 25353 86":[0,0,0,0],"V_FERIAS INDENIZ ADIC 1 3 AT":[0,0,0,0],"V_FERIAS INDENIZ PROPORC AT":[0,0,0,0],"V_FERIAS INDENIZ VENCIDAS AT":[0,0,0,0],"V_FERIAS INDENIZACAO ADIC 1 3":[0,0,0,0],"V_FERIAS INDENIZADAS PROPORC":[0,0,0,0],"V_FERIAS INDENIZADAS VENCIDAS":[0,0,0,0],"V_FERIAS L C 1093 2009":[0,0,0,0],"V_FERIAS MEDIA HORAS EXTRAS":[0,0,0,0],"V_FERIAS PROPORCIONAIS LC 444 85 DOC":[0,0,0,0],"V_FERIAS RESTITUICAO":[0,0,0,0],"V_FERIAS RGPS EMBRAPA":[0,0,0,0],"V_FERIAS VENC INDENIZ PROPOR CDT":[0,0,0,0],"V_FG IFE S DECISAO JUDICIAL":[0,0,1,1],"V_FGR FUNC GRAT L 8216 91 APO":[0,0,1,1],"V_FGR FUNC GRATIFICADA L 8216 91":[0,0,1,1],"V_FUC FUNCAO COMIS COORD CURSO":[0,0,0,0],"V_FUNCAO APOSENTADO TCU 733 94":[0,0,1,1],"V_FUNCAO COMIS GRANDES EVENTOS":[0,0,1,1],"V_FUNCAO COMIS TECNICA AUX CLT":[0,0,1,1],"V_FUNCAO COMISSIONADA DNIT":[0,0,1,1],"V_FUNCAO COMISSIONADA DO DPRF":[0,0,1,1],"V_FUNCAO COMISSIONADA INPI":[0,0,1,1],"V_FUNCAO COMISSIONADA INSS":[0,0,1,1],"V_FUNCAO COMISSIONADA TECNICA CLT":[0,0,1,1],"V_FUNCAO DE ASSESSORIA E APOIO":[0,0,1,1],"V_FUNCAO DE CONFIANCA FC":[0,0,1,1],"V_FUNCAO GRAT QUADRO PERMANENTE":[0,0,1,1],"V_FUNCAO GRATIF QUADRO INICIAL":[0,0,1,1],"V_FUNCAO GRATIFICADA FG APOSENT":[0,0,1,1],"V_FUNCAO GRATIFICADA FG IFES":[1,1,1,1],"V_GACEN LEI 11 784 08 AP":[0,0,1,1],"V_GACEN LEI 11 784 08 AT":[0,0,0,0],"V_GACEN MP 431 2008 AP":[0,0,1,1],"V_GACEN MP 431 2008 AT":[0,0,1,1],"V_GACEN S INCIDENCIA PSS JUDIC":[0,0,1,1],"V_GAE GCT A 192 INC I L8112 90":[1,1,1,1],"V_GAE GRAT ATIV EXEC LD 13 92 AP":[0,0,1,1],"V_GAE GRAT ATIV EXEC LD 13 92 AT":[1,1,0,0],"V_GAE GRAT ATIV EXEC LD 13 93 AT":[1,1,0,0],"V_GAEG GRAT DE EXERCICIO":[0,0,0,0],"V_GAEG LEI NO 11 907 09":[0,0,0,0],"V_GAPIN BANDA II AT":[0,0,1,1],"V_GAPIN BANDA III AT":[0,0,1,1],"V_GAPIN LEI 11 907 09 AP":[0,0,1,1],"V_GAPIN LEI 11 907 09 AT":[0,0,0,0],"V_GAPIN MP 441 2008 AP":[0,0,1,1],"V_GAPIN MP 441 2008 AT":[0,0,1,1],"V_GCEF GRAT COND ESP FUN MILITAR":[1,1,1,1],"V_GCEF LEI 10 874 04 AP":[1,1,1,1],"V_GCEF LEI 10 874 04 AT":[1,1,1,1],"V_GD PARC COMPL ART 17 ON 5 2016":[1,1,1,1],"V_GD PARC COMPLEMENT L 13324 16":[1,1,1,1],"V_GD PARC COMPLEMENT L 46657 16":[1,1,1,1],"V_GDAA AGU LEI 11 907 09 AP":[0,0,1,1],"V_GDAA AGU LEI 11 907 09 AT":[0,0,0,0],"V_GDAA AGU MP 441 2008 AP":[0,0,1,1],"V_GDAA AGU MP 441 2008 AT":[0,0,0,0],"V_GDAC LEI 11 233 05 AP":[0,0,1,1],"V_GDAC LEI 11 233 05 AT":[0,0,0,0],"V_GDAC MP 431 2008 AP":[0,0,1,1],"V_GDAC MP 431 2008 AT":[1,1,0,0],"V_GDACE GRAT DES CARGO ESPEC AP":[1,1,1,1],"V_GDACE GRAT DES CARGO ESPEC AT":[1,1,1,1],"V_GDACE LEI 12 277 10 AP":[0,0,1,1],"V_GDACE LEI 12 277 10 AT":[1,1,1,1],"V_GDACT GRAT DES AT CIEN E TECN":[0,0,1,1],"V_GDACT MP 2 229 43 01 AP":[0,0,1,1],"V_GDACT MP 2 229 43 01 AT":[0,0,1,1],"V_GDACTSP ART 34 L 11355 06 AP":[1,1,1,1],"V_GDACTSP ART 34 L 11355 06 AT":[1,1,1,1],"V_GDACTSP LEI 11 355 06 AT":[1,1,1,1],"V_GDADNIT DNIT MP 441 2008 AT":[0,0,1,1],"V_GDADNIT LEI 11 907 09 AT":[0,0,1,1],"V_GDADNPM MP 441 2008":[1,1,1,1],"V_GDAEM GR DES AT ESP AMBIENT AP":[0,0,1,1],"V_GDAEM GR DES AT ESP AMBIENTAL":[1,1,1,1],"V_GDAEM LEI NO 11 156 05 AP":[0,0,1,1],"V_GDAEM LEI NO 11 156 05 AT":[0,0,1,1],"V_GDAFAZ LEI 11 907 08 AP":[0,0,1,1],"V_GDAFAZ LEI 11 907 08 AT":[0,0,1,1],"V_GDAFAZ MP 441 2008 AP":[0,0,1,1],"V_GDAFAZ MP 441 2008 AT":[0,0,1,1],"V_GDAHFA LEI 11 784 08 AP":[0,0,1,1],"V_GDAHFA LEI 11 784 08 AT":[0,0,0,0],"V_GDAHFA MP 431 2008 APO":[0,0,1,1],"V_GDAHFA MP 431 2008 AT":[1,1,0,0],"V_GDAIE GRAT DES ATIV INFRA EST":[0,0,0,0],"V_GDAIE LEI 11 539 07 AT":[0,0,0,0],"V_GDAIN ABIN LEI 11 776 08 AT":[0,0,0,0],"V_GDAIN FUNAI LEI 11 907 09 AP":[0,0,1,1],"V_GDAIN FUNAI LEI 11 907 09 AT":[0,0,0,0],"V_GDAIN FUNAI MP 441 2008 AP":[0,0,1,1],"V_GDAIN FUNAI MP 441 2008 AT":[0,0,1,1],"V_GDAIPEA LEI 11 890 08 AP":[0,0,1,1],"V_GDAIPEA LEI 11 890 08 AT":[0,0,1,1],"V_GDAIPEA MP 440 2008 AP":[0,0,1,1],"V_GDAIPEA MP 440 2008 AT":[0,0,1,1],"V_GDAIT ART 15 LEI 11 171 05 AT":[0,0,1,1],"V_GDAIT ART 155 LEI 11 171 05 AT":[0,0,1,1],"V_GDAIT LEI 11 171 05 AT":[0,0,1,1],"V_GDAP LEI 10 355 01 AP":[0,0,1,1],"V_GDAPA GRAT DES AT PERITO F AGR":[1,1,1,1],"V_GDAPA LEI 10 550 02 AT":[0,0,1,1],"V_GDAPDNPM LEI 11 907 09 AT":[0,0,0,0],"V_GDAPDNPM MP 441 2008 AP":[0,0,1,1],"V_GDAPDNPM MP 441 2008 AT":[0,0,0,0],"V_GDAPEC DNIT MP 441 2008 AP":[0,0,1,1],"V_GDAPEC DNIT MP 441 2008 AT":[0,0,0,0],"V_GDAPEC LEI 11 907 09 AP":[0,0,1,1],"V_GDAPEC LEI 11 907 09 AT":[0,0,0,0],"V_GDAPEF LEI 11 907 09 AT":[1,1,1,1],"V_GDAPEF MP 441 2008 AT":[1,1,1,1],"V_GDAPEN LEI 11 907 09 AT":[0,0,1,1],"V_GDAPI LEI 11 355 06 AP":[0,0,1,1],"V_GDAPI LEI 11 355 06 ART 100 AP":[0,0,1,1],"V_GDAPI LEI 11 355 06 ART 100 AT":[0,0,1,1],"V_GDAPI LEI 11 355 06 AT":[0,0,1,1],"V_GDAPIB LEI 11 907 09 AT":[0,0,1,1],"V_GDAPIB MP 441 2008 AT":[0,0,1,1],"V_GDAPM ART 15 LEI 11 046 04 AT":[0,0,1,1],"V_GDAPM LEI 11 046 04 AP":[0,0,1,1],"V_GDAPM LEI 11 046 04 AT":[0,0,0,0],"V_GDAPMP LEI 11 907 09 AP":[0,0,1,1],"V_GDAPMP LEI 11 907 09 AT":[0,0,0,0],"V_GDAPMP MP 441 2008 AP":[0,0,1,1],"V_GDAPMP MP 441 2008 AT":[0,0,0,0],"V_GDAPREVIC LEI 12 154 2009 AT":[0,0,1,1],"V_GDAPS GRAT DESEMP ATIV POL SOC":[1,1,1,1],"V_GDAR ART 16 LEI 10 871 04 AT":[1,1,1,1],"V_GDARA ART 15 MP 216 04 AP":[0,0,1,1],"V_GDARA ART 15 MP 216 04 AT":[0,0,0,0],"V_GDARA LEI 11 090 05 AP":[0,0,1,1],"V_GDARA LEI 11 090 05 AT":[0,0,0,0],"V_GDARM ART 15 LEI 11 046 04 AT":[1,1,1,1],"V_GDASA GRAT DES AT CONT T AEREO":[0,0,1,1],"V_GDASCVM LEI 11 890 08 AT":[0,0,1,1],"V_GDASCVM MP 440 2008 AT":[0,0,1,1],"V_GDASS LEI 10 855 2004":[0,0,1,1],"V_GDASS LEI 10 855 2004 AP":[0,0,1,1],"V_GDASS LEI 10 855 2004 AT":[0,0,0,0],"V_GDASS LEI 10855 2004 AP":[0,0,1,1],"V_GDASST GRAT DES SEG SOC TB AP":[0,0,1,1],"V_GDASST GRAT DES SEG SOC TB AT":[0,0,0,0],"V_GDASST LEI 10 483 02 AP":[0,0,1,1],"V_GDASUS LEI 11 344 2006 AP":[0,0,1,1],"V_GDASUS LEI 11 344 2006 AT":[0,0,0,0],"V_GDASUSEP MP 440 2008 AT":[0,0,1,1],"V_GDATEM DEC JUD PENSIONISTA":[0,0,1,1],"V_GDATEM LEI 11355 06 AP":[0,0,1,1],"V_GDATEM LEI 11355 06 ART 122 AP":[0,0,1,1],"V_GDATEM LEI 11355 06 ART 122 AT":[0,0,0,0],"V_GDATEM LEI 11355 06 AT":[0,0,1,1],"V_GDATFA GRAT DES AT TEC FIS AGR":[0,0,0,0],"V_GDATP MP 440 2008 AP":[0,0,1,1],"V_GDATPF LEI 11 784 08 AP":[0,0,1,1],"V_GDATPF LEI 11 784 08 AT":[0,0,1,1],"V_GDATPF MP 431 2008 AP":[0,0,1,1],"V_GDATPF MP 431 2008 AT":[1,1,0,0],"V_GDATPRF LEI 11 784 05 AP":[0,0,1,1],"V_GDATPRF LEI 11 784 05 AT":[0,0,0,0],"V_GDATPRF MP 431 2008 AP":[0,0,1,1],"V_GDATPRF MP 431 2008 AT":[0,0,1,1],"V_GDATUR MP 441 2008 AP":[0,0,1,1],"V_GDATUR MP 441 2008 AT":[0,0,0,0],"V_GDCPREVIC LEI 12 154 2009 AP":[0,0,1,1],"V_GDCPREVIC LEI 12 154 2009 AT":[0,0,1,1],"V_GDECVM MP 440 2008 AT":[0,0,1,1],"V_GDEXT GRAT DESEMP PCC EXT AT":[0,0,1,1],"V_GDEXT LEI 13 681 18 AT":[0,0,0,0],"V_GDIAE ART 62 MP 304 2006 AT":[0,0,0,0],"V_GDIBGE ART 80 LEI 11355 06 AT":[0,0,0,0],"V_GDIBGE ART 80 LEI11355 06 AP":[0,0,1,1],"V_GDIBGE LEI 11 355 06 AT":[0,0,0,0],"V_GDIBGE LEI 11355 06 AP":[0,0,1,1],"V_GDINEP ART 55 MP 304 2006 AT":[0,0,0,0],"V_GDIT ART 15 DA LEI 11171 05":[0,0,1,1],"V_GDIT ART 15 DA LEI 11171 05 AT":[0,0,1,1],"V_GDIT ART 15 LEI 11 171 05 AP":[0,0,1,1],"V_GDIT LEI 11 171 05 AP":[0,0,1,1],"V_GDIT LEI 11 171 05 AT":[0,0,1,1],"V_GDM FIOCRUZ LEI 12 702 12 AT":[0,0,1,1],"V_GDM FIOCRUZ MP 568 2012 AT":[0,0,1,1],"V_GDM FUNAI LEI 12 702 12 AP":[0,0,1,1],"V_GDM PGPE MP 568 2012 AP":[0,0,1,1],"V_GDM PGPE MP 568 2012 AT":[0,0,1,1],"V_GDM PST LEI 12 702 12 AP":[0,0,1,1],"V_GDM PST LEI 12 702 12 AT":[0,0,0,0],"V_GDM PST MP 568 2012 AP":[0,0,1,1],"V_GDPCAR LEI 11 907 09 AP":[0,0,1,1],"V_GDPCAR LEI 11 907 09 AT":[0,0,0,0],"V_GDPCAR LEI 11907 09 AT":[0,0,0,0],"V_GDPCAR MP 441 2008 AT":[0,0,1,1],"V_GDPFNDE LEI 11 907 09 AT":[0,0,0,0],"V_GDPFNDE MP 441 2008 AP":[0,0,1,1],"V_GDPFNDE MP 441 2008 AT":[0,0,0,0],"V_GDPGPE LEI 11 784 2008 AP":[0,0,1,1],"V_GDPGPE LEI 11 784 2008 AT":[1,1,1,1],"V_GDPST LEI 11 784 2008":[0,0,1,1],"V_GDPST LEI 11 784 2008 AP":[0,0,1,1],"V_GDPST LEI 11 784 2008 AT":[0,0,0,0],"V_GDSUFRAMA LEI 11 907 09 AP":[0,0,1,1],"V_GDSUFRAMA LEI 11 907 09 AT":[0,0,0,0],"V_GDSUFRAMA MP 441 2008 AP":[0,0,1,1],"V_GDSUFRAMA MP 441 2008 AT":[0,0,0,0],"V_GDTAF GRAT DES AT TEC AUX FISC":[1,1,1,1],"V_GDTAF LEI 13 324 16 AP":[1,1,1,1],"V_GDTAF LEI 13 324 16 AT":[1,1,1,1],"V_GEAAC LEI 11 784 08 AT":[1,1,1,1],"V_GEAAC MP 431 2008 AT":[1,1,1,1],"V_GEAAPCC EXT LEI 13 681 18 AT":[1,1,0,0],"V_GEAAPCCEXT AT":[1,1,1,1],"V_GEAAPGPE LEI 11 784 2008 AP":[1,1,1,1],"V_GEAAPGPE LEI 11 784 2008 AT":[1,1,1,1],"V_GEAAPST LEI 11 784 2008 AP":[0,0,1,1],"V_GEAAPST LEI 11 784 2008 AT":[1,1,0,0],"V_GEACE GRAT EXC ATIV COMB ENDEM":[0,0,1,1],"V_GEAF MP 441 2008 AP":[1,1,1,1],"V_GEAP PER CAPITA PATROCINADOR":[0,0,0,0],"V_GEATA AGU LEI 10 907 04 AP":[0,0,1,1],"V_GEATA AGU LEI 10 907 04 AT":[0,0,0,0],"V_GEATA GRAT E AP TEC ADM AGU AP":[0,0,1,1],"V_GEATA GRAT E AP TEC ADM AGU AT":[1,1,0,0],"V_GECEPLAC GRATIF CEPLAC AP":[0,0,1,1],"V_GECEPLAC GRATIF CEPLAC AT":[0,0,0,0],"V_GECEPLAC LEI 12 702 12 AP":[0,0,1,1],"V_GECEPLAC LEI 12 702 12 AT":[0,0,0,0],"V_GEDR ART 33 LEI 11357 2006 AP":[1,1,1,1],"V_GEDR ART 33 LEI 11357 2006 AT":[1,1,1,1],"V_GEDR LEI 11 357 2006 AP":[0,0,0,0],"V_GEDR LEI 11 357 2006 AT":[0,0,0,0],"V_GEFM GRA ESP FUNC MIL MP302 06":[1,1,1,1],"V_GEFM LEI 11 356 06 AP":[0,0,1,1],"V_GEFM LEI 11 356 06 AT":[1,1,0,0],"V_GEINMET GRATIFICACAO INMET AP":[0,0,1,1],"V_GEINMET GRATIFICACAO INMET AT":[0,0,0,0],"V_GEINMET LEI 12 702 12 AT":[0,0,0,0],"V_GEP LEI 10 355 01 AP":[0,0,1,1],"V_GEPDIN ART 32 LEI 11090 05 AP":[0,0,1,1],"V_GEPDIN ART 32 LEI 11090 05 AT":[1,1,0,0],"V_GEPM GRAT PER MEDICA MP272 AT":[0,0,1,1],"V_GEPR LEI 11 907 09 AT":[0,0,0,0],"V_GEPR MP 441 2008 AT":[0,0,0,0],"V_GESST GRAT ESP SEG SOC TRAB AP":[0,0,1,1],"V_GESST GRAT ESP SEG SOC TRAB AT":[1,1,0,0],"V_GESST LEI 10 971 04 AP":[0,0,1,1],"V_GFM LEI 11 907 09 AP":[0,0,1,1],"V_GFM LEI 11 907 09 AT":[1,1,1,1],"V_GFM MP 441 2008":[1,1,1,1],"V_GFM MP 441 2008 AT":[1,1,1,1],"V_GIAPU ART 21 MP 212 04 AP":[0,0,1,1],"V_GIAPU ART 21 MP 212 04 AT":[0,0,0,0],"V_GIAPU LEI 11 095 05 AP":[0,0,1,1],"V_GIAPU LEI 11 095 05 AT":[1,1,1,1],"V_GQ C T LEI 11 907 09 AT":[1,1,1,1],"V_GQ FIOCRUZ LEI 11 355 09 AT":[1,1,1,1],"V_GQ GRAT DE QUALIFICACAO AP":[1,1,1,1],"V_GQ GRAT DE QUALIFICACAO AT":[1,1,1,1],"V_GQ GRAT QUALICACAO PIBSP":[1,1,1,1],"V_GQ GRAT QUALIFICACAO C T":[1,1,1,1],"V_GQ GRAT QUALIFICACAO FIOCRUZ":[1,1,0,0],"V_GQ GRAT QUALIFICACAO IBGE":[1,1,1,1],"V_GQ GRAT QUALIFICACAO INMETRO":[1,1,1,1],"V_GQ GRAT QUALIFICACAO INPI":[1,1,1,1],"V_GQ I DNIT LEI 12 186 09 AT":[0,0,1,1],"V_GQ I PEC SUFRAMA":[0,0,1,1],"V_GQ I SUFRAMA LEI 11356 06 AT":[0,0,1,1],"V_GQ IBGE LEI 11 355 06 AT":[1,1,1,1],"V_GQ II GRAT QUALIFICACAO DNPM":[1,1,1,1],"V_GQ INEP LEI 11 357 06 AT":[1,1,1,1],"V_GQ INMETRO LEI 11 355 06 AT":[1,1,1,1],"V_GQ INPI LEI 11 355 06 AT":[1,1,1,1],"V_GQ MEIO AMBIENTE L 12778 12":[1,1,1,1],"V_GQ NIVEL I INFRA ESTRUTURA":[1,1,1,1],"V_GQ PEC MEIO AMBIENTE":[1,1,1,1],"V_GQ PIBSP LEI 11 907 09 AT":[0,0,1,1],"V_GQ TEC MILITAR L 12277 10 AT":[1,1,1,1],"V_GQ TECNOLOGIA MILITAR":[1,1,1,1],"V_GQDI LEI 1 355 06 ART 61 AP":[0,0,1,1],"V_GQDI LEI 1 355 06 ART 61 AT":[0,0,1,1],"V_GQDI LEI 11 355 06 ART 61 AT":[0,0,1,1],"V_GQDI LEI 11 355 06 AT":[0,0,1,1],"V_GRAT AT EX GAE ART 3 L 8538 92":[1,1,1,1],"V_GRAT ATIV EXEC GAE GOE APOS":[1,1,1,1],"V_GRAT ATIV EXECUT GAE GOE":[1,1,1,1],"V_GRAT ATIV EXECUT GAE LD 13 92":[1,1,1,1],"V_GRAT ATIV EXECUT GAE LD 13 APO":[1,1,1,1],"V_GRAT ATIV POLIC FEDERAL DPF AP":[1,1,1,1],"V_GRAT ATIV POLIC FEDERAL DPF AT":[1,1,1,1],"V_GRAT ATIVIDADE DE RISCO":[0,0,1,1],"V_GRAT ATIVIDADE EXECUTIVA AP":[1,1,1,1],"V_GRAT ATIVIDADE EXECUTIVA AT":[1,1,1,1],"V_GRAT CARGO COMISSIONADO CLT":[0,0,1,1],"V_GRAT CURSO CONCURSO EXER ANTER":[0,0,1,1],"V_GRAT DE PRODUTIV SUB SUDICE":[0,0,1,1],"V_GRAT DE SUPERVISOR":[0,0,1,1],"V_GRAT DES FUNC GADF LD 13 92 AP":[0,0,1,1],"V_GRAT DESEMP FUNCAO GADF LD 13":[1,1,1,1],"V_GRAT DESEMP FUNCAO LD 13":[0,0,1,1],"V_GRAT DESGASTE FISICO MENTAL":[0,0,1,1],"V_GRAT ESP QUALIF ADICIONAL CLT":[0,0,1,1],"V_GRAT ESPECIALIZACAO SUB JUDICE":[0,0,1,1],"V_GRAT EXERC CUMULATIVO OFICIOS":[0,0,1,1],"V_GRAT FUNC VICE SUBST LC 1018 07":[0,0,1,1],"V_GRAT FUNCAO NATUREZA ESPECIAL":[0,0,0,0],"V_GRAT FUNCAO REPR":[0,0,1,1],"V_GRAT JETON SECRETARIO INFORMANTE":[0,0,1,1],"V_GRAT LEI 8460 92 ART 7 ATIVO":[0,0,1,1],"V_GRAT NATAL SUBSTITUICAO INTER":[0,0,0,0],"V_GRAT NATALINA BENEF PENSAO":[0,0,0,0],"V_GRAT NATALINA PROPORCIONAL":[0,0,0,0],"V_GRAT NATALINA PROPORCIONAL CDT":[0,0,0,0],"V_GRAT P ENCARGO CURSO CONCURSO":[0,0,1,1],"V_GRAT P REPRESENTACAO GABINETE":[0,0,0,0],"V_GRAT REPRESENT GABINETE APOS":[0,0,1,1],"V_GRAT SEMESTRAL COMPL APOS PENS":[0,0,1,1],"V_GRAT SER EXTR CENSO TEMPORARIO":[0,0,1,1],"V_GRAT TIT ART 70 2O 1 LEI 13457 09":[0,0,1,1],"V_GRAT TIT ART 70 2O 2 LEI 13457 09":[0,0,1,1],"V_GRATIF RAIO X APOS":[0,0,1,1],"V_GRATIF RAIO X CDT CLT":[1,1,1,1],"V_GRATIFICACAO":[0,0,0,0],"V_GRATIFICACAO DE ATIV EXTERNA":[0,0,1,1],"V_GRATIFICACAO DE FUNCAO":[0,0,0,0],"V_GRATIFICACAO DE NATAL PENS MIL":[0,0,0,0],"V_GRATIFICACAO DE NATAL RMI":[0,0,0,0],"V_GRATIFICACAO DE RAIO X":[1,1,1,1],"V_GRATIFICACAO DE REPRES MILITAR":[1,1,1,1],"V_GRATIFICACAO JETON JUCESP":[0,0,1,1],"V_GRATIFICACAO JETON MEMBRO":[0,0,1,1],"V_GRATIFICACAO NATALINA":[0,0,0,0],"V_GRATIFICACAO NATALINA AP":[0,0,0,0],"V_GRATIFICACAO NATALINA AT":[0,0,0,0],"V_GRV GRAT POR RISCO DE VIDA GDF":[1,1,1,1],"V_GSISP GRAT DE EXERCICIO":[1,1,1,1],"V_GSISP LEI NO 11 907 09":[1,1,1,1],"V_GSISTE 6O ART15 L11356 06 MF":[0,0,0,0],"V_GSISTE AFF":[0,0,1,1],"V_GSISTE CF LEI N 11 356 06":[1,1,1,1],"V_GSISTE CIPEF LEI NO11 356 06":[0,0,0,0],"V_GSISTE SAAF":[0,0,1,1],"V_GSISTE SIORG":[0,0,1,1],"V_GSISTE SIORG LEI NO11 356 06":[0,0,0,0],"V_GSISTE SIPEC":[0,0,1,1],"V_GSISTE SIPEC LEI NO 11 356 06":[0,0,0,0],"V_GSISTE SISG":[0,0,1,1],"V_GSISTE SISG LEI NO 11 356 06":[0,0,0,0],"V_GSISTE SPO":[0,0,1,1],"V_GSISTE SPO LEI NO 11 356 06":[0,0,0,0],"V_GTCN SUBST VICE DIRETOR ESCOLA":[0,0,1,1],"V_GTEMA ART 17 LEI 11 357 06 AP":[0,0,1,1],"V_GTEMA ART 17 LEI 11 357 06 AT":[0,0,0,0],"V_GTEMA ART3 17 LEI 11 357 06 AT":[0,0,0,0],"V_HABILITACAO MILITAR INATIVO":[0,0,1,1],"V_HONORARIO ADVOCATICIO":[0,0,1,1],"V_HONORARIO ADVOCATICIOS":[0,0,1,1],"V_HONORARIO DIRIGENTE CLT":[0,0,1,1],"V_HONORARIOS ART 39 LEI 13327 16":[0,0,1,1],"V_HORA EXTRA 100 CONSTIT CLT":[0,0,1,1],"V_HORA EXTRA 150 CLT":[0,0,1,1],"V_HORA EXTRA DIURNA 60 CLT":[0,0,1,1],"V_HORA EXTRA EXP BANCO HORAS":[0,0,1,1],"V_HORA EXTRA NOT ESP 100 ADI CLT":[0,0,1,1],"V_HORA EXTRA NOTURNA 100 CLT":[0,0,1,1],"V_HORA EXTRA NOTURNA 50 CLT":[0,0,1,1],"V_HORA RED C ADC NOTURNO CLT":[0,0,1,1],"V_HORAS EXTRAS 100":[0,0,0,0],"V_HORAS EXTRAS 100 CLT":[0,0,1,1],"V_HORAS EXTRAS SUBSIDIO JUD":[0,0,1,1],"V_HORAS FERIADO":[0,0,1,1],"V_HORAS IN INTINERE CLT":[0,0,1,1],"V_HORAS INTERJORNADA CLT":[0,0,1,1],"V_HORAS PLANTAO DIURNO CLT":[0,0,1,1],"V_HORAS PLANTAO NOTURNO CLT":[0,0,1,1],"V_HORAS SUPLEMENTARES CLT":[0,0,1,1],"V_HS AD NOT SOBRE HORAS EXTRAS":[0,0,1,1],"V_HS AD NOT SOBRE HORAS SUPLEM":[0,0,1,1],"V_IDENIZACAO LC 811 96":[0,0,1,1],"V_IMP JUD SIND SINFA PA DEC JU":[0,0,0,0],"V_IMPOSTO DE RENDA APO PENSIONIS":[0,0,0,0],"V_INCENT FUNC SANITARISTA APOS":[0,0,1,1],"V_INCENTIVO FUNCIONAL SANITARIST":[0,0,1,1],"V_INCENTIVO JORNADA REDUZIDA":[0,0,0,0],"V_INCENTIVO QUALIFIC D 5824 2006":[1,1,1,1],"V_INCORPORACAO ADIC NOTURNO CLT":[1,1,1,1],"V_IND ART 13 LEI 10559 02 ANS36":[0,0,1,1],"V_IND ART 13 LEI 10559 02 ANS37":[0,0,1,1],"V_IND HORA EXTRA TST 291 CLT":[0,0,1,1],"V_IND TEMP EMERGENCIAL LEI 13712 18":[0,0,1,1],"V_IND TEMP EMERGENCIAL MP837 18":[0,0,1,1],"V_INDEN LIC PREMIO SERV EXON COMISSAO":[0,0,1,1],"V_INDENIZ ADIC L 7238 84 A 9 CLT":[0,0,1,1],"V_INDENIZ AO ERARIO 8 112 ART 46":[0,0,0,1],"V_INDENIZ ART 16 L 8216 91 JUD":[0,0,1,1],"V_INDENIZ POR DISPONIBILIDADE":[0,0,1,1],"V_INDENIZACAO A GESTANTE":[0,0,1,1],"V_INDENIZACAO ANIST ART 8 ADCT":[0,0,1,1],"V_INDENIZACAO ART 16 LEI 8216 91":[0,0,1,1],"V_INDENIZACAO ART 477 DA CLT":[0,0,1,1],"V_INDENIZACAO ART 479 CLT":[0,0,1,1],"V_INDENIZACAO ART 480 CLT":[0,0,1,1],"V_INDENIZACAO DE PLANTOES":[0,0,1,1],"V_INDENIZACAO DE TRANSPORTE":[0,0,0,0],"V_INDENIZACAO FERIAS EFP":[0,0,0,0],"V_INDENIZACAO L C 1093 2009":[0,0,1,1],"V_INDENIZACAO LICENCA GESTANTE":[0,0,1,1],"V_INDENIZACAO LOCAL ESTRATEGICAS":[0,0,1,1],"V_INDENIZACAO LOCALESTRATEGICAS":[0,0,1,1],"V_INDENIZACAO PDV":[0,0,1,1],"V_INDENIZACAO REPRESENTACAO PM":[0,0,1,1],"V_INDENIZACOES DE FERIAS CLT":[0,0,0,0],"V_INDENIZACOES PESSOAL MILITAR":[0,0,1,1],"V_INTEG HS EXT D S R MRD CLT":[0,0,1,1],"V_INTEG HS EXT DESC SEM REM CLT":[0,0,1,1],"V_INTEGRACAO HORAS EXTRAS":[0,0,1,1],"V_INTEGRALIZACAO AUX DOENCA CLT":[0,0,1,1],"V_IPC 26 05 UFRJ APOS":[0,0,1,1],"V_IPC 26 05 UFRJ ATIVO":[0,0,0,0],"V_IQ 10 LEI 11 091 05 AP":[0,0,0,0],"V_IQ 10 LEI 11 091 05 AT":[1,1,1,1],"V_IQ 15 LEI 11 091 05 AP":[0,0,1,1],"V_IQ 15 LEI 11 091 05 AT":[1,1,1,1],"V_IQ 20 LEI 11 091 05 AP":[0,0,1,1],"V_IQ 20 LEI 11 091 05 AT":[1,1,0,0],"V_IQ 25 LEI 11 091 05 AP":[0,0,1,1],"V_IQ 25 LEI 11 091 05 AT":[1,1,0,0],"V_IQ 30 LEI 11 091 05 AP":[0,0,1,1],"V_IQ 30 LEI 11 091 05 AT":[1,1,0,0],"V_IQ 35 LEI 11 091 05 AT":[1,1,1,1],"V_IQ 52 LEI 11 091 05 AP":[0,0,1,1],"V_IQ 52 LEI 11 091 05 AT":[1,1,0,0],"V_IQ 75 LEI 11 091 05 AP":[0,0,1,1],"V_IQ 75 LEI 11 091 05 AT":[1,1,0,0],"V_IQ INCENT A QUALIFICACAO 10":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 10 AP":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 15":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 15 AP":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 20":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 20 AP":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 25":[1,1,0,0],"V_IQ INCENT A QUALIFICACAO 25 AP":[0,0,1,1],"V_IQ INCENT A QUALIFICACAO 30":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 30 AP":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 35":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 52":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 52 AP":[1,1,1,1],"V_IQ INCENT A QUALIFICACAO 75":[1,1,1,1],"V_IQ INCENT QUALIFICACAO 10 AP":[1,1,1,1],"V_IQ INCENT QUALIFICACAO 20 AP":[1,1,1,1],"V_IQ INCENT QUALIFICACAO 30 AP":[1,1,1,1],"V_IRREDUTIBILIDADE ART 37 XV CF":[1,1,1,1],"V_IRRF 13O SAL GRAT NATALINA":[0,0,0,0],"V_IRRF EXERC ANTERIOR RRA AP PEN":[0,0,1,1],"V_LAR SAO FRANCISCO DE ASSIS A J":[0,0,1,1],"V_LIC PREM PECUN GDF E ANTER PEN":[0,0,1,1],"V_LIC PREM PECUN GDF EX ANTER AP":[0,0,1,1],"V_LIC PREMIO DEC 25013 E 25353 86":[0,0,0,0],"V_LIC PREMIO DEC JU ISENTA IR":[0,0,1,1],"V_LICENCA ESPECIAL INDENIZADA":[0,0,1,1],"V_LICENCA INCENTIVADA":[0,0,1,1],"V_LICENCA PREMIO":[0,0,1,1],"V_LICENCA PREMIO AFR LC 1059 2008":[0,0,1,1],"V_LICENCA PREMIO ART 2 LC 1113 2010":[0,0,0,0],"V_LICENCA PREMIO ASP AEVP LC1051 2008":[0,0,1,1],"V_LICENCA PREMIO DEC 52031 2007":[0,0,1,1],"V_LICENCA PREMIO EM PECUNIA":[0,0,1,1],"V_LICENCA PREMIO EM PECUNIA GDF":[0,0,1,1],"V_LICENCA PREMIO INDEN S IR JUD":[0,0,1,1],"V_LICENCA PREMIO INDENIZADO CLT":[0,0,1,1],"V_LICENCA PREMIO L C 1015 20077":[0,0,1,1],"V_LICENCA PREMIO L C 1079 2008":[0,0,1,1],"V_LICENCA PREMIO L C 1080 2008":[0,0,1,1],"V_LICENCA PREMIO LC 1048 2008":[0,0,1,1],"V_LICENCA PREMIO LC 1122 2010":[0,0,1,1],"V_LICENCA PREMIO LC 1173 2012":[0,0,1,1],"V_LICENCA PREMIO LC1157 2011":[0,0,1,1],"V_MED FERIAS AG TEC ASSIS SAUDE":[0,0,0,0],"V_MEDIA AD NOT FER PROPORCIONAIS":[0,0,0,0],"V_MEDIA ADIC NOTURNO API CLT":[0,0,1,1],"V_MEDIA DE COMP SAL MIN PROF CLT":[0,0,1,1],"V_MEDIA FERIAS LIC MAT ADIC NOTURNO":[0,0,0,0],"V_MEDIA FERIAS PLANT AUX ENFERMAGEM":[0,0,0,0],"V_MEDIA FERIAS PLANT DIST MED CIR DEN":[0,0,0,0],"V_MEDIA FERIAS PLANT ENF FISIO FARMA":[0,0,0,0],"V_MEDIA FERIAS PLANTAO MED CIR DENT":[0,0,0,0],"V_MEDIA FERIAS SERV EXTRAORDINARIO":[0,0,0,0],"V_MEDIA FERIAS TEC ENFERMAGEM":[0,0,0,0],"V_MEDIA HS EXT FER PROPORCIONAIS":[0,0,0,0],"V_MEDIA HS EXT FERIAS VENCIDAS":[0,0,0,0],"V_MEDIA HS EXT SAL MATERNIDADE":[0,0,1,1],"V_MEDIA LIC MATER AG TEC ASSIS SAUDE":[0,0,1,1],"V_MEDIA LIC MATER TECNICO ENFERMAGEM":[0,0,0,0],"V_MEDIA PARA FERIAS":[0,0,0,0],"V_MEDIA PLANTOES":[0,0,1,1],"V_MEDIA SAL MAT PLANT AUX ENFERMAGEM":[0,0,0,0],"V_MEDIA SAL MAT PLANT DIST MED CIR DENT":[0,0,1,1],"V_MEDIA SAL MAT PLANT ENF FISIO FARMA":[0,0,1,1],"V_MEDIA SAL MAT PLANTAO MED CIR DENT":[0,0,1,1],"V_MEDIAS HORAS EXT AVISO PRE IND":[0,0,1,1],"V_MS 20023900002300 0 5VF PA DES":[0,0,1,1],"V_MS 961434 5 15VF DF ABONO PEC":[0,0,1,1],"V_MS 9711644 1 2VF GO ART 192":[0,0,1,1],"V_MS 97382139 6 12VF MG ABONO AT":[0,0,1,1],"V_MS 996304 6 13VF MG PSS":[0,0,1,1],"V_MS20026100011140 3 8 VF SP AT":[0,0,1,1],"V_OPCAO DAS PESSOAL PERMANENTE":[1,1,1,1],"V_OPCAO DFA DFG GDF":[0,0,1,1],"V_OPCAO FUNCAO APOSENTADO":[1,1,1,1],"V_OPCAO GADF ATIVO LD 13 92":[0,0,0,0],"V_OPCAO GADF L D 13 92 AP":[0,0,1,1],"V_P CAPITA SAUDE SUPLEMENTAR DPU":[0,0,0,0],"V_PAG EXERC ANT PENSAO MONTEPIO":[0,0,1,1],"V_PAGAMENTO DEC JUD PENS MILIT":[0,0,1,1],"V_PAGAMENTO DEC JUD PENSIONIST":[0,0,1,1],"V_PAGTO EXERC ANT ASSIS PRE ES":[0,0,1,1],"V_PAGTO EXERC ANT DEC JUD IS PSS":[0,0,0,0],"V_PAGTO EXERC ANT JUD IS IR":[0,0,0,0],"V_PAGTO EXERC ANT JUD IS TUDO":[0,0,0,0],"V_PARC UNICA ART 4 L 10559 02":[0,0,1,1],"V_PARCELA COMPL SUBSIDIO AT":[1,1,1,1],"V_PART RES ADIC ART 33 3 LC1059 INAT":[0,0,1,1],"V_PART RES ADIC ART 33 3O LC 1059 08":[0,0,1,1],"V_PART RES DIF ART 4 SF 56 08 INAT":[0,0,1,1],"V_PART RESULT DIF ART 4 SF 56 08":[0,0,1,1],"V_PART RESULT LC 1059 08 AFR INATIVO":[0,0,1,1],"V_PARTICIP RESULT LC 1059 08 AFR":[0,0,1,1],"V_PARTICIPACAO AUX ALIMENTACAO":[0,0,0,0],"V_PARTICIPACAO LUCROS RESULTADOS":[0,0,1,1],"V_PASSIVO TRAB SOB VANT PCS":[0,0,0,0],"V_PASSIVO TRABALHISTA":[0,0,0,0],"V_PATRONAL EST MUN PN MP 03 2005":[0,0,1,1],"V_PENSAO ALIMENT ASS PRE ESCOLAR":[0,0,1,1],"V_PENSAO ALIMENT EXERC ANT RRA":[0,0,1,1],"V_PENSAO ALIMENT SAL FAMILIA":[0,0,1,1],"V_PENSAO CIVIL":[0,0,1,1],"V_PENSAO COMPLEMENTAR CIVIL":[0,0,1,1],"V_PENSAO GRACIOSA":[0,0,1,1],"V_PENSAO INDEN NAO TRANS JULGADO":[0,0,1,1],"V_PENSAO INDENIZATORIA JUDICIAL":[0,0,1,1],"V_PENSAO JUD ASSISTENCIA MATERIAL AJ":[0,0,1,1],"V_PENSAO MILIT 2 POSTOS AC JUDIC":[0,0,1,1],"V_PENSAO MILITAR":[1,1,1,1],"V_PENSAO PARLAM SECAO EXTRAORDINARIA":[0,0,1,1],"V_PEPGB INSS MP 1 296 2025":[0,0,0,0],"V_PER CAPITA SAUDE SUPLEMENTAR":[0,0,0,0],"V_PERDA SAL MATERNIDADE 13 SALARIO":[0,0,0,0],"V_PERDA SAL MATERNIDADE LEI 10421 02":[0,0,1,1],"V_PERF INSS MP 1 181 2023":[0,0,0,0],"V_PISO SALARIAL SUPERIOR CLT":[0,0,1,1],"V_PLANO SAUDE ORG PER CAPITA PAT":[0,0,1,1],"V_PLANTAO MEDIA LIC MATERNIDADE":[0,0,1,1],"V_PPLR LEI 10101 2000":[0,0,1,1],"V_PREMIO INCENTIVO OP 114":[0,0,1,1],"V_PREMIO INCENTIVO QUALI CLT":[0,0,1,1],"V_PREMIO VALOR LIC PREMIO LC 25013 86":[0,0,1,1],"V_PREV SOCIAL EXERC ANT RRA":[0,0,1,1],"V_PROC 10166 7221 2007 54 PENSAO":[0,0,1,1],"V_PROGRAMA INCENTIVO EDUCACIONAL":[0,0,0,0],"V_PROGRAMA PEAD":[0,0,1,1],"V_PROGRAMA PEQ":[0,0,1,1],"V_PROLABORE DE EXITO APOS":[0,0,1,1],"V_PROLABORE DE EXITO ATIVO":[0,0,1,1],"V_PROV SPPREVCOM ANTECIPACAO FERIAS":[0,0,0,0],"V_PROVENTO BASICO":[1,1,1,1],"V_PROVENTO DISPONIBILIDADE":[0,0,1,1],"V_PROVENTOS EC N 41 2003":[1,1,1,1],"V_PROVENTOS MEDIA ARITMETICA":[0,0,1,1],"V_PROVISIONAMENTO PREVIDENCIA 13 SAL":[0,0,0,0],"V_PSS EXERC ANTERIOR RRA AP":[0,0,1,1],"V_PSS EXERC ANTERIOR RRA PENS":[0,0,1,1],"V_PTTC PREST TAREFA TEMPO CERTO":[0,0,1,1],"V_QUITACAO 28 86 DEC JUD PENSIO":[0,0,1,1],"V_QUITACAO 28 86 JUDICIAL APOS":[0,0,1,1],"V_QUITACAO 28 86 JUDICIAL AT":[0,0,1,1],"V_QUITACAO 3 17 JUDICIAL APOS":[0,0,1,1],"V_QUITACAO 3 17 JUDICIAL ATIVO":[0,0,1,1],"V_RECESSO PEC ART 15 IN 213 2019":[0,0,0,0],"V_REDUTOR EMENDA 41 03 AP":[0,0,1,1],"V_REDUTOR EMENDA 41 03 AT":[0,0,1,1],"V_REM FUNCAO DE CONFIANCA CLT":[0,0,1,1],"V_REMUNERACAO COMPENSATORIA":[0,0,1,1],"V_REMUNERACAO GLOBAL CLT INB":[0,0,1,1],"V_REP ERARIO L 8112 90 CUSTEIO":[0,0,0,1],"V_REPOSICAO EMBRAPA":[0,0,1,1],"V_REPOUSO SEMANAL REMUNERADO":[1,1,1,1],"V_REPRESENTACAO CLT":[0,0,1,1],"V_REPRESENTACAO DFG DFA CNP GDF":[0,0,1,1],"V_REPRESENTACAO MENSAL APOSENT":[0,0,1,1],"V_RESCISAO CONT LIQUIDO CLT":[0,0,1,1],"V_RESSARC ASSISTENCIA A SAUDE":[0,0,0,0],"V_RET REAJ DEMAIS RUB FERIAS ACT":[0,0,0,0],"V_RET REAJUSTE DEMAIS RUB ACT":[0,0,1,1],"V_RET REAJUSTE SALARIO ACT":[0,0,1,1],"V_RETR PROM RECL RUBRICA CLT":[0,0,1,1],"V_RETRIB BANCA EXAMINADORA PM I":[0,0,1,1],"V_RETRIB BANCA EXAMINADORA PM II":[0,0,1,1],"V_RETRIB BANCA EXAMINADORA PM III":[0,0,1,1],"V_RETRIB BANCA EXAMINADORA PM IV":[0,0,1,1],"V_RETRIB BANCA EXAMINADORA PM V":[0,0,1,1],"V_RETRIB FUNCAO ENSINO PM I 4 5":[0,0,1,1],"V_RETRIB FUNCAO ENSINO PM II 3 5":[0,0,1,1],"V_RETRIB FUNCAO ENSINO PM III 2 5":[0,0,1,1],"V_RETRIB FUNCAO ENSINO PM IV 2 0":[0,0,1,1],"V_RETRIB FUNCAO ENSINO PM V 1 0":[0,0,1,1],"V_RETRIBUICAO CARGO EM COMISSAO":[0,0,1,1],"V_RETRIBUICAO RESIDENCIA MEDICA":[0,0,1,1],"V_RETROATIVO ANIST ADCT MP300":[0,0,1,1],"V_RGPS INSS PROGR MAIS MEDICOS":[0,1,0,1],"V_RMP RESID MULTIPROFISSIONAL":[0,0,1,1],"V_RT C T LEI 11 907 09 AT":[1,1,1,1],"V_RT FIOCRUZ LEI 11355 06 AT":[1,1,1,1],"V_RT FNDE LEI 11 357 06 AT":[1,1,0,0],"V_RT IBGE LEI 11 355 06 AT":[1,1,1,1],"V_RT INEP 11 357 06 AT":[1,1,0,0],"V_RT INMETRO LEI 11 355 06 AT":[1,1,1,1],"V_RT INPI LEI 11 355 06 AT":[1,1,1,1],"V_RT PIBSP LEI 11 907 09 AT":[0,0,1,1],"V_RT RETRIB POR TITULACAO AP":[1,1,1,1],"V_RT RETRIB POR TITULACAO AT":[1,1,1,1],"V_RT RETRIB POR TITULACAO INEP":[1,1,1,1],"V_RT RETRIB POR TITULACAO RSC":[1,1,1,1],"V_RT RETRIB TITULACAO C T":[1,1,1,1],"V_RT RETRIB TITULACAO FIOCRUZ":[1,1,1,1],"V_RT RETRIB TITULACAO IBGE":[1,1,1,1],"V_RT RSC LEI 12 772 12 AP":[0,0,1,1],"V_RT RSC LEI 12 772 12 AT":[1,1,0,0],"V_RT RSC LEI 12772 12 AT":[1,1,0,0],"V_RT TEC MILITAR 9 657 98 AT":[1,1,1,1],"V_RT TECNOLOGIA MILITAR":[1,1,1,1],"V_SALARIO":[0,0,0,0],"V_SALARIO APRENDIZ CLT":[0,0,1,1],"V_SALARIO CELETISTA JUD":[1,1,0,0],"V_SALARIO CLT":[1,1,1,1],"V_SALARIO ESPOSA":[0,0,1,1],"V_SALARIO FAMILIA":[0,0,1,1],"V_SALARIO FAMILIA APOSENTADO":[0,0,1,1],"V_SALARIO FAMILIA AUTARQUICO":[0,0,1,1],"V_SALARIO FAMILIA CDT 8745 93":[0,0,1,1],"V_SALARIO FAMILIA CLT":[0,0,1,1],"V_SALARIO FAMILIA CLT PENS ALIM":[0,0,1,1],"V_SALARIO FAMILIA EFP":[0,0,1,1],"V_SALARIO FAMILIA EFP PENS ALIM":[0,0,1,1],"V_SALARIO MATERNIDADE":[0,0,1,1],"V_SALARIO MATERNIDADE MES ANTERIOR":[0,0,1,1],"V_SALARIO PESS CONTRAT JUDICIAL":[0,0,1,1],"V_SALARIO PESSOAL CONTRATADO":[0,0,1,1],"V_SALDO DEVEDOR OE A RECEBER CLD":[0,0,1,1],"V_SERV EXTR INDENIZACAO ENUNC 291 TST":[0,0,1,1],"V_SERV EXTR N SERVIDOR EFCJ":[0,0,1,1],"V_SERV EXTRAORD 100 DEC 45695 65":[0,0,1,1],"V_SERV EXTRAORD SOBRE ADIC NOTURNO":[0,0,1,1],"V_SERV EXTRAORDINARIO MEDIA AFAST":[0,0,1,1],"V_SERV EXTRAORDINARIO MEDIA LIC MATER":[0,0,1,1],"V_SERV VOLUNTARIO DEC 24 619 04":[0,0,1,1],"V_SERV VOLUNTARIO DEC 39 627 19":[0,0,1,1],"V_SERVICO EXTRAORDINARIO":[0,0,1,1],"V_SERVICO EXTRAORDINARIO 100 CLT":[0,0,1,1],"V_SERVICO EXTRAORDINARIO CLT":[0,0,1,1],"V_SERVICO EXTRAORDINARIO EFP":[0,0,1,1],"V_SERVICO EXTRAORDINARIO H FIXAS CLT":[0,0,1,1],"V_SERVICO EXTRAORDINARIO PEB I":[0,0,1,1],"V_SERVICO EXTRAORDINARIO PEB II":[0,0,1,1],"V_SERVICO EXTRAORDINARIO PROF II":[0,0,1,1],"V_SICOOB DEC JUDICIAL":[0,0,1,1],"V_SINDIMETAL DECISAO JUD NUCLEP":[0,0,1,1],"V_SOLDO":[1,1,1,1],"V_SOLDO AP":[0,0,1,1],"V_SOLDO INATIVO":[0,0,1,1],"V_SUBSIDIO":[1,1,1,1],"V_SUBSIDIO AP":[0,0,1,1],"V_SUBSIDIO AT":[1,1,0,0],"V_SUBST ADMINISTRATIVA EFCJ":[0,0,1,1],"V_SUBST EV GRAT EX ATIV COND ESP DIF":[0,0,1,1],"V_SUBST EVENT ASU SUPERV GERAL":[0,0,1,1],"V_SUBST EVENT DELEGADO POLICIA":[0,0,1,1],"V_SUBST EVENTUAL ADMINISTRATIVA":[0,0,1,1],"V_SUBST EVENTUAL ADMINISTRATIVA VLR":[0,0,1,1],"V_SUBST EVENTUAL AFR FUNCAO INTERNA":[0,0,1,1],"V_SUBST EVENTUAL ASU ATENDENTE":[0,0,1,1],"V_SUBST EVENTUAL ASU SUPERVISOR":[0,0,1,1],"V_SUBST GRAT REPRESENTACAO":[0,0,1,1],"V_SUBST GRAT REPRESENTACAO VLR":[0,0,1,1],"V_SUBST GRATIF DIRECAO GRADI":[0,0,1,1],"V_SUBST PRO LAB AG ATIV ESC VIG PENIT":[0,0,1,1],"V_SUBST PRO LAB AG SEG PENITENCIARIA":[0,0,1,1],"V_SUBST PRO LAB APOIO AGROPECUARIO":[0,0,1,1],"V_SUBST PRO LAB APOIO PESQ CIENT TEC":[0,0,1,1],"V_SUBST PRO LAB ART 11 LC 674 92":[0,0,1,1],"V_SUBST PRO LAB ART 27 DA LC 1157 11":[0,0,1,1],"V_SUBST PRO LAB ART 30 LC 1157 11":[0,0,1,1],"V_SUBST PRO LAB ASSIS PESQ CIENT TEC":[0,0,1,1],"V_SUBST PRO LAB ASSIST AGROPECUARIO":[0,0,1,1],"V_SUBST PRO LAB CARR POLICIAL":[0,0,1,1],"V_SUBST PRO LAB DELEGADO POLICIA":[0,0,1,1],"V_SUBST PRO LAB DIREG ASSES TEC":[0,0,1,1],"V_SUBST PRO LAB ENGENHEIRO":[0,0,1,1],"V_SUBST PRO LAB ESPEC AMB LC 996 06":[0,0,1,1],"V_SUBST PRO LAB GERENTE LC 1144 2011":[0,0,1,1],"V_SUBST PRO LAB LC 556 88 CIR DENT":[0,0,1,1],"V_SUBST PRO LAB LC 556 88 MED SAN":[0,0,1,1],"V_SUBST PRO LAB LC 556 88 MEDICO":[0,0,1,1],"V_SUBST PRO LAB PESQ CIENTIFICO":[0,0,1,1],"V_SUBST PRO LAB PROCURADOR ESTADO":[0,0,1,1],"V_SUBST PRO LAB TAAT JULG TRIB":[0,0,1,1],"V_SUBST PRO LAB TEC DESPORTIVO":[0,0,1,1],"V_SUBST PRO LABORE":[0,0,1,1],"V_SUBST PRO LABORE AFR":[0,0,1,1],"V_SUBST PRO LABORE PQC LC 821 96":[0,0,1,1],"V_SUBSTITUICAO":[1,1,1,1],"V_SUBSTITUICAO DE DIRETOR":[0,0,1,1],"V_SUBSTITUICAO DE FUNCAO VAGA":[0,0,1,1],"V_SUBSTITUICAO DE INTERINO":[0,0,0,0],"V_SUBSTITUICAO DESIGNACAO":[0,0,1,1],"V_SUBSTITUICAO INTER GRAT NATAL":[0,0,0,0],"V_SUBSTITUICAO INTERINO":[0,0,1,1],"V_SUBSTITUICAO PRO LABORE LC 1193 13":[0,0,1,1],"V_SUBSTITUICAO VICE DIRETOR ESCOLA":[0,0,1,1],"V_V P PARECER FC 03 89":[0,0,0,0],"V_V P PARECER FC 03 89 AT":[0,0,0,0],"V_V P TRANSITORIA ART 2 MP1573 7":[0,0,1,1],"V_VANT ART 184 INC I LEI 1711 52":[1,1,1,1],"V_VANT ART 184 INC II LEI 1711 52":[1,1,1,1],"V_VANT PEC INDIVIDUAL L 10698 03":[1,1,1,1],"V_VANT PES 2 ART 54 MP2048 26AP":[1,1,1,1],"V_VANT PES ART 13 LEI 8216 APOS":[0,0,1,1],"V_VANT PES ART 2 L 10302 IFE AT":[1,1,1,1],"V_VANT PES ART 2 L10302 IFE APO":[1,1,1,1],"V_VANT PES ART 5 DEC 95689 88 AP":[1,1,1,1],"V_VANT PES ART 5 DEC 95689 88 AT":[1,1,1,1],"V_VANT PES ART 58 MP2048 26 00AT":[1,1,1,1],"V_VANT PES ART19UNICO MP1915 3":[1,1,1,1],"V_VANT PES ART52 MP2000 12 2000":[1,1,1,1],"V_VANT PES MP 1549 97 L 9484 97":[1,1,1,1],"V_VANT PES NOM IDENT DL 2438 88":[1,1,1,1],"V_VANT PES NOM IDENT L 2 347 87":[1,1,1,1],"V_VANT PESS ART 12 P 4 L 8270 91":[1,1,1,1],"V_VANT PESS ART 12P 5 L 8270 91":[1,1,1,1],"V_VANT PESSOAL NOM IDENTIFICADA":[1,1,1,1],"V_VANTAGEM ADMINIST 28 86 ATIV":[0,0,1,1],"V_VANTAGEM ADMINIST 3 17 APOS":[0,0,1,1],"V_VANTAGEM ART 16 11 344 2006":[1,1,1,1],"V_VANTAGEM ARTIGO 180 L 1711 52":[1,1,1,1],"V_VANTAGEM ARTIGO 180 L1711 52":[1,1,1,1],"V_VANTAGEM INDIV ART 9 L 8460 92":[1,1,1,1],"V_VANTAGEM L 5462 68 APOSENT":[1,1,1,1],"V_VANTAGEM PES ART 5 L 8852 94":[1,1,1,1],"V_VANTAGEM PES ART 5 L 8852 94 A":[1,1,1,1],"V_VANTAGEM PESS ART 15 L 9527 97":[1,1,1,1],"V_VANTAGEM PESSOAL CLT":[0,0,1,1],"V_VANTAGEM PESSOAL D 90698 84":[1,1,1,1],"V_VANTAGEM PESSOAL ON 86":[1,1,1,1],"V_VANTAGEM PESSOAL RARH 2 CLT":[0,0,1,1],"V_VB COMP ART 15 L11091 05 AP":[0,0,1,1],"V_VB COMP ART 15 L11091 05 AT":[0,0,0,0],"V_VB COMPLEMENTAR NAO TRAN JULG":[0,0,0,0],"V_VENC BAS COMP ART 15 L11091 05":[1,1,1,1],"V_VENCIMENTO BASICO":[1,1,1,1],"V_VENCIMENTO DAS NES":[0,0,0,0],"V_VERBA INDENIZ ACT CLT":[0,0,1,1],"V_VP ART 41 3 LEI 8112 AP":[0,0,1,1],"V_VP DEC JUD ENQ L10355 SUB JUDI":[0,0,1,1],"V_VP DEC JUD ENQ L10355 TRAN J":[1,1,1,1],"V_VP TRANSITORIA ART 2 MP1573 7":[0,0,1,1],"V_VPE ART 1 LEI 11 134 2005 AP":[0,0,1,1],"V_VPE ART 1 LEI 11 134 2005 AT":[1,1,0,0],"V_VPEXT LEI 13328 2016 AP":[1,1,1,1],"V_VPEXT LEI 13328 2016 AT":[1,1,1,1],"V_VPEXT LEI 13328 2016 RMI AP":[0,0,1,1],"V_VPEXT LEI 13328 2016 RMI AT":[1,1,0,0],"V_VPNI 1O ART 147 LEI 11355 06":[0,0,1,1],"V_VPNI ART 14 LEI 12716 12 AP":[0,0,1,1],"V_VPNI ART 14 LEI 12716 12 AT":[0,0,1,1],"V_VPNI ART 61 LEI 10486 02 RMI":[0,0,1,1],"V_VPNI ART 62 A LEI 8112 90 AP":[1,1,1,1],"V_VPNI ART 62 A LEI 8112 90 AT":[1,1,1,1],"V_VPNI ART 97 LEI 13 328 16 AP":[0,0,1,1],"V_VPNI COMP SAL L 13 681 18 AT":[1,1,0,0],"V_VPNI COMP SALARIO L 12 800 AT":[1,1,1,1],"V_VPNI CONAB PCCS2009":[0,0,1,1],"V_VPNI DIARIA ASILADO JUDICIAL":[0,0,1,1],"V_VPNI EMENDA CONSTITUCIONAL 70":[0,0,1,1],"V_VPNI IRRED REM ART 37 XV CF AP":[0,0,1,1],"V_VPNI L 10 486 2002 ART 20":[0,0,1,1],"V_VPNI LEI 11 907 09 AP":[0,0,1,1],"V_VPNI QUINTOS DEC OUT PODERES":[0,0,1,1]};
+
+function normalize(s) {
+  // Aggressive normalization: remove accents, upper, strip non-alphanum to single space
+  let n = (s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  n = n.replace(/[^A-Z0-9]+/g, ' ');
+  return n.replace(/\s+/g, ' ').trim();
+}
+
+function parseBRNumber(s) {
+  if (!s) return NaN;
+  s = String(s).replace(/\./g, '').replace(',', '.');
+  return parseFloat(s);
+}
+
+function formatBRL(n) {
+  if (n === null || n === undefined || isNaN(n)) return '-';
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// ---- Extract text from PDF using pdf.js preserving line structure ----
+async function pdfToLines(arrayBuffer) {
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const lines = [];
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    // Group items by y-coordinate
+    const items = textContent.items.map(it => ({
+      text: it.str,
+      x: it.transform[4],
+      y: Math.round(it.transform[5]),
+    }));
+    // Sort by y desc (top first), then x asc
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+    // Group by y (within tolerance)
+    let currentY = null;
+    let currentLine = [];
+    for (const it of items) {
+      if (currentY === null || Math.abs(it.y - currentY) <= 4) {
+        currentLine.push(it);
+        currentY = it.y;
+      } else {
+        lines.push(currentLine);
+        currentLine = [it];
+        currentY = it.y;
+      }
+    }
+    if (currentLine.length) lines.push(currentLine);
+  }
+  // Convert each line to a text representation preserving column spacing
+  return lines.map(line => {
+    line.sort((a, b) => a.x - b.x);
+    return { items: line, text: line.map(i => i.text).join(' ').replace(/\s+/g, ' ').trim() };
+  });
+}
+
+// ---- Parse SIAPE paycheck ----
+function parsePaycheck(lines) {
+  const data = {
+    nome: '',
+    mesAno: '',
+    vinculo: '',
+    cpf: '',
+    bruto: 0,
+    desconto: 0,
+    liquido: 0,
+    rendimentos: [],
+    descontos: [],
+  };
+
+  let section = null;  // 'R' or 'D'
+  let stop = false;
+  let pendingLabel = null, pendingPrazo = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const t = line.text;
+    const up = t.toUpperCase();
+
+    // Extract header info
+    if (up.includes('MES/ANO PAGAMENTO') || up.includes('MÊS/ANO PAGAMENTO')) {
+      // Next line typically has the mes/ano
+      // Look in NEXT line for pattern like "ABR 2026"
+      for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+        const m = lines[j].text.match(/\b([A-Z]{3})\s+(\d{4})\b/i);
+        if (m) { data.mesAno = m[1].toUpperCase() + '/' + m[2]; break; }
+      }
+    }
+    if (up.includes('NOME DO SERVIDOR')) {
+      for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+        const nxt = lines[j].text;
+        if (nxt && !nxt.match(/^\d/) && !nxt.toUpperCase().includes('MAT.') && nxt.length > 3) {
+          // Remove trailing numbers (matricula/ident) - keep only letter-based name
+          const clean = nxt.replace(/\s+\d[\d\s]*$/g, '').trim();
+          data.nome = clean;
+          break;
+        }
+      }
+    }
+    // Extract SITUACAO FUNCIONAL → vinculo
+    if (!data.vinculo && (up.includes('SITUACAO FUNCIONAL') || up.includes('SITUAÇÃO FUNCIONAL'))) {
+      const vincMap = [
+        ['ATIVO PERMANENTE', 'Ativo'], ['CLT ANS', 'CLT Ans - Dec 6657/08'],
+        ['REDISTRIBUIDO', 'Redistribuido'], ['APOSENTADO', 'Aposentado'],
+        ['PENSIONISTA', 'Pensionista'], ['ANISTIADO', 'Anistiado'],
+        ['RESERVA', 'Reserva'], ['REFORMA', 'Reforma'], ['ATIVO', 'Ativo'],
+      ];
+      for (let j = i; j <= Math.min(i + 4, lines.length - 1); j++) {
+        const v = normalize(lines[j].text);
+        const found = vincMap.find(([k]) => v.includes(k));
+        if (found) { data.vinculo = found[1]; break; }
+      }
+    }
+
+    const cpfMatch = t.match(/\b(\d{11})\b/);
+    if (cpfMatch && !data.cpf && up.includes('CPF')) {
+      // Try to get CPF from same-ish region
+    }
+
+    // Section detection
+    if (up.match(/^RENDIMENTOS\b/) || t.startsWith('RENDIMENTOS')) {
+      section = 'R';
+      pendingLabel = null; pendingPrazo = null;
+      tryProcessWithPending(line, 'R', data);
+      continue;
+    }
+    if (up.match(/^DESCONTOS\b/) || t.startsWith('DESCONTOS')) {
+      section = 'D';
+      pendingLabel = null; pendingPrazo = null;
+      tryProcessWithPending(line, 'D', data);
+      continue;
+    }
+    if (up.includes('BASE C\u00c1LCULO DO TETO') || up.includes('BASE CALCULO DO TETO')) {
+      stop = true;
+      // Parse totals line - next line has BASE_TETO BASE_IR FGTS BRUTO DESCONTO LIQUIDO
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        const vals = extractAllNumbers(lines[j].text);
+        if (vals.length >= 5) {
+          // Typical order: base_teto base_ir fgts bruto desconto liquido
+          data.bruto = vals[vals.length - 3];
+          data.desconto = vals[vals.length - 2];
+          data.liquido = vals[vals.length - 1];
+          break;
+        }
+      }
+      break;
+    }
+
+    if (section && !stop) {
+      tryProcessWithPending(line, section, data);
+    }
+  }
+
+  return data;
+
+  function tryProcessWithPending(line, sec, data) {
+    const arr = sec === 'R' ? data.rendimentos : data.descontos;
+    const prevLen = arr.length;
+    processLine(line, sec, data, false);
+    if (arr.length > prevLen) { pendingLabel = null; pendingPrazo = null; return; }
+
+    // processLine added nothing — check why
+    const nums = extractAllNumbers(line.text);
+    if (nums.length === 0) {
+      // Label-only line — strip section word and store as pending
+      let lbl = line.text.replace(/^(RENDIMENTOS|DESCONTOS)\s*/i, '').trim();
+      const pm = lbl.match(/\s(\d{2,4})\s*$/);
+      let pz = null;
+      if (pm) { pz = parseInt(pm[1]); if (pz < 1 || pz > 999) pz = null; else lbl = lbl.substring(0, lbl.lastIndexOf(pm[0])).trim(); }
+      if (lbl.length >= 3) { pendingLabel = lbl; pendingPrazo = pz; }
+    } else if (pendingLabel) {
+      // Value-only line — pair with stored pending label
+      const valor = nums[nums.length - 1];
+      if (!isNaN(valor) && valor > 0) {
+        arr.push({ discriminacao: pendingLabel, prazo: pendingPrazo, valor });
+        pendingLabel = null; pendingPrazo = null;
+      }
+    }
+  }
+}
+
+function extractAllNumbers(s) {
+  const re = /(\d{1,3}(?:\.\d{3})*,\d{2})/g;
+  const out = [];
+  let m;
+  while ((m = re.exec(s)) !== null) out.push(parseBRNumber(m[1]));
+  return out;
+}
+
+function processLine(line, section, data, isFirstInSection) {
+  const t = line.text;
+  if (!t || t.length < 3) return;
+  // Line must have a valor (BR number) at the end
+  const nums = extractAllNumbers(t);
+  if (nums.length === 0) return;
+  const valor = nums[nums.length - 1];
+  if (isNaN(valor) || valor <= 0) return;
+
+  // Extract prazo: 2-3 digit standalone number before the valor
+  // Rebuild line text and find patterns
+  let restText = t;
+  // Remove the final valor string from the text
+  const lastNumMatch = restText.match(/(\d{1,3}(?:\.\d{3})*,\d{2})(?!.*\d{1,3}(?:\.\d{3})*,\d{2})/);
+  if (lastNumMatch) {
+    restText = restText.substring(0, restText.lastIndexOf(lastNumMatch[1])).trim();
+  }
+  // Now look for prazo at end: a 2-4 digit number isolated
+  let prazo = null;
+  const prazoMatch = restText.match(/\s(\d{2,4})\s*$/);
+  if (prazoMatch) {
+    prazo = parseInt(prazoMatch[1], 10);
+    if (prazo < 1 || prazo > 999) prazo = null;
+    else restText = restText.substring(0, restText.lastIndexOf(prazoMatch[0])).trim();
+  }
+
+  // Remove section label if present
+  restText = restText.replace(/^(RENDIMENTOS|DESCONTOS)\s*/i, '').trim();
+
+  if (!restText || restText.length < 3) return;
+
+  const item = {
+    discriminacao: restText,
+    prazo: prazo,
+    valor: valor,
+  };
+
+  if (section === 'R') data.rendimentos.push(item);
+  else data.descontos.push(item);
+}
+
+// ---- Classify using rubrica DB ----
+function lookupRub(prefix, nome) {
+  const k = prefix + '_' + normalize(nome);
+  return RUBRICAS[k];
+}
+
+function classifyRendimento(nome, vinculo, idade) {
+  // Militar (RMI — Reserva/Reforma CBM/PM/FA): TODAS as verbas entram na base
+  const isMilitar = vinculo === 'Reserva' || vinculo === 'Reforma';
+  if (isMilitar) return { found: true, in35: true, in70: true };
+  const rec = lookupRub('V', nome);
+  // isAtivo: ativo permanente, redistribuido, qualquer variante CLT
+  const isAtivo = vinculo === 'Ativo' || vinculo === 'Redistribuido' || vinculo.toLowerCase().includes('clt');
+  if (!rec) return { found: false, in35: null, in70: null };
+  // [in35_ativo, in70_ativo, in35_aposentado, in70_aposentado]
+  const in35 = isAtivo ? rec[0] === 1 : rec[2] === 1;
+  const in70 = isAtivo ? rec[1] === 1 : rec[3] === 1;
+  return { found: true, in35, in70 };
+}
+
+function classifyDesconto(nome, valor, vinculo, prazo) {
+  const rec = lookupRub('D', nome);
+  const isAtivo = vinculo === 'Ativo' || vinculo === 'Redistribuido' || vinculo.toLowerCase().includes('clt');
+  const up = normalize(nome);
+
+  // Skip if prazo === 1 (ultima parcela) - NOT counted for any margin
+  if (prazo === 1) return { consig: 0, cc: 0, cb: 0, compuls: 0, found: !!rec };
+
+  // Cartao Consignado / Beneficio via keyword (confirmed pattern)
+  let cc = 0, cb = 0;
+  if (up.includes('CARTAO CREDITO') || up.includes('CARTAO CREDIT')) cc = valor;
+  if (up.includes('CARTAO BENEFICIO')) cb = valor;
+
+  // Consig 35%: only if not cart consig/benef
+  let consig = 0;
+  if (cc === 0 && cb === 0) {
+    if (rec) {
+      const flag = isAtivo ? rec[0] : rec[2];
+      if (flag === 1) consig = valor;
+    } else {
+      if (up.includes('EMPREST') || up.includes('CONTRIB PREV ABERTA')) consig = valor;
+    }
+  }
+
+  // Compulsoria 70%: all descontos that count for the 70% ceiling
+  // Includes facultativos (emprest, cartoes) + obrigatorios (CPSS, IRRF, Taxa)
+  let compuls = 0;
+  if (rec) {
+    const flag70 = isAtivo ? rec[1] : rec[3];
+    if (flag70 === 1) compuls = valor;
+  } else {
+    // Fallback: if its a loan/cartao/contrib/obrigatorio
+    if (up.includes('EMPREST') || up.includes('CARTAO') || up.includes('CONTRIB PREV') ||
+        up.includes('CONT PLANO SEGURIDADE') || up.includes('IMPOSTO DE RENDA') ||
+        up.includes('TAXA OCUPACAO')) compuls = valor;
+  }
+  return { consig, cc, cb, compuls, found: !!rec };
+}
+
+function calcIdade(dataNascISO) {
+  if (!dataNascISO) return null;
+  const d = new Date(dataNascISO);
+  if (isNaN(d)) return null;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+  return age;
+}
+
+// ---- State ----
+let current = null; // current parsed paycheck data
+const historico = [];
+
+// ---- UI Functions ----
+function setStatus(msg, type) {
+  const el = document.getElementById('statusMsg');
+  el.className = type || 'info';
+  el.textContent = msg;
+}
+function clearStatus() {
+  document.getElementById('statusMsg').className = '';
+  document.getElementById('statusMsg').textContent = '';
+}
+
+
+async function handleFile(file) {
+  if (!file || file.type !== 'application/pdf') {
+    setStatus('Por favor selecione um arquivo PDF.', 'error');
+    return;
+  }
+  setStatus('Processando PDF: ' + file.name + '...', 'info');
+  try {
+    const buf = await file.arrayBuffer();
+    const lines = await pdfToLines(buf);
+    const data = parsePaycheck(lines);
+    current = data;
+    // Auto-set vinculo dropdown from PDF
+    if (data.vinculo) document.getElementById('vinculo').value = data.vinculo;
+    // Reset manual state on new file
+    current._rendState = null;
+    document.getElementById('overrideBaseChk').checked = false;
+    document.getElementById('overrideBaseInput').value = '';
+    document.getElementById('overrideBaseInput').disabled = true;
+    renderResults();
+    setStatus('PDF processado. ' + data.rendimentos.length + ' rendimentos e ' + data.descontos.length + ' descontos extraidos.', 'success');
+  } catch (e) {
+    console.error(e);
+    setStatus('Erro ao processar PDF: ' + e.message, 'error');
+  }
+}
+
+function renderResults() {
+  if (!current) return;
+  document.getElementById('results').classList.add('show');
+  const vinculo = document.getElementById('vinculo').value;
+  const idade = null;
+
+  // Classify rendimentos + compute base (SIGEPE mode)
+  // Dedup rule (refinada): para rendimentos duplicados:
+  //   - COM prazo: so o primeiro conta (demais sao retroativos/ajustes)
+  //   - SEM prazo: todos somam (multiplos PTTC, horas extras etc.)
+  const dedupMap = {};
+  current.rendimentos.forEach((r, i) => {
+    const key = normalize(r.discriminacao);
+    if (!dedupMap[key]) dedupMap[key] = { firstWithPrazoIdx: null, noPrazoIdxs: [] };
+    if (r.prazo != null) {
+      if (dedupMap[key].firstWithPrazoIdx === null) dedupMap[key].firstWithPrazoIdx = i;
+    } else {
+      dedupMap[key].noPrazoIdxs.push(i);
+    }
+  });
+  function isPrincipal(r, i) {
+    const key = normalize(r.discriminacao);
+    const rec = dedupMap[key];
+    if (r.prazo != null) return rec.firstWithPrazoIdx === i;
+    return rec.noPrazoIdxs.includes(i);
+  }
+  // Initialize per-rendimento state in current._rendState (if not yet set)
+  if (!current._rendState) current._rendState = {};
+  let base = 0;
+  const tbRend = document.querySelector('#tableRend tbody');
+  tbRend.innerHTML = '';
+  current.rendimentos.forEach((r, i) => {
+    const cls = classifyRendimento(r.discriminacao, vinculo, idade);
+    let badge = '<span class="badge badge-unk">Nao cadast.</span>';
+    const principal = isPrincipal(r, i);
+    let defaultOn = false;
+    if (!principal) {
+      badge = '<span class="badge badge-skip">Duplicata (retroativo)</span>';
+    } else if (cls.found) {
+      if (cls.in35) { badge = '<span class="badge badge-yes">Entra (35%)</span>'; defaultOn = true; }
+      else if (cls.in70) badge = '<span class="badge badge-skip">So 70%</span>';
+      else badge = '<span class="badge badge-no">Nao entra</span>';
+    }
+    // Init state for this row
+    if (!(i in current._rendState)) current._rendState[i] = { on: defaultOn, frac: 1.0 };
+    const state = current._rendState[i];
+    const entra = state.on ? r.valor * state.frac : 0;
+    if (entra > 0) base += entra;
+
+    const tr = document.createElement('tr');
+    tr.draggable = true;
+    const nRend = current.rendimentos.length;
+    tr.innerHTML =
+      '<td class="drag-handle" title="Arrastar para reordenar">⠿</td>' +
+      '<td>' + (i+1) + '</td>' +
+      '<td>' + r.discriminacao + '</td>' +
+      '<td>' + (r.prazo ?? '') + '</td>' +
+      '<td class="num">' + formatBRL(r.valor) + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td style="text-align:center;"><input type="checkbox" class="rend-check" data-idx="' + i + '"' + (state.on ? ' checked' : '') + '></td>' +
+      '<td><input type="number" class="rend-frac" data-idx="' + i + '" value="' + (state.frac*100).toFixed(1) + '" min="0" max="100" step="0.01" style="width:62px;padding:2px 4px;font-size:12px;text-align:right;">%</td>' +
+      '<td class="num">' + formatBRL(entra) + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn-icon" onclick="moveRend(' + i + ',-1)" title="Subir"' + (i===0?' disabled':'') + '>↑</button>' +
+        '<button class="btn-icon" onclick="moveRend(' + i + ',1)" title="Descer"' + (i===nRend-1?' disabled':'') + '>↓</button>' +
+        '<button class="btn-icon btn-danger" onclick="removeRend(' + i + ')" title="Remover">×</button>' +
+      '</td>';
+    tr.addEventListener('dragstart', e => { dragSrcIdx = i; dragSrcType = 'rend'; e.dataTransfer.effectAllowed = 'move'; tr.classList.add('drag-active'); });
+    tr.addEventListener('dragend', () => { tr.classList.remove('drag-active'); document.querySelectorAll('tr.drag-over').forEach(el => el.classList.remove('drag-over')); dragSrcIdx = null; dragSrcType = null; });
+    tr.addEventListener('dragover', e => { e.preventDefault(); tr.classList.add('drag-over'); });
+    tr.addEventListener('dragleave', () => tr.classList.remove('drag-over'));
+    tr.addEventListener('drop', e => { e.preventDefault(); tr.classList.remove('drag-over'); if (dragSrcType === 'rend' && dragSrcIdx !== null && dragSrcIdx !== i) moveRendDrag(dragSrcIdx, i); });
+    tbRend.appendChild(tr);
+  });
+  const trTotR = document.createElement('tr');
+  trTotR.className = 'total';
+  trTotR.innerHTML = '<td colspan="9" style="text-align:right;">TOTAL BASE 35% (automatica)</td><td class="num">' + formatBRL(base) + '</td><td></td>';
+  tbRend.appendChild(trTotR);
+  document.getElementById('totalBase').textContent = formatBRL(base);
+
+  // Wire up checkbox + fraction events
+  tbRend.querySelectorAll('.rend-check').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      current._rendState[idx].on = e.target.checked;
+      renderResults();
+    });
+  });
+  tbRend.querySelectorAll('.rend-frac').forEach(input => {
+    input.addEventListener('change', e => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      let v = parseFloat(e.target.value) / 100;
+      if (isNaN(v)) v = 0;
+      if (v < 0) v = 0;
+      if (v > 1) v = 1;
+      current._rendState[idx].frac = v;
+      renderResults();
+    });
+  });
+
+  // Handle override base
+  const overrideChk = document.getElementById('overrideBaseChk');
+  const overrideInput = document.getElementById('overrideBaseInput');
+  const useOverride = overrideChk.checked && overrideInput.value;
+  if (useOverride) {
+    const override = parseFloat(overrideInput.value);
+    if (!isNaN(override) && override >= 0) base = override;
+  }
+  document.getElementById('baseUsada').textContent = formatBRL(base) + (useOverride ? ' (manual)' : ' (auto)');
+
+  // Classify descontos + compute consumption
+  // mg70_util = total_rendimentos - total_liquido (TODOS os descontos, conforme SIAPE oficial)
+  let consig = 0, cc = 0, cb = 0;
+  const tbDesc = document.querySelector('#tableDesc tbody');
+  tbDesc.innerHTML = '';
+  current.descontos.forEach((d, i) => {
+    const res = classifyDesconto(d.discriminacao, d.valor, vinculo, d.prazo);
+    consig += res.consig;
+    cc += res.cc;
+    cb += res.cb;
+    const tr = document.createElement('tr');
+    tr.draggable = true;
+    const nDesc = current.descontos.length;
+    tr.innerHTML = '<td class="drag-handle" title="Arrastar para reordenar">⠿</td><td>' + (i+1) + '</td><td>' + d.discriminacao + '</td><td>' + (d.prazo ?? '') + '</td><td class="num">' + formatBRL(d.valor) + '</td>' +
+      '<td class="num">' + (res.consig ? formatBRL(res.consig) : '-') + '</td>' +
+      '<td class="num">' + (res.cc ? formatBRL(res.cc) : '-') + '</td>' +
+      '<td class="num">' + (res.cb ? formatBRL(res.cb) : '-') + '</td>' +
+      '<td class="num">' + (res.compuls ? formatBRL(res.compuls) : '-') + '</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn-icon" onclick="moveDesc(' + i + ',-1)" title="Subir"' + (i===0?' disabled':'') + '>↑</button>' +
+        '<button class="btn-icon" onclick="moveDesc(' + i + ',1)" title="Descer"' + (i===nDesc-1?' disabled':'') + '>↓</button>' +
+        '<button class="btn-icon btn-danger" onclick="removeDesc(' + i + ')" title="Remover">×</button>' +
+      '</td>';
+    tr.addEventListener('dragstart', e => { dragSrcIdx = i; dragSrcType = 'desc'; e.dataTransfer.effectAllowed = 'move'; tr.classList.add('drag-active'); });
+    tr.addEventListener('dragend', () => { tr.classList.remove('drag-active'); document.querySelectorAll('tr.drag-over').forEach(el => el.classList.remove('drag-over')); dragSrcIdx = null; dragSrcType = null; });
+    tr.addEventListener('dragover', e => { e.preventDefault(); tr.classList.add('drag-over'); });
+    tr.addEventListener('dragleave', () => tr.classList.remove('drag-over'));
+    tr.addEventListener('drop', e => { e.preventDefault(); tr.classList.remove('drag-over'); if (dragSrcType === 'desc' && dragSrcIdx !== null && dragSrcIdx !== i) moveDescDrag(dragSrcIdx, i); });
+    tbDesc.appendChild(tr);
+  });
+
+  // mg70_util = total_rendimentos - total_liquido (TODOS os descontos — fonte SIAPE oficial)
+  // Fallback: soma dos descontos individuais se bruto/liquido nao disponiveis
+  const compuls = (current.bruto && current.liquido)
+    ? Math.max(0, current.bruto - current.liquido)
+    : current.descontos.reduce((s, d) => s + d.valor, 0);
+
+  const trTotD = document.createElement('tr');
+  trTotD.className = 'total';
+  trTotD.innerHTML = '<td colspan="5" style="text-align:right;">TOTAIS</td><td class="num">' + formatBRL(consig) + '</td><td class="num">' + formatBRL(cc) + '</td><td class="num">' + formatBRL(cb) + '</td><td class="num">' + formatBRL(compuls) + '</td><td></td>';
+  tbDesc.appendChild(trTotD);
+
+  // Summary
+  const summary = document.getElementById('summary');
+  summary.innerHTML = '';
+  function addStat(label, value) {
+    const div = document.createElement('div');
+    div.className = 'stat';
+    div.innerHTML = '<div class="label">' + label + '</div><div class="value">' + value + '</div>';
+    summary.appendChild(div);
+  }
+  addStat('Nome', current.nome || '-');
+  addStat('Mes/Ano', current.mesAno || '-');
+  addStat('Vinculo', vinculo);
+  addStat('Rem. Bruta', formatBRL(current.bruto));
+  addStat('Rem. Liquida', formatBRL(current.liquido));
+
+  // Margens — Regra 40% global (CC e CB sub-limites de 5% cada, consumindo da global)
+  const consumoTotal = consig + cc + cb;
+  const livre70 = base * 0.70 - compuls;
+  const livreGlobal = base * 0.40 - consumoTotal;
+  const livre5cc = base * 0.05 - cc;
+  const livre5cb = base * 0.05 - cb;
+
+  // Quando o teto 70% for menor que a margem global, ele é o fator limitante real
+  const teto70Limita = livreGlobal > 0 && livre70 < livreGlobal;
+  const disponivelReal = teto70Limita ? Math.max(0, livre70) : livreGlobal;
+
+  const extraGlobal = '<div style="font-size:11px;color:#666;margin-top:4px;">Consig: ' + formatBRL(consig) + ' &nbsp;&middot;&nbsp; CC: ' + formatBRL(cc) + ' &nbsp;&middot;&nbsp; CB: ' + formatBRL(cb) + '</div>' +
+    (teto70Limita
+      ? '<div style="font-size:12px;font-weight:700;color:#b71c1c;margin-top:6px;padding:5px 8px;background:#ffebee;border-radius:5px;border-left:3px solid #e53935;">&#x26A0; Teto 70% &eacute; o fator limitante &mdash; dispon&iacute;vel real: ' + formatBRL(disponivelReal) + '</div>'
+      : '');
+
+  // Margens
+  const grid = document.getElementById('marginGrid');
+  grid.innerHTML = '';
+  if (!current._coefs) current._coefs = { 0: '', 1: '', 2: '', 3: '' };
+
+  const margens = [
+    { key: 3, label: 'Compulsoria (Teto Total)', pct: 0.70, consumo: compuls,
+      livreVal: livre70, extraHtml: '' },
+    { key: 0, label: 'Margem Global Consignavel', pct: 0.40, consumo: consumoTotal,
+      livreVal: livreGlobal, extraHtml: extraGlobal },
+    { key: 1, label: 'Limite Cartao de Credito', pct: 0.05, consumo: cc,
+      livreVal: livre5cc, extraHtml: '' },
+    { key: 2, label: 'Limite Cartao Beneficio', pct: 0.05, consumo: cb,
+      livreVal: livre5cb, extraHtml: '' },
+  ];
+
+  margens.forEach(m => {
+    const total = base * m.pct;
+    const livre = m.livreVal;
+    const coefStr = current._coefs[m.key] || '';
+    const div = document.createElement('div');
+    div.className = 'margin-card ' + (livre >= 0 ? 'positive' : 'negative');
+    div.innerHTML = '<h3>' + m.label + ' (' + (m.pct*100).toFixed(0) + '%)</h3>' +
+      '<div class="small">Margem Total: ' + formatBRL(total) + '</div>' +
+      '<div class="small">Consumido: ' + formatBRL(m.consumo) + '</div>' +
+      '<div class="big">' + formatBRL(livre) + '</div>' +
+      '<div class="small">' + (livre >= 0 ? 'Margem Disponivel' : 'Acima do limite') + '</div>' +
+      m.extraHtml +
+      '<div style="margin-top:10px;">' +
+        '<label style="font-size:11px;color:#666;display:block;margin-bottom:2px;">Coeficiente (ex: 0,025 para 60 meses):</label>' +
+        '<input type="text" class="coef-input" data-key="' + m.key + '" value="' + coefStr + '" placeholder="0,0000" ' +
+        'style="width:100%;padding:4px 8px;font-size:13px;border:1px solid #ccc;border-radius:4px;">' +
+      '</div>' +
+      '<div class="liberado-display" data-key="' + m.key + '"></div>';
+    grid.appendChild(div);
+    updateLiberadoDisplay(m.key, livre, coefStr);
+  });
+  // Wire up coef inputs - only update the specific liberado display, don't re-render the whole page
+  grid.querySelectorAll('.coef-input').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const k = parseInt(e.target.dataset.key, 10);
+      current._coefs[k] = e.target.value;
+      const mInfo = margens.find(mm => mm.key === k);
+      updateLiberadoDisplay(k, mInfo.livreVal, e.target.value);
+    });
+  });
+
+  function updateLiberadoDisplay(key, livre, coefStr) {
+    const el = grid.querySelector('.liberado-display[data-key="' + key + '"]');
+    if (!el) return;
+    const coef = parseFloat(String(coefStr).replace(',', '.'));
+    if (!isNaN(coef) && coef > 0 && livre > 0) {
+      const liberado = livre / coef;
+      el.innerHTML = '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #bbb;">' +
+        '<div class="small" style="font-weight:600;color:#1f4e78;">Valor a Liberar:</div>' +
+        '<div style="font-size:18px;font-weight:bold;color:#1f4e78;">' + formatBRL(liberado) + '</div>' +
+        '</div>';
+    } else if (!isNaN(coef) && coef > 0) {
+      el.innerHTML = '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #bbb;font-size:11px;color:#999;">Sem margem disponivel</div>';
+    } else {
+      el.innerHTML = '';
+    }
+  }
+
+  current._calc = { base, consig, cc, cb, compuls, vinculo, idade, margens: margens.map(m => ({ ...m, total: base * m.pct, livre: m.livreVal })) };
+}
+
+// ---- Export CSV ----
+function exportCSV() {
+  if (!current) return;
+  const rows = [];
+  rows.push(['=== CONTRACHEQUE ===']);
+  rows.push(['Nome', current.nome]);
+  rows.push(['Mes/Ano', current.mesAno]);
+  rows.push(['Vinculo', current._calc.vinculo]);
+  rows.push(['Bruto', current.bruto.toFixed(2).replace('.', ',')]);
+  rows.push(['Desconto Total', current.desconto.toFixed(2).replace('.', ',')]);
+  rows.push(['Liquido', current.liquido.toFixed(2).replace('.', ',')]);
+  rows.push([]);
+  rows.push(['=== RENDIMENTOS ===']);
+  rows.push(['Discriminacao', 'Prazo', 'Valor']);
+  current.rendimentos.forEach(r => rows.push([r.discriminacao, r.prazo ?? '', r.valor.toFixed(2).replace('.', ',')]));
+  rows.push([]);
+  rows.push(['=== DESCONTOS ===']);
+  rows.push(['Discriminacao', 'Prazo', 'Valor']);
+  current.descontos.forEach(d => rows.push([d.discriminacao, d.prazo ?? '', d.valor.toFixed(2).replace('.', ',')]));
+  rows.push([]);
+  rows.push(['=== MARGENS ===']);
+  rows.push(['Categoria', 'Limite', 'Total', 'Consumido', 'Livre']);
+  current._calc.margens.forEach(m => {
+    rows.push([m.label, (m.pct*100).toFixed(0) + '%', m.total.toFixed(2).replace('.', ','), m.consumo.toFixed(2).replace('.', ','), m.livre.toFixed(2).replace('.', ',')]);
+  });
+  const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(';')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const safeNome = (current.nome || 'contracheque').replace(/[^a-zA-Z0-9]/g, '_');
+  a.download = 'margem_' + safeNome + '_' + (current.mesAno || '').replace('/', '-') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function salvarHistorico() {
+  if (!current || !current._calc) return;
+  historico.push({
+    nome: current.nome,
+    mesAno: current.mesAno,
+    base: current._calc.base,
+    consig_livre: current._calc.margens[0].livre,
+    cc_livre: current._calc.margens[1].livre,
+    cb_livre: current._calc.margens[2].livre,
+  });
+  renderHistorico();
+  setStatus('Adicionado ao historico. Total: ' + historico.length + ' simulacoes.', 'success');
+}
+
+function renderHistorico() {
+  const card = document.getElementById('histCard');
+  const tb = document.querySelector('#tableHist tbody');
+  tb.innerHTML = '';
+  if (historico.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  historico.forEach((h, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (h.nome || '-') + '</td><td>' + (h.mesAno || '-') + '</td><td class="num">' + formatBRL(h.base) + '</td>' +
+      '<td class="num" style="color:' + (h.consig_livre >= 0 ? '#155724' : '#721c24') + '">' + formatBRL(h.consig_livre) + '</td>' +
+      '<td class="num" style="color:' + (h.cc_livre >= 0 ? '#155724' : '#721c24') + '">' + formatBRL(h.cc_livre) + '</td>' +
+      '<td class="num" style="color:' + (h.cb_livre >= 0 ? '#155724' : '#721c24') + '">' + formatBRL(h.cb_livre) + '</td>' +
+      '<td><button class="secondary" style="padding:4px 10px;font-size:11px;" onclick="removerHist(' + i + ')">Remover</button></td>';
+    tb.appendChild(tr);
+  });
+}
+
+window.removerHist = function(i) {
+  historico.splice(i, 1);
+  renderHistorico();
+};
+
+function exportHistorico() {
+  if (historico.length === 0) return;
+  const rows = [['Nome', 'Mes/Ano', 'Base Calculo', 'Consig 35% Livre', 'Cart Consig 5% Livre', 'Cart Benef 5% Livre']];
+  historico.forEach(h => {
+    rows.push([h.nome, h.mesAno, h.base.toFixed(2).replace('.', ','), h.consig_livre.toFixed(2).replace('.', ','), h.cc_livre.toFixed(2).replace('.', ','), h.cb_livre.toFixed(2).replace('.', ',')]);
+  });
+  const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(';')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'historico_margens.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function limparHist() {
+  if (confirm('Limpar todo o historico?')) { historico.length = 0; renderHistorico(); }
+}
+
+function limparAtual() {
+  current = null;
+  document.getElementById('results').classList.remove('show');
+  document.getElementById('fileInput').value = '';
+  clearStatus();
+}
+
+// ---- Event Handlers ----
+const dz = document.getElementById('dropZone');
+const fi = document.getElementById('fileInput');
+dz.addEventListener('click', () => fi.click());
+fi.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', e => { dz.classList.remove('dragover'); });
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+document.getElementById('vinculo').addEventListener('change', () => { if (current) { current._rendState = null; renderResults(); } });
+document.getElementById('overrideBaseChk').addEventListener('change', e => {
+  document.getElementById('overrideBaseInput').disabled = !e.target.checked;
+  if (current) renderResults();
+});
+document.getElementById('overrideBaseInput').addEventListener('input', () => { if (current) renderResults(); });
+
+document.getElementById('btnExport').addEventListener('click', exportCSV);
+document.getElementById('btnExportPDF').addEventListener('click', exportPDF);
+document.getElementById('btnSalvarHist').addEventListener('click', salvarHistorico);
+document.getElementById('btnLimpar').addEventListener('click', limparAtual);
+document.getElementById('btnExportHist').addEventListener('click', exportHistorico);
+document.getElementById('btnLimparHist').addEventListener('click', limparHist);
+document.getElementById('btnAddRend').addEventListener('click', () => openAddModal('rend'));
+document.getElementById('btnAddDesc').addEventListener('click', () => openAddModal('desc'));
+// addModal/addValor/addDiscr estao APOS o bloco script — listeners movidos para script inline abaixo do modal
+
+function renderRaimundo() {}
+function renderJ17() {}
+
+// ---- Drag & drop global state ----
+let dragSrcIdx = null;
+let dragSrcType = null;
+
+// ---- Reorder helpers (preserva _rendState) ----
+function _stateArr() {
+  return current.rendimentos.map((_, i) => current._rendState[i] || { on: false, frac: 1.0 });
+}
+function _rebuildState(arr) {
+  current._rendState = {};
+  arr.forEach((s, i) => { current._rendState[i] = s; });
+}
+
+function moveRendDrag(src, dest) {
+  const sa = _stateArr();
+  const item = current.rendimentos.splice(src, 1)[0];
+  current.rendimentos.splice(dest, 0, item);
+  const si = sa.splice(src, 1)[0];
+  sa.splice(dest, 0, si);
+  _rebuildState(sa);
+  renderResults();
+}
+
+function moveRend(idx, dir) {
+  const ni = idx + dir;
+  if (ni < 0 || ni >= current.rendimentos.length) return;
+  const sa = _stateArr();
+  [current.rendimentos[idx], current.rendimentos[ni]] = [current.rendimentos[ni], current.rendimentos[idx]];
+  [sa[idx], sa[ni]] = [sa[ni], sa[idx]];
+  _rebuildState(sa);
+  renderResults();
+}
+
+function removeRend(idx) {
+  if (!confirm('Remover este rendimento?')) return;
+  const sa = _stateArr();
+  current.rendimentos.splice(idx, 1);
+  sa.splice(idx, 1);
+  _rebuildState(sa);
+  renderResults();
+}
+
+function moveDescDrag(src, dest) {
+  const item = current.descontos.splice(src, 1)[0];
+  current.descontos.splice(dest, 0, item);
+  renderResults();
+}
+
+function moveDesc(idx, dir) {
+  const ni = idx + dir;
+  if (ni < 0 || ni >= current.descontos.length) return;
+  [current.descontos[idx], current.descontos[ni]] = [current.descontos[ni], current.descontos[idx]];
+  renderResults();
+}
+
+function removeDesc(idx) {
+  if (!confirm('Remover este desconto?')) return;
+  current.descontos.splice(idx, 1);
+  renderResults();
+}
+
+// ---- Modal: Adicionar Rendimento / Desconto ----
+
+// Sugestões padrão de rendimentos SIAPE
+const SUGEST_REND = [
+  'VENCIMENTO BASICO', 'SALARIO BASICO', 'SALARIO CLT',
+  'GRAT DESEMPENHO (GDPGPE)', 'GRAT DESEMPENHO ATIV TECNICO-ADMI',
+  'GRAT DESEMPENHO ATIV FISCALIZACAO', 'GRAT ATIVIDADE DOCENTE',
+  'GRAT QUALIF (GQ)', 'GRAT ENCARGOS ESPECIAIS', 'GRAT REPRESENTACAO',
+  'ADICIONAL DE INSALUBRIDADE', 'ADICIONAL POR TEMPO DE SERVICO',
+  'ADICIONAL NOTURNO', 'ADICIONAL DE PERICULOSIDADE',
+  'AUXILIO ALIMENTACAO', 'AUXILIO TRANSPORTE', 'AUXILIO MORADIA',
+  'VENCIMENTO BASICO MILITAR', 'INDENIZACAO DE CAMPO',
+  'FUNCAO COMISSIONADA (FCPE)', 'RETRIB PELO EXERC DE FUNCAO',
+  'REMUNERACAO DO CARGO EM COMISSAO',
+  'GRATIFICACAO NATALINA', 'HORAS EXTRAS', 'PCCS',
+  'VPNI', 'VANTAGEM PESSOAL NOMINALMENTE IDENTIFICADA',
+  'PAGAMENTO RETROATIVO', 'PROG DESEMPENHO INSTITUCIONAL',
+];
+
+// Sugestões padrão de descontos SIAPE
+const SUGEST_DESC = [
+  'PSS - PREV SERV PUBLICO', 'CONT PLANO SEGURIDADE SOCIAL', 'IRRF',
+  'EMPREST BCO OFICIAL - BCO BRAS', 'EMPREST BCO PRIVADOS - DIGIO',
+  'EMPREST BCO PRIVADOS - BRADESCO', 'EMPREST BCO PRIVADOS - CEF',
+  'EMPREST BCO PRIVADOS - SANTANDER', 'EMPREST BCO PRIVADOS - BMG',
+  'AMORT CARTAO CREDITO', 'AMORT CARTAO CREDITO CLICKBANK',
+  'AMORT CARTAO BENEFICIO', 'AMORT CARTAO BENEFICIO - LECCA',
+  'CONTRIBUICAO PENSAO MILITAR', 'CONTR.PENSAO MILITAR ADICIONAL',
+  'FUNDO DE SAUDE', 'FUNDO DE SAUDE ADICIONAL',
+  'PLANO DE SAUDE', 'PLANO ODONTOLOGICO',
+  'PENSAO ALIMENTICIA', 'MENSALIDADE ASSOC/SINDICATO',
+  'CONTRIB ASSOC SERV PUB', 'CONTRIB SINDICAL',
+  'ADIANTAMENTO SALARIAL', 'ADIANTAMENTO DE DECIMO TERCEIRO',
+  'REPOSICAO AO ERARIO', 'MULTA TRANSITO',
+];
+
+function _getHist(type) {
+  try { return JSON.parse(localStorage.getItem('simHist_' + type) || '[]'); } catch(e) { return []; }
+}
+function _saveHist(type, discr) {
+  const hist = [discr, ..._getHist(type).filter(h => h.toLowerCase() !== discr.toLowerCase())].slice(0, 30);
+  localStorage.setItem('simHist_' + type, JSON.stringify(hist));
+}
+function _populateDatalist(type) {
+  const predef = type === 'rend' ? SUGEST_REND : SUGEST_DESC;
+  const hist = _getHist(type);
+  // histórico primeiro (recentes), depois padrão (que não esteja no histórico)
+  const combined = [...hist, ...predef.filter(s => !hist.some(h => h.toLowerCase() === s.toLowerCase()))];
+  const dl = document.getElementById('addDiscrList');
+  dl.innerHTML = combined.map(s => '<option value="' + s.replace(/"/g, '&quot;') + '">').join('');
+  const hint = document.getElementById('addDiscrHint');
+  hint.textContent = hist.length > 0 ? '(' + hist.length + ' no histórico)' : '(sem histórico ainda)';
+}
+
+function openAddModal(type) {
+  if (!current) return;
+  document.getElementById('addModalType').value = type;
+  document.getElementById('addModalTitle').textContent = type === 'rend' ? 'Adicionar Rendimento' : 'Adicionar Desconto';
+  document.getElementById('addDiscr').value = '';
+  document.getElementById('addPrazo').value = '';
+  document.getElementById('addValor').value = '';
+  _populateDatalist(type);
+  document.getElementById('addModal').classList.add('open');
+  setTimeout(() => document.getElementById('addDiscr').focus(), 80);
+}
+
+function closeAddModal() {
+  document.getElementById('addModal').classList.remove('open');
+}
+
+function confirmAddItem() {
+  const type = document.getElementById('addModalType').value;
+  const discr = document.getElementById('addDiscr').value.trim();
+  const prazoStr = document.getElementById('addPrazo').value.trim();
+  const valorStr = document.getElementById('addValor').value.trim();
+  if (!discr || !valorStr) { alert('Preencha Discriminacao e Valor.'); return; }
+  const prazo = prazoStr ? parseInt(prazoStr, 10) : null;
+  const valor = parseBRNumber(valorStr);
+  if (isNaN(valor) || valor < 0) { alert('Valor invalido. Use formato: 1.234,56'); return; }
+  _saveHist(type, discr.toUpperCase());
+  if (type === 'rend') {
+    current.rendimentos.push({ discriminacao: discr, prazo, valor });
+  } else {
+    current.descontos.push({ discriminacao: discr, prazo, valor });
+  }
+  closeAddModal();
+  renderResults();
+}
+
+// ---- Exportar PDF ----
+function exportPDF() {
+  if (!current || !current._calc) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const vinculo = document.getElementById('vinculo').value;
+  const calc = current._calc;
+  const azul = [31, 78, 120];
+
+  doc.setFontSize(15);
+  doc.setTextColor(...azul);
+  doc.text('Simulador de Margem Consignavel - SIAPE', 14, 18);
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text('Gerado em: ' + new Date().toLocaleDateString('pt-BR'), 14, 25);
+
+  doc.setFontSize(12);
+  doc.setTextColor(...azul);
+  doc.text('Dados do Servidor', 14, 33);
+  doc.autoTable({
+    startY: 36,
+    head: [['Campo', 'Valor']],
+    body: [
+      ['Nome', current.nome || '-'],
+      ['Mes/Ano', current.mesAno || '-'],
+      ['Vinculo', vinculo],
+      ['Remuneracao Bruta', formatBRL(current.bruto)],
+      ['Remuneracao Liquida', formatBRL(current.liquido)],
+      ['Base de Calculo', formatBRL(calc.base)],
+    ],
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: azul },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
+  });
+
+  let y = doc.lastAutoTable.finalY + 8;
+  doc.setFontSize(12);
+  doc.setTextColor(...azul);
+  doc.text('Resultado das Margens', 14, y);
+  doc.autoTable({
+    startY: y + 3,
+    head: [['Margem', 'Total', 'Consumido', 'Disponivel']],
+    body: calc.margens.map(m => [
+      m.label + ' (' + (m.pct * 100).toFixed(0) + '%)',
+      formatBRL(m.total),
+      formatBRL(m.consumo),
+      formatBRL(m.livre),
+    ]),
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: azul },
+    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+  doc.setFontSize(12);
+  doc.setTextColor(...azul);
+  doc.text('Rendimentos', 14, y);
+  doc.autoTable({
+    startY: y + 3,
+    head: [['#', 'Discriminacao', 'Prazo', 'Valor']],
+    body: current.rendimentos.map((r, i) => [i + 1, r.discriminacao, r.prazo ?? '', formatBRL(r.valor)]),
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: azul },
+    columnStyles: { 0: { cellWidth: 10 }, 2: { cellWidth: 14 }, 3: { halign: 'right', cellWidth: 30 } },
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+  if (y > 240) { doc.addPage(); y = 16; }
+  doc.setFontSize(12);
+  doc.setTextColor(...azul);
+  doc.text('Descontos', 14, y);
+  doc.autoTable({
+    startY: y + 3,
+    head: [['#', 'Discriminacao', 'Prazo', 'Valor', 'Consig 35%', 'Cart 5%', 'Benef 5%', 'Comp 70%']],
+    body: current.descontos.map((d, i) => {
+      const res = classifyDesconto(d.discriminacao, d.valor, vinculo, d.prazo);
+      return [i + 1, d.discriminacao, d.prazo ?? '', formatBRL(d.valor),
+        res.consig ? formatBRL(res.consig) : '-',
+        res.cc ? formatBRL(res.cc) : '-',
+        res.cb ? formatBRL(res.cb) : '-',
+        res.compuls ? formatBRL(res.compuls) : '-'];
+    }),
+    styles: { fontSize: 7 },
+    headStyles: { fillColor: azul },
+    columnStyles: {
+      0: { cellWidth: 8 }, 2: { cellWidth: 12 },
+      3: { halign: 'right', cellWidth: 24 }, 4: { halign: 'right', cellWidth: 20 },
+      5: { halign: 'right', cellWidth: 16 }, 6: { halign: 'right', cellWidth: 16 },
+      7: { halign: 'right', cellWidth: 20 },
+    },
+  });
+
+  const nome = (current.nome || 'resultado').replace(/\s+/g, '_');
+  const mes = (current.mesAno || '').replace('/', '-');
+  doc.save('margem_' + nome + '_' + mes + '.pdf');
+}
+</script>
+
+<!-- Modal: Adicionar Rendimento / Desconto -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal-box">
+    <h3 id="addModalTitle">Adicionar Item</h3>
+    <input type="hidden" id="addModalType">
+    <div class="field">
+      <label>Discriminacao * <span id="addDiscrHint" style="font-weight:400;color:#888;font-size:11px;"></span></label>
+      <input type="text" id="addDiscr" list="addDiscrList" autocomplete="off"
+             placeholder="Digite ou escolha da lista..."
+             style="width:100%;padding:8px 10px;border:1px solid #ccc;border-radius:6px;font-size:14px;">
+      <datalist id="addDiscrList"></datalist>
+    </div>
+    <div class="field">
+      <label>Prazo (opcional)</label>
+      <input type="number" id="addPrazo" placeholder="Ex: 60" min="1">
+    </div>
+    <div class="field">
+      <label>Valor * (use virgula: 1.234,56)</label>
+      <input type="text" id="addValor" placeholder="Ex: 5.000,00">
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeAddModal()">Cancelar</button>
+      <button onclick="confirmAddItem()">Adicionar</button>
+    </div>
+  </div>
+</div>
+<!-- Listeners do modal: colocados APOS o HTML do modal para que os elementos existam no DOM -->
+<script>
+document.getElementById('addModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeAddModal(); });
+document.getElementById('addValor').addEventListener('keydown', e => { if (e.key === 'Enter') confirmAddItem(); });
+document.getElementById('addDiscr').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('addPrazo').focus(); });
+</script>
+</body>
+</html>
