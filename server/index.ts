@@ -398,6 +398,23 @@ app.use((req, res, next) => {
               ADD COLUMN IF NOT EXISTS data_recebimento VARCHAR(20),
               ADD COLUMN IF NOT EXISTS parceiro_relatorio VARCHAR(100)
           `);
+          // Portabilidade com refin na mesma operação: a produção deve usar a ADE do
+          // refin (é a que consta no relatório de comissão). Corrige registros já pagos
+          // que ficaram com a ADE da portabilidade. Idempotente e evita colisão com o
+          // índice único (contrato_id, tenant_id).
+          await migDb.execute(migSql`
+            UPDATE producoes_contratos pc
+            SET contrato_id = pa.ade_refin
+            FROM proposals pa
+            WHERE pc.proposal_id = pa.id
+              AND pa.ade_refin IS NOT NULL AND pa.ade_refin <> ''
+              AND pc.contrato_id = pa.ade
+              AND pc.contrato_id <> pa.ade_refin
+              AND NOT EXISTS (
+                SELECT 1 FROM producoes_contratos p2
+                WHERE p2.tenant_id = pc.tenant_id AND p2.contrato_id = pa.ade_refin AND p2.id <> pc.id
+              )
+          `);
           // Proventos e Descontos — conta corrente interna do corretor
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS lancamentos_corretor (
@@ -697,7 +714,9 @@ app.use((req, res, next) => {
             ALTER TABLE tenants
               ADD COLUMN IF NOT EXISTS interno BOOLEAN NOT NULL DEFAULT false,
               ADD COLUMN IF NOT EXISTS asaas_customer_id TEXT,
-              ADD COLUMN IF NOT EXISTS logo_url_dark VARCHAR(500)
+              ADD COLUMN IF NOT EXISTS logo_url_dark VARCHAR(500),
+              ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'ativo',
+              ADD COLUMN IF NOT EXISTS ultimo_acesso TIMESTAMP
           `);
           // Capital Go (tenant 4) é o ambiente interno do dono — time próprio, não paga assinatura
           await saasDb.execute(saasSql`UPDATE tenants SET interno = true WHERE id = 4 AND interno = false`);

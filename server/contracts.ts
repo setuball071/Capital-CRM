@@ -975,7 +975,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       // na produção (recebimento/repasse), vinculado por proposalId. Dedupe por ADE.
       if (status === "PAGO") {
         try {
-          const ade = (updated.ade || current.ade) || null;
+          // Portabilidade que gerou refin na mesma operação: a produção usa o ADE do
+          // refin (é o que consta no relatório de comissão do parceiro), não o da port.
+          const adeRefin = (updated.adeRefin || current.adeRefin) || null;
+          const adePort = (updated.ade || current.ade) || null;
+          const ade = adeRefin || adePort;
           const contratoIdVal = ade || `PROP-${id}`;
           let vendedorNome: string | null = null;
           if (updated.vendorId) {
