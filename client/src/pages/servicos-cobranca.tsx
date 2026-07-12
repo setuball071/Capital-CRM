@@ -124,6 +124,8 @@ interface TenantOption {
   id: number;
   name: string;
   interno?: boolean;
+  status?: string;
+  isActive?: boolean;
 }
 
 // ============================================================================
@@ -626,8 +628,9 @@ function CardProdutos({ tenants }: { tenants: TenantOption[] }) {
     setCobrancaForm({ tenantId: "", vencimento: "", descricao: produto.nome });
   };
 
-  // ambientes internos não são cobrados
-  const tenantsCobraveis = tenants.filter((t) => t.interno !== true);
+  // ambientes internos não são cobrados; excluídos/inativos não aparecem em nenhum select
+  const tenantsSelecionaveis = tenants.filter((t) => t.status !== "excluido" && t.isActive !== false);
+  const tenantsCobraveis = tenantsSelecionaveis.filter((t) => t.interno !== true);
 
   return (
     <Card>
@@ -1205,11 +1208,13 @@ function CardPromocoes({ tenants, produtos }: { tenants: TenantOption[]; produto
                     <SelectValue placeholder="Selecione um ambiente" />
                   </SelectTrigger>
                   <SelectContent>
-                    {tenants.map((t) => (
-                      <SelectItem key={t.id} value={t.id.toString()}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
+                    {tenants
+                      .filter((t) => t.status !== "excluido" && t.isActive !== false)
+                      .map((t) => (
+                        <SelectItem key={t.id} value={t.id.toString()}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

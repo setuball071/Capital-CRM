@@ -2035,6 +2035,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== AUTH ROUTES =====
 
+  // SP1 — aplica o limite de usuários do plano do ambiente. Ambiente interno ou
+  // sem plano/limite = liberado. Retorna ok=false quando já está no teto.
+  async function checarLimiteUsuarios(
+    tenantId: number,
+  ): Promise<{ ok: boolean; limite?: number; atual?: number; plano?: string }> {
+    const [tenant] = (await db.execute(sql`SELECT interno FROM tenants WHERE id = ${tenantId}`)).rows as any[];
+    if (!tenant || tenant.interno === true) return { ok: true };
+    const [row] = (await db.execute(sql`
+      SELECT p.max_usuarios, p.nome FROM subscriptions s JOIN planos p ON p.id = s.plano_id WHERE s.tenant_id = ${tenantId}
+    `)).rows as any[];
+    if (!row || row.max_usuarios == null) return { ok: true };
+    const [cnt] = (await db.execute(sql`SELECT COUNT(*)::int AS n FROM user_tenants WHERE tenant_id = ${tenantId}`)).rows as any[];
+    const atual = Number(cnt.n);
+    return { ok: atual < Number(row.max_usuarios), limite: Number(row.max_usuarios), atual, plano: row.nome };
+  }
+
   // Create user with role-based permissions:
   // - admin: can create any user
   // - atendimento: can create any user EXCEPT admin
@@ -2085,6 +2101,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const existingUser = await storage.getUserByEmail(email);
         if (existingUser) {
           return res.status(400).json({ message: "Login já cadastrado" });
+        }
+
+        // SP1 — aplica o limite de usuários do plano do ambiente atual
+        const tenantAlvo = (req as any).tenantId;
+        if (tenantAlvo) {
+          const limite = await checarLimiteUsuarios(tenantAlvo);
+          if (!limite.ok) {
+            return res.status(400).json({
+              message: `O plano ${limite.plano} permite até ${limite.limite} usuários (você já tem ${limite.atual}). Faça upgrade para adicionar mais.`,
+            });
+          }
         }
 
         // Hash password
@@ -30948,11 +30975,12 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   app.get("/api/admin/tenants-without-subscription", requireAuth, async (req: any, res) => {
     if (!req.user?.isMaster) return res.status(403).json({ message: "Acesso restrito ao master" });
     try {
+      // Só ambientes existentes e ativos podem receber assinatura (exclui os soft-deletados/inativos)
       const rows = await db.execute(sql`
         SELECT t.id, t.name, t.key
         FROM tenants t
         LEFT JOIN subscriptions s ON s.tenant_id = t.id
-        WHERE s.id IS NULL
+        WHERE s.id IS NULL AND t.status <> 'excluido' AND t.is_active = true
         ORDER BY t.name
       `);
       res.json(rows.rows);
