@@ -115,7 +115,7 @@ button.btn-pdf:hover { background: #5a32a3; }
 <body>
 <div class="container">
   <h1>Simulador de Margem Consignavel - SIAPE</h1>
-  <p class="sub">Arraste o contracheque (PDF) aqui e o calculo das 3 margens (35% emprestimo + 5% cartao consignado + 5% cartao beneficio) e feito automaticamente.</p>
+  <p class="sub">Arraste o contracheque (PDF) aqui e o calculo das 3 margens (40% emprestimo + 5% cartao consignado + 5% cartao beneficio) e feito automaticamente.</p>
 
   <div class="card">
     <div class="row" style="align-items:flex-end;">
@@ -191,7 +191,7 @@ button.btn-pdf:hover { background: #5a32a3; }
       <h2 style="margin-top:0;color:#1f4e78;">Descontos Extraidos</h2>
       <table id="tableDesc">
         <thead>
-          <tr><th style="width:22px;"></th><th>#</th><th>Discriminacao</th><th>Prazo</th><th>Valor</th><th>Consig 35%</th><th>Cart. Consig 5%</th><th>Cart. Benef 5%</th><th>Compuls. 70%</th><th style="width:90px;">Acoes</th></tr>
+          <tr><th style="width:22px;"></th><th>#</th><th>Discriminacao</th><th>Prazo</th><th>Valor</th><th>Consig 40%</th><th>Cart. Consig 5%</th><th>Cart. Benef 5%</th><th>Compuls. 70%</th><th style="width:90px;">Acoes</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -210,7 +210,7 @@ button.btn-pdf:hover { background: #5a32a3; }
     <h2 style="margin-top:0;color:#1f4e78;">Historico de Simulacoes</h2>
     <table id="tableHist">
       <thead>
-        <tr><th>Nome</th><th>Mes/Ano</th><th>Base</th><th>Consig 35% Livre</th><th>Cart Consig 5% Livre</th><th>Cart Benef 5% Livre</th><th>Acao</th></tr>
+        <tr><th>Nome</th><th>Mes/Ano</th><th>Base</th><th>Consig 40% Livre</th><th>Cart Consig 5% Livre</th><th>Cart Benef 5% Livre</th><th>Acao</th></tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -490,7 +490,7 @@ function classifyDesconto(nome, valor, vinculo, prazo) {
   if (up.includes('CARTAO CREDITO') || up.includes('CARTAO CREDIT')) cc = valor;
   if (up.includes('CARTAO BENEFICIO')) cb = valor;
 
-  // Consig 35%: only if not cart consig/benef
+  // Consig 40%: only if not cart consig/benef
   let consig = 0;
   if (cc === 0 && cb === 0) {
     if (rec) {
@@ -608,7 +608,7 @@ function renderResults() {
     if (!principal) {
       badge = '<span class="badge badge-skip">Duplicata (retroativo)</span>';
     } else if (cls.found) {
-      if (cls.in35) { badge = '<span class="badge badge-yes">Entra (35%)</span>'; defaultOn = true; }
+      if (cls.in35) { badge = '<span class="badge badge-yes">Entra (40%)</span>'; defaultOn = true; }
       else if (cls.in70) badge = '<span class="badge badge-skip">So 70%</span>';
       else badge = '<span class="badge badge-no">Nao entra</span>';
     }
@@ -645,7 +645,7 @@ function renderResults() {
   });
   const trTotR = document.createElement('tr');
   trTotR.className = 'total';
-  trTotR.innerHTML = '<td colspan="9" style="text-align:right;">TOTAL BASE 35% (automatica)</td><td class="num">' + formatBRL(base) + '</td><td></td>';
+  trTotR.innerHTML = '<td colspan="9" style="text-align:right;">TOTAL BASE 40% (automatica)</td><td class="num">' + formatBRL(base) + '</td><td></td>';
   tbRend.appendChild(trTotR);
   document.getElementById('totalBase').textContent = formatBRL(base);
 
@@ -893,7 +893,7 @@ window.removerHist = function(i) {
 
 function exportHistorico() {
   if (historico.length === 0) return;
-  const rows = [['Nome', 'Mes/Ano', 'Base Calculo', 'Consig 35% Livre', 'Cart Consig 5% Livre', 'Cart Benef 5% Livre']];
+  const rows = [['Nome', 'Mes/Ano', 'Base Calculo', 'Consig 40% Livre', 'Cart Consig 5% Livre', 'Cart Benef 5% Livre']];
   historico.forEach(h => {
     rows.push([h.nome, h.mesAno, h.base.toFixed(2).replace('.', ','), h.consig_livre.toFixed(2).replace('.', ','), h.cc_livre.toFixed(2).replace('.', ','), h.cb_livre.toFixed(2).replace('.', ',')]);
   });
@@ -1174,7 +1174,7 @@ function exportPDF() {
   doc.text('Descontos', 14, y);
   doc.autoTable({
     startY: y + 3,
-    head: [['#', 'Discriminacao', 'Prazo', 'Valor', 'Consig 35%', 'Cart 5%', 'Benef 5%', 'Comp 70%']],
+    head: [['#', 'Discriminacao', 'Prazo', 'Valor', 'Consig 40%', 'Cart 5%', 'Benef 5%', 'Comp 70%']],
     body: current.descontos.map((d, i) => {
       const res = classifyDesconto(d.discriminacao, d.valor, vinculo, d.prazo);
       return [i + 1, d.discriminacao, d.prazo ?? '', formatBRL(d.valor),
