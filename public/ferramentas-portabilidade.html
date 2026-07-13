@@ -2730,7 +2730,7 @@ function extrairContratos(texto, items) {
   const RE_PARCELA  = /^(\d+)\/(\d+)$/;
   const RE_DATA     = /^\d{2}\/\d{2}\/\d{4}/;
   const RE_MMYYYY   = /^\d{2}\/\d{4}$/;
-  const RE_CONTRATO = /^[\da-fA-F\-/]+$/;
+  const RE_CONTRATO = /^[A-Za-z0-9\-/.]+$/;
   const RE_SKIP     = /CARTAO CREDITO|CARTAO BENEFICIO|AMORT CARTAO/i;
 
   const S = {IDLE:0,RUB:1,SEQ:2,PRIOR:3,DATA:4,VALOR:5,PARCELA:6,INICIO:7,FIM:8};
@@ -2781,7 +2781,7 @@ function extrairContratos(texto, items) {
 
   // ── FALLBACK: texto concatenado (outros formatos de extrato) ───────
   if (results.length === 0) {
-    const RE_LINHA = /([\da-fA-F\-/]+)\s+\d{5}\s*-\s*(.+?)\s+\d+\s+\d+\s+\d{2}\/\d{2}\/\d{4}\s+[\d:]+\s+(\d+)\/(\d+)\s+R\$\s*([\d.,]+)\s+\d{2}\/\d{4}\s+\d{2}\/\d{4}/g;
+    const RE_LINHA = /([A-Za-z0-9\-/.]+)\s+\d{5}\s*-\s*(.+?)\s+\d+\s+\d+\s+\d{2}\/\d{2}\/\d{4}\s+[\d:]+\s+(\d+)\/(\d+)\s+R\$\s*([\d.,]+)\s+\d{2}\/\d{4}\s+\d{2}\/\d{4}/g;
     let m;
     while ((m = RE_LINHA.exec(texto)) !== null) {
       const rub = m[2].trim();
