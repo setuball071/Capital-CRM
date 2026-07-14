@@ -1702,6 +1702,9 @@ body { background: #F8F8FC !important; color: #111827 !important; }
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Enviar para Criador de Proposta
       </button>
+      <button onclick="simularEEnviarIA()" style="width:100%;padding:14px;font-size:14px;background:#6C2BD9;border:none;color:white;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(108,43,217,.3);display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;letter-spacing:.01em;">
+        ✨ Gerar Proposta com IA
+      </button>
       <button onclick="salvarParaDigitacao()" style="width:100%;padding:12px;font-size:13px;background:#fff;border:2px solid #6C2BD9;color:#6C2BD9;border-radius:8px;cursor:pointer;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         Salvar para Digitação
@@ -6824,7 +6827,12 @@ function enviarParaPropostaIA() {
   const base = _buildPropostaPayload();
   if (!base) return; // erro já alertado dentro de _buildPropostaPayload
 
-  const contratosAtuais = contratos.map(c => ({
+  // No refim, os contratos atuais são apenas os marcados para portar (igual _buildPropostaPayload)
+  const fonte = (typeof tipoPort !== 'undefined' && tipoPort === 'refim')
+    ? getContratosMarcados()
+    : contratos;
+
+  const contratosAtuais = fonte.map(c => ({
     banco:   c.banco || '',
     parcela: parseFloat(c.parcela) || 0,
     prazo:   parseInt(c.prazo) || 0,
@@ -6841,6 +6849,12 @@ function enviarParaPropostaIA() {
   } else {
     alert('O Gerador de Proposta IA está disponível dentro do CRM.');
   }
+}
+
+// Versão refim-aware do envio para o Gerador IA (espelha simularEEnviar)
+function simularEEnviarIA() {
+  if (typeof tipoPort !== 'undefined' && tipoPort !== 'refim') simular();
+  setTimeout(() => enviarParaPropostaIA(), 350);
 }
 
 function enviarParaProposta() {
