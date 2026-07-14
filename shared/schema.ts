@@ -1844,6 +1844,7 @@ export const MODULE_SUB_ITEMS = {
     { key: "simulador_amortizacao", label: "Simulador de Amortização" },
     { key: "simulador_portabilidade", label: "Simulador de Portabilidade" },
     { key: "calculadora_contracheque", label: "Cálculo de Contracheque" },
+    { key: "proposta_ia", label: "Gerador de Proposta IA" },
   ],
   modulo_roteiros: [
     { key: "convenios", label: "Convênios" },

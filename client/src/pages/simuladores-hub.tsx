@@ -3,9 +3,11 @@ import CalculatorPage from "@/pages/calculator";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
+import SimPropostaIa from "@/pages/sim-proposta-ia";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
+import type { ModuleName } from "@shared/schema";
 import { MatIcon } from "@/components/mat-icon";
 
 // Escuta postMessage do iframe do Simulador de Portabilidade e redireciona para o Criador de Proposta nativo
@@ -44,19 +46,25 @@ function IframeThemeSync({
 }
 
 // Ícones Material Symbols do design (Simuladores.dc.html → TAB_DEFS)
-const TABS = [
-  { id: "proposta", label: "Criador de Proposta", icon: "description" },
-  { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt" },
-  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart" },
-  { id: "amortizacao", label: "Amortização", icon: "trending_down" },
-  { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up" },
-  { id: "contracheque", label: "Contracheque", icon: "description" },
+const TABS_BASE = [
+  { id: "proposta", label: "Criador de Proposta", icon: "description", permKey: null },
+  { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt", permKey: null },
+  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart", permKey: null },
+  { id: "amortizacao", label: "Amortização", icon: "trending_down", permKey: null },
+  { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up", permKey: null },
+  { id: "contracheque", label: "Contracheque", icon: "description", permKey: null },
+  { id: "proposta-ia", label: "Gerador de Proposta - IA", icon: "auto_awesome", permKey: "proposta_ia" },
 ];
 
 export default function SimuladoresHub() {
   const [activeTab, setActiveTab] = useState("proposta");
   const { theme } = useTheme();
-  const { user } = useAuth();
+  const { user, hasSubItemAccess } = useAuth();
+
+  const TABS = TABS_BASE.filter((tab) => {
+    if (!tab.permKey) return true;
+    return hasSubItemAccess("modulo_simulador" as ModuleName, tab.permKey);
+  });
   const portabilidadeRef = useRef<HTMLIFrameElement>(null);
   const contrachequeRef = useRef<HTMLIFrameElement>(null);
 
@@ -177,6 +185,11 @@ export default function SimuladoresHub() {
           {/* Renda Fixa — native React */}
           <div style={{ display: activeTab === "renda-fixa" ? "block" : "none", height: "100%", overflow: "auto" }}>
             <CalculadoraRendaFixaPage />
+          </div>
+
+          {/* Gerador de Proposta IA — native React */}
+          <div style={{ display: activeTab === "proposta-ia" ? "block" : "none", height: "100%", overflow: "auto" }}>
+            <SimPropostaIa />
           </div>
 
           {/* Contracheque — iframe */}
