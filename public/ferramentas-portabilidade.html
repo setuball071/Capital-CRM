@@ -1873,10 +1873,15 @@ body { background: #F8F8FC !important; color: #111827 !important; }
 <!-- BRIDGE -->
 <!-- BRIDGE → PROPOSTA (fora do #resultado para funcionar mesmo com ele oculto) -->
 <div id="bridgeBtnWrap" style="display:none;margin-top:20px;text-align:center;padding-bottom:24px;">
-  <button onclick="enviarParaProposta()" style="background:#7C3AED;padding:11px 28px;font-size:13px;font-weight:600;border-radius:8px;border:none;color:#fff;cursor:pointer;box-shadow:0 2px 12px rgba(124,58,237,.3);font-family:inherit;">
-    📄 Enviar para o Criador de Proposta
-  </button>
-  <div style="font-size:11px;color:#6B7280;margin-top:6px;">Os dados serão preenchidos automaticamente na aba Criador de Proposta</div>
+  <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+    <button onclick="enviarParaProposta()" style="background:#7C3AED;padding:11px 28px;font-size:13px;font-weight:600;border-radius:8px;border:none;color:#fff;cursor:pointer;box-shadow:0 2px 12px rgba(124,58,237,.3);font-family:inherit;">
+      📄 Enviar para o Criador de Proposta
+    </button>
+    <button onclick="enviarParaPropostaIA()" style="background:#6C2BD9;padding:11px 28px;font-size:13px;font-weight:600;border-radius:8px;border:1px solid #6C2BD9;color:#fff;cursor:pointer;box-shadow:0 2px 12px rgba(108,43,217,.3);font-family:inherit;">
+      ✨ Gerar Proposta com IA
+    </button>
+  </div>
+  <div style="font-size:11px;color:#6B7280;margin-top:6px;">Os dados serão preenchidos automaticamente na aba escolhida</div>
 </div>
 
 <!-- HIDDEN STUBS -->
@@ -6810,6 +6815,32 @@ function _buildPropostaPayload() {
   }
 
   return { contratos: ctData, novas: nvData };
+}
+
+// ── Envia cotação para o Gerador de Proposta IA (aba nativa React) ──
+// Reaproveita o payload existente (parcelas/prazos) + enriquece com a ação de cada
+// contrato e o nome do cliente. Só faz sentido dentro do CRM (iframe).
+function enviarParaPropostaIA() {
+  const base = _buildPropostaPayload();
+  if (!base) return; // erro já alertado dentro de _buildPropostaPayload
+
+  const contratosAtuais = contratos.map(c => ({
+    banco:   c.banco || '',
+    parcela: parseFloat(c.parcela) || 0,
+    prazo:   parseInt(c.prazo) || 0,
+    acao:    c.acao || 'manter',
+    portar:  !!c.portar,
+  }));
+
+  const cliente = (document.getElementById('nomeCliente')?.value || '').trim();
+
+  const payload = { cliente, contratos: contratosAtuais, novas: base.novas };
+
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: 'CAPITAL_CRM_PROPOSTA_IA_FILL', payload }, '*');
+  } else {
+    alert('O Gerador de Proposta IA está disponível dentro do CRM.');
+  }
 }
 
 function enviarParaProposta() {

@@ -58,6 +58,7 @@ const TABS_BASE = [
 
 export default function SimuladoresHub() {
   const [activeTab, setActiveTab] = useState("proposta");
+  const [iaImportData, setIaImportData] = useState<any>(null);
   const { theme } = useTheme();
   const { user, hasSubItemAccess } = useAuth();
 
@@ -65,6 +66,18 @@ export default function SimuladoresHub() {
     if (!tab.permKey) return true;
     return hasSubItemAccess("modulo_simulador" as ModuleName, tab.permKey);
   });
+
+  // Recebe a cotação do Simulador de Portabilidade (iframe) e abre o Gerador de Proposta IA
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === "CAPITAL_CRM_PROPOSTA_IA_FILL" && event.data?.payload) {
+        setIaImportData(event.data.payload);
+        setActiveTab("proposta-ia");
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
   const portabilidadeRef = useRef<HTMLIFrameElement>(null);
   const contrachequeRef = useRef<HTMLIFrameElement>(null);
 
@@ -189,7 +202,7 @@ export default function SimuladoresHub() {
 
           {/* Gerador de Proposta IA — native React */}
           <div style={{ display: activeTab === "proposta-ia" ? "block" : "none", height: "100%", overflow: "auto" }}>
-            <SimPropostaIa />
+            <SimPropostaIa importData={iaImportData} onConsumed={() => setIaImportData(null)} />
           </div>
 
           {/* Contracheque — iframe */}

@@ -1,6 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTenant } from "@/components/tenant-theme-provider";
 import { MatIcon } from "@/components/mat-icon";
+
+interface ImportData {
+  cliente?: string;
+  contratos?: Array<{ banco?: string; parcela?: number; prazo?: number; acao?: string; portar?: boolean }>;
+  novas?: Array<{ parcela?: number; prazo?: number; troco?: number }>;
+}
+
+// Traduz a ação bruta do simulador (manter/quitar/amortizar + flag portar) para o rótulo do formulário
+function mapAcao(acao?: string, portar?: boolean): string {
+  if (acao === "quitar") return "Quitar";
+  if (acao === "amortizar") return portar ? "Amortizar e portar" : "Amortizar";
+  if (portar) return "Portar";
+  return "Manter";
+}
 
 interface ContratoAtual {
   id: number;
@@ -39,7 +53,13 @@ let _uid = 1;
 
 const ACOES = ["Portar", "Quitar", "Amortizar", "Amortizar e portar", "Manter"];
 
-export default function SimPropostaIa() {
+export default function SimPropostaIa({
+  importData,
+  onConsumed,
+}: {
+  importData?: ImportData | null;
+  onConsumed?: () => void;
+}) {
   const { logoUrl } = useTenant();
 
   const [cliente, setCliente] = useState("");
@@ -54,6 +74,36 @@ export default function SimPropostaIa() {
   const [gerando, setGerando] = useState(false);
   const [proposta, setProposta] = useState<PropostaGerada | null>(null);
   const [erro, setErro] = useState("");
+  const [importado, setImportado] = useState(false);
+
+  // Pré-preenche o formulário quando o Simulador de Portabilidade envia uma cotação
+  useEffect(() => {
+    if (!importData) return;
+
+    if (importData.cliente) setCliente(importData.cliente);
+
+    const atuais = (importData.contratos || []).map((c) => ({
+      id: _uid++,
+      banco: c.banco || "",
+      parcela: c.parcela ? fmtBRL(c.parcela) : "",
+      prazo: c.prazo ? `${c.prazo} meses` : "",
+      acao: mapAcao(c.acao, c.portar),
+    }));
+    if (atuais.length) setContratosAtuais(atuais);
+
+    const finais = (importData.novas || []).map((n) => ({
+      id: _uid++,
+      banco: "",
+      parcela: n.parcela ? fmtBRL(n.parcela) : "",
+      prazo: n.prazo ? `${n.prazo} meses` : "",
+    }));
+    if (finais.length) setContratosFinals(finais);
+
+    setImportado(true);
+    setProposta(null);
+    setErro("");
+    onConsumed?.();
+  }, [importData]);
 
   // ── contratos atuais ──
   const addAtual = () =>
@@ -357,6 +407,18 @@ tfoot td{padding:10px 12px;font-weight:700;color:#111;border-top:1px solid #E5E7
           </button>
         )}
       </div>
+
+      {/* ── Aviso de importação do simulador ── */}
+      {importado && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 8,
+          padding: "10px 14px", fontSize: 13, color: "#6C2BD9", marginBottom: 20,
+        }}>
+          <MatIcon name="sync_alt" size={16} />
+          Dados importados do Simulador de Portabilidade. Revise os campos, nomeie os bancos do cenário final e gere a proposta.
+        </div>
+      )}
 
       {/* ── Campo cliente ── */}
       <div style={{ marginBottom: 20 }}>
