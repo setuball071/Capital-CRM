@@ -57,7 +57,12 @@ const TABS_BASE = [
 ];
 
 export default function SimuladoresHub() {
-  const [activeTab, setActiveTab] = useState("proposta");
+  // ?tab=<id> abre direto na aba pedida (ex.: a Consulta manda ?tab=portabilidade
+  // ao levar os contratos marcados para o simulador em aba nova)
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabParam = new URLSearchParams(window.location.search).get("tab");
+    return tabParam && TABS_BASE.some((t) => t.id === tabParam) ? tabParam : "proposta";
+  });
   const [iaImportData, setIaImportData] = useState<any>(null);
   const { theme } = useTheme();
   const { user, hasSubItemAccess } = useAuth();

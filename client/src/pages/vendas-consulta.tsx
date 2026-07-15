@@ -282,11 +282,71 @@ export default function VendasConsulta() {
   const [agendamentoNota, setAgendamentoNota] = useState("");
   const [showObsDialog, setShowObsDialog] = useState(false);
 
-  // ─── Simular portabilidade (modal do design Capital Go) ──────────────────
-  const [simPortOpen, setSimPortOpen] = useState(false);
-  const [simPortBanco, setSimPortBanco] = useState("");
-  const [simPortPrazo, setSimPortPrazo] = useState("84");
-  const [simPortTaxa, setSimPortTaxa] = useState("1,80");
+  // ─── Simular portabilidade ───────────────────────────────────────────────
+  // Leva os contratos marcados para o simulador de portabilidade REAL, em aba nova.
+  // Handoff via localStorage (o simulador é um HTML legado em iframe e lê essa
+  // chave ao carregar; ver client/public/ferramentas-portabilidade.html).
+  const PORT_HANDOFF_KEY = "capitalgo_port_contratos";
+
+  const abrirSimuladorPortabilidade = () => {
+    const usaSiape = !!(siapeParcelas && siapeParcelas.length > 0);
+    const lista: Array<{
+      banco: string; numero_contrato: string; parcela: number;
+      prazo: number; prazo_total: number; taxa: number;
+    }> = [];
+
+    if (usaSiape) {
+      siapeSelecionados.forEach((idx) => {
+        const p = siapeParcelas![idx];
+        if (!p) return;
+        const prazo = Number(p.prazo_restante) || 0;
+        lista.push({
+          banco: String(p.banco || ""),
+          numero_contrato: "",
+          parcela: Number(p.valor) || 0,
+          prazo,
+          prazo_total: prazo, // a Consulta não tem as parcelas pagas → 0 pagas
+          taxa: parseFloat((taxasSiape[String(idx)] || "0").replace(",", ".")) || 0,
+        });
+      });
+    } else if (consultaData?.contratos) {
+      contratosSelecionados.forEach((idx) => {
+        const c = consultaData.contratos[idx];
+        if (!c) return;
+        const prazo = parseInt(String(c.parcelas_restantes || c.parcelasRestantes || 0)) || 0;
+        lista.push({
+          banco: String(c.banco || c.BANCO_DO_EMPRESTIMO || ""),
+          numero_contrato: String(c.numero_contrato || c.numeroContrato || ""),
+          parcela: parseCurrency(c.valor_parcela || c.valorParcela) || 0,
+          prazo,
+          prazo_total: prazo, // a Consulta não tem as parcelas pagas → 0 pagas
+          taxa: parseFloat((taxasContratos[idx] || "0").replace(",", ".")) || 0,
+        });
+      });
+    }
+
+    if (lista.length === 0) return;
+
+    try {
+      localStorage.setItem(
+        PORT_HANDOFF_KEY,
+        JSON.stringify({
+          cliente: consultaData?.clienteBase?.nome || "",
+          cpf: clienteCpf,
+          contratos: lista,
+          ts: Date.now(),
+        }),
+      );
+    } catch {
+      toast({
+        title: "Não foi possível abrir o simulador",
+        description: "O navegador bloqueou o armazenamento local.",
+        variant: "destructive",
+      });
+      return;
+    }
+    window.open("/simuladores?tab=portabilidade", "_blank");
+  };
 
   // ─── Dados Bancários manual (Maranhão) ───────────────────────────────────
   const [editandoBancario, setEditandoBancario] = useState(false);
@@ -1876,7 +1936,7 @@ export default function VendasConsulta() {
                           size="sm"
                           className="ml-auto h-8 gap-1.5"
                           disabled={selCount === 0}
-                          onClick={() => setSimPortOpen(true)}
+                          onClick={abrirSimuladorPortabilidade}
                           data-testid="button-simular-portabilidade"
                         >
                           <ArrowLeftRight className="h-3.5 w-3.5" />
@@ -2246,111 +2306,6 @@ export default function VendasConsulta() {
       </Dialog>
 
       {/* Modal Painel de Contato */}
-      {/* ── Modal Simular Portabilidade (Perfil do Cliente.dc.html) ────────── */}
-      <Dialog open={simPortOpen} onOpenChange={setSimPortOpen}>
-        <DialogContent className="max-w-[560px] rounded-2xl p-7">
-          {(() => {
-            const usaSiape = !!(siapeParcelas && siapeParcelas.length > 0);
-            let totalSaldo = 0;
-            let parcelaAtual = 0;
-            let selCount = 0;
-            if (usaSiape) {
-              siapeSelecionados.forEach((idx) => {
-                const p = siapeParcelas![idx];
-                if (!p) return;
-                selCount++;
-                parcelaAtual += p.valor || 0;
-                const tx = parseFloat(taxasSiape[String(idx)] || "0") || 0;
-                const saldo = tx > 0 ? calcularSaldoDevedorPrice(p.valor, tx, p.prazo_restante) ?? 0 : 0;
-                totalSaldo += saldo;
-              });
-            } else if (consultaData?.contratos) {
-              contratosSelecionados.forEach((idx) => {
-                const c = consultaData.contratos[idx];
-                if (!c) return;
-                selCount++;
-                const vp = parseCurrency(c.valor_parcela || c.valorParcela);
-                parcelaAtual += vp;
-                const tx = parseFloat(taxasContratos[idx] || "0") || 0;
-                const pr = parseInt(String(c.parcelas_restantes || c.parcelasRestantes || 0)) || 0;
-                const saldoCalc = tx > 0 ? calcularSaldoDevedorPrice(vp, tx, pr) : null;
-                totalSaldo += saldoCalc !== null ? saldoCalc : parseCurrency(c.saldo_devedor || c.saldoDevedor);
-              });
-            }
-            const prazoNum = parseInt(simPortPrazo, 10) || 1;
-            const taxaNum = (parseFloat((simPortTaxa || "0").replace(",", ".")) || 0) / 100;
-            const pmt = totalSaldo > 0
-              ? (taxaNum > 0 ? (totalSaldo * taxaNum) / (1 - Math.pow(1 + taxaNum, -prazoNum)) : totalSaldo / prazoNum)
-              : 0;
-            const economia = parcelaAtual - pmt;
-            const fieldLabel = "text-[11.5px] font-semibold text-muted-foreground mb-1";
-            return (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="text-[19px] font-bold">Simular portabilidade</DialogTitle>
-                  <DialogDescription className="text-[11.5px]">
-                    {selCount} contrato(s) selecionado(s) · {consultaData?.clienteBase?.nome || ""}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid grid-cols-2 gap-4 mb-1">
-                  <div>
-                    <p className={fieldLabel}>Banco de destino</p>
-                    <Select value={simPortBanco} onValueChange={setSimPortBanco}>
-                      <SelectTrigger className="h-[42px] rounded-lg"><SelectValue placeholder="Selecione o banco" /></SelectTrigger>
-                      <SelectContent>
-                        {["BRB", "INTER", "CAIXA", "C6 BANK", "SAFRA"].map((b) => (
-                          <SelectItem key={b} value={b}>{b}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <p className={fieldLabel}>Prazo (meses)</p>
-                    <Input className="h-[42px] rounded-lg" value={simPortPrazo} onChange={(e) => setSimPortPrazo(e.target.value)} inputMode="numeric" />
-                  </div>
-                  <div>
-                    <p className={fieldLabel}>Taxa (% a.m.)</p>
-                    <Input className="h-[42px] rounded-lg" value={simPortTaxa} onChange={(e) => setSimPortTaxa(e.target.value)} inputMode="decimal" />
-                  </div>
-                  <div>
-                    <p className={fieldLabel}>Valor total financiado</p>
-                    <div className="h-[42px] flex items-center rounded-lg border border-border px-3 text-sm font-bold bg-muted/50">
-                      {formatCurrency(totalSaldo)}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-6 rounded-xl border border-border bg-muted/50 px-5 py-4 mb-2">
-                  <div>
-                    <p className={fieldLabel}>Nova parcela estimada</p>
-                    <p className="text-[22px] font-bold">{formatCurrency(pmt || 0)}</p>
-                  </div>
-                  <div>
-                    <p className={fieldLabel}>Economia mensal</p>
-                    <p className="text-[22px] font-bold" style={{ color: economia >= 0 ? "#0F8A46" : "#C62828" }}>
-                      {(economia >= 0 ? "+ " : "- ") + formatCurrency(Math.abs(economia || 0))}
-                    </p>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" className="h-[42px]" onClick={() => setSimPortOpen(false)}>Cancelar</Button>
-                  <Button
-                    className="h-[42px]"
-                    onClick={() => {
-                      const resumo = `Portabilidade — ${consultaData?.clienteBase?.nome || ""}\n${selCount} contrato(s) · Saldo total ${formatCurrency(totalSaldo)}\nBanco destino: ${simPortBanco || "-"} · Prazo ${simPortPrazo}m · Taxa ${simPortTaxa}% a.m.\nNova parcela: ${formatCurrency(pmt || 0)} · Economia mensal: ${formatCurrency(economia || 0)}`;
-                      navigator.clipboard?.writeText(resumo).catch(() => {});
-                      toast({ title: "Cotação salva", description: "Resumo copiado para a área de transferência." });
-                      setSimPortOpen(false);
-                    }}
-                  >
-                    Salvar cotação
-                  </Button>
-                </DialogFooter>
-              </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={contatosModalOpen} onOpenChange={setContatosModalOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
