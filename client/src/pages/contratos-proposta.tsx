@@ -9,10 +9,11 @@ import {
   Building2, BadgePercent, CheckCircle2, AlertCircle, Loader2,
   User, MapPin, CreditCard, ImageIcon, TriangleAlert, Search, Eye,
   Landmark, Users, Flag, Sparkles, ArrowLeftRight, Coins, RotateCw,
-  Trash2, Plus,
+  Trash2, Plus, MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription,
@@ -391,6 +392,8 @@ export default function ContratosPropostaPage() {
   const [selectedContaIdx,      setSelectedContaIdx]      = useState<number | "manual" | null>(null);
   const [contaError,             setContaError]             = useState(false);
   const [showManualConfirm,      setShowManualConfirm]      = useState(false);
+  // Observação escrita na revisão (Conferência) — vai para o histórico da proposta
+  const [obsCadastro,            setObsCadastro]            = useState("");
 
   // ── Portabilidade em lote ────────────────────────────────────────────────────
   const [portContratos,    setPortContratos]    = useState<PortabilidadeContrato[]>([]);
@@ -938,6 +941,7 @@ export default function ContratosPropostaPage() {
         ade: data.ade || undefined,
         parceiroId: canSetParceiro && parceiroId ? parceiroId : undefined,
         reuseDocIds: reusedDocs.length ? reusedDocs.map((d) => d.id) : undefined,
+        observacao: obsCadastro.trim() || undefined, // vai para o histórico da proposta
         // Comissões calculadas a partir da tabela do Financeiro (não digitadas pelo usuário)
         commissionPercentage: selectedTabela?.pctEmpresa
           ? selectedTabela.pctEmpresa / 100
@@ -1145,7 +1149,10 @@ export default function ContratosPropostaPage() {
         };
       });
 
-      const _batchRes = await apiRequest("POST", "/api/contracts/proposals/batch", { proposals: proposalsBatch });
+      const _batchRes = await apiRequest("POST", "/api/contracts/proposals/batch", {
+        proposals: proposalsBatch,
+        observacao: obsCadastro.trim() || undefined, // vai para o histórico de cada proposta do lote
+      });
       const created: any[] = await _batchRes.json();
 
       // Upload dos anexos para cada proposta criada
@@ -4208,6 +4215,28 @@ export default function ContratosPropostaPage() {
                 onChange={(e) => handleDocFiles(e.target.files)}
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Observação da digitação — vale para todos os tipos de proposta */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Observações <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={obsCadastro}
+              onChange={(e) => setObsCadastro(e.target.value)}
+              placeholder="Alguma informação importante sobre esta digitação para o operacional? (ex: cliente pediu contato após 18h, documento enviado por WhatsApp...)"
+              rows={3}
+              className="resize-none"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              Fica registrada no histórico da proposta{(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? " (em todas as propostas do lote)" : ""}.
+            </p>
           </CardContent>
         </Card>
 
