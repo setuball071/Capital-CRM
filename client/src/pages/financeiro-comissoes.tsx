@@ -21,12 +21,14 @@ function tabFromLocation(location: string): string {
   return "contratos";
 }
 
-export default function FinanceiroComissoes() {
+// tabForcado: usado quando a tela é embutida fora de uma rota própria (ex.: o modal
+// do atalho "Tabelas" no cabeçalho, onde a URL não muda e tabFromLocation não serve).
+export default function FinanceiroComissoes({ tabForcado }: { tabForcado?: string } = {}) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const { theme } = useTheme();
   const { user } = useAuth();
   const [location] = useLocation();
-  const tab = tabFromLocation(location);
+  const tab = tabForcado || tabFromLocation(location);
 
   const { data: users } = useQuery<CRMUser[]>({
     queryKey: ["/api/users"],

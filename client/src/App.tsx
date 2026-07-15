@@ -70,6 +70,7 @@ import GestaoComercialHistoricoPage from "@/pages/gestao-comercial-historico";
 import MetasMensaisPage from "@/pages/gestao-comercial-metas-mensais";
 import MaterialApoioPage from "@/pages/material-apoio";
 import { MaterialApoioModal } from "@/components/material-apoio-modal";
+import { FinanceiroTabelasModal } from "@/components/financeiro-tabelas-modal";
 import FinanceiroComissoesPage from "@/pages/financeiro-comissoes";
 import ContratosListaPage from "@/pages/contratos-lista";
 import ContratosPropostaPage from "@/pages/contratos-proposta";
@@ -285,6 +286,7 @@ function Router() {
   const [location, navigate] = useLocation();
   const [modalAberto, setModalAberto] = useState(false);
   const [modalCategoria, setModalCategoria] = useState("");
+  const [tabelasModalAberto, setTabelasModalAberto] = useState(false);
 
   // Wait for auth to resolve before rendering any routes
   if (isLoading) {
@@ -324,20 +326,15 @@ function Router() {
     "--sidebar-width-icon": "3rem",
   };
 
-  const rotasDeVenda = ["/vendas/campanhas", "/vendas/atendimento", "/vendas/consulta", "/vendas/pipeline"];
-  const estaNaVenda = rotasDeVenda.some((r) => location.startsWith(r));
-
+  // Atalhos do cabeçalho abrem SEMPRE em modal, sem tirar o usuário da tela onde
+  // ele está. A tela cheia oficial é acessada pelo menu lateral.
   const handleAtalho = (categoria: string) => {
     if (categoria === "processos") {
       window.open("/material-apoio?categoria=processos", "_blank");
       return;
     }
-    if (estaNaVenda) {
-      setModalCategoria(categoria);
-      setModalAberto(true);
-    } else {
-      navigate(`/material-apoio?categoria=${categoria}`);
-    }
+    setModalCategoria(categoria);
+    setModalAberto(true);
   };
 
   return (
@@ -353,7 +350,7 @@ function Router() {
             <HeaderCpfSearch />
             <div className="flex items-center gap-2">
               {[
-                { key: "tabelas", label: "Tabelas", icon: "table_chart", onClick: () => navigate("/financeiro/tabelas") },
+                { key: "tabelas", label: "Tabelas", icon: "table_chart", onClick: () => setTabelasModalAberto(true) },
                 { key: "criativos", label: "Criativos", icon: "palette", onClick: () => handleAtalho("criativos") },
                 { key: "tutoriais", label: "Tutoriais", icon: "school", onClick: () => handleAtalho("tutoriais") },
               ].map((s) => (
@@ -640,6 +637,10 @@ function Router() {
         aberto={modalAberto}
         categoria={modalCategoria}
         onClose={() => setModalAberto(false)}
+      />
+      <FinanceiroTabelasModal
+        aberto={tabelasModalAberto}
+        onClose={() => setTabelasModalAberto(false)}
       />
       <UpdatesPopup />
       <AssistenteWidget />
