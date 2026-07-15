@@ -2474,6 +2474,24 @@ function parcelaPrice(pv, i, n) {
   return pv * i / (1 - Math.pow(1 + i, -n));
 }
 
+// Inverso do saldoPrice: descobre a taxa mensal implícita a partir do saldo devedor.
+// Equivale à função TAXA/RATE do Excel — não há forma fechada, então resolve por bisseção
+// (saldoPrice é monotonicamente decrescente em i, o que garante convergência).
+// Retorna a taxa em % a.m., ou 0 quando não há solução na faixa realista de consignado.
+function taxaFromSaldo(pmt, saldo, n) {
+  if (pmt <= 0 || saldo <= 0 || n <= 0) return 0;
+  // Com i→0 o saldo tende a pmt*n (máximo possível). Saldo acima disso exigiria taxa <= 0.
+  if (saldo >= pmt * n) return 0;
+  let lo = 0.0000001, hi = 0.10; // 0% a 10% a.m.
+  // Se nem a 10% a.m. o valor presente cai até o saldo informado, está fora da faixa de busca.
+  if (saldoPrice(pmt, hi, n) > saldo) return 0;
+  for (let k = 0; k < 80; k++) {
+    const mid = (lo + hi) / 2;
+    if (saldoPrice(pmt, mid, n) > saldo) lo = mid; else hi = mid;
+  }
+  return ((lo + hi) / 2) * 100;
+}
+
 // State com IDs únicos
 let nextMargemId = 1;
 let nextContratoId = 1;
@@ -3220,6 +3238,7 @@ function addContrato() {
     prazo_total:     0,
     taxa:            0,
     saldo:           0,
+    saldoManual:     false, // true = saldo digitado vira a âncora e a taxa passa a ser deduzida
     acao:            'manter',
     amort:           0,
     portar:          false,
@@ -3232,20 +3251,48 @@ function addContrato() {
 function updateContratoCalc(id) {
   const c = contratos.find(x => x.id === id);
   if (!c) return;
-  
-  // Calcula saldo APENAS se todos os valores forem válidos
-  if (c.parcela > 0 && c.taxa > 0 && c.prazo > 0) {
+
+  // Bidirecional: o campo digitado por último é a âncora e o outro é deduzido.
+  if (c.saldoManual) {
+    // Saldo é a âncora (valor real do banco): descobre a taxa a partir dele.
+    c.taxa = (c.parcela > 0 && c.saldo > 0 && c.prazo > 0)
+      ? taxaFromSaldo(c.parcela, c.saldo, c.prazo)
+      : 0;
+  } else if (c.parcela > 0 && c.taxa > 0 && c.prazo > 0) {
+    // Taxa é a âncora: calcula o saldo (comportamento original).
     c.saldo = saldoPrice(c.parcela, c.taxa / 100, c.prazo);
   } else {
     c.saldo = 0;
   }
-  
+
   const row = document.querySelector(`tr[data-id="${id}"]`);
   if (row) {
+    // Não sobrescreve o campo que o usuário está editando no momento
     const saldoCell = row.querySelector('[data-field="saldo"]');
-    if (saldoCell) saldoCell.textContent = fmt(c.saldo);
+    if (saldoCell && document.activeElement !== saldoCell) {
+      if (saldoCell.tagName === 'INPUT') saldoCell.value = c.saldo ? fmt(c.saldo) : '';
+      else saldoCell.textContent = fmt(c.saldo);
+    }
+
+    const taxaEl = row.querySelector('[data-k="taxa"]');
+    if (taxaEl && document.activeElement !== taxaEl) {
+      if (c.saldoManual) {
+        if (c.taxa > 0) {
+          taxaEl.value = fmtPct(c.taxa);
+          taxaEl.style.color = '#6C2BD9';
+          taxaEl.title = 'Taxa estimada a partir do saldo informado';
+        } else {
+          taxaEl.value = '';
+          taxaEl.style.color = '#DC2626';
+          taxaEl.title = 'Saldo incompatível com parcela e prazo — confira os valores';
+        }
+      } else {
+        taxaEl.style.color = '';
+        taxaEl.title = '';
+      }
+    }
   }
-  
+
   updateTotaisContratos();
 }
 
@@ -3623,7 +3670,7 @@ function renderContratos() {
         ${(c.prazo_total > 0) ? `<small style="color:#6C2BD9;font-size:10px;">${c.prazo_total - (c.prazo||0)} pagas</small>` : '<small style="color:#9CA3AF;font-size:10px;">informe o total</small>'}
       </td>
       <td><input data-id="${c.id}" data-k="taxa" value="${c.taxa ? fmtPct(c.taxa) : ''}" placeholder="1,80"></td>
-      <td class="text-right"><span class="muted" data-field="saldo">${fmt(c.saldo)}</span></td>
+      <td><input data-id="${c.id}" data-k="saldo" data-field="saldo" value="${c.saldo ? fmt(c.saldo) : ''}" placeholder="0,00" style="text-align:right;" title="Informe o saldo para descobrir a taxa automaticamente"></td>
       <td>
         <select data-id="${c.id}" data-k="acao">
           <option value="manter" ${(!c.acao || c.acao === 'manter') ? 'selected' : ''}>Manter</option>
@@ -3657,12 +3704,29 @@ function renderContratos() {
             atualizarSimuladorRefim();
           }
         });
+      } else if (el.dataset.k === 'saldo') {
+        // SALDO: ao ser digitado vira a âncora — a taxa passa a ser deduzida dele
+        el.addEventListener('blur', e => {
+          const cont = contratos.find(x => x.id === num(e.target.dataset.id));
+          if (cont) {
+            const v = num(e.target.value);
+            cont.saldo = v;
+            cont.saldoManual = v > 0; // saldo apagado devolve o controle para a taxa
+            e.target.value = v ? fmt(v) : '';
+            updateContratoCalc(cont.id);
+            renderConfigSeparado();
+            atualizarSimuladorRefim();
+          }
+        });
       } else if (el.dataset.k === 'taxa') {
         // TAXA: salva valor enquanto digita, mas calcula APENAS no blur
         el.addEventListener('input', e => {
           const cont = contratos.find(x => x.id === num(e.target.dataset.id));
           if (cont) {
             cont.taxa = num(e.target.value);
+            cont.saldoManual = false; // digitar a taxa devolve a âncora para ela
+            e.target.style.color = '';
+            e.target.title = '';
           }
         });
         el.addEventListener('blur', e => {
