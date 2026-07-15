@@ -303,7 +303,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         clientName, clientCpf, clientMatricula, clientConvenio,
         bank, product, tableId, contractValue, installmentValue, term,
         ade, commissionPercentage, corretorCommissionPercentage,
-        clientMeta, parceiroId, reuseDocIds,
+        clientMeta, parceiroId, reuseDocIds, observacao,
       } = req.body;
 
       if (!clientName || !clientCpf) {
@@ -373,12 +373,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         })
         .returning();
 
-      // Record initial history
+      // Record initial history (com a observação escrita na revisão, se houver)
+      const obsTxt = String(observacao || "").trim();
       await db.insert(proposalHistory).values({
         proposalId: proposal.id,
         toStatus: "CADASTRADA",
         action: "AVANCO",
-        notes: "Proposta cadastrada",
+        notes: obsTxt ? `Proposta cadastrada — ${obsTxt}` : "Proposta cadastrada",
         performedBy: user.id,
       });
 
@@ -661,7 +662,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
     try {
       const user = req.user!;
       const tenantId = req.tenantId!;
-      const { proposals: batch } = req.body;
+      const { proposals: batch, observacao } = req.body;
+      const obsBatch = String(observacao || "").trim();
 
       if (!Array.isArray(batch) || batch.length === 0) {
         return res.status(400).json({ message: "Nenhuma proposta no lote" });
@@ -744,7 +746,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           proposalId: proposal.id,
           toStatus: "CADASTRADA",
           action: "AVANCO",
-          notes: "Proposta cadastrada em lote",
+          notes: obsBatch ? `Proposta cadastrada em lote — ${obsBatch}` : "Proposta cadastrada em lote",
           performedBy: user.id,
         });
 
