@@ -6794,6 +6794,69 @@ document.addEventListener('DOMContentLoaded', function() {
   _fetchRulesFromAPI();
 });
 
+// ── Handoff: Consulta Individual → Simulador de Portabilidade ─────────────
+// A Consulta grava os contratos marcados em localStorage e abre este simulador
+// numa aba nova. Aqui a gente injeta e limpa a chave (uso único, não repete na
+// próxima visita). Mesmo padrão do import de PDF: push → render → recalcula.
+const PORT_HANDOFF_KEY = 'capitalgo_port_contratos';
+
+function carregarContratosDaConsulta() {
+  let payload = null;
+  try {
+    const raw = storage.getItem(PORT_HANDOFF_KEY);
+    if (!raw) return;
+    storage.removeItem(PORT_HANDOFF_KEY); // consome de uma vez só
+    payload = JSON.parse(raw);
+  } catch (e) { return; }
+
+  const lista = payload && Array.isArray(payload.contratos) ? payload.contratos : [];
+  if (lista.length === 0) return;
+
+  // Ignora handoff velho (mais de 5 min) — evita injetar ao reabrir a aba depois
+  if (payload.ts && (Date.now() - payload.ts) > 5 * 60 * 1000) return;
+
+  lista.forEach(c => {
+    contratos.push({
+      id:              nextContratoId++,
+      banco:           c.banco || '',
+      numero_contrato: c.numero_contrato || '',
+      parcela:         Number(c.parcela) || 0,
+      prazo:           Number(c.prazo) || 0,
+      prazo_total:     Number(c.prazo_total) || 0,
+      taxa:            Number(c.taxa) || 0,
+      saldo:           0,
+      acao:            'manter',
+      amort:           0,
+      portar:          true,
+      taxaPort:        1.30,
+      prazoPort:       48
+    });
+  });
+
+  renderContratos();
+  contratos.forEach(c => {
+    if (c.parcela > 0 && c.taxa > 0 && c.prazo > 0) updateContratoCalc(c.id);
+  });
+  updateTotaisContratos();
+
+  // Avisa o corretor de onde vieram (mesmo local de status do import de PDF)
+  const st = document.getElementById('pdfStatus');
+  if (st) {
+    st.style.color = '#10B981';
+    st.textContent = '✔ ' + lista.length + ' contrato(s) trazido(s) da Consulta'
+      + (payload.cliente ? ' — ' + payload.cliente : '');
+  }
+}
+
+// Dispara sozinho, independente do init principal — se alguma função de lá
+// falhar, o handoff não pode ser arrastado junto. Cobre também o caso da página
+// já estar carregada quando este script roda.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', carregarContratosDaConsulta);
+} else {
+  carregarContratosDaConsulta();
+}
+
 
 
 // ── BRIDGE: Simulador → Criador de Proposta ──────────────────────────────
