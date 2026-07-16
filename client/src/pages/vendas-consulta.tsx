@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearch } from "wouter";
+import { OportunidadePopup, type ObsOportunidade } from "@/components/oportunidade-popup";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -475,7 +476,7 @@ export default function VendasConsulta() {
   });
   const siapeParcelas = siapeParcelasData?.parcelas ?? null;
 
-  const { data: clienteObsData } = useQuery<{ id: number; observation: string; imported_at: string }[] | null>({
+  const { data: clienteObsData } = useQuery<ObsOportunidade[] | null>({
     queryKey: ["/api/client-observations", clienteCpf],
     enabled: !!clienteCpf,
     retry: false,
@@ -487,6 +488,19 @@ export default function VendasConsulta() {
       return res.json();
     },
   });
+
+  // Oportunidade vinda do corte de base — a query já ordena por imported_at DESC,
+  // então o find pega a mais recente. Popup abre ao carregar a ficha; observação
+  // comum não abre nada (segue no botão ℹ️).
+  const oportunidade = clienteObsData?.find((o) => o.categoria === "oportunidade") ?? null;
+  const [oportOpen, setOportOpen] = useState(false);
+  const oportVistaRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (oportunidade && oportVistaRef.current !== clienteCpf) {
+      oportVistaRef.current = clienteCpf;
+      setOportOpen(true);
+    }
+  }, [oportunidade, clienteCpf]);
 
   const parseCurrency = (value: string | number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -2304,6 +2318,11 @@ export default function VendasConsulta() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Oportunidade do corte de base — abre ao carregar a ficha */}
+      {oportOpen && oportunidade && (
+        <OportunidadePopup obs={oportunidade} onClose={() => setOportOpen(false)} />
+      )}
 
       {/* Modal Painel de Contato */}
       <Dialog open={contatosModalOpen} onOpenChange={setContatosModalOpen}>
