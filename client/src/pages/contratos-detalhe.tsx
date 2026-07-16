@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import {
@@ -442,6 +442,22 @@ export default function ContratosDetalhePage() {
     },
     onError: (e: any) => toast({ title: "Falha ao excluir", description: e.message, variant: "destructive" }),
   });
+
+  // ESC volta para a lista — mas só quando não há nada aberto para o ESC fechar
+  // primeiro (diálogo/menu, campo em edição, ou o cursor dentro de um input).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]')) return;
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
+      if (editField !== null) { setEditField(null); return; }
+      setLocation("/contratos");
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [editField, setLocation]);
 
   if (isLoading) {
     return (
