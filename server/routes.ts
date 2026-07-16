@@ -15464,11 +15464,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
   );
 
   // In-memory job store for async imports
+  // Job store em memória compartilhado pelos imports assíncronos (higienizados e
+  // observações por CPF). O polling de ambos é o GET /api/vendas/import-job/:jobId.
   const importJobs = new Map<string, {
     status: "processing" | "done" | "error";
     progress: number;
     total: number;
-    result?: { imported: number; updated: number; ignored: number; removedByPortfolio: number; campaignId: number; nomeCampanha: string };
+    result?:
+      | { imported: number; updated: number; ignored: number; removedByPortfolio: number; campaignId: number; nomeCampanha: string }
+      | { imported: number; skipped: number; errors: number; batchId: string };
     error?: string;
   }>();
 
@@ -30329,8 +30333,11 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const tenantId = req.tenantId!;
       const cpf = req.params.cpf.replace(/[^0-9]/g, "");
       if (!cpf) return res.status(400).json({ message: "CPF inválido" });
+      // categoria/etiqueta/dados alimentam o popup de oportunidade na ficha.
+      // O 404 quando vazio é mantido de propósito: vendas-consulta.tsx e
+      // consulta-cliente.tsx já tratam 404 → null; devolver [] quebraria os dois.
       const result = await db.execute(sql`
-        SELECT id, cpf, observation, imported_at
+        SELECT id, cpf, observation, imported_at, filename, categoria, etiqueta, dados
         FROM client_observations
         WHERE tenant_id = ${tenantId}
           AND REGEXP_REPLACE(cpf, '[^0-9]', '', 'g') = ${cpf}
@@ -30371,73 +30378,103 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       // Strip UTF-8 BOM if present
       content = content.replace(/^\uFEFF/, "");
 
-      const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-
-      if (lines.length === 0) {
-        return res.status(400).json({ message: "Arquivo vazio" });
+      // Papa Parse: auto-detecta ; ou , e trata aspas escapadas e quebra de linha
+      // dentro do campo (o parser manual anterior corrompia esses casos).
+      // dynamicTyping:false é obrigatório — os números do corte vêm com PONTO
+      // decimal (3403.43); qualquer conversão automática os corromperia.
+      const parsed = Papa.parse(content, {
+        header: true,
+        skipEmptyLines: true,
+        delimiter: "",
+        dynamicTyping: false,
+      });
+      const linhas = (parsed.data || []) as Record<string, string>[];
+      if (linhas.length === 0) {
+        return res.status(400).json({ message: "Arquivo vazio ou inválido" });
       }
 
-      // Auto-detect delimiter: semicolon (Brazilian Excel) or comma
-      const firstLine = lines[0];
-      const delimiter = (firstLine.split(";").length >= firstLine.split(",").length) ? ";" : ",";
+      // Normaliza header: sem acento, sem BOM, maiúsculo
+      const normH = (h: string) =>
+        (h || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/﻿/g, "").trim().toUpperCase();
 
-      // Detect header row
-      const header = firstLine.toLowerCase().split(delimiter).map(h => h.trim().replace(/"/g, "").replace(/\uFEFF/g, ""));
-      const cpfIdx = header.findIndex(h => h === "cpf");
-      const obsIdx = header.findIndex(h => h === "observacao" || h === "observação");
-
-      if (cpfIdx === -1 || obsIdx === -1) {
-        return res.status(400).json({ message: "CSV deve ter colunas 'cpf' e 'observacao'" });
+      const headers = Object.keys(linhas[0]);
+      const hCpf = headers.find((h) => normH(h) === "CPF");
+      if (!hCpf) {
+        return res.status(400).json({ message: "O CSV precisa ter uma coluna 'cpf'" });
       }
+      // RESUMO (corte) tem prioridade; OBSERVACAO mantém o formato antigo funcionando
+      const hResumo = headers.find((h) => normH(h) === "RESUMO");
+      const hObs = headers.find((h) => normH(h) === "OBSERVACAO");
+      const hTexto = hResumo || hObs;
+      const hEtiqueta = headers.find((h) => normH(h) === "OPORTUNIDADE");
 
-      // Generate a unique batch ID for this import
+      // Colunas já consumidas em campos próprios — não repetir no jsonb
+      const CONTROLE = new Set(
+        [normH(hCpf), hTexto ? normH(hTexto) : "", hEtiqueta ? normH(hEtiqueta) : ""].filter(Boolean),
+      );
+
       const batchId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const filename = req.file.originalname || "arquivo.csv";
 
-      let imported = 0;
-      let skipped = 0;
-      let errors = 0;
+      // Responde já e processa em background — 43k linhas estouravam o timeout
+      const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      importJobs.set(jobId, { status: "processing", progress: 0, total: linhas.length });
+      res.json({ jobId, total: linhas.length });
 
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line) continue;
-
-        // Simple CSV split respecting quoted fields (uses auto-detected delimiter)
-        const cols: string[] = [];
-        let inQuote = false;
-        let cur = "";
-        for (const ch of line) {
-          if (ch === '"') { inQuote = !inQuote; }
-          else if (ch === delimiter && !inQuote) { cols.push(cur.trim()); cur = ""; }
-          else { cur += ch; }
-        }
-        cols.push(cur.trim());
-
-        const rawCpf = (cols[cpfIdx] || "").replace(/"/g, "").trim();
-        const obs = (cols[obsIdx] || "").replace(/"/g, "").trim();
-        if (!rawCpf || !obs) { errors++; continue; }
-
-        const cpf = rawCpf.replace(/[^0-9]/g, "");
-        if (cpf.length < 11) { errors++; continue; }
-
+      setImmediate(async () => {
+        let imported = 0, skipped = 0, errors = 0, done = 0;
         try {
-          const insertResult = await db.execute(sql`
-            INSERT INTO client_observations (tenant_id, cpf, observation, imported_by, imported_at, batch_id, filename)
-            VALUES (${tenantId}, ${cpf}, ${obs}, ${userId}, NOW(), ${batchId}, ${filename})
-            ON CONFLICT (tenant_id, cpf, observation) DO NOTHING
-            RETURNING id
-          `);
-          if (insertResult.rows.length > 0) {
-            imported++;
-          } else {
-            skipped++;
-          }
-        } catch {
-          errors++;
-        }
-      }
+          for (const row of linhas) {
+            const cpfLinha = String(row[hCpf] || "").replace(/\D/g, "");
+            if (cpfLinha.length < 11) { errors++; done++; continue; }
 
-      res.json({ imported, skipped, errors, batchId });
+            const texto = hTexto ? String(row[hTexto] || "").trim() : "";
+            const etiqueta = hEtiqueta ? String(row[hEtiqueta] || "").trim() : "";
+
+            // Toda coluna desconhecida é preservada — corte novo funciona sem tocar no código
+            const dados: Record<string, string> = {};
+            for (const [h, v] of Object.entries(row)) {
+              const k = normH(h);
+              if (!k || CONTROLE.has(k)) continue;
+              const val = String(v ?? "").trim();
+              if (val) dados[k] = val;
+            }
+
+            if (!texto && !etiqueta && Object.keys(dados).length === 0) { errors++; done++; continue; }
+
+            // Só vira oportunidade se veio de corte (tem RESUMO ou OPORTUNIDADE)
+            const categoria = (hResumo && texto) || etiqueta ? "oportunidade" : "observacao";
+            const obsFinal = texto || etiqueta || "Oportunidade importada";
+
+            try {
+              const r = await db.execute(sql`
+                INSERT INTO client_observations
+                  (tenant_id, cpf, observation, imported_by, imported_at, batch_id, filename, categoria, etiqueta, dados)
+                VALUES
+                  (${tenantId}, ${cpfLinha}, ${obsFinal}, ${userId}, NOW(), ${batchId}, ${filename},
+                   ${categoria}, ${etiqueta || null}, ${JSON.stringify(dados)}::jsonb)
+                ON CONFLICT (tenant_id, cpf, observation) DO NOTHING
+                RETURNING id
+              `);
+              if (r.rows.length > 0) imported++; else skipped++;
+            } catch {
+              errors++;
+            }
+            done++;
+            if (done % 200 === 0) {
+              importJobs.set(jobId, { status: "processing", progress: done, total: linhas.length });
+            }
+          }
+          importJobs.set(jobId, {
+            status: "done", progress: done, total: linhas.length,
+            result: { imported, skipped, errors, batchId },
+          });
+          console.log(`[OBSERVACOES] Import ${jobId}: ${imported} novas, ${skipped} ja existiam, ${errors} erros`);
+        } catch (e: any) {
+          console.error("[OBSERVACOES] Import falhou:", e);
+          importJobs.set(jobId, { status: "error", progress: done, total: linhas.length, error: String(e?.message || e) });
+        }
+      });
     } catch (err: any) {
       res.status(500).json({ message: "Erro ao importar observações" });
     }
