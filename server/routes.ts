@@ -30378,14 +30378,19 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       // Strip UTF-8 BOM if present
       content = content.replace(/^\uFEFF/, "");
 
-      // Papa Parse: auto-detecta ; ou , e trata aspas escapadas e quebra de linha
-      // dentro do campo (o parser manual anterior corrompia esses casos).
+      // Detecta o delimitador pela PRIMEIRA linha (o header), não pela auto-detecção
+      // do Papa: o RESUMO vem cheio de vírgulas de decimal BR (R$ 88,25) e de listas
+      // (AGIBANK, EAGLE), então a auto-detecção contava vírgulas e escolhia ","
+      // errado — quebrava o "cpf;resumo" e o CPF não era encontrado (erro 400).
+      const primeiraLinha = content.split(/\r?\n/, 1)[0] || "";
+      const delimitador = primeiraLinha.includes(";") ? ";" : ",";
+
       // dynamicTyping:false é obrigatório — os números do corte vêm com PONTO
       // decimal (3403.43); qualquer conversão automática os corromperia.
       const parsed = Papa.parse(content, {
         header: true,
         skipEmptyLines: true,
-        delimiter: "",
+        delimiter: delimitador,
         dynamicTyping: false,
       });
       const linhas = (parsed.data || []) as Record<string, string>[];
