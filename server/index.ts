@@ -904,6 +904,19 @@ app.use((req, res, next) => {
             )
           `);
           await saasDb.execute(saasSql`CREATE INDEX IF NOT EXISTS idx_assinatura_hist_tenant ON assinatura_historico(tenant_id)`);
+          // Oportunidades por CPF (cortes de base) — estrutura na área de observações
+          await saasDb.execute(saasSql`
+            ALTER TABLE client_observations
+              ADD COLUMN IF NOT EXISTS categoria VARCHAR(30) NOT NULL DEFAULT 'observacao',
+              ADD COLUMN IF NOT EXISTS etiqueta  VARCHAR(50),
+              ADD COLUMN IF NOT EXISTS dados     JSONB DEFAULT '{}'::jsonb
+          `);
+          // A leitura por CPF normaliza a coluna com REGEXP_REPLACE e hoje faz seq scan;
+          // índice funcional casa com essa expressão e evita varredura a cada ficha aberta.
+          await saasDb.execute(saasSql`
+            CREATE INDEX IF NOT EXISTS idx_client_obs_cpf_norm
+              ON client_observations (tenant_id, (REGEXP_REPLACE(cpf, '[^0-9]', '', 'g')))
+          `);
           // Seed dos planos legados (só se a tabela estiver vazia) — viram linhas editáveis
           const planosCountRow = (await saasDb.execute(saasSql`SELECT COUNT(*)::int AS n FROM planos`)).rows[0] as any;
           if (Number(planosCountRow.n) === 0) {

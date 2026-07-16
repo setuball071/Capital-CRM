@@ -3838,6 +3838,14 @@ export const clientObservations = pgTable("client_observations", {
   observation: text("observation").notNull(),
   importedBy: integer("imported_by").references(() => users.id),
   importedAt: timestamp("imported_at").notNull().defaultNow(),
+  // Já existiam no banco (migrations/client-observations-batch.sql) mas faltavam aqui:
+  // sem declarar, um drizzle-kit push tentaria dropá-las.
+  batchId: text("batch_id"),
+  filename: text("filename"),
+  // Oportunidades vindas dos cortes de base (ver docs/superpowers/specs/2026-07-15-oportunidades-por-cpf-design.md)
+  categoria: varchar("categoria", { length: 30 }).notNull().default("observacao"), // oportunidade | observacao
+  etiqueta: varchar("etiqueta", { length: 50 }), // OPORTUNIDADE do corte (PORT | CARTAO | CARTAO+PORT)
+  dados: jsonb("dados").default({}), // demais colunas do corte, genéricas
 });
 
 export const insertClientObservationSchema = createInsertSchema(clientObservations).omit({
