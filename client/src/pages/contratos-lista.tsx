@@ -61,6 +61,17 @@ function consultaBadgeCls(hours: number): string {
   return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
 }
 
+// ─── Parcela exibida na portabilidade ────────────────────────────────────────
+// Enquanto não há ADE de refin, quem o cliente paga é a parcela do contrato de
+// origem — a parcela final só passa a valer depois que o refin sai.
+function parcelaExibida(p: any): { value: any; original: boolean } {
+  const orig = p.clientMeta?.parcelaOriginal;
+  if (p.product === "PORTABILIDADE" && !p.adeRefin && orig != null && orig !== "") {
+    return { value: String(orig), original: true };
+  }
+  return { value: p.installmentValue, original: false };
+}
+
 // ─── Paleta compartilhada entre badges e caixas de fase ──────────────────────
 
 // Tons EXATOS do design (Contratos.dc.html → toneColors): success/warning/info/danger
@@ -1082,7 +1093,7 @@ export default function ContratosListaPage() {
     corretor: (p) => (p.vendorName || "").toLowerCase(),
     tipo: (p) => (p.product || "").toLowerCase(),
     banco: (p) => (p.bank || "").toLowerCase(),
-    parcela: (p) => parseFloat(p.installmentValue || "0") || 0,
+    parcela: (p) => parseFloat(parcelaExibida(p).value || "0") || 0, // ordena pelo valor que está na tela
     contrato: (p) => parseFloat(p.contractValue || "0") || 0,
     ade: (p) => (p.ade || "").toLowerCase(),
     parceiro: (p) => (p.parceiroNome || "").toLowerCase(),
@@ -1123,7 +1134,7 @@ export default function ContratosListaPage() {
         p.vendorName || "",
         PRODUCT_LABEL[p.product] || p.product || "",
         p.bank || "",
-        money(p.installmentValue),
+        money(parcelaExibida(p).value), // mesma regra da tela (port. sem ADE de refin = parcela original)
         money(p.contractValue),
         p.ade || "",
         statusLabel(p.status),
@@ -1587,7 +1598,16 @@ export default function ContratosListaPage() {
                   {showCorretorCol && <TableCell className="text-sm text-muted-foreground">{p.vendorName || "—"}</TableCell>}
                   <TableCell className="text-sm">{PRODUCT_LABEL[p.product] || p.product || "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.bank || "—"}</TableCell>
-                  <TableCell className="text-right text-sm">{formatMoney(p.installmentValue)}</TableCell>
+                  <TableCell className="text-right text-sm">
+                    {(() => {
+                      const pe = parcelaExibida(p);
+                      return (
+                        <span title={pe.original ? "Parcela do contrato de origem — a parcela final passa a ser exibida quando a ADE de refin for registrada" : undefined}>
+                          {formatMoney(pe.value)}
+                        </span>
+                      );
+                    })()}
+                  </TableCell>
                   <TableCell className="text-right text-sm font-semibold">{formatMoney(p.contractValue)}</TableCell>
                   <TableCell className="text-sm font-mono text-xs" onClick={(e) => e.stopPropagation()}>
                     <div className="flex flex-col items-start gap-0.5">
