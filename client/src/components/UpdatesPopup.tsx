@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { RichText } from "@/components/rich-text";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 
@@ -66,11 +67,11 @@ export function UpdatesPopup() {
     <>
       <Dialog open modal>
         <DialogContent
-          className="max-w-lg [&>button:last-child]:hidden"
+          className="max-w-4xl max-h-[88vh] flex flex-col [&>button:last-child]:hidden"
           onInteractOutside={e => e.preventDefault()}
           onEscapeKeyDown={e => e.preventDefault()}
         >
-          <DialogHeader>
+          <DialogHeader className="flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100">
@@ -86,36 +87,37 @@ export function UpdatesPopup() {
             </div>
           </DialogHeader>
 
-          <div className="space-y-4">
+          {/* Atualização densa não pode ser cortada: rola aqui dentro */}
+          <div className="space-y-4 overflow-y-auto flex-1 min-h-0 pr-1">
             <div>
-              <h3 className="font-semibold text-sm mb-1">{current.title}</h3>
+              <h3 className="font-semibold text-lg mb-1">{current.title}</h3>
               <Badge variant="outline" className="text-xs text-muted-foreground">
                 {format(new Date(current.published_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
               </Badge>
             </div>
 
-            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
-              <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-1.5">
-                <RefreshCw className="h-3.5 w-3.5 text-blue-600" />
+            <div className="rounded-md border border-border bg-muted/30 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground mb-2">
+                <RefreshCw className="h-4 w-4 text-blue-600" />
                 O que mudou
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.content_what}</p>
+              <RichText className="text-[15px] text-muted-foreground">{current.content_what}</RichText>
             </div>
 
-            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
-              <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-1.5">
-                <Settings className="h-3.5 w-3.5 text-amber-600" />
+            <div className="rounded-md border border-border bg-muted/30 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground mb-2">
+                <Settings className="h-4 w-4 text-amber-600" />
                 Como funciona
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.content_how}</p>
+              <RichText className="text-[15px] text-muted-foreground">{current.content_how}</RichText>
             </div>
 
-            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1">
-              <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-1.5">
-                <User className="h-3.5 w-3.5 text-green-600" />
+            <div className="rounded-md border border-border bg-muted/30 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground mb-2">
+                <User className="h-4 w-4 text-green-600" />
                 Impacto no seu dia a dia
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.content_impact}</p>
+              <RichText className="text-[15px] text-muted-foreground">{current.content_impact}</RichText>
             </div>
 
             {/* Image gallery */}

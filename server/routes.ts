@@ -29272,11 +29272,24 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             content: `Você é um comunicador interno de uma empresa de crédito consignado chamada Capital Go.
 Com base no texto técnico fornecido (output de um sistema de desenvolvimento),
 reescreva em linguagem simples e direta para os colaboradores da empresa.
+
+REGRA MAIS IMPORTANTE: simplifique a LINGUAGEM, nunca o CONTEÚDO.
+- NÃO resuma, NÃO omita e NÃO agrupe informações do texto original. Todo ponto
+  relevante do texto de entrada precisa aparecer na saída.
+- Use quantos itens/parágrafos forem necessários. Não há limite de tamanho:
+  se o texto de entrada é longo e denso, a saída também será — e tudo bem.
+- Só descarte jargão técnico irrelevante para o usuário final (nomes de arquivo,
+  commits, detalhes de implementação). O QUE mudou para o usuário, sempre fica.
+
+FORMATAÇÃO: use Markdown simples para ficar legível —
+**negrito** para destacar o que importa e listas com "- " para enumerar itens.
+Uma ideia por item. Sem títulos (#) e sem tabelas.
+
 Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 {
-  "content_what": "O que foi atualizado (2-3 frases simples)",
-  "content_how": "Como funciona agora (passo a passo simples, máx 4 itens)",
-  "content_impact": "Como isso impacta seu dia a dia (1-2 frases diretas)"
+  "content_what": "O que foi atualizado — cubra TODAS as mudanças, uma por item",
+  "content_how": "Como funciona agora — o passo a passo completo de usar",
+  "content_impact": "Como isso impacta o dia a dia — o ganho prático de cada mudança"
 }`,
           },
           {
@@ -29285,7 +29298,8 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           },
         ],
         temperature: 0.4,
-        max_tokens: 1000,
+        // Alto de propósito: atualização densa não pode ser cortada no meio
+        max_tokens: 4000,
         response_format: { type: "json_object" },
       });
 

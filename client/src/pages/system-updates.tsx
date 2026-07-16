@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RichText } from "@/components/rich-text";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -376,15 +377,15 @@ export default function SystemUpdatesPage() {
                 <div className="px-4 pb-4 border-t border-border pt-3 space-y-2">
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-0.5">O que mudou</p>
-                    <p className="text-sm whitespace-pre-line">{u.content_what}</p>
+                    <RichText className="text-sm">{u.content_what}</RichText>
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-0.5">Como funciona</p>
-                    <p className="text-sm whitespace-pre-line">{u.content_how}</p>
+                    <RichText className="text-sm">{u.content_how}</RichText>
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-0.5">Impacto no dia a dia</p>
-                    <p className="text-sm whitespace-pre-line">{u.content_impact}</p>
+                    <RichText className="text-sm">{u.content_impact}</RichText>
                   </div>
                 </div>
               )}
@@ -395,7 +396,7 @@ export default function SystemUpdatesPage() {
 
       {/* Dialog criar / editar */}
       <Dialog open={openDialog} onOpenChange={open => { if (!open) { setOpenDialog(false); setEditingUpdate(null); setForm(EMPTY_FORM); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingUpdate ? "Editar Atualização" : "Nova Atualização"}</DialogTitle>
           </DialogHeader>
@@ -433,10 +434,10 @@ export default function SystemUpdatesPage() {
                 placeholder="Cole aqui o changelog técnico, descrição da tarefa, diff ou notas do sistema..."
                 value={form.rawInput}
                 onChange={e => setForm(p => ({ ...p, rawInput: e.target.value }))}
-                rows={4}
+                rows={10}
                 data-testid="textarea-update-raw"
               />
-              <p className="text-xs text-muted-foreground">A IA vai transformar isso em linguagem simples para os colaboradores</p>
+              <p className="text-xs text-muted-foreground">A IA traduz para linguagem simples sem resumir — pode colar o conteúdo completo</p>
             </div>
 
             <div className="space-y-1">
@@ -446,7 +447,7 @@ export default function SystemUpdatesPage() {
                 placeholder="Gerado pela IA ou escreva manualmente..."
                 value={form.contentWhat}
                 onChange={e => setForm(p => ({ ...p, contentWhat: e.target.value }))}
-                rows={2}
+                rows={8}
                 data-testid="textarea-update-what"
               />
             </div>
@@ -458,7 +459,7 @@ export default function SystemUpdatesPage() {
                 placeholder="Gerado pela IA ou escreva manualmente..."
                 value={form.contentHow}
                 onChange={e => setForm(p => ({ ...p, contentHow: e.target.value }))}
-                rows={2}
+                rows={8}
                 data-testid="textarea-update-how"
               />
             </div>
@@ -470,7 +471,7 @@ export default function SystemUpdatesPage() {
                 placeholder="Gerado pela IA ou escreva manualmente..."
                 value={form.contentImpact}
                 onChange={e => setForm(p => ({ ...p, contentImpact: e.target.value }))}
-                rows={2}
+                rows={8}
                 data-testid="textarea-update-impact"
               />
             </div>
