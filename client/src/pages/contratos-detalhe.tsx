@@ -500,8 +500,12 @@ export default function ContratosDetalhePage() {
       default: return null;
     }
   })();
+  // Tabela inativa = vigência fechada no Financeiro: sai das opções de escolha,
+  // mas continua resolvendo pelo id nos contratos que já a usam.
+  const tabelaAtiva = (t: any) => !t?.vigenciaFim;
   // Tabelas do TIPO de operação + convênio (base para banco e tabela editáveis)
   const tabelasDoTipo = financeiroTabelas.filter((t: any) =>
+    tabelaAtiva(t) &&
     (!t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase()) &&
     (!tipoAlvoTabela || (t.tipo || "") === tipoAlvoTabela)
   );
@@ -511,7 +515,7 @@ export default function ContratosDetalhePage() {
   // Clonar: bancos cadastrados (do convênio) + permissão (consultor só clona as próprias)
   const cloneBanks = Array.from(new Set(
     financeiroTabelas
-      .filter((t: any) => !t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase())
+      .filter((t: any) => tabelaAtiva(t) && (!t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase()))
       .map((t: any) => t.banco as string)
       .filter(Boolean)
   ));
@@ -1499,6 +1503,7 @@ export default function ContratosDetalhePage() {
                 <SelectContent>
                   {financeiroTabelas
                     .filter((t: any) =>
+                      tabelaAtiva(t) &&
                       (!t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase()) &&
                       t.banco === cloneBank
                     )

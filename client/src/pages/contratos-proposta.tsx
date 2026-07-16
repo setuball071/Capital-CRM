@@ -772,11 +772,16 @@ export default function ContratosPropostaPage() {
     }
   }
 
-  /** Tabelas filtradas por convênio + tipo de contrato */
+  /** Tabela inativa = vigência fechada no Financeiro. Sai das opções de novas
+   *  propostas, mas continua resolvendo em contratos já feitos (selectedTabela). */
+  const tabelaAtiva = (t: any) => !t?.vigenciaFim;
+
+  /** Tabelas filtradas por convênio + tipo de contrato (só vigentes) */
   const tabelasDoTipo = (() => {
     const tipoAlvo = mapTipoContrato(contractType);
     const conv = selectedConvenio?.id || "";
     return financeiroTabelas.filter((t: any) => {
+      if (!tabelaAtiva(t)) return false;
       const okConv = !conv || (t.convenio || "").toUpperCase() === conv.toUpperCase();
       const okTipo = !tipoAlvo || (t.tipo || "") === tipoAlvo;
       return okConv && okTipo;
@@ -793,6 +798,7 @@ export default function ContratosPropostaPage() {
     if (!banco) return [];
     const conv = selectedConvenio?.id || "";
     return financeiroTabelas.filter((t: any) =>
+      tabelaAtiva(t) &&
       t.tipo === "Refin de Portabilidade" &&
       t.banco === banco &&
       (!t.convenio || t.convenio.toUpperCase() === conv.toUpperCase())

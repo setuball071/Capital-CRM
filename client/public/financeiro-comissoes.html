@@ -476,6 +476,11 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <select class="filter-select" id="tb-conv" onchange="renderTabelas()"><option value="">Todos convênios</option><option>SIAPE</option><option>INSS</option><option>Militar</option><option>Privado</option><option>Outro</option></select>
     <select class="filter-select" id="tb-tipo" onchange="renderTabelas()"><option value="">Todos os tipos</option><option>Novo</option><option>Portabilidade</option><option>Refin de Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
     <select class="filter-select" id="tb-prazo" onchange="renderTabelas()"><option value="">Todos os prazos</option></select>
+    <select class="filter-select" id="tb-situacao" onchange="renderTabelas()">
+      <option value="ativas">Ativas</option>
+      <option value="inativas">Inativas</option>
+      <option value="todas">Ativas + Inativas</option>
+    </select>
     <span class="count-chip" id="tb-count">—</span>
     <div class="filter-right" id="tb-master-btns">
       <button id="btn-excluir-sel-tab" class="btn btn-danger btn-sm" style="display:none" onclick="excluirSelecionadasTabelas()">🗑 Excluir (<span id="sel-count-tab">0</span>)</button>
@@ -2713,7 +2718,11 @@ function renderTabelas(){
   const conv=document.getElementById('tb-conv').value;
   const tipo=document.getElementById('tb-tipo').value;
   const prazo=document.getElementById('tb-prazo').value;
+  const situacao=document.getElementById('tb-situacao')?.value||'ativas';
   let list=TABELAS_REF.filter(t=>{
+    // Vigência fechada = tabela inativa (não some do sistema, só sai de uso)
+    if(situacao==='ativas'&&tabelaInativa(t))return false;
+    if(situacao==='inativas'&&!tabelaInativa(t))return false;
     if(busca&&!(t.nome.toLowerCase().includes(busca)||(t.banco||'').toLowerCase().includes(busca)||(t.convenio||'').toLowerCase().includes(busca)))return false;
     if(banco&&t.banco!==banco)return false;
     if(conv&&t.convenio!==conv)return false;
@@ -2835,18 +2844,21 @@ function renderTabelas(){
   tbody.innerHTML=list.map(t=>{
     const myRep=getMyRepasse(t.tipo);
     const pctCorr=pctCorretorGrupo(t.pctEmpresa,myRep);
-    if(isMaster){return`<tr>
+    const inat=tabelaInativa(t);
+    if(isMaster){return`<tr${inat?' style="opacity:.55"':''}>
       <td style="padding:6px 14px"><input type="checkbox" class="tab-chk" value="${t.id}" ${_selectedTabelas.has(t.id)?'checked':''} onchange="toggleTabelaSelecionada('${t.id}',this.checked)" style="cursor:pointer;width:15px;height:15px"></td>
       <td style="color:var(--muted);font-size:12px">${t.banco||'—'}</td>
-      <td class="td-name">${t.nome}</td>
+      <td class="td-name">${t.nome}${inat?' <span class="badge no-click b-cancelado" style="margin-left:6px">Inativa</span>':''}</td>
       <td>${tagConvenio(t.convenio)}</td><td>${tagTipo(t.tipo||'Novo')}</td>
       <td class="r">${t.prazo} meses</td>
       <td class="r" style="font-family:monospace;font-size:12px">${fmtCoef(t.coef)}</td>
       <td class="r"><span class="pct-empresa">${t.pctEmpresa}%</span></td>
       <td>${badgesFlags(t)}</td>
       <td><span class="pct-corretor">${Number(pctCorr).toFixed(2).replace('.',',')}%</span> <span style="font-size:11px;color:var(--muted)">(${myRep}% repasse)</span></td>
-      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtData(t.vigenciaInicio||t.criadoEm)}${(t.historico&&t.historico.length)?` <span title="${t.historico.length} alteração(ões)" style="color:var(--accent);cursor:default">●</span>`:''}</td>
-      <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="abrirModalTabela('${t.id}')">Editar</button> <button class="btn btn-danger btn-sm" onclick="excluirTabela('${t.id}')">Excluir</button></td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtData(t.vigenciaInicio||t.criadoEm)}${inat?` → ${fmtData(t.vigenciaFim)}`:''}${(t.historico&&t.historico.length)?` <span title="${t.historico.length} alteração(ões)" style="color:var(--accent);cursor:default">●</span>`:''}</td>
+      <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="abrirModalTabela('${t.id}')">Editar</button> ${inat
+        ?`<button class="btn btn-ghost btn-sm" title="Reabrir vigência" onclick="reativarTabela('${t.id}')">↩ Reativar</button>`
+        :`<button class="btn btn-ghost btn-sm" title="Fechar vigência (sai de uso, sem excluir)" onclick="inativarTabela('${t.id}')">⏸ Inativar</button>`} <button class="btn btn-danger btn-sm" onclick="excluirTabela('${t.id}')">Excluir</button></td>
     </tr>`;}
     else{return`<tr>
       <td style="color:var(--muted);font-size:12px">${t.banco||'—'}</td>
@@ -2982,6 +2994,25 @@ function salvarTabela(){
   }
   salvarDados();
   fecharModal('modal-tabela');toast('Tabela salva!');renderTabelas();
+}
+// Tabela inativa = vigência fechada. Continua no sistema (contratos antigos
+// seguem resolvendo a tabela), mas sai do simulador e de novas propostas.
+function tabelaInativa(t){return !!(t&&t.vigenciaFim);}
+function inativarTabela(id){
+  const t=tabelaById(id);if(!t)return;
+  if(!confirm(`Inativar "${t.nome}"?\n\nA vigência é fechada hoje: ela sai do simulador e das novas propostas, mas continua no sistema e nos contratos já feitos.`))return;
+  const agora=new Date().toISOString();
+  t.vigenciaFim=agora;
+  if(!t.historico)t.historico=[];
+  t.historico.push({vigenciaInicio:t.vigenciaInicio||t.criadoEm||agora,vigenciaFim:agora,banco:t.banco,nome:t.nome,convenio:t.convenio,tipo:t.tipo,prazo:t.prazo,coef:t.coef,pctEmpresa:t.pctEmpresa,srcc:t.srcc,remuneraMenos12:t.remuneraMenos12});
+  salvarDados();toast('Tabela inativada.');renderTabelas();
+}
+function reativarTabela(id){
+  const t=tabelaById(id);if(!t)return;
+  if(!confirm(`Reativar "${t.nome}"?\n\nEla volta a aparecer no simulador e nas novas propostas, com vigência reaberta a partir de hoje.`))return;
+  t.vigenciaFim=null;
+  t.vigenciaInicio=new Date().toISOString();
+  salvarDados();toast('Tabela reativada.');renderTabelas();
 }
 function excluirTabela(id){
   if(!confirm('Excluir esta tabela?'))return;
