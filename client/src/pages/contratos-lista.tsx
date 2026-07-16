@@ -5,6 +5,7 @@ import {
   Plus, Search, Filter, Briefcase, Eye,
   Settings, Trash2, Pencil, Check, X, Lock, MoreHorizontal,
   ListChecks, Hash, MessageSquare, RefreshCw, Copy, Download,
+  SlidersHorizontal, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -614,13 +615,31 @@ export default function ContratosListaPage() {
   const [filterProduct, setFilterProduct] = useState(() => sessionStorage.getItem("contratos_filterProduct") || "all");
   const [filterVendor, setFilterVendor] = useState(() => sessionStorage.getItem("contratos_filterVendor") || "all");
   const [filterPeriodo, setFilterPeriodo] = useState(() => sessionStorage.getItem("contratos_filterPeriodo") || "all");
+  const [filterBank, setFilterBank] = useState(() => sessionStorage.getItem("contratos_filterBank") || "all");
+  const [filterBancoOrigem, setFilterBancoOrigem] = useState(() => sessionStorage.getItem("contratos_filterBancoOrigem") || "all");
+  const [filterOrgao, setFilterOrgao] = useState(() => sessionStorage.getItem("contratos_filterOrgao") || "all");
+  const [filterVinculo, setFilterVinculo] = useState(() => sessionStorage.getItem("contratos_filterVinculo") || "all");
+  const [filterRegJuridico, setFilterRegJuridico] = useState(() => sessionStorage.getItem("contratos_filterRegJuridico") || "all");
+  const [filterEstado, setFilterEstado] = useState(() => sessionStorage.getItem("contratos_filterEstado") || "all");
+  const [filterCidade, setFilterCidade] = useState(() => sessionStorage.getItem("contratos_filterCidade") || "all");
+  const [filtersOpen, setFiltersOpen] = useState(() => sessionStorage.getItem("contratos_filtersOpen") === "1");
   useEffect(() => {
     const persist = (k: string, v: string) => v && v !== "all" ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k);
     persist("contratos_search", search);
     persist("contratos_filterProduct", filterProduct);
     persist("contratos_filterVendor", filterVendor);
     persist("contratos_filterPeriodo", filterPeriodo);
-  }, [search, filterProduct, filterVendor, filterPeriodo]);
+    persist("contratos_filterBank", filterBank);
+    persist("contratos_filterBancoOrigem", filterBancoOrigem);
+    persist("contratos_filterOrgao", filterOrgao);
+    persist("contratos_filterVinculo", filterVinculo);
+    persist("contratos_filterRegJuridico", filterRegJuridico);
+    persist("contratos_filterEstado", filterEstado);
+    persist("contratos_filterCidade", filterCidade);
+  }, [search, filterProduct, filterVendor, filterPeriodo, filterBank, filterBancoOrigem, filterOrgao, filterVinculo, filterRegJuridico, filterEstado, filterCidade]);
+  useEffect(() => {
+    sessionStorage.setItem("contratos_filtersOpen", filtersOpen ? "1" : "0");
+  }, [filtersOpen]);
   // Fase ativa persiste na sessão: ao abrir um contrato e voltar, mantém o filtro
   const [activePhase, setActivePhase] = useState<number | null>(() => {
     const s = sessionStorage.getItem("contratos_activePhase");
@@ -914,6 +933,14 @@ export default function ContratosListaPage() {
     if (filterPeriodo === "mes") { d.setDate(1); return d; }
     return null;
   })();
+  // Campos do cadastro usados nos filtros avançados (todos vêm em clientMeta)
+  const fBancoOrigem = (p: any) => String(p.clientMeta?.bancoOrigem || "").trim();
+  const fOrgao = (p: any) => String(p.clientMeta?.orgao || "").trim();
+  const fVinculo = (p: any) => String(p.clientMeta?.vinculo || "").trim();
+  const fRegJuridico = (p: any) => String(p.clientMeta?.regJuridico || "").trim();
+  const fEstado = (p: any) => String(p.clientMeta?.endereco?.estado || p.clientMeta?.uf || "").trim().toUpperCase();
+  const fCidade = (p: any) => String(p.clientMeta?.endereco?.cidade || "").trim();
+
   function matchesFilters(p: any): boolean {
     if (viewMode === "corretor" && p.vendorId !== user?.id) return false;
     const q = search.trim().toLowerCase();
@@ -929,7 +956,17 @@ export default function ContratosListaPage() {
     const matchVendor = filterVendor === "all" || String(p.vendorId) === String(filterVendor);
     const matchPeriodo = !periodoDesde || (p.createdAt != null && new Date(p.createdAt) >= periodoDesde);
     const matchProduct = filterProduct === "all" || p.product === filterProduct;
-    return !!(matchSearch && matchVendor && matchPeriodo && matchProduct);
+    const eq = (filtro: string, valor: string) => filtro === "all" || filtro === valor;
+    return !!(
+      matchSearch && matchVendor && matchPeriodo && matchProduct &&
+      eq(filterBank, String(p.bank || "").trim()) &&
+      eq(filterBancoOrigem, fBancoOrigem(p)) &&
+      eq(filterOrgao, fOrgao(p)) &&
+      eq(filterVinculo, fVinculo(p)) &&
+      eq(filterRegJuridico, fRegJuridico(p)) &&
+      eq(filterEstado, fEstado(p)) &&
+      eq(filterCidade, fCidade(p))
+    );
   }
   const cardBase = proposals.filter(matchesFilters);
 
@@ -988,10 +1025,36 @@ export default function ContratosListaPage() {
     return true;
   });
 
-  // Corretores distintos presentes nas propostas (para o filtro)
+  // ── Opções dos filtros: montadas a partir das próprias propostas ────────────
+  // (só aparece o que existe na base — nada de lista fixa que não bate com os dados)
+  const optionBase = viewMode === "corretor" ? proposals.filter((p) => p.vendorId === user?.id) : proposals;
+  const uniqOptions = (get: (p: any) => string, from: any[] = optionBase) =>
+    Array.from(new Set(from.map(get).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
   const vendorOptions = Array.from(
     new Map(proposals.filter((p) => p.vendorId).map((p) => [String(p.vendorId), p.vendorName || `#${p.vendorId}`])).entries()
   ).sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  const bankOptions = uniqOptions((p) => String(p.bank || "").trim());
+  const bancoOrigemOptions = uniqOptions(fBancoOrigem);
+  const orgaoOptions = uniqOptions(fOrgao);
+  const vinculoOptions = uniqOptions(fVinculo);
+  const regJuridicoOptions = uniqOptions(fRegJuridico);
+  const estadoOptions = uniqOptions(fEstado);
+  // Cidades limitadas ao estado escolhido (evita lista gigante e combinação impossível)
+  const cidadeOptions = uniqOptions(
+    fCidade,
+    filterEstado === "all" ? optionBase : optionBase.filter((p) => fEstado(p) === filterEstado)
+  );
+
+  const activeFilters = [
+    filterVendor, filterPeriodo, filterProduct, filterBank, filterBancoOrigem,
+    filterOrgao, filterVinculo, filterRegJuridico, filterEstado, filterCidade,
+  ].filter((v) => v !== "all").length + (search.trim() ? 1 : 0);
+  function limparFiltros() {
+    setSearch(""); setFilterVendor("all"); setFilterPeriodo("all"); setFilterProduct("all");
+    setFilterBank("all"); setFilterBancoOrigem("all"); setFilterOrgao("all");
+    setFilterVinculo("all"); setFilterRegJuridico("all"); setFilterEstado("all"); setFilterCidade("all");
+  }
 
   // Na caixa "Aguardando retorno CIP": ordena pela data da CIP — a mais antiga
   // (mais perto de vencer o prazo) no topo; sem data CIP vai pro fim.
@@ -1080,6 +1143,34 @@ export default function ContratosListaPage() {
     a.click();
     URL.revokeObjectURL(url);
   }
+  // Um campo do painel de filtros. Some da tela quando não há valor nenhum na base
+  // (ex.: nenhum cadastro com vínculo preenchido) — filtro vazio só polui.
+  function filterSelect({ label, value, onChange, options, allLabel }: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    options: [string, string][];
+    allLabel: string;
+  }) {
+    if (options.length === 0) return null;
+    return (
+      <div key={label} className="space-y-1">
+        <label className="block text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">{label}</label>
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className="h-[38px] w-full rounded-[9px] text-[13px]">
+            <SelectValue placeholder={allLabel} />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            <SelectItem value="all">{allLabel}</SelectItem>
+            {options.map(([v, l]) => (
+              <SelectItem key={v} value={v}>{l}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
   const sortHead = (key: string, label: string, cls = "") => (
     // Na caixa CIP a ordenação é fixa (por urgência) → cabeçalho não clicável
     <TableHead
@@ -1182,6 +1273,90 @@ export default function ContratosListaPage() {
         </div>
       </div>
 
+      {/* ── Filtros (retrátil) — valem para as caixas E para a tabela ─────── */}
+      <section className="rounded-2xl border border-border bg-card">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome, CPF, banco, ADE, corretor..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-[38px] rounded-[9px] bg-muted/50 text-[13.5px]"
+              data-testid="input-search"
+            />
+          </div>
+          <Button
+            variant="outline" size="sm"
+            className="h-[38px] gap-1.5 rounded-[9px]"
+            onClick={() => setFiltersOpen((o) => !o)}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filtros
+            {activeFilters > 0 && (
+              <span className="ml-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-bold text-background">
+                {activeFilters}
+              </span>
+            )}
+            {filtersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+          {activeFilters > 0 && (
+            <Button variant="ghost" size="sm" className="h-[38px] text-xs text-muted-foreground" onClick={limparFiltros}>
+              <X className="h-3.5 w-3.5 mr-1" /> Limpar
+            </Button>
+          )}
+        </div>
+
+        {filtersOpen && (
+          <div className="border-t border-border px-4 py-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {showCorretorCol && filterSelect({
+              label: "Corretor", value: filterVendor, onChange: setFilterVendor,
+              allLabel: "Todos os corretores",
+              options: vendorOptions.map(([id, name]) => [id, name] as [string, string]),
+            })}
+            {filterSelect({
+              label: "Data de cadastro", value: filterPeriodo, onChange: setFilterPeriodo,
+              allLabel: "Qualquer data",
+              options: [["hoje", "Cadastradas hoje"], ["7d", "Últimos 7 dias"], ["30d", "Últimos 30 dias"], ["mes", "Este mês"]],
+            })}
+            {filterSelect({
+              label: "Tipo de operação", value: filterProduct, onChange: setFilterProduct,
+              allLabel: "Todos os tipos",
+              options: Object.entries(PRODUCT_LABEL) as [string, string][],
+            })}
+            {filterSelect({
+              label: "Banco da proposta", value: filterBank, onChange: setFilterBank,
+              allLabel: "Todos os bancos", options: bankOptions.map((v) => [v, v] as [string, string]),
+            })}
+            {filterSelect({
+              label: "Banco de origem", value: filterBancoOrigem, onChange: setFilterBancoOrigem,
+              allLabel: "Todos os bancos de origem", options: bancoOrigemOptions.map((v) => [v, v] as [string, string]),
+            })}
+            {filterSelect({
+              label: "Órgão", value: filterOrgao, onChange: setFilterOrgao,
+              allLabel: "Todos os órgãos", options: orgaoOptions.map((v) => [v, v] as [string, string]),
+            })}
+            {filterSelect({
+              label: "Vínculo", value: filterVinculo, onChange: setFilterVinculo,
+              allLabel: "Todos os vínculos", options: vinculoOptions.map((v) => [v, v] as [string, string]),
+            })}
+            {filterSelect({
+              label: "Regime jurídico", value: filterRegJuridico, onChange: setFilterRegJuridico,
+              allLabel: "Todos os regimes", options: regJuridicoOptions.map((v) => [v, v] as [string, string]),
+            })}
+            {filterSelect({
+              label: "Estado do cliente", value: filterEstado,
+              onChange: (v: string) => { setFilterEstado(v); setFilterCidade("all"); },
+              allLabel: "Todos os estados", options: estadoOptions.map((v) => [v, v] as [string, string]),
+            })}
+            {filterSelect({
+              label: "Cidade do cliente", value: filterCidade, onChange: setFilterCidade,
+              allLabel: "Todas as cidades", options: cidadeOptions.map((v) => [v, v] as [string, string]),
+            })}
+          </div>
+        )}
+      </section>
+
       {/* ── Caixas de fases ───────────────────────────────────────────────── */}
       {phases.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -1255,65 +1430,8 @@ export default function ContratosListaPage() {
         </div>
       )}
 
-      {/* ── Card da tabela: busca + filtros (uma linha) + tabela ──────────── */}
+      {/* ── Card da tabela ───────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-border bg-card px-6 pt-5 pb-3 space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome, CPF, banco, ADE, corretor..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-[38px] rounded-[9px] bg-muted/50 text-[13.5px]"
-            data-testid="input-search"
-          />
-        </div>
-        {showCorretorCol && (
-          <Select value={filterVendor} onValueChange={setFilterVendor}>
-            <SelectTrigger className="w-[190px] h-[38px] rounded-[9px] text-[13.5px]">
-              <SelectValue placeholder="Todos os corretores" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os corretores</SelectItem>
-              {vendorOptions.map(([id, name]) => (
-                <SelectItem key={id} value={id}>{name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <Select value={filterPeriodo} onValueChange={setFilterPeriodo}>
-          <SelectTrigger className="w-[170px] h-[38px] rounded-[9px] text-[13.5px]">
-            <SelectValue placeholder="Qualquer data" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Qualquer data</SelectItem>
-            <SelectItem value="hoje">Cadastradas hoje</SelectItem>
-            <SelectItem value="7d">Últimos 7 dias</SelectItem>
-            <SelectItem value="30d">Últimos 30 dias</SelectItem>
-            <SelectItem value="mes">Este mês</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterProduct} onValueChange={setFilterProduct}>
-          <SelectTrigger className="w-[170px] h-[38px] rounded-[9px] text-[13.5px]" data-testid="select-filter-product">
-            <SelectValue placeholder="Todos os produtos" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os produtos</SelectItem>
-            {Object.entries(PRODUCT_LABEL).map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {(search || filterVendor !== "all" || filterPeriodo !== "all" || filterProduct !== "all") && (
-          <Button
-            variant="ghost" size="sm" className="h-[38px] text-xs text-muted-foreground"
-            onClick={() => { setSearch(""); setFilterVendor("all"); setFilterPeriodo("all"); setFilterProduct("all"); }}
-          >
-            <X className="h-3.5 w-3.5 mr-1" /> Limpar
-          </Button>
-        )}
-      </div>
-
       {/* ── Barra de ações em lote ─────────────────────────────────────────── */}
       {showSelectCol && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5">
@@ -1441,24 +1559,30 @@ export default function ContratosListaPage() {
                   <TableCell className="text-xs text-muted-foreground font-mono">{p.id}</TableCell>
                   <TableCell className="text-sm">{p.clientConvenio || "—"}</TableCell>
                   <TableCell className="text-sm font-mono text-xs" onClick={(e) => e.stopPropagation()}>
-                    <span className="group inline-flex items-center gap-1">
-                      {formatCpfMask(p.clientCpf || "")}
-                      {p.clientCpf && (
-                        <button title="Copiar CPF" onClick={() => copyText(`cpf-${p.id}`, (p.clientCpf || "").replace(/\D/g, ""))} className="text-muted-foreground hover:text-primary">
-                          {copiedKey === `cpf-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                        </button>
-                      )}
-                    </span>
+                    {p.clientCpf ? (
+                      <button
+                        type="button"
+                        title="Clique para copiar o CPF"
+                        onClick={() => copyText(`cpf-${p.id}`, (p.clientCpf || "").replace(/\D/g, ""))}
+                        className="group inline-flex items-center gap-1 rounded px-1 -mx-1 py-0.5 text-left hover:bg-muted hover:text-primary transition-colors"
+                      >
+                        {formatCpfMask(p.clientCpf)}
+                        {copiedKey === `cpf-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      </button>
+                    ) : "—"}
                   </TableCell>
                   <TableCell className="text-sm font-medium" onClick={(e) => e.stopPropagation()}>
-                    <span className="group inline-flex items-center gap-1">
-                      {p.clientName}
-                      {p.clientName && (
-                        <button title="Copiar nome" onClick={() => copyText(`nome-${p.id}`, p.clientName)} className="text-muted-foreground hover:text-primary">
-                          {copiedKey === `nome-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                        </button>
-                      )}
-                    </span>
+                    {p.clientName ? (
+                      <button
+                        type="button"
+                        title="Clique para copiar o nome"
+                        onClick={() => copyText(`nome-${p.id}`, p.clientName)}
+                        className="group inline-flex items-center gap-1 rounded px-1 -mx-1 py-0.5 text-left hover:bg-muted hover:text-primary transition-colors"
+                      >
+                        {p.clientName}
+                        {copiedKey === `nome-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      </button>
+                    ) : "—"}
                   </TableCell>
                   {showCorretorCol && <TableCell className="text-sm text-muted-foreground">{p.vendorName || "—"}</TableCell>}
                   <TableCell className="text-sm">{PRODUCT_LABEL[p.product] || p.product || "—"}</TableCell>
@@ -1466,23 +1590,29 @@ export default function ContratosListaPage() {
                   <TableCell className="text-right text-sm">{formatMoney(p.installmentValue)}</TableCell>
                   <TableCell className="text-right text-sm font-semibold">{formatMoney(p.contractValue)}</TableCell>
                   <TableCell className="text-sm font-mono text-xs" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="group inline-flex items-center gap-1">
-                        {p.ade || "—"}
-                        {p.ade && (
-                          <button title="Copiar ADE" onClick={() => copyText(`ade-${p.id}`, p.ade)} className="text-muted-foreground hover:text-primary">
-                            {copiedKey === `ade-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                          </button>
-                        )}
-                      </span>
+                    <div className="flex flex-col items-start gap-0.5">
+                      {p.ade ? (
+                        <button
+                          type="button"
+                          title="Clique para copiar a ADE"
+                          onClick={() => copyText(`ade-${p.id}`, p.ade)}
+                          className="group inline-flex items-center gap-1 rounded px-1 -mx-1 py-0.5 text-left hover:bg-muted hover:text-primary transition-colors"
+                        >
+                          {p.ade}
+                          {copiedKey === `ade-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        </button>
+                      ) : "—"}
                       {p.product === "PORTABILIDADE" && p.adeRefin && (
-                        <span className="group inline-flex items-center gap-1 text-muted-foreground">
+                        <button
+                          type="button"
+                          title="Clique para copiar a ADE de refin"
+                          onClick={() => copyText(`aderefin-${p.id}`, p.adeRefin)}
+                          className="group inline-flex items-center gap-1 rounded px-1 -mx-1 py-0.5 text-left text-muted-foreground hover:bg-muted hover:text-primary transition-colors"
+                        >
                           <span className="text-[10px] uppercase tracking-wide">refin</span>
                           {p.adeRefin}
-                          <button title="Copiar ADE de refin" onClick={() => copyText(`aderefin-${p.id}`, p.adeRefin)} className="hover:text-primary">
-                            {copiedKey === `aderefin-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                          </button>
-                        </span>
+                          {copiedKey === `aderefin-${p.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        </button>
                       )}
                     </div>
                   </TableCell>
