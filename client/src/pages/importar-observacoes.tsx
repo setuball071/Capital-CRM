@@ -44,6 +44,7 @@ export default function ImportarObservacoesPage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [progresso, setProgresso] = useState<{ feito: number; total: number } | null>(null);
 
   // ─── Histórico ───
   const [batches, setBatches] = useState<ImportBatch[]>([]);
@@ -78,6 +79,7 @@ export default function ImportarObservacoesPage() {
     }
     setIsImporting(true);
     setImportResult(null);
+    setProgresso(null);
     try {
       const formData = new FormData();
       formData.append("file", importFile);
@@ -90,15 +92,38 @@ export default function ImportarObservacoesPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Erro ao importar");
       }
-      const data: ImportResult = await res.json();
-      setImportResult(data);
-      toast({ title: `Importação concluída: ${data.imported} novas, ${data.skipped} já existiam` });
-      // Refresh history so the new batch appears
-      fetchHistory();
+      // O import é assíncrono: responde {jobId,total} e processa em background.
+      // Arquivo de corte tem dezenas de milhares de linhas — aqui a gente acompanha.
+      const { jobId, total } = await res.json();
+      setProgresso({ feito: 0, total });
+
+      await new Promise<void>((resolve, reject) => {
+        const timer = setInterval(async () => {
+          try {
+            const jr = await fetch(`/api/vendas/import-job/${jobId}`, { credentials: "include" });
+            if (!jr.ok) return; // job ainda não registrado — tenta de novo
+            const job = await jr.json();
+            setProgresso({ feito: job.progress || 0, total: job.total || total });
+            if (job.status === "done") {
+              clearInterval(timer);
+              setImportResult(job.result as ImportResult);
+              toast({ title: `Importação concluída: ${job.result.imported} novas, ${job.result.skipped} já existiam` });
+              fetchHistory();
+              resolve();
+            } else if (job.status === "error") {
+              clearInterval(timer);
+              reject(new Error(job.error || "Falha no processamento"));
+            }
+          } catch {
+            /* erro de rede pontual — o próximo tick tenta de novo */
+          }
+        }, 2000);
+      });
     } catch (err: any) {
       toast({ title: err.message || "Erro ao importar", variant: "destructive" });
     } finally {
       setIsImporting(false);
+      setProgresso(null);
     }
   };
 
@@ -185,8 +210,16 @@ export default function ImportarObservacoesPage() {
             <CardHeader>
               <CardTitle className="text-base">Upload do arquivo</CardTitle>
               <CardDescription>
-                CSV com colunas <code className="bg-muted px-1 rounded text-xs">cpf</code> e{" "}
-                <code className="bg-muted px-1 rounded text-xs">observacao</code>. Reimportar o mesmo arquivo não cria duplicatas.
+                CSV com a coluna <code className="bg-muted px-1 rounded text-xs">cpf</code> e o texto em{" "}
+                <code className="bg-muted px-1 rounded text-xs">observacao</code> ou{" "}
+                <code className="bg-muted px-1 rounded text-xs">RESUMO</code> (cortes de base).
+                Com <code className="bg-muted px-1 rounded text-xs">RESUMO</code> ou{" "}
+                <code className="bg-muted px-1 rounded text-xs">OPORTUNIDADE</code>, vira oportunidade e aparece num popup ao abrir o cliente.
+                <br />
+                <span className="text-xs">
+                  Qualquer outra coluna é preservada automaticamente e exibida como detalhe — não precisa avisar ninguém ao mudar o corte.
+                  Reimportar o mesmo arquivo não cria duplicatas.
+                </span>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -223,6 +256,20 @@ export default function ImportarObservacoesPage() {
                   <Download className="h-4 w-4 mr-2" />Baixar modelo CSV
                 </Button>
               </div>
+
+              {progresso && (
+                <div className="space-y-1.5 pt-1" data-testid="progresso-import-obs">
+                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all"
+                      style={{ width: `${progresso.total ? Math.round((progresso.feito / progresso.total) * 100) : 0}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Processando {progresso.feito.toLocaleString("pt-BR")} de {progresso.total.toLocaleString("pt-BR")} linhas...
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
