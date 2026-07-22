@@ -61,6 +61,31 @@ interface PropostaData {
 let _idSeq = 0;
 const nextId = () => ++_idSeq;
 
+// Resultado financeiro real da operação para o cliente:
+//   (o que pagaria hoje) − (o que pagará na proposta) + (troco recebido na mão)
+// Cada contrato entra com o SEU próprio prazo. A versão anterior usava
+// total × Math.min(prazos), assumindo que todos terminavam junto com o mais
+// curto — subestimava a dívida atual e quase sempre gerava resultado negativo.
+function calcResultadoFinanceiro(
+  contratos: ContratoRow[],
+  novas: NovaRow[],
+): number | null {
+  const linhasAt = contratos.filter(c => (parseFloat(c.parcela) || 0) > 0);
+  const linhasNv = novas.filter(n => (parseFloat(n.parcela) || 0) > 0);
+  if (!linhasAt.length || !linhasNv.length) return null;
+
+  // Exige prazo em toda linha que tem parcela — sem isso o total sai
+  // subestimado e pode inverter o sinal (o mesmo tipo de erro do Math.min).
+  const semPrazo = [...linhasAt, ...linhasNv].some(x => !(parseInt(x.prazo) > 0));
+  if (semPrazo) return null;
+
+  const pagoAtual = linhasAt.reduce((s, c) => s + parseFloat(c.parcela) * parseInt(c.prazo), 0);
+  const pagoNovo  = linhasNv.reduce((s, n) => s + parseFloat(n.parcela) * parseInt(n.prazo), 0);
+  const troco     = novas.reduce((s, n) => s + (parseFloat(n.troco) || 0), 0);
+
+  return pagoAtual - pagoNovo + troco;
+}
+
 // ── componente principal ────────────────────────────────────────────────
 export default function SimCriadorProposta() {
   const propCtx = useProposta();
@@ -318,11 +343,9 @@ export default function SimCriadorProposta() {
     const resItems: [string, string, "green" | "blue"][] = [];
     if (tAt && tNv && tAt - tNv > 0) resItems.push(["Economia mensal", fmtR(tAt - tNv), "green"]);
     if (tTroco > 0) resItems.push(["Troco total disponível", fmtR(tTroco), "blue"]);
-    const prazosAt = proposta.contratos.filter(c => parseInt(c.prazo)).map(c => parseInt(c.prazo));
-    const prazosNv = proposta.novas.filter(n => parseInt(n.prazo)).map(n => parseInt(n.prazo));
-    if (prazosAt.length && prazosNv.length && tAt && tNv) {
-      const diff = tAt * Math.min(...prazosAt) - tNv * Math.min(...prazosNv);
-      if (diff > 0) resItems.push(["Economia total estimada", fmtR(diff), "green"]);
+    const resFin = calcResultadoFinanceiro(proposta.contratos, proposta.novas);
+    if (resFin !== null && resFin > 0) {
+      resItems.push(["Resultado financeiro total", fmtR(resFin), "green"]);
     }
     if (resItems.length > 0) {
       doc.setFillColor(248, 248, 248); doc.roundedRect(ml, y, cw, resItems.length * 8 + 14, 2, 2, "F");
@@ -647,11 +670,7 @@ function PropostaVisual({
 
   const economia = totalAt && totalNv ? totalAt - totalNv : null;
 
-  const prazosAt = proposta.contratos.filter(c => parseInt(c.prazo)).map(c => parseInt(c.prazo));
-  const prazosNv = proposta.novas.filter(n => parseInt(n.prazo)).map(n => parseInt(n.prazo));
-  const econTotal = prazosAt.length && prazosNv.length && totalAt && totalNv
-    ? totalAt * Math.min(...prazosAt) - totalNv * Math.min(...prazosNv)
-    : null;
+  const econTotal = calcResultadoFinanceiro(proposta.contratos, proposta.novas);
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden shadow-md mt-2">
@@ -778,9 +797,9 @@ function PropostaVisual({
                 )}
                 {mostraEconTotal && (
                   <div className="text-center p-4">
-                    <div className="text-[10px] text-muted-foreground mb-1">Economia total est.</div>
+                    <div className="text-[10px] text-muted-foreground mb-1">Resultado financeiro total</div>
                     <div className="text-base font-semibold text-green-600 dark:text-green-400">{fmtR(econTotal!)}</div>
-                    <div className="inline-block text-[9px] font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full mt-1">No período</div>
+                    <div className="inline-block text-[9px] font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full mt-1">Economia + troco</div>
                   </div>
                 )}
               </div>
