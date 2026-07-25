@@ -15,6 +15,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -248,6 +249,7 @@ export default function AdminTenantsPage() {
   });
 
   const [newDomain, setNewDomain] = useState({ domain: "", isPrimary: false });
+  const [domainResult, setDomainResult] = useState<{ domain: string; cnameAlvo: string | null; warnings: string[] } | null>(null);
   const [domainError, setDomainError] = useState("");
   const [newUserAccess, setNewUserAccess] = useState({ userId: "", roleInTenant: "vendedor" });
 
@@ -380,15 +382,17 @@ export default function AdminTenantsPage() {
 
   const addDomainMutation = useMutation({
     mutationFn: async (data: { tenantId: number; domain: string; isPrimary: boolean }) => {
-      return apiRequest("POST", `/api/admin/tenants/${data.tenantId}/domains`, {
+      const res = await apiRequest("POST", `/api/admin/tenants/${data.tenantId}/domains`, {
         domain: data.domain,
         isPrimary: data.isPrimary,
       });
+      return (await res.json()) as { domain: string; cnameAlvo: string | null; warnings: string[] };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", selectedTenant?.id, "domains"] });
       setIsAddDomainOpen(false);
       setNewDomain({ domain: "", isPrimary: false });
+      setDomainResult(result);
       toast({ title: "Domínio adicionado com sucesso" });
     },
     onError: (error: Error) => {
@@ -1106,7 +1110,10 @@ export default function AdminTenantsPage() {
           <DialogHeader>
             <DialogTitle>Adicionar Domínio</DialogTitle>
             <DialogDescription>
-              Configure um domínio para este ambiente
+              Configure um domínio próprio para este ambiente.
+              {saasConfig?.railwayConfigured
+                ? " O registro no Railway (SSL) é automático — o alvo do CNAME aparece após adicionar."
+                : " Atenção: Railway API não configurada — o domínio será gravado, mas será preciso registrá-lo manualmente no painel do Railway."}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -1164,6 +1171,59 @@ export default function AdminTenantsPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Resultado ao adicionar domínio (mostra o CNAME pro cliente apontar) ===== */}
+      <Dialog open={!!domainResult} onOpenChange={(open) => { if (!open) setDomainResult(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              Domínio adicionado
+            </DialogTitle>
+            <DialogDescription>
+              Repasse ao cliente o registro de DNS abaixo para o domínio começar a funcionar com SSL.
+            </DialogDescription>
+          </DialogHeader>
+          {domainResult && (
+            <div className="space-y-4 text-sm">
+              <div className="rounded-md border p-4 space-y-1">
+                <p className="text-muted-foreground text-xs">Domínio</p>
+                <p className="font-mono">{domainResult.domain}</p>
+              </div>
+              {domainResult.cnameAlvo ? (
+                <div className="rounded-md border p-4 space-y-2">
+                  <p className="text-muted-foreground text-xs">O cliente deve criar um registro CNAME apontando para:</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-mono text-foreground break-all">{domainResult.cnameAlvo}</p>
+                    <Button variant="ghost" size="icon" onClick={() => copyText(domainResult.cnameAlvo || "", "CNAME")}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    O SSL é emitido automaticamente pelo Railway assim que o DNS propagar (pode levar alguns minutos).
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Alvo de CNAME não retornado — pegue o alvo no painel do Railway (Settings → Networking) após registrar o domínio.
+                </p>
+              )}
+              {domainResult.warnings.length > 0 && (
+                <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 space-y-1">
+                  {domainResult.warnings.map((w, i) => (
+                    <p key={i} className="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-1">
+                      <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" /> {w}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setDomainResult(null)}>Fechar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
