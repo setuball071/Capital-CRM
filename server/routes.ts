@@ -21358,7 +21358,29 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           })
           .returning();
 
-        res.status(201).json(result[0]);
+        // Registra no Railway para o SSL ser emitido (best-effort, igual ao wizard).
+        // A linha em tenant_domains já está gravada e é a fonte de verdade: se o
+        // Railway falhar ou não estiver configurado, devolvemos um aviso e o admin
+        // registra manualmente no painel — o vínculo domínio↔tenant não se perde.
+        let cnameAlvo: string | null = null;
+        const warnings: string[] = [];
+        try {
+          const { railwayConfigured, addCustomDomain } = await import("./railway");
+          if (railwayConfigured()) {
+            const created = await addCustomDomain(cleanDomain);
+            cnameAlvo = created.cnameAlvo;
+          } else {
+            warnings.push(
+              "Railway API não configurada (RAILWAY_API_TOKEN) — registre o domínio manualmente no painel do Railway para o SSL ser emitido.",
+            );
+          }
+        } catch (e: any) {
+          warnings.push(
+            `Railway: ${e?.message || "falha ao registrar domínio"} — registre manualmente no painel do Railway.`,
+          );
+        }
+
+        res.status(201).json({ ...result[0], cnameAlvo, warnings });
       } catch (error) {
         console.error("Add domain error:", error);
         res.status(500).json({ message: "Erro ao adicionar domínio" });
