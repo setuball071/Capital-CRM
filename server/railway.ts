@@ -52,6 +52,15 @@ export async function addCustomDomain(
   });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok || data.errors?.length) {
+    // A mensagem do topo costuma ser genérica ("Problem processing request"); o
+    // detalhe útil fica no corpo (extensions/path). Logamos tudo para diagnóstico.
+    console.error("[RAILWAY] customDomainCreate falhou:", {
+      httpStatus: res.status,
+      domain,
+      serviceId: process.env.RAILWAY_SERVICE_ID,
+      environmentId: process.env.RAILWAY_ENVIRONMENT_ID,
+      resposta: JSON.stringify(data).slice(0, 2000),
+    });
     const msg = data.errors?.[0]?.message || `Railway API falhou (HTTP ${res.status})`;
     throw new Error(msg);
   }
