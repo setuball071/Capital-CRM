@@ -9,6 +9,7 @@ import crypto from "crypto";
 import bcrypt from "bcrypt";
 import { db } from "./storage";
 import { sql } from "drizzle-orm";
+import { normalizeDomain } from "./tenant-middleware";
 
 export interface ProvisionInput {
   nome: string;
@@ -181,7 +182,14 @@ export async function provisionTenant(input: ProvisionInput): Promise<ProvisionR
       // Coberto pelo wildcard no Railway — resolve na hora, sem chamada de API
     }
   } else if (dominioTipo === "proprio" && input.dominioProprio) {
-    dominio = input.dominioProprio.toLowerCase().trim();
+    // Mesma normalização que o resolveTenant usa para casar o host (tira
+    // https://, www., porta e path). Sem isso, um "https://empresa.com.br/"
+    // digitado no wizard era gravado cru: nunca casava com o host da requisição
+    // e o Railway rejeitava o domínio ("Problem processing request").
+    dominio = normalizeDomain(input.dominioProprio);
+    if (!dominio.includes(".") || dominio.length < 4) {
+      throw new Error(`Domínio inválido: "${input.dominioProprio}"`);
+    }
     await db.execute(sql`
       INSERT INTO tenant_domains (tenant_id, domain, is_primary) VALUES (${tenantId}, ${dominio}, true)
     `);

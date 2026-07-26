@@ -580,7 +580,8 @@ export default function AdminTenantsPage() {
     wizard.adminNome.trim() !== "" &&
     wizard.adminEmail.trim() !== "";
   const wizardStep2Valid =
-    wizard.dominioTipo !== "proprio" || wizard.dominioProprio.trim() !== "";
+    wizard.dominioTipo !== "proprio" ||
+    (wizard.dominioProprio.trim() !== "" && validateDomain(wizard.dominioProprio) === "");
 
   const filteredTenants = tenants.filter((t) => {
     const st = tenantStatus(t);
@@ -1469,11 +1470,16 @@ export default function AdminTenantsPage() {
                           onChange={(e) => setWizard((w) => ({ ...w, dominioProprio: e.target.value }))}
                           placeholder="crm.empresadocliente.com.br"
                           data-testid="input-wizard-dominio-proprio"
+                          className={validateDomain(wizard.dominioProprio) ? "border-destructive" : ""}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          O cliente precisará apontar um CNAME do domínio para o servidor. O alvo será
-                          informado ao final do provisionamento.
-                        </p>
+                        {validateDomain(wizard.dominioProprio) ? (
+                          <p className="text-xs text-destructive">{validateDomain(wizard.dominioProprio)}</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            O cliente precisará apontar um CNAME do domínio para o servidor. O alvo será
+                            informado ao final do provisionamento.
+                          </p>
+                        )}
                         {saasConfig && !saasConfig.railwayConfigured && (
                           <p className="text-xs text-amber-600 dark:text-amber-400">
                             Railway não configurado — será necessário registrar o domínio manualmente no
