@@ -4,8 +4,9 @@
 // próprio do cliente (ex.: crm.empresa.com.br), que precisa ser registrado no
 // serviço do Railway para o SSL ser emitido.
 //
-// Env: RAILWAY_API_TOKEN (gerado pelo Fábio no painel). RAILWAY_SERVICE_ID e
-// RAILWAY_ENVIRONMENT_ID são injetados automaticamente pelo próprio Railway.
+// Env: RAILWAY_API_TOKEN (gerado pelo Fábio no painel). RAILWAY_PROJECT_ID,
+// RAILWAY_SERVICE_ID e RAILWAY_ENVIRONMENT_ID são injetados automaticamente
+// pelo próprio Railway.
 
 const RAILWAY_GQL = "https://backboard.railway.com/graphql/v2";
 
@@ -13,7 +14,8 @@ export function railwayConfigured(): boolean {
   return Boolean(
     process.env.RAILWAY_API_TOKEN &&
       process.env.RAILWAY_SERVICE_ID &&
-      process.env.RAILWAY_ENVIRONMENT_ID,
+      process.env.RAILWAY_ENVIRONMENT_ID &&
+      process.env.RAILWAY_PROJECT_ID,
   );
 }
 
@@ -43,9 +45,12 @@ export async function addCustomDomain(
       }`,
       variables: {
         input: {
-          domain,
-          serviceId: process.env.RAILWAY_SERVICE_ID,
+          // projectId é OBRIGATÓRIO no CustomDomainCreateInput. Sem ele o Railway
+          // responde com o genérico "Problem processing request".
+          projectId: process.env.RAILWAY_PROJECT_ID,
           environmentId: process.env.RAILWAY_ENVIRONMENT_ID,
+          serviceId: process.env.RAILWAY_SERVICE_ID,
+          domain,
         },
       },
     }),
@@ -57,6 +62,7 @@ export async function addCustomDomain(
     console.error("[RAILWAY] customDomainCreate falhou:", {
       httpStatus: res.status,
       domain,
+      projectId: process.env.RAILWAY_PROJECT_ID,
       serviceId: process.env.RAILWAY_SERVICE_ID,
       environmentId: process.env.RAILWAY_ENVIRONMENT_ID,
       resposta: JSON.stringify(data).slice(0, 2000),
