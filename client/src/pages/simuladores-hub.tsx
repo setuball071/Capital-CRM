@@ -3,12 +3,10 @@ import CalculatorPage from "@/pages/calculator";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
-import SimPropostaIa from "@/pages/sim-proposta-ia";
 import SimEvolucaoDivida from "@/pages/sim-evolucao-divida";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
-import type { ModuleName } from "@shared/schema";
 import { MatIcon } from "@/components/mat-icon";
 
 // Escuta postMessage do iframe do Simulador de Portabilidade e redireciona para o Criador de Proposta nativo
@@ -47,15 +45,14 @@ function IframeThemeSync({
 }
 
 // Ícones Material Symbols do design (Simuladores.dc.html → TAB_DEFS)
-const TABS_BASE = [
-  { id: "proposta", label: "Criador de Proposta", icon: "description", permKey: null },
-  { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt", permKey: null },
-  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart", permKey: null },
-  { id: "amortizacao", label: "Amortização", icon: "trending_down", permKey: null },
-  { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up", permKey: null },
-  { id: "contracheque", label: "Contracheque", icon: "description", permKey: null },
-  { id: "evolucao-divida", label: "Evolução de Dívida", icon: "table_chart", permKey: null },
-  { id: "proposta-ia", label: "Gerador de Proposta - IA", icon: "auto_awesome", permKey: "proposta_ia" },
+const TABS = [
+  { id: "proposta", label: "Criador de Proposta", icon: "description" },
+  { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt" },
+  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart" },
+  { id: "amortizacao", label: "Amortização", icon: "trending_down" },
+  { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up" },
+  { id: "contracheque", label: "Contracheque", icon: "description" },
+  { id: "evolucao-divida", label: "Evolução de Dívida", icon: "table_chart" },
 ];
 
 export default function SimuladoresHub() {
@@ -63,28 +60,10 @@ export default function SimuladoresHub() {
   // ao levar os contratos marcados para o simulador em aba nova)
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = new URLSearchParams(window.location.search).get("tab");
-    return tabParam && TABS_BASE.some((t) => t.id === tabParam) ? tabParam : "proposta";
+    return tabParam && TABS.some((t) => t.id === tabParam) ? tabParam : "proposta";
   });
-  const [iaImportData, setIaImportData] = useState<any>(null);
   const { theme } = useTheme();
-  const { user, hasSubItemAccess } = useAuth();
-
-  const TABS = TABS_BASE.filter((tab) => {
-    if (!tab.permKey) return true;
-    return hasSubItemAccess("modulo_simulador" as ModuleName, tab.permKey);
-  });
-
-  // Recebe a cotação do Simulador de Portabilidade (iframe) e abre o Gerador de Proposta IA
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (event.data?.type === "CAPITAL_CRM_PROPOSTA_IA_FILL" && event.data?.payload) {
-        setIaImportData(event.data.payload);
-        setActiveTab("proposta-ia");
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, []);
+  const { user } = useAuth();
   const portabilidadeRef = useRef<HTMLIFrameElement>(null);
   const contrachequeRef = useRef<HTMLIFrameElement>(null);
 
@@ -210,11 +189,6 @@ export default function SimuladoresHub() {
           {/* Evolução de Dívida — native React */}
           <div style={{ display: activeTab === "evolucao-divida" ? "block" : "none", height: "100%", overflow: "auto" }}>
             <SimEvolucaoDivida />
-          </div>
-
-          {/* Gerador de Proposta IA — native React */}
-          <div style={{ display: activeTab === "proposta-ia" ? "block" : "none", height: "100%", overflow: "auto" }}>
-            <SimPropostaIa importData={iaImportData} onConsumed={() => setIaImportData(null)} />
           </div>
 
           {/* Contracheque — iframe */}
