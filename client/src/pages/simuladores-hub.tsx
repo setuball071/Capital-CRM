@@ -4,6 +4,7 @@ import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
 import SimPropostaIa from "@/pages/sim-proposta-ia";
+import SimEvolucaoDivida from "@/pages/sim-evolucao-divida";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
@@ -53,6 +54,7 @@ const TABS_BASE = [
   { id: "amortizacao", label: "Amortização", icon: "trending_down", permKey: null },
   { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up", permKey: null },
   { id: "contracheque", label: "Contracheque", icon: "description", permKey: null },
+  { id: "evolucao-divida", label: "Evolução de Dívida", icon: "table_chart", permKey: null },
   { id: "proposta-ia", label: "Gerador de Proposta - IA", icon: "auto_awesome", permKey: "proposta_ia" },
 ];
 
@@ -203,6 +205,11 @@ export default function SimuladoresHub() {
           {/* Renda Fixa — native React */}
           <div style={{ display: activeTab === "renda-fixa" ? "block" : "none", height: "100%", overflow: "auto" }}>
             <CalculadoraRendaFixaPage />
+          </div>
+
+          {/* Evolução de Dívida — native React */}
+          <div style={{ display: activeTab === "evolucao-divida" ? "block" : "none", height: "100%", overflow: "auto" }}>
+            <SimEvolucaoDivida />
           </div>
 
           {/* Gerador de Proposta IA — native React */}
