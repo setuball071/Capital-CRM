@@ -39,6 +39,22 @@ const MS_SECTION: Record<string, string> = {
   "Financeiro": "payments",
 };
 
+// Cor de identificação por área. Aplicada SÓ no ícone e na barra lateral — o texto
+// continua neutro para não competir com a identidade visual do tenant (white-label).
+// Classes literais (o Tailwind não enxerga string montada em runtime).
+const CORES_SECAO: Record<string, { icone: string; barra: string; fundo: string }> = {
+  "Operacional":       { icone: "text-blue-600 dark:text-blue-400",       barra: "bg-blue-500",    fundo: "bg-blue-500/10" },
+  "Vendas":            { icone: "text-emerald-600 dark:text-emerald-400", barra: "bg-emerald-500", fundo: "bg-emerald-500/10" },
+  "Referências":       { icone: "text-cyan-600 dark:text-cyan-400",       barra: "bg-cyan-500",    fundo: "bg-cyan-500/10" },
+  "Desenvolvimento":   { icone: "text-slate-500 dark:text-slate-400",     barra: "bg-slate-500",   fundo: "bg-slate-500/10" },
+  "Academia Avançada": { icone: "text-violet-600 dark:text-violet-400",   barra: "bg-violet-500",  fundo: "bg-violet-500/10" },
+  "Base de Clientes":  { icone: "text-indigo-600 dark:text-indigo-400",   barra: "bg-indigo-500",  fundo: "bg-indigo-500/10" },
+  "Administração":     { icone: "text-amber-600 dark:text-amber-400",     barra: "bg-amber-500",   fundo: "bg-amber-500/10" },
+  "Gestão Comercial":  { icone: "text-rose-600 dark:text-rose-400",       barra: "bg-rose-500",    fundo: "bg-rose-500/10" },
+  "Financeiro":        { icone: "text-teal-600 dark:text-teal-400",       barra: "bg-teal-500",    fundo: "bg-teal-500/10" },
+};
+const COR_PADRAO = { icone: "text-muted-foreground", barra: "bg-muted-foreground", fundo: "bg-muted" };
+
 // Itens: os de Vendas vêm do design; demais seguem o mesmo vocabulário Material
 const MS_ITEM: Record<string, string> = {
   // Vendas (exato do design)
@@ -349,12 +365,10 @@ export function AppSidebar() {
 
   const getSectionKey = (title: string) => title.toLowerCase().replace(/ /g, '');
 
+  // Acordeão: abrir uma seção fecha as demais, para a sidebar caber sempre na tela.
   const toggleSection = (sectionTitle: string) => {
     const key = getSectionKey(sectionTitle);
-    setOpenSections(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+    setOpenSections(prev => (prev[key] ? {} : { [key]: true }));
   };
 
   const handleLogout = async () => {
@@ -431,7 +445,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground group-data-[collapsible=icon]:hidden" style={{ padding: "6px 12px 6px" }}>
+              <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70 group-data-[collapsible=icon]:hidden" style={{ padding: "6px 12px 6px" }}>
                 GERAL
               </div>
               <SidebarMenuItem>
@@ -469,20 +483,35 @@ export function AppSidebar() {
                 const grupoSuper = /Administra|Gest|Financ/i.test(section.title) ? "GESTÃO" : "OPERAÇÃO";
                 const mostrarGrupo = grupoSuper !== ultimoGrupo;
                 ultimoGrupo = grupoSuper;
+                const cor = CORES_SECAO[section.title] ?? COR_PADRAO;
+                // Barra lateral acesa quando a seção está aberta OU tem página ativa
+                const destacar = isOpen || hasActiveItem;
 
                 return (
                   <Fragment key={section.title}>
                   {mostrarGrupo && (
-                    <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground group-data-[collapsible=icon]:hidden" style={{ padding: "14px 12px 6px" }}>
-                      {grupoSuper}
-                    </div>
+                    <>
+                      <div className="mx-3 mt-3 border-t border-border group-data-[collapsible=icon]:hidden" />
+                      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70 group-data-[collapsible=icon]:hidden" style={{ padding: "10px 12px 6px" }}>
+                        {grupoSuper}
+                      </div>
+                    </>
                   )}
                   <Collapsible
                     open={isOpen}
                     onOpenChange={() => toggleSection(section.title)}
                   >
                     <SidebarMenuItem>
-                      <div className="rounded-md">
+                      {/* Barra lateral colorida identifica a área de relance */}
+                      <div className={cn("relative rounded-md", destacar && cor.fundo)}>
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "absolute left-0 top-1 bottom-1 z-10 w-1 rounded-full transition-opacity group-data-[collapsible=icon]:hidden",
+                            cor.barra,
+                            destacar ? "opacity-100" : "opacity-0"
+                          )}
+                        />
                         <CollapsibleTrigger asChild>
                           <SidebarMenuButton
                             isActive={hasActiveItem}
@@ -493,7 +522,7 @@ export function AppSidebar() {
                             data-testid={`sidebar-section-${sectionKey}`}
                           >
                             <div className="flex items-center gap-2">
-                              <MatIcon name={MS_SECTION[section.title] ?? "folder"} className={hasActiveItem ? undefined : "text-muted-foreground"} />
+                              <MatIcon name={MS_SECTION[section.title] ?? "folder"} className={cor.icone} />
                               <span>{section.title}</span>
                             </div>
                             <div className="flex items-center gap-1">
