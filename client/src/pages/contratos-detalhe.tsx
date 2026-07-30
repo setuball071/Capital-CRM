@@ -904,6 +904,28 @@ export default function ContratosDetalhePage() {
           {m.nomeInstituidor && renderField({ fieldKey: "nomeInstituidor", label: "Instituidor", value: m.nomeInstituidor })}
           {m.matriculaInstituidor && renderField({ fieldKey: "matInstituidor", label: "Matr. Instituidor", value: m.matriculaInstituidor, mono: true })}
           {m.naturezaPensao && renderField({ fieldKey: "naturezaPensao", label: "Natureza Pensão", value: m.naturezaPensao })}
+          {/* Parceiro (interno — só operacional/master; corretor não vê) */}
+          {canManageContracts && (
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Parceiro <span className="text-[10px]">(interno)</span></p>
+              <div className="mt-0.5">
+                <Select
+                  value={proposal.parceiroId ? String(proposal.parceiroId) : "none"}
+                  onValueChange={(v) => editMutation.mutate({ parceiroId: v === "none" ? null : v })}
+                >
+                  <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— nenhum —</SelectItem>
+                    {partnersList
+                      .filter((p: any) => p.isActive || String(p.id) === String(proposal.parceiroId))
+                      .map((p: any) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -973,28 +995,6 @@ export default function ContratosDetalhePage() {
               </div>
             )}
           </div>
-          {/* Parceiro (interno — só operacional/master; corretor não vê) */}
-          {canManageContracts && (
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Parceiro <span className="text-[10px]">(interno)</span></p>
-              <div className="mt-0.5">
-                <Select
-                  value={proposal.parceiroId ? String(proposal.parceiroId) : "none"}
-                  onValueChange={(v) => editMutation.mutate({ parceiroId: v === "none" ? null : v })}
-                >
-                  <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— nenhum —</SelectItem>
-                    {partnersList
-                      .filter((p: any) => p.isActive || String(p.id) === String(proposal.parceiroId))
-                      .map((p: any) => (
-                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
           {/* Portabilidade — CONTRATO DE ORIGEM primeiro (o que está sendo portado) */}
           {isPortabilidade && (
             <>
