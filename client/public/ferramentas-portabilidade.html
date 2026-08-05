@@ -1512,6 +1512,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
       <div id="totaisSimples" style="display:none;margin-top:16px;padding:16px;background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;">
         <div style="display:flex;gap:32px;flex-wrap:wrap;">
           <div><span style="font-size:12px;color:#6B7280;">Saldo Total Portado</span><br><strong id="simpSaldoTotal" style="font-size:18px;color:#1a0030;">-</strong></div>
+          <div id="wrapSimpFinanciado" style="display:none;"><span style="font-size:12px;color:#B45309;">Valor Financiado <span id="simpSeguroPerc" style="font-size:10px;">(c/ seguro)</span></span><br><strong id="simpFinanciado" style="font-size:18px;color:#B45309;">-</strong></div>
           <div><span style="font-size:12px;color:#6B7280;">Parcela Total Atual</span><br><strong id="simpParcelaAtual" style="font-size:18px;color:#EF4444;">-</strong></div>
           <div><span style="font-size:12px;color:#6B7280;">Parcela Total Nova</span><br><strong id="simpParcelaNova" style="font-size:18px;color:#16A34A;">-</strong></div>
           <div><span style="font-size:12px;color:#6B7280;">Economia Mensal</span><br><strong id="simpEconomia" style="font-size:18px;color:#6C2BD9;">-</strong></div>
@@ -1669,6 +1670,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
           <span>Valor refim (bruto): <b id="rValorRefim" style="color:#EA580C;">-</b></span>
           <span>IOF: <b id="rIOF" style="color:#EA580C;">-</b></span>
           <span id="rSeguroWrap" style="display:none;">Seguro prestamista (<span id="rSeguroPerc">-</span>): <b id="rSeguro" style="color:#B45309;">-</b></span>
+          <span id="rFinanciadoWrap" style="display:none;">Valor financiado: <b id="rFinanciado" style="color:#B45309;">-</b></span>
           <span>Encargos: <b id="rEncargos" style="color:#EA580C;">-</b></span>
           <span>Total pago (parc×prazo): <b id="rValorBruto" style="color:#374151;">-</b></span>
         </div>
@@ -6017,8 +6019,22 @@ function calcSimples() {
   }
 
   if (taxa > 0) {
-    const parcelaConsolidada = calcParcela(totalSaldo, taxa, prazo);
+    const parcelaConsolidada = calcParcela(totalSaldo * fatorSeguro, taxa, prazo);
     document.getElementById('simpSaldoTotal').textContent   = fmtBRL(totalSaldo);
+
+    // Valor financiado (saldo + seguro) — só aparece quando há seguro
+    const wrapFin = document.getElementById('wrapSimpFinanciado');
+    if (wrapFin) {
+      if (fatorSeguro > 1) {
+        const segPerc = (fatorSeguro - 1) * 100;
+        document.getElementById('simpFinanciado').textContent = fmtBRL(totalSaldo * fatorSeguro);
+        document.getElementById('simpSeguroPerc').textContent = `(c/ seguro ${fmtPct(segPerc)}% = ${fmtBRL(totalSaldo * (fatorSeguro - 1))})`;
+        wrapFin.style.display = '';
+      } else {
+        wrapFin.style.display = 'none';
+      }
+    }
+
     document.getElementById('simpParcelaAtual').textContent = fmtBRL(totalParcelaAtual);
     document.getElementById('simpParcelaNova').textContent  = modo === 'junto' ? fmtBRL(parcelaConsolidada) : fmtBRL(totalParcelaNova);
     document.getElementById('simpEconomia').textContent     = fmtBRL(totalParcelaAtual - (modo === 'junto' ? parcelaConsolidada : totalParcelaNova));
@@ -6598,9 +6614,18 @@ function calcRefim() {
       </tr>`;
 
     const avisoSep = document.getElementById('refimSeparadoAviso');
-    if(!avisoSep) { } else avisoSep.innerHTML = avisos.length
+    // Valor financiado = (saldo + troco bruto) × (1 + seguro) — base real da parcela
+    const totalTrocoBruto = linhas.reduce((a,l)=>a+l.trocoBruto,0);
+    const totalFinanciado = (totalSaldo + totalTrocoBruto) * fatorSeguro;
+    const seguroLinha = fatorSeguro > 1
+      ? `<div style="margin-top:6px;padding:8px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;font-size:12px;color:#92400E;">
+           💰 <b>Valor financiado: ${fmtBRL(totalFinanciado)}</b>
+           <span style="color:#B45309;"> = saldo ${fmtBRL(totalSaldo)} + troco bruto ${fmtBRL(totalTrocoBruto)} + seguro ${fmtPct((fatorSeguro-1)*100)}% (${fmtBRL((totalSaldo + totalTrocoBruto) * (fatorSeguro-1))})</span>
+         </div>`
+      : '';
+    if(!avisoSep) { } else avisoSep.innerHTML = (avisos.length
       ? '<span style="color:#F59E0B;font-weight:600;">⚠️ Atenção: ' + avisos.join('; ') + '</span>'
-      : '<span style="color:#16A34A;font-weight:600;">✅ Todos os contratos viáveis</span>';
+      : '<span style="color:#16A34A;font-weight:600;">✅ Todos os contratos viáveis</span>') + seguroLinha;
 
     avisoEl.innerHTML = '<span style="color:#16A34A;font-weight:600;">✅ ' + marcados.length +
       ' contrato(s) — saldo total: ' + fmtBRL(totalSaldo).replace('R$ ','') + '</span>';
@@ -6620,13 +6645,20 @@ function calcRefim() {
 function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim, valorBruto, somaParcelasOrig, valorSeguro, seguroPerc) {
   // Seguro prestamista — só exibe quando o banco cobra
   const segWrap = document.getElementById('rSeguroWrap');
+  const finWrap = document.getElementById('rFinanciadoWrap');
   if (segWrap) {
     if (valorSeguro > 0) {
       document.getElementById('rSeguro').textContent = fmtBRL(valorSeguro);
       document.getElementById('rSeguroPerc').textContent = fmtPct(seguroPerc) + '%';
       segWrap.style.display = '';
+      // Valor financiado = saldo + troco bruto + seguro (base real da parcela)
+      if (finWrap) {
+        document.getElementById('rFinanciado').textContent = fmtBRL(saldoPortado + valorRefim + valorSeguro);
+        finWrap.style.display = '';
+      }
     } else {
       segWrap.style.display = 'none';
+      if (finWrap) finWrap.style.display = 'none';
     }
   }
   const dif = (somaParcelasOrig || 0) - parcelaTotal;
