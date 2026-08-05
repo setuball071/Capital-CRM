@@ -1363,6 +1363,15 @@ body { background: #F8F8FC !important; color: #111827 !important; }
       <span style="font-size:12px;color:#6B7280;margin-left:8px;">
         Marque os contratos que deseja portar/renegociar
       </span>
+      <div style="margin-left:auto;display:flex;gap:6px;align-items:center;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:6px;padding:5px 8px;">
+        <span style="font-size:12px;color:#6C2BD9;font-weight:600;white-space:nowrap;">Taxa p/ todos:</span>
+        <input id="taxaTodos" placeholder="1,80" style="width:64px;text-align:center;font-size:12px;padding:4px 6px;border:1px solid #DDD6FE;border-radius:4px;"
+          title="Aplica esta taxa a todos os contratos de uma vez"
+          onkeydown="if(event.key==='Enter'){aplicarTaxaTodos();}">
+        <button onclick="aplicarTaxaTodos()" style="padding:5px 12px;background:#6C2BD9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+          Aplicar
+        </button>
+      </div>
     </div>
     
     <table>
@@ -3817,6 +3826,43 @@ function selecionarTodasPortabilidades(marcar) {
     feedback.style.transition = 'opacity 0.3s';
     setTimeout(() => document.body.removeChild(feedback), 300);
   }, 2000);
+}
+
+// Aplica a mesma taxa a todos os contratos de uma vez.
+// Contratos com saldo digitado manualmente são preservados: neles o saldo é o
+// dado real do banco e a taxa é deduzida dele — sobrescrever perderia essa informação.
+function aplicarTaxaTodos() {
+  const input = document.getElementById('taxaTodos');
+  const taxa = parseBR(input?.value || '');
+  if (!taxa) { alert('Informe a taxa que deseja aplicar a todos os contratos.'); return; }
+  if (!contratos.length) { alert('Nenhum contrato na lista.'); return; }
+
+  let aplicados = 0, preservados = 0;
+  contratos.forEach(c => {
+    if (c.saldoManual) { preservados++; return; }
+    c.taxa = taxa;
+    aplicados++;
+  });
+
+  // Limpa o corpo da tabela: renderContratos reaproveita linhas existentes por ID
+  // e não repintaria os campos de taxa.
+  const tb = document.getElementById('tbContratos');
+  if (tb) tb.innerHTML = '';
+  renderContratos();
+  contratos.forEach(c => updateContratoCalc(c.id));
+  atualizarSimuladorRefim();
+
+  let msg = `✅ Taxa ${fmtPct(taxa)}% aplicada a ${aplicados} contrato(s)`;
+  if (preservados) msg += ` — ${preservados} com saldo digitado mantiveram a taxa deduzida`;
+  const feedback = document.createElement('div');
+  feedback.style.cssText = 'position:fixed;top:20px;right:20px;background:#6C2BD9;color:white;padding:12px 20px;border-radius:8px;font-weight:600;z-index:9999;box-shadow:0 4px 6px rgba(0,0,0,0.1);max-width:380px;font-size:13px;';
+  feedback.textContent = msg;
+  document.body.appendChild(feedback);
+  setTimeout(() => {
+    feedback.style.opacity = '0';
+    feedback.style.transition = 'opacity 0.3s';
+    setTimeout(() => document.body.removeChild(feedback), 300);
+  }, 2600);
 }
 
 // ===== RENDER CONTRATOS =====
