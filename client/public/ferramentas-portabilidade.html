@@ -2571,11 +2571,13 @@ async function importarPDFFile(file) {
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     
     window._pdfItems = []; // reset a cada importação
+    window._pdfRotate = 0; // rotação da página (extratos SIAPE costumam ser paisagem = 90)
     let textoCompleto = '';
-    
+
     // Extrai texto de todas as páginas
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
+      if (i === 1) window._pdfRotate = page.rotate || 0;
       const textContent = await page.getTextContent();
       // Coleta todos os itens com coordenadas X,Y para reconstrução por coluna
       const rawItems = textContent.items
@@ -2606,7 +2608,8 @@ async function importarPDFFile(file) {
     const cpfMatch = textoCompleto.match(RE_CPF_PDF);
 
     // Nome + margem do extrato (fórmula: Bruta Facult. Global − Utilizadas)
-    const infoExtrato = extrairMargemENome(textoCompleto);
+    // Usa _pdfItems (coordenadas) + rotação para reconstruir as linhas visuais
+    const infoExtrato = extrairMargemENome(textoCompleto, window._pdfItems, window._pdfRotate);
 
     if (cpfMatch) {
       const cpfExtraido = cpfMatch[1];
@@ -2685,11 +2688,32 @@ async function importarPDFFile(file) {
   event.target.value = '';
 }
 
+// Reconstrói as linhas visuais do PDF agrupando itens pela coordenada de linha.
+// Página retrato (rotate 0/180): linha = Y. Página paisagem (rotate 90/270): as
+// coordenadas vêm trocadas — a linha visual é o X (extratos SIAPE são paisagem).
+function _linhasPorY(items, rotate) {
+  if (!items || !items.length) return [];
+  const paisagem = rotate === 90 || rotate === 270;
+  const lin = it => (paisagem ? it.x : it.y);   // eixo que define a linha
+  const col = it => (paisagem ? it.y : it.x);   // eixo que ordena dentro da linha
+  // rotate 90: linhas crescem com X; retrato: Y decresce de cima p/ baixo
+  const ordemLinha = paisagem ? (a, b) => a - b : (a, b) => b - a;
+
+  const grupos = [];
+  for (const it of items) {
+    const g = grupos.find(g => Math.abs(g.lin - lin(it)) <= 2);
+    if (g) g.items.push(it); else grupos.push({ lin: lin(it), items: [it] });
+  }
+  grupos.sort((a, b) => ordemLinha(a.lin, b.lin));
+  return grupos.map(g => g.items.sort((a, b) => col(a) - col(b)).map(i => i.str).join(' '));
+}
+
 // ── Margem + nome do extrato de consignações (SIAPE) ──────────────────────
 // Fórmula: Bruta Facult. Global − Utilizada Facultativa − Utilizada Cartão
 //          − Utilizada Cartão Benefício  →  margem do cliente (negativa = estourado)
-function extrairMargemENome(texto) {
-  const linhas = texto.split('\n');
+function extrairMargemENome(texto, items, rotate) {
+  // Preferir linhas reconstruídas pelas coordenadas; fallback no texto cru
+  const linhas = (items && items.length) ? _linhasPorY(items, rotate || 0) : texto.split('\n');
   const money = l => (l.match(/R\$\s*-?[\d.,]+/g) || []).map(v => parseBR(v));
 
   let nome = '';
