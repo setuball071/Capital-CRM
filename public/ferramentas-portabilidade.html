@@ -1474,6 +1474,11 @@ body { background: #F8F8FC !important; color: #111827 !important; }
           <label>Prazo (meses)</label>
           <input id="simpPrazo" type="number" value="48" placeholder="48" oninput="calcSimples()">
         </div>
+        <div class="field" style="max-width:120px;">
+          <label>Seguro (%) <span style="font-weight:400;color:#9CA3AF;">opcional</span></label>
+          <input id="simpSeguro" placeholder="Ex: 10" oninput="calcSimples()"
+            style="border-color:#FCD34D;" title="Seguro prestamista: % somado ao saldo antes de calcular a nova parcela">
+        </div>
         <div class="field" style="max-width:180px;">
           <label>Resultado</label>
           <select id="simpModo" onchange="calcSimples()">
@@ -1663,6 +1668,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
           <span>Saldo portado: <b id="rSaldoPortado" style="color:#374151;">-</b></span>
           <span>Valor refim (bruto): <b id="rValorRefim" style="color:#EA580C;">-</b></span>
           <span>IOF: <b id="rIOF" style="color:#EA580C;">-</b></span>
+          <span id="rSeguroWrap" style="display:none;">Seguro prestamista (<span id="rSeguroPerc">-</span>): <b id="rSeguro" style="color:#B45309;">-</b></span>
           <span>Encargos: <b id="rEncargos" style="color:#EA580C;">-</b></span>
           <span>Total pago (parc×prazo): <b id="rValorBruto" style="color:#374151;">-</b></span>
         </div>
@@ -1744,6 +1750,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#EDE9FE;" title="Nº mínimo de parcelas PAGAS para portar (0 = aceita qualquer)">Pagas p/<br><span style="font-weight:400;color:#6C2BD9;">Portar</span></th>
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#EDE9FE;" title="Nº mínimo de parcelas PAGAS para o banco remunerar (0 = remunera sempre)">Pagas p/<br><span style="font-weight:400;color:#6C2BD9;">Remunerar</span></th>
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;" title="Une saldos negativos de vários contratos para cobrir margem">Une<br><span style="font-weight:400;color:#6B7280;">Neg.</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#FEF3C7;" title="Seguro prestamista: % somado ao valor financiado (saldo + troco) antes de calcular a parcela. 0 = banco não cobra">Seguro<br><span style="font-weight:400;color:#B45309;">(%)</span></th>
             <th style="width:60px;border-bottom:2px solid #E5E7EB;"></th>
           </tr>
         </thead>
@@ -5690,6 +5697,7 @@ function _mesclarRegras(saved) {
                           pagasMinRemunerar: sv.pagasMinRemunerar ?? def.pagasMinRemunerar ?? 0,
                           uneSaldoNegativo:  sv.uneSaldoNegativo  ?? def.uneSaldoNegativo  ?? false,
                           excecoesOrigem:    sv.excecoesOrigem    ?? def.excecoesOrigem    ?? [],
+                          seguro:            sv.seguro            ?? def.seguro            ?? 0,
                           obs: (Array.isArray(sv.obs) && sv.obs.length) ? sv.obs : def.obs } : {...def};
   }).concat(saved.filter(s => !regrasBancosDefault.find(d => d.banco === s.banco)));
 }
@@ -5748,6 +5756,7 @@ async function _pushRulesToAPI() {
       pagasMinRemunerar: Number(r.pagasMinRemunerar) || 0,
       uneSaldoNegativo:  !!r.uneSaldoNegativo,
       excecoesOrigem:    Array.isArray(r.excecoesOrigem) ? r.excecoesOrigem : null,
+      seguro:            Number(r.seguro) || 0,
       ordem:             idx,
     }));
     const resp = await fetch('/api/portability-bank-rules', {
@@ -5861,6 +5870,8 @@ function calcSimples() {
   const taxa   = parseBR(document.getElementById('simpTaxa').value);
   const prazo  = parseInt(document.getElementById('simpPrazo').value) || 96;
   const modo   = document.getElementById('simpModo')?.value || 'separado';
+  // Seguro prestamista: % somado ao saldo antes de calcular a nova parcela
+  const fatorSeguro = 1 + parseBR(document.getElementById('simpSeguro')?.value || '0') / 100;
   const marcados = getContratosMarcados();
   const tb = document.getElementById('tbSimples');
 
@@ -5882,12 +5893,12 @@ function calcSimples() {
     if (saldoEfetivo <= 0) return; // quitado — não conta
     totalSaldo += saldoEfetivo;
     totalParcelaAtual += parseBR(c.parcela);
-    totalParcelaNova += taxa > 0 ? calcParcela(saldoEfetivo, taxa, prazo) : 0;
+    totalParcelaNova += taxa > 0 ? calcParcela(saldoEfetivo * fatorSeguro, taxa, prazo) : 0;
   });
 
   if (modo === 'junto') {
     // Modo junto: uma única linha com saldo e parcela consolidados
-    const parcelaConsolidada = taxa > 0 ? calcParcela(totalSaldo, taxa, prazo) : 0;
+    const parcelaConsolidada = taxa > 0 ? calcParcela(totalSaldo * fatorSeguro, taxa, prazo) : 0;
     const economiaConsol = totalParcelaAtual - parcelaConsolidada;
     tb.innerHTML = `<tr style="background:#F5F3FF;">
       <td style="font-weight:700;color:#6C2BD9;">${marcados.length} contrato(s) — parcela unificada</td>
@@ -5912,7 +5923,7 @@ function calcSimples() {
       if (saldoEfetivo <= 0) return;
       const parcelaAtual = parseBR(c.parcela);
       const prazoInd = prazosSimpSeparado[idx] ?? prazo;
-      const parcelaNova = taxa > 0 ? calcParcela(saldoEfetivo, taxa, prazoInd) : 0;
+      const parcelaNova = taxa > 0 ? calcParcela(saldoEfetivo * fatorSeguro, taxa, prazoInd) : 0;
       linhasSimp.push({ banco: c.banco || '-', parcelaOriginal: parcelaAtual, parcelaTotal: parcelaNova });
       linhasSimpMarcadoIdx.push(idx);
     });
@@ -5929,7 +5940,7 @@ function calcSimples() {
       const saldo = saldoEfetivo;
       const parcelaAtual = parseBR(c.parcela);
       const prazoInd = prazosSimpSeparado[idx] ?? prazo;
-      const parcelaNova = taxa > 0 ? calcParcela(saldo, taxa, prazoInd) : 0;
+      const parcelaNova = taxa > 0 ? calcParcela(saldo * fatorSeguro, taxa, prazoInd) : 0;
       const economia = parcelaAtual - parcelaNova;
       totalParcelaNovaSep += parcelaNova;
 
@@ -6380,34 +6391,40 @@ function calcRefim() {
     }
 
     const minTrocoUnif = regra.minTroco || 250;
+    // Seguro prestamista: % somado ao valor financiado (saldo + troco) antes da parcela
+    const fatorSeguro = 1 + (Number(regra.seguro) || 0) / 100;
     let trocoLiquido = 0, parcelaTotal = 0, trocoBruto = 0, iof = 0;
     if (modo === 'troco') {
       const inputTroco = parseBR(document.getElementById('refimTrocoInput').value);
       trocoLiquido  = inputTroco || minTrocoUnif; // padrão = mínimo do banco
       trocoBruto    = trocoBrutoDeLiquido(trocoLiquido); // bruto = líquido × 1,032
       iof           = calcIOF(trocoBruto);
-      parcelaTotal  = price.pmt(saldoPortado + trocoBruto);
+      parcelaTotal  = price.pmt((saldoPortado + trocoBruto) * fatorSeguro);
     } else {
       const inputParcela = parseBR(document.getElementById('refimParcelaInput').value);
       parcelaTotal  = inputParcela || somaParcelasOrig; // padrão = mantém parcela atual
-      trocoBruto    = price.pv(parcelaTotal) - saldoPortado;
+      // Desfaz o seguro antes de separar o troco — senão o troco sairia inflado
+      trocoBruto    = price.pv(parcelaTotal) / fatorSeguro - saldoPortado;
       if (trocoBruto <= 0) {
         avisoEl.innerHTML = '<span style="color:#EF4444;font-weight:600;">⚠️ Parcela insuficiente — ' +
-          'mínimo sem troco: ' + fmtBRL(price.pmt(saldoPortado)).replace('R$ ','') + '/mês.</span>';
+          'mínimo sem troco: ' + fmtBRL(price.pmt(saldoPortado * fatorSeguro)).replace('R$ ','') + '/mês.</span>';
         return;
       }
       iof          = calcIOF(trocoBruto);
       trocoLiquido = trocoBruto - iof; // líquido = bruto / 1,032
     }
+    const valorSeguro = (saldoPortado + trocoBruto) * (fatorSeguro - 1);
     const encargos  = parcelaTotal * prazo - (saldoPortado + trocoBruto);
     const valorBruto = parcelaTotal * prazo;
     if (!validarUnif(trocoBruto, parcelaTotal, trocoLiquido)) return;
-    renderResultadoRefim(saldoPortado, trocoBruto, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim * 100, valorBruto, somaParcelasOrig);
+    renderResultadoRefim(saldoPortado, trocoBruto, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim * 100, valorBruto, somaParcelasOrig, valorSeguro, (Number(regra.seguro) || 0));
     mostrarCoberturaMargem(margemNeg, somaParcelasOrig, parcelaTotal, 'rMargemNegBlock');
 
   } else {
     // ── MODO SEPARADO — cada contrato no seu prazo restante ──
     const minTroco = regra.minTroco || 250;
+    // Seguro prestamista: % somado ao valor financiado de cada contrato
+    const fatorSeguro = 1 + (Number(regra.seguro) || 0) / 100;
     let totalSaldo = 0, totalTroco = 0, totalIOF = 0, totalParcela = 0, totalEncargos = 0;
     const avisos = [];
     let inputValor = 0;
@@ -6436,14 +6453,15 @@ function calcRefim() {
         trocoLiquido = trocosSeparado[idx] ?? minTroco;
         trocoBruto   = trocoBrutoDeLiquido(trocoLiquido);
         iof          = calcIOF(trocoBruto);
-        parcelaTotal = price.pmt(saldo + trocoBruto);
+        parcelaTotal = price.pmt((saldo + trocoBruto) * fatorSeguro);
       } else {
         // Distribui a parcela proporcionalmente ao saldo de cada contrato
         const totalSaldos = marcados.reduce((a,x) => { const xs = parseBR(x.saldo); return a + (x.acao === 'amortizar' ? Math.max(0, xs - (x.amort||0)) : xs); }, 0);
         const parcelaProp = inputValor * (saldo / totalSaldos);
-        trocoBruto   = price.pv(parcelaProp) - saldo;
+        // Desfaz o seguro antes de separar o troco
+        trocoBruto   = price.pv(parcelaProp) / fatorSeguro - saldo;
         if (trocoBruto <= 0) {
-          trocoBruto = 0; iof = 0; trocoLiquido = 0; parcelaTotal = price.pmt(saldo);
+          trocoBruto = 0; iof = 0; trocoLiquido = 0; parcelaTotal = price.pmt(saldo * fatorSeguro);
           ok = false;
           status = '<span style="color:#EF4444;font-weight:600;">❌ Sem troco</span>';
         } else {
@@ -6558,7 +6576,18 @@ function calcRefim() {
   }
 }
 
-function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim, valorBruto, somaParcelasOrig) {
+function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim, valorBruto, somaParcelasOrig, valorSeguro, seguroPerc) {
+  // Seguro prestamista — só exibe quando o banco cobra
+  const segWrap = document.getElementById('rSeguroWrap');
+  if (segWrap) {
+    if (valorSeguro > 0) {
+      document.getElementById('rSeguro').textContent = fmtBRL(valorSeguro);
+      document.getElementById('rSeguroPerc').textContent = fmtPct(seguroPerc) + '%';
+      segWrap.style.display = '';
+    } else {
+      segWrap.style.display = 'none';
+    }
+  }
   const dif = (somaParcelasOrig || 0) - parcelaTotal;
   const difEl = document.getElementById('rDifParcela');
   if (difEl) {
@@ -6761,7 +6790,7 @@ function renderTbRegras() {
           <td colspan="2" style="padding:4px 8px;color:#6B7280;">
             porta c/ <b>${e.pagasMinPortar ?? 0}</b> · rem. c/ <b>${e.pagasMinRemunerar ?? 0}</b>
           </td>
-          <td colspan="3" style="padding:4px 8px;">
+          <td colspan="4" style="padding:4px 8px;">
             <button onclick="removerExcecao(${i},${ei})" style="background:#FEE2E2;color:#DC2626;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px;">✕</button>
           </td>
         </tr>`).join('')
@@ -6775,7 +6804,7 @@ function renderTbRegras() {
     }).join('');
     const addExcForm = `
       <tr id="exc-add-${i}" style="display:none;background:#F9F9FF;">
-        <td colspan="9" style="padding:8px 12px;">
+        <td colspan="10" style="padding:8px 12px;">
           <div style="font-size:11px;color:#6B7280;margin-bottom:6px;">Banco de origem = banco de onde o contrato vem (ex: Nubank, C6, PicPay...)</div>
           <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
             <div><label style="font-size:10px;display:block;">Banco Origem</label><input id="excBanco-${i}" placeholder="Ex: Nubank" style="width:110px;font-size:11px;"></div>
@@ -6822,6 +6851,10 @@ function renderTbRegras() {
       <td style="text-align:center;padding:6px;">
         <input type="checkbox" ${r.uneSaldoNegativo ? 'checked' : ''}
           onchange="regrasBancos[${i}].uneSaldoNegativo=this.checked;salvarRegras();">
+      </td>
+      <td style="text-align:center;padding:6px;background:#FFFBEB;">
+        <input value="${String(r.seguro || 0).replace('.',',')}" style="width:55px;text-align:center;"
+          onchange="regrasBancos[${i}].seguro=parseBR(this.value);salvarRegras();atualizarSimuladorRefim();">
       </td>
       <td style="padding:6px;white-space:nowrap;">
         <button onclick="toggleExcForm(${i})" style="background:#EDE9FE;color:#6C2BD9;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;" title="Gerenciar exceções por banco de origem">⚙</button>

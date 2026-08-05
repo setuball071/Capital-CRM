@@ -603,7 +603,8 @@ app.use((req, res, next) => {
               ADD COLUMN IF NOT EXISTS pagas_min_portar INTEGER DEFAULT 0,
               ADD COLUMN IF NOT EXISTS pagas_min_remunerar INTEGER DEFAULT 0,
               ADD COLUMN IF NOT EXISTS une_saldo_negativo BOOLEAN DEFAULT FALSE,
-              ADD COLUMN IF NOT EXISTS excecoes_origem JSONB
+              ADD COLUMN IF NOT EXISTS excecoes_origem JSONB,
+              ADD COLUMN IF NOT EXISTS seguro NUMERIC(6,2) DEFAULT 0
           `);
           await simMigDb.execute(simMigSql`
             CREATE TABLE IF NOT EXISTS cotacoes_simulador (

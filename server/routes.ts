@@ -29648,6 +29648,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
                COALESCE(pagas_min_portar, 0)    AS "pagasMinPortar",
                COALESCE(pagas_min_remunerar, 0) AS "pagasMinRemunerar",
                COALESCE(une_saldo_negativo, false) AS "uneSaldoNegativo",
+               COALESCE(seguro, 0)::float       AS "seguro",
                excecoes_origem                  AS "excecoesOrigem",
                ordem,
                updated_at          AS "updatedAt"
@@ -29696,6 +29697,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           pagasMinPortar: Number.isFinite(parseInt(r.pagasMinPortar, 10)) ? parseInt(r.pagasMinPortar, 10) : 0,
           pagasMinRemunerar: Number.isFinite(parseInt(r.pagasMinRemunerar, 10)) ? parseInt(r.pagasMinRemunerar, 10) : 0,
           uneSaldoNegativo: Boolean(r.uneSaldoNegativo),
+          seguro: toNum(r.seguro),
           excecoesOrigem: Array.isArray(r.excecoesOrigem) ? r.excecoesOrigem : null,
           ordem: Number.isFinite(parseInt(r.ordem, 10)) ? parseInt(r.ordem, 10) : idx,
         };
@@ -29720,13 +29722,13 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
           INSERT INTO portability_bank_rules
             (tenant_id, banco, entrada_min, taxa_refim, saldo_min, min_troco,
              taxa_livre, taxa_sugerida, obs, pagas_min_portar, pagas_min_remunerar,
-             une_saldo_negativo, excecoes_origem, ordem, updated_by, updated_at)
+             une_saldo_negativo, excecoes_origem, seguro, ordem, updated_by, updated_at)
           VALUES
             (${tenantId}, ${r.banco}, ${r.entradaMin}, ${r.taxaRefim}, ${r.saldoMin}, ${r.minTroco},
              ${r.taxaLivre}, ${r.taxaSugerida}, ${r.obs ? JSON.stringify(r.obs) : null}::jsonb,
              ${r.pagasMinPortar}, ${r.pagasMinRemunerar}, ${r.uneSaldoNegativo},
              ${r.excecoesOrigem ? JSON.stringify(r.excecoesOrigem) : null}::jsonb,
-             ${r.ordem}, ${user.id}, NOW())
+             ${r.seguro}, ${r.ordem}, ${user.id}, NOW())
           ON CONFLICT (tenant_id, banco) DO UPDATE SET
             entrada_min        = EXCLUDED.entrada_min,
             taxa_refim         = EXCLUDED.taxa_refim,
@@ -29739,6 +29741,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             pagas_min_remunerar= EXCLUDED.pagas_min_remunerar,
             une_saldo_negativo = EXCLUDED.une_saldo_negativo,
             excecoes_origem    = EXCLUDED.excecoes_origem,
+            seguro             = EXCLUDED.seguro,
             ordem              = EXCLUDED.ordem,
             updated_by         = ${user.id},
             updated_at         = NOW()
