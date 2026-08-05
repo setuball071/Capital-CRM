@@ -1332,6 +1332,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
         Folha de pagamento SIAPE, INSS, Prefeitura · Banco, parcela e prazo detectados automaticamente
       </div>
       <div id="pdfStatus" style="margin-top:10px;font-size:12px;font-weight:600;"></div>
+      <div id="margemExtratoBox" style="display:none;margin-top:10px;"></div>
     </div>
 
     <style>
@@ -2603,12 +2604,29 @@ async function importarPDFFile(file) {
     // Extrai CPF do cabeçalho do contracheque (formato 000.000.000-00)
     const RE_CPF_PDF = /\b(\d{3}\.\d{3}\.\d{3}-\d{2})\b/;
     const cpfMatch = textoCompleto.match(RE_CPF_PDF);
+
+    // Nome + margem do extrato (fórmula: Bruta Facult. Global − Utilizadas)
+    const infoExtrato = extrairMargemENome(textoCompleto);
+
     if (cpfMatch) {
       const cpfExtraido = cpfMatch[1];
       document.getElementById('cpfCliente').value = cpfExtraido;
       document.getElementById('modalCpfCliente').value = cpfExtraido;
-      _buscarClientePorCpf(cpfExtraido);
+      if (infoExtrato.nome) {
+        // Nome do PDF é autoritativo — cadastro não sobrescreve
+        document.getElementById('nomeCliente').value = infoExtrato.nome;
+        document.getElementById('modalNomeCliente').value = infoExtrato.nome;
+        _mostrarClienteDetectado(infoExtrato.nome, cpfExtraido);
+        buscarCotacoesPorCpf(cpfExtraido);
+      } else {
+        _buscarClientePorCpf(cpfExtraido);
+      }
+    } else if (infoExtrato.nome) {
+      document.getElementById('nomeCliente').value = infoExtrato.nome;
+      document.getElementById('modalNomeCliente').value = infoExtrato.nome;
+      _mostrarClienteDetectado(infoExtrato.nome, '');
     }
+    mostrarMargemExtrato(infoExtrato);
 
     // Processa usando itens com coordenadas (mais preciso para PDFs em colunas)
     const contratosDetectados = extrairContratos(textoCompleto, window._pdfItems);
@@ -2665,6 +2683,95 @@ async function importarPDFFile(file) {
   
   // Limpa o input para permitir reimportar
   event.target.value = '';
+}
+
+// ── Margem + nome do extrato de consignações (SIAPE) ──────────────────────
+// Fórmula: Bruta Facult. Global − Utilizada Facultativa − Utilizada Cartão
+//          − Utilizada Cartão Benefício  →  margem do cliente (negativa = estourado)
+function extrairMargemENome(texto) {
+  const linhas = texto.split('\n');
+  const money = l => (l.match(/R\$\s*-?[\d.,]+/g) || []).map(v => parseBR(v));
+
+  let nome = '';
+  let brutaFacult = null, utilFacult = null, utilCartao = null, utilCartaoBenef = null;
+
+  for (let i = 0; i < linhas.length; i++) {
+    const l = linhas[i];
+
+    // Nome: linha do cabeçalho "... CPF MATRÍCULA NOME" (nome em maiúsculas no fim)
+    if (!nome) {
+      const m = /(\d{3}\.\d{3}\.\d{3}-\d{2})\s+\d+\s+([A-ZÀ-ÜÇ][A-ZÀ-ÜÇ'\s.]{4,})\s*$/.exec(l);
+      if (m) nome = m[2].trim().replace(/\s{2,}/g, ' ');
+    }
+
+    // Bloco global: ordem fixa do extrato — Bruta Comp. · Líquida Comp. ·
+    // Bruta Facult. Global · Líquida Facult. Global · Bruta Cartão · ...
+    // Valores podem vir na mesma linha do cabeçalho ou nas 2 seguintes.
+    if (brutaFacult === null && /Bruta\s+Facult/i.test(l)) {
+      for (let j = i; j <= i + 2 && j < linhas.length; j++) {
+        const vals = money(linhas[j]);
+        if (vals.length >= 6) { brutaFacult = vals[2]; break; }
+      }
+    }
+
+    // Bloco utilizadas: 3 valores na sequência Facultativa · Cartão · Cartão Benefício
+    // (podem estar 1-3 linhas abaixo do rótulo, misturados com a nota de rodapé)
+    if (utilFacult === null && /Utilizada\s+Facultativa/i.test(l)) {
+      for (let j = i; j <= i + 3 && j < linhas.length; j++) {
+        const vals = money(linhas[j]);
+        if (vals.length >= 3) {
+          utilFacult      = vals[vals.length - 3];
+          utilCartao      = vals[vals.length - 2];
+          utilCartaoBenef = vals[vals.length - 1];
+          break;
+        }
+      }
+    }
+  }
+
+  const margem = (brutaFacult !== null && utilFacult !== null)
+    ? brutaFacult - utilFacult - (utilCartao || 0) - (utilCartaoBenef || 0)
+    : null;
+  return { nome, brutaFacult, utilFacult, utilCartao, utilCartaoBenef, margem };
+}
+
+// Pinta o painel de margem do extrato e, se negativa, alimenta os campos
+// "Margem negativa atual" (Simples e Refim) automaticamente.
+function mostrarMargemExtrato(info) {
+  const box = document.getElementById('margemExtratoBox');
+  if (!box) return;
+  if (info.margem === null) { box.style.display = 'none'; return; }
+
+  const neg = info.margem < 0;
+  const cor = neg ? '#DC2626' : '#10B981';
+  const linha = (lbl, v, sinal) =>
+    `<div style="display:flex;justify-content:space-between;font-size:12px;color:#4B5563;padding:2px 0;">
+       <span>${sinal} ${lbl}</span><span>${fmt(v)}</span>
+     </div>`;
+
+  box.innerHTML = `
+    <div style="border:1px solid ${neg ? '#FECACA' : '#A7F3D0'};background:${neg ? '#FEF2F2' : '#ECFDF5'};border-radius:8px;padding:12px 16px;max-width:420px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin-bottom:6px;">Margem do cliente (extrato)</div>
+      ${linha('Bruta Facult. Global', info.brutaFacult, '')}
+      ${linha('Utilizada Facultativa', info.utilFacult, '−')}
+      ${linha('Utilizada Cartão', info.utilCartao || 0, '−')}
+      ${linha('Utilizada Cartão Benefício', info.utilCartaoBenef || 0, '−')}
+      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:${cor};border-top:1px solid ${neg ? '#FECACA' : '#A7F3D0'};margin-top:6px;padding-top:6px;">
+        <span>${neg ? '⚠️ Margem NEGATIVA' : '✅ Margem disponível'}</span><span>${fmt(info.margem)}</span>
+      </div>
+      ${neg ? `<div style="font-size:11px;color:#92400E;margin-top:6px;">Preenchido automaticamente em "Margem negativa atual" (Simples e Com Troco).</div>` : ''}
+    </div>`;
+  box.style.display = 'block';
+
+  if (neg) {
+    const abs = Math.abs(info.margem);
+    const s = document.getElementById('simpMargemNeg');
+    if (s) s.value = fmt(abs);
+    const r = document.getElementById('refimMargemNeg');
+    if (r) r.value = fmt(abs);
+    if (typeof calcSimples === 'function') calcSimples();
+    if (typeof calcRefim === 'function') calcRefim();
+  }
 }
 
 function extrairContratos(texto, items) {
@@ -2849,6 +2956,10 @@ function limparSimulador() {
   document.getElementById('nomeCliente').value = '';
   document.getElementById('cpfCliente').value = '';
   document.getElementById('convenio').value = '';
+
+  // Esconde painel de margem do extrato
+  const margemBox = document.getElementById('margemExtratoBox');
+  if (margemBox) { margemBox.style.display = 'none'; margemBox.innerHTML = ''; }
   
   // Limpa campos de consultor (se existirem)
   const consultorNome = document.getElementById('consultorNome');
