@@ -2725,6 +2725,7 @@ function extrairMargemENome(texto, items, rotate) {
 
   let nome = '';
   let brutaFacult = null, utilFacult = null, utilCartao = null, utilCartaoBenef = null;
+  let liquidaComp = null; // Líquida Compulsória — limitadora de todas as margens
 
   for (let i = 0; i < linhas.length; i++) {
     const l = linhas[i];
@@ -2741,7 +2742,7 @@ function extrairMargemENome(texto, items, rotate) {
     if (brutaFacult === null && /Bruta\s+Facult/i.test(l)) {
       for (let j = i; j <= i + 2 && j < linhas.length; j++) {
         const vals = money(linhas[j]);
-        if (vals.length >= 6) { brutaFacult = vals[2]; break; }
+        if (vals.length >= 6) { liquidaComp = vals[1]; brutaFacult = vals[2]; break; }
       }
     }
 
@@ -2763,7 +2764,7 @@ function extrairMargemENome(texto, items, rotate) {
   const margem = (brutaFacult !== null && utilFacult !== null)
     ? brutaFacult - utilFacult - (utilCartao || 0) - (utilCartaoBenef || 0)
     : null;
-  return { nome, brutaFacult, utilFacult, utilCartao, utilCartaoBenef, margem };
+  return { nome, brutaFacult, utilFacult, utilCartao, utilCartaoBenef, liquidaComp, margem };
 }
 
 // Pinta o painel de margem do extrato e, se negativa, alimenta os campos
@@ -2772,6 +2773,24 @@ function mostrarMargemExtrato(info) {
   const box = document.getElementById('margemExtratoBox');
   if (!box) return;
   if (info.margem === null) { box.style.display = 'none'; return; }
+
+  // Líquida Compulsória é a LIMITADORA de todas as margens: se for menor que a
+  // margem calculada, o cliente não tem esse espaço — mostra alerta em vez do resultado.
+  if (info.margem >= 0 && info.liquidaComp !== null && info.liquidaComp < info.margem - 0.01) {
+    box.innerHTML = `
+      <div style="border:1px solid #FDE68A;background:#FFFBEB;border-radius:8px;padding:12px 16px;max-width:420px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#92400E;margin-bottom:6px;">⚠️ Compulsória limita a margem</div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#4B5563;padding:2px 0;">
+          <span>Margem calculada (facultativa)</span><span>${fmt(info.margem)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:#B45309;border-top:1px solid #FDE68A;margin-top:6px;padding-top:6px;">
+          <span>Líquida Compulsória</span><span>${fmt(info.liquidaComp)}</span>
+        </div>
+        <div style="font-size:11px;color:#92400E;margin-top:6px;">A Líquida Compulsória é menor que a margem calculada — ela é a limitadora: o espaço real do cliente é ${fmt(info.liquidaComp)}.</div>
+      </div>`;
+    box.style.display = 'block';
+    return;
+  }
 
   const neg = info.margem < 0;
   const cor = neg ? '#DC2626' : '#10B981';
@@ -2991,6 +3010,28 @@ function limparSimulador() {
   // Esconde painel de margem do extrato
   const margemBox = document.getElementById('margemExtratoBox');
   if (margemBox) { margemBox.style.display = 'none'; margemBox.innerHTML = ''; }
+
+  // Banner de cliente detectado + painel de cotações salvas
+  const bannerCli = document.getElementById('clienteDetectado');
+  if (bannerCli) bannerCli.style.display = 'none';
+  const painelCot = document.getElementById('cotacoesPanel');
+  if (painelCot) painelCot.innerHTML = '';
+
+  // Campos do modal de identificação
+  const mCpf = document.getElementById('modalCpfCliente');
+  if (mCpf) mCpf.value = '';
+  const mNome = document.getElementById('modalNomeCliente');
+  if (mNome) mNome.value = '';
+
+  // Margem negativa (Simples e Refim) — preenchida pela importação do extrato
+  const sNeg = document.getElementById('simpMargemNeg');
+  if (sNeg) sNeg.value = '';
+  const rNeg = document.getElementById('refimMargemNeg');
+  if (rNeg) rNeg.value = '';
+
+  // Status da importação de PDF
+  const pdfSt = document.getElementById('pdfStatus');
+  if (pdfSt) pdfSt.textContent = '';
   
   // Limpa campos de consultor (se existirem)
   const consultorNome = document.getElementById('consultorNome');
