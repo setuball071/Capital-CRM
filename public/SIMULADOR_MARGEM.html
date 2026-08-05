@@ -613,7 +613,7 @@ function renderResults() {
       else badge = '<span class="badge badge-no">Nao entra</span>';
     }
     // Init state for this row
-    if (!(i in current._rendState)) current._rendState[i] = { on: defaultOn, frac: 1.0 };
+    if (!(i in current._rendState)) current._rendState[i] = { on: r.manual ? true : defaultOn, frac: 1.0 };
     const state = current._rendState[i];
     const entra = state.on ? r.valor * state.frac : 0;
     if (entra > 0) base += entra;
@@ -712,8 +712,9 @@ function renderResults() {
 
   // mg70_util = total_rendimentos - total_liquido (TODOS os descontos — fonte SIAPE oficial)
   // Fallback: soma dos descontos individuais se bruto/liquido nao disponiveis
+  const manualDesc = current.descontos.filter(d => d.manual).reduce((s, d) => s + d.valor, 0);
   const compuls = (current.bruto && current.liquido)
-    ? Math.max(0, current.bruto - current.liquido)
+    ? Math.max(0, current.bruto - current.liquido) + manualDesc
     : current.descontos.reduce((s, d) => s + d.valor, 0);
 
   const trTotD = document.createElement('tr');
@@ -1093,9 +1094,9 @@ function confirmAddItem() {
   if (isNaN(valor) || valor < 0) { alert('Valor invalido. Use formato: 1.234,56'); return; }
   _saveHist(type, discr.toUpperCase());
   if (type === 'rend') {
-    current.rendimentos.push({ discriminacao: discr, prazo, valor });
+    current.rendimentos.push({ discriminacao: discr, prazo, valor, manual: true });
   } else {
-    current.descontos.push({ discriminacao: discr, prazo, valor });
+    current.descontos.push({ discriminacao: discr, prazo, valor, manual: true });
   }
   closeAddModal();
   renderResults();
