@@ -1688,7 +1688,19 @@ body { background: #F8F8FC !important; color: #111827 !important; }
 
       <!-- RESULTADO SEPARADO POR CONTRATO -->
       <div id="refimResultadoSeparado" style="display:none;margin-top:16px;">
-        <h3 style="font-size:15px;margin:0 0 12px 0;color:#6C2BD9;">📊 Resultado por Contrato</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px 0;">
+          <h3 style="font-size:15px;margin:0;color:#6C2BD9;">📊 Resultado por Contrato</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button onclick="maximizarTrocos()" style="padding:6px 14px;background:#16A34A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;"
+              title="Calcula o troco máximo de cada contrato (parcela nova = parcela atual). Se houver margem negativa, respeita a redução necessária para cobri-la.">
+              ⚡ Maximizar trocos
+            </button>
+            <button onclick="resetarTrocos()" style="padding:6px 12px;background:#F3F4F6;color:#374151;border:1px solid #E5E7EB;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;"
+              title="Volta todos os trocos para o mínimo do banco">
+              ↺ Mínimo
+            </button>
+          </div>
+        </div>
         <div style="overflow-x:auto;">
           <table style="width:100%;border-collapse:collapse;font-size:12px;">
             <thead>
@@ -6419,6 +6431,104 @@ function salvarParaDigitacao() {
   a.download = `simulacao-${nomeCliente.replace(/\s+/g, '-')}-${data}.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// Contratos elegíveis do refim — mesma regra usada em calcRefim (separado)
+function _marcadosRefim(regra) {
+  return getContratosMarcados().filter(c =>
+    c.acao !== 'quitar' &&
+    (regra.taxaLivre ? true : parseBR(c.taxa) >= regra.entradaMin)
+  );
+}
+
+// Calcula o troco máximo de cada contrato de uma vez.
+// Teto de cada contrato: a parcela nova não pode superar a atual.
+// Com margem negativa informada, UM contrato (o de maior parcela) é reservado para
+// cobri-la individualmente — regra do simulador: a cobertura nunca é pela soma.
+// Como pv() é linear, o troco sacrificado é o mesmo qualquer que seja o contrato escolhido.
+function maximizarTrocos() {
+  const nomeBanco = document.getElementById('refimBanco').value;
+  const regra = regrasBancos.find(r => r.banco === nomeBanco);
+  if (!regra) { alert('Selecione o banco de destino antes de maximizar os trocos.'); return; }
+  const taxaRefim = getTaxaRefim(regra);
+  if (taxaRefim === null) { alert('Informe a taxa negociada antes de maximizar os trocos.'); return; }
+
+  const marcados = _marcadosRefim(regra);
+  if (!marcados.length) { alert('Nenhum contrato elegível para portar.'); return; }
+
+  const margemNeg   = parseBR(document.getElementById('refimMargemNeg')?.value || '0');
+  const fatorSeguro = 1 + (Number(regra.seguro) || 0) / 100;
+  const minTroco    = regra.minTroco || 250;
+  const prazo       = 120; // refim com troco sempre em 120 meses
+  const price       = mkPrice(taxaRefim, prazo);
+
+  // Escolhe quem cobre a margem negativa. O critério NÃO é a maior parcela e sim a
+  // maior REDUÇÃO possível: com troco zero, a parcela cai para pmt(saldo) — se essa
+  // queda já não alcança o negativo, o contrato não consegue cobrir de jeito nenhum.
+  const reducaoMax = c => {
+    const s = c.acao === 'amortizar'
+      ? Math.max(0, parseBR(c.saldo) - (c.amort || 0))
+      : parseBR(c.saldo);
+    return parseBR(c.parcela) - price.pmt(s * fatorSeguro);
+  };
+  let idxCobre = -1;
+  if (margemNeg > 0) {
+    let melhor = 0;
+    marcados.forEach((c, idx) => {
+      const red = reducaoMax(c);
+      if (red >= margemNeg - 0.01 && red > melhor) { melhor = red; idxCobre = idx; }
+    });
+  }
+
+  let abaixoMin = 0, semEspaco = 0;
+  marcados.forEach((c, idx) => {
+    const saldo = c.acao === 'amortizar'
+      ? Math.max(0, parseBR(c.saldo) - (c.amort || 0))
+      : parseBR(c.saldo);
+    // Só o contrato reservado abre mão de parcela para cobrir o negativo
+    const parcelaAlvo = Math.max(0, parseBR(c.parcela) - (idx === idxCobre ? margemNeg : 0));
+    // Inverte a Price: quanto de troco cabe para a parcela chegar no alvo
+    const trocoBruto  = price.pv(parcelaAlvo) / fatorSeguro - saldo;
+    const trocoLiq    = trocoBruto > 0 ? trocoBruto / (1 + IOF_RATE) : 0;
+    if (trocoLiq <= 0) semEspaco++;
+    else if (trocoLiq < minTroco) abaixoMin++;
+    trocosSeparado[idx] = Math.max(0, Math.floor(trocoLiq * 100) / 100); // trunca p/ não estourar o teto
+  });
+
+  calcRefim();
+
+  let msg = `⚡ Trocos maximizados em ${marcados.length} contrato(s)`;
+  if (margemNeg > 0) {
+    msg += idxCobre >= 0
+      ? ` — ${marcados[idxCobre].banco || 'um contrato'} reservado para cobrir o negativo de ${fmtBRL(margemNeg)}`
+      : ` — ⚠️ nenhum contrato tem parcela suficiente para cobrir o negativo de ${fmtBRL(margemNeg)}`;
+  }
+  if (semEspaco) msg += ` · ${semEspaco} sem espaço para troco`;
+  if (abaixoMin) msg += ` · ${abaixoMin} abaixo do troco mínimo`;
+  _toastRefim(msg, (semEspaco || abaixoMin || (margemNeg > 0 && idxCobre < 0)) ? '#D97706' : '#16A34A');
+}
+
+// Volta todos os trocos para o mínimo do banco
+function resetarTrocos() {
+  const nomeBanco = document.getElementById('refimBanco').value;
+  const regra = regrasBancos.find(r => r.banco === nomeBanco);
+  if (!regra) return;
+  const minTroco = regra.minTroco || 250;
+  _marcadosRefim(regra).forEach((c, idx) => { trocosSeparado[idx] = minTroco; });
+  calcRefim();
+  _toastRefim(`↺ Trocos redefinidos para o mínimo do ${nomeBanco} (${fmtBRL(minTroco)})`, '#6C2BD9');
+}
+
+function _toastRefim(msg, cor) {
+  const el = document.createElement('div');
+  el.style.cssText = `position:fixed;top:20px;right:20px;background:${cor};color:#fff;padding:12px 20px;border-radius:8px;font-weight:600;z-index:9999;box-shadow:0 4px 6px rgba(0,0,0,.1);max-width:420px;font-size:13px;`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity .3s';
+    setTimeout(() => document.body.removeChild(el), 300);
+  }, 3000);
 }
 
 function calcRefim() {
