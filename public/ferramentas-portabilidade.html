@@ -1691,9 +1691,13 @@ body { background: #F8F8FC !important; color: #111827 !important; }
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px 0;">
           <h3 style="font-size:15px;margin:0;color:#6C2BD9;">📊 Resultado por Contrato</h3>
           <div style="display:flex;gap:8px;align-items:center;">
-            <button onclick="maximizarTrocos()" style="padding:6px 14px;background:#16A34A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;"
-              title="Calcula o troco máximo de cada contrato (parcela nova = parcela atual). Se houver margem negativa, respeita a redução necessária para cobri-la.">
-              ⚡ Maximizar trocos
+            <button onclick="maximizarTrocos(false)" style="padding:6px 14px;background:#16A34A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;"
+              title="Troco máximo de cada contrato: parcela nova = parcela atual. Libera o maior valor possível (não reserva redução para cobrir margem negativa).">
+              ⚡ Máximo
+            </button>
+            <button id="btnMaxMargem" onclick="maximizarTrocos(true)" style="display:none;padding:6px 14px;background:#D97706;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;"
+              title="Troco máximo mantendo um contrato com redução suficiente para cobrir a margem negativa. Libera menos troco, porém a operação passa na margem.">
+              🛡️ Máx. cobrindo margem
             </button>
             <button onclick="resetarTrocos()" style="padding:6px 12px;background:#F3F4F6;color:#374151;border:1px solid #E5E7EB;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;"
               title="Volta todos os trocos para o mínimo do banco">
@@ -6443,10 +6447,13 @@ function _marcadosRefim(regra) {
 
 // Calcula o troco máximo de cada contrato de uma vez.
 // Teto de cada contrato: a parcela nova não pode superar a atual.
-// Com margem negativa informada, UM contrato (o de maior parcela) é reservado para
-// cobri-la individualmente — regra do simulador: a cobertura nunca é pela soma.
-// Como pv() é linear, o troco sacrificado é o mesmo qualquer que seja o contrato escolhido.
-function maximizarTrocos() {
+//
+// cobrirMargem=false → máximo absoluto (todo contrato vai ao teto).
+// cobrirMargem=true  → reserva UM contrato com redução >= margem negativa, para a
+//   operação passar na margem (regra do simulador: cobertura é individual, nunca
+//   pela soma). Isso custa pv(margemNeg) de troco — como pv() é linear, o custo é
+//   o mesmo qualquer que seja o contrato reservado.
+function maximizarTrocos(cobrirMargem) {
   const nomeBanco = document.getElementById('refimBanco').value;
   const regra = regrasBancos.find(r => r.banco === nomeBanco);
   if (!regra) { alert('Selecione o banco de destino antes de maximizar os trocos.'); return; }
@@ -6472,7 +6479,7 @@ function maximizarTrocos() {
     return parseBR(c.parcela) - price.pmt(s * fatorSeguro);
   };
   let idxCobre = -1;
-  if (margemNeg > 0) {
+  if (cobrirMargem && margemNeg > 0) {
     let melhor = 0;
     marcados.forEach((c, idx) => {
       const red = reducaoMax(c);
@@ -6497,15 +6504,27 @@ function maximizarTrocos() {
 
   calcRefim();
 
-  let msg = `⚡ Trocos maximizados em ${marcados.length} contrato(s)`;
-  if (margemNeg > 0) {
-    msg += idxCobre >= 0
-      ? ` — ${marcados[idxCobre].banco || 'um contrato'} reservado para cobrir o negativo de ${fmtBRL(margemNeg)}`
-      : ` — ⚠️ nenhum contrato tem parcela suficiente para cobrir o negativo de ${fmtBRL(margemNeg)}`;
+  // Custo de reservar um contrato para cobrir o negativo (pv da redução exigida)
+  const custoCobertura = margemNeg > 0
+    ? price.pv(margemNeg) / fatorSeguro / (1 + IOF_RATE)
+    : 0;
+
+  let msg, alerta = semEspaco || abaixoMin;
+  if (cobrirMargem) {
+    msg = idxCobre >= 0
+      ? `🛡️ Trocos no máximo com ${marcados[idxCobre].banco || 'um contrato'} cobrindo o negativo de ${fmtBRL(margemNeg)} — custa ${fmtBRL(custoCobertura)} de troco`
+      : `⚠️ Nenhum contrato consegue cobrir o negativo de ${fmtBRL(margemNeg)} nem com troco zero — trocos ficaram no máximo`;
+    if (idxCobre < 0) alerta = true;
+  } else {
+    msg = `⚡ Trocos no máximo em ${marcados.length} contrato(s)`;
+    if (margemNeg > 0) {
+      msg += ` — negativo de ${fmtBRL(margemNeg)} NÃO coberto (usar "Máx. cobrindo margem" custaria ${fmtBRL(custoCobertura)})`;
+      alerta = true;
+    }
   }
   if (semEspaco) msg += ` · ${semEspaco} sem espaço para troco`;
   if (abaixoMin) msg += ` · ${abaixoMin} abaixo do troco mínimo`;
-  _toastRefim(msg, (semEspaco || abaixoMin || (margemNeg > 0 && idxCobre < 0)) ? '#D97706' : '#16A34A');
+  _toastRefim(msg, alerta ? '#D97706' : '#16A34A');
 }
 
 // Volta todos os trocos para o mínimo do banco
@@ -6543,6 +6562,9 @@ function calcRefim() {
 
   if (!regra) return;
   const margemNeg = parseBR(document.getElementById('refimMargemNeg')?.value || '0');
+  // Botão de maximizar cobrindo a margem só faz sentido com negativo informado
+  const btnMaxMg = document.getElementById('btnMaxMargem');
+  if (btnMaxMg) btnMaxMg.style.display = margemNeg > 0 ? '' : 'none';
 
   // Campo taxa livre (Caixa)
   const taxaLivreWrap = document.getElementById('wrapTaxaLivre');
