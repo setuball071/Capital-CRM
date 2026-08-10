@@ -1307,6 +1307,20 @@ body { background: #F8F8FC !important; color: #111827 !important; }
     </div>
     <button onclick="buscarCotacoesPorCpf(document.getElementById('cpfCliente').value)" style="padding:4px 10px;background:#16A34A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;">📂 Ver cotações salvas</button>
   </div>
+  <!-- BUSCA: cotações salvas por CPF (sem precisar anexar o extrato) -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:10px 16px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;flex-wrap:wrap;">
+    <span style="font-size:12px;font-weight:700;color:#6C2BD9;white-space:nowrap;">🔎 Buscar cotações salvas por CPF:</span>
+    <input id="buscaCpfCotacoes" placeholder="000.000.000-00" maxlength="14"
+      style="width:150px;font-size:13px;padding:5px 8px;border:1px solid #DDD6FE;border-radius:5px;"
+      oninput="this.value = _formatarCpf(this.value)"
+      onkeydown="if(event.key==='Enter'){buscarCotacoesPorCpfManual();}">
+    <button onclick="buscarCotacoesPorCpfManual()"
+      style="padding:5px 14px;background:#6C2BD9;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+      Buscar
+    </button>
+    <span id="buscaCpfStatus" style="font-size:12px;color:#6B7280;"></span>
+  </div>
+
   <!-- PAINEL: cotações salvas por CPF -->
   <div id="cotacoesPanel"></div>
 
@@ -3043,6 +3057,10 @@ function limparSimulador() {
   if (bannerCli) bannerCli.style.display = 'none';
   const painelCot = document.getElementById('cotacoesPanel');
   if (painelCot) painelCot.innerHTML = '';
+  const buscaCpf = document.getElementById('buscaCpfCotacoes');
+  if (buscaCpf) buscaCpf.value = '';
+  const buscaSt = document.getElementById('buscaCpfStatus');
+  if (buscaSt) buscaSt.textContent = '';
 
   // Campos do modal de identificação
   const mCpf = document.getElementById('modalCpfCliente');
@@ -6930,14 +6948,57 @@ async function salvarCotacao() {
   }
 }
 
+// Máscara de digitação do CPF (000.000.000-00).
+// Não confundir com mascaraCPF(), que OCULTA dígitos por privacidade.
+function _formatarCpf(v) {
+  v = (v || '').replace(/\D/g, '').slice(0, 11);
+  v = v.replace(/(\d{3})(\d)/, '$1.$2');
+  v = v.replace(/(\d{3})(\d)/, '$1.$2');
+  v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  return v;
+}
+
+// Busca manual de cotações salvas — permite consultar sem anexar o extrato
+async function buscarCotacoesPorCpfManual() {
+  const input  = document.getElementById('buscaCpfCotacoes');
+  const status = document.getElementById('buscaCpfStatus');
+  const cpf    = (input?.value || '').trim();
+  const limpo  = cpf.replace(/\D/g, '');
+
+  if (limpo.length !== 11) {
+    if (status) { status.textContent = '⚠️ Informe os 11 dígitos do CPF.'; status.style.color = '#D97706'; }
+    return;
+  }
+
+  if (status) { status.textContent = 'Buscando…'; status.style.color = '#6B7280'; }
+  const achou = await buscarCotacoesPorCpf(cpf);
+
+  if (status) {
+    if (achou > 0) {
+      status.textContent = `✅ ${achou} cotação(ões) encontrada(s).`;
+      status.style.color = '#16A34A';
+    } else {
+      status.textContent = 'Nenhuma cotação salva para este CPF.';
+      status.style.color = '#6B7280';
+    }
+  }
+  // Alimenta os campos do cliente para que "Salvar Cotação" funcione sem o PDF
+  if (achou > 0) {
+    const cpfEl = document.getElementById('cpfCliente');
+    if (cpfEl && !cpfEl.value) cpfEl.value = cpf;
+    const mCpf = document.getElementById('modalCpfCliente');
+    if (mCpf && !mCpf.value) mCpf.value = cpf;
+  }
+}
+
 async function buscarCotacoesPorCpf(cpf) {
   const panel = document.getElementById('cotacoesPanel');
-  if (!panel || !cpf) return;
+  if (!panel || !cpf) return 0;
   try {
     const resp = await fetch(`/api/cotacoes-simulador?cpf=${encodeURIComponent(cpf)}`, { credentials: 'include' });
-    if (!resp.ok) return;
+    if (!resp.ok) return 0;
     const lista = await resp.json();
-    if (!lista.length) { panel.innerHTML = ''; return; }
+    if (!lista.length) { panel.innerHTML = ''; return 0; }
     panel.innerHTML = `
       <div style="margin-bottom:12px;padding:12px 16px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;">
         <div style="font-size:12px;font-weight:700;color:#6C2BD9;margin-bottom:8px;">📂 Cotações salvas para este cliente</div>
@@ -6952,8 +7013,10 @@ async function buscarCotacoesPorCpf(cpf) {
             <button onclick="excluirCotacao(${c.id},'${cpf}')" style="padding:4px 8px;background:#FEE2E2;color:#DC2626;border:none;border-radius:5px;cursor:pointer;font-size:11px;">✕</button>
           </div>`).join('')}
       </div>`;
+    return lista.length;
   } catch (err) {
     console.warn('[cotacoes] busca falhou:', err);
+    return 0;
   }
 }
 
