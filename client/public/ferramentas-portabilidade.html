@@ -6380,7 +6380,9 @@ function atualizarVisibilidadeCampos() {
 let taxasLivres = {};
 
 function setTaxaLivre(banco, valor) {
-  const v = parseBR(valor);
+  // input type=number entrega decimal com PONTO ("1.5") — parseBR trataria o
+  // ponto como separador de milhar e 1.5 viraria 15% a.m. Parse direto:
+  const v = parseFloat(String(valor || '').replace(',', '.')) || 0;
   if (v > 0) taxasLivres[banco] = v; else delete taxasLivres[banco];
   calcRefim();
 }
@@ -6407,7 +6409,7 @@ function renderTaxasLivres() {
     <div class="field" style="max-width:200px;">
       <label>Taxa ${r.banco} (% a.m.)</label>
       <input type="number" step="0.01" placeholder="Ex: 1,40"
-        value="${taxasLivres[r.banco] != null ? String(taxasLivres[r.banco]).replace('.', ',') : ''}"
+        value="${taxasLivres[r.banco] != null ? taxasLivres[r.banco] : ''}"
         onchange="setTaxaLivre('${r.banco.replace(/'/g, "\\'")}', this.value)"
         style="border:2px solid ${taxasLivres[r.banco] > 0 ? '#6C2BD9' : '#F59E0B'};font-weight:700;">
     </div>`).join('');
