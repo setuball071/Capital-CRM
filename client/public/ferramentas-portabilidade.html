@@ -1589,6 +1589,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
               <th style="width:90px;">Taxa Atual</th>
               <th style="width:90px;">Parcela Atual</th>
               <th style="width:70px;">Pagas</th>
+              <th style="width:140px;" title="Para onde este contrato vai. Deixe em Padrão para usar o Banco Destino selecionado acima.">Banco Destino</th>
               <th style="width:160px;">Status</th>
             </tr>
           </thead>
@@ -2708,7 +2709,8 @@ async function importarPDFFile(file) {
         amort:           0,
         portar:          false,
         taxaPort:        1.30,
-        prazoPort:       48
+        prazoPort:       48,
+        bancoDestino:    ''  // vazio = usa o Banco Destino global do refim
       });
       if (c.semParcela) semParcela++;
     });
@@ -3472,7 +3474,8 @@ function addContrato() {
     amort:           0,
     portar:          false,
     taxaPort:        1.30,
-    prazoPort:       48
+    prazoPort:       48,
+    bancoDestino:    ''  // vazio = usa o Banco Destino global do refim
   });
   renderContratos();
 }
@@ -5932,7 +5935,7 @@ let tipoPort = 'simples';
 let _novasSimples = {};
 let _novasRefim   = {};
 let prazosSeparado = {}; // não usado no refim (prazo sempre 120)
-let trocosSeparado = {}; // { idx: trocoLiquido } — troco editável por contrato no modo separado
+let trocosSeparado = {}; // { contratoId: trocoLiquido } — troco editável por contrato (id, não índice: com múltiplos bancos os índices deixam de ser estáveis)
 let prazosSimpSeparado = {}; // { idx: prazo } — prazo editável por contrato na port. simples separada
 
 // Resultado do refim — atualizado por renderResultadoRefim e calcRefim (separado)
@@ -6366,6 +6369,42 @@ function avaliarElegibilidade(contrato, regra) {
   return { portavel, remunera, motivo, pagasRealizadas };
 }
 
+// Banco destino efetivo de um contrato: o escolhido na linha ou, se "Padrão",
+// o Banco Destino global do refim.
+function _bancoDoContrato(c) {
+  return (c && c.bancoDestino) || document.getElementById('refimBanco')?.value || '';
+}
+function _regraDoContrato(c) {
+  const nome = _bancoDoContrato(c);
+  return nome ? regrasBancos.find(r => r.banco === nome) : null;
+}
+
+// Agrupa os contratos marcados por banco destino efetivo.
+// Retorna [{ banco, regra, contratos: [...] }] na ordem em que os bancos aparecem.
+function _gruposPorBancoDestino(lista) {
+  const mapa = new Map();
+  lista.forEach(c => {
+    const nome = _bancoDoContrato(c);
+    if (!mapa.has(nome)) mapa.set(nome, []);
+    mapa.get(nome).push(c);
+  });
+  return Array.from(mapa.entries()).map(([banco, contratos]) => ({
+    banco,
+    regra: regrasBancos.find(r => r.banco === banco) || null,
+    contratos,
+  }));
+}
+
+function setBancoDestino(id, banco) {
+  const c = contratos.find(x => x.id === id);
+  if (!c) return;
+  c.bancoDestino = banco || '';
+  // O conjunto por banco mudou: os trocos daquele contrato voltam ao padrão do novo banco
+  delete trocosSeparado[c.id];
+  pintarRefimContratos();
+  calcRefim();
+}
+
 function pintarRefimContratos() {
   const nome  = document.getElementById('refimBanco').value;
   const regra = regrasBancos.find(r => r.banco === nome);
@@ -6373,7 +6412,7 @@ function pintarRefimContratos() {
   const tb = document.getElementById('tbRefimContratos');
 
   if (!marcados.length) {
-    tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#9CA3AF;padding:16px;">Nenhum contrato marcado para portar.</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#9CA3AF;padding:16px;">Nenhum contrato marcado para portar.</td></tr>`;
     document.getElementById('refimSaldoTotal').textContent = '';
     return;
   }
@@ -6385,18 +6424,20 @@ function pintarRefimContratos() {
     const taxa  = parseBR(c.taxa);
     const saldoBruto = parseBR(c.saldo);
     const saldo = c.acao === 'amortizar' ? Math.max(0, saldoBruto - (c.amort || 0)) : saldoBruto;
-    const elig  = avaliarElegibilidade(c, regra);
+    // Cada contrato e avaliado pela regra do SEU banco destino (ou o global, se Padrao)
+    const regraC = _regraDoContrato(c) || regra;
+    const elig  = avaliarElegibilidade(c, regraC);
     const prazoTotal    = parseInt(c.prazo_total) || 0;
     const prazoRestante = parseInt(c.prazo)       || 0;
     const pagasStr = prazoTotal > 0 ? `${prazoTotal - prazoRestante}/${prazoTotal}` : '–';
     let statusHtml = '';
 
-    if (!regra) {
+    if (!regraC) {
       statusHtml = `<span style="color:#9CA3AF;font-size:12px;">Selecione banco</span>`;
     } else {
-      const taxaOk = taxa >= regra.entradaMin;
+      const taxaOk = taxa >= regraC.entradaMin;
       if (!taxaOk) {
-        statusHtml = `<span style="color:#EF4444;font-weight:600;font-size:12px;">🔴 Taxa baixa</span><br><span style="font-size:10px;color:#9CA3AF;">mín ${fmtPct(regra.entradaMin)}%</span>`;
+        statusHtml = `<span style="color:#EF4444;font-weight:600;font-size:12px;">🔴 Taxa baixa</span><br><span style="font-size:10px;color:#9CA3AF;">mín ${fmtPct(regraC.entradaMin)}%</span>`;
       } else if (elig.portavel === null) {
         statusHtml = `<span style="color:#16A34A;font-weight:600;font-size:12px;">🟢 Taxa aceita</span><br><span style="font-size:10px;color:#9CA3AF;">pagas: ?</span>`;
         saldoRemunerado += saldo; qtdRemunerado++;
@@ -6417,6 +6458,13 @@ function pintarRefimContratos() {
       <td>${fmtPct(taxa)}</td>
       <td>${fmtBRL(parseBR(c.parcela))}</td>
       <td style="text-align:center;font-size:12px;color:#6B7280;">${pagasStr}</td>
+      <td style="text-align:center;">
+        <select onchange="setBancoDestino(${c.id}, this.value)"
+          style="width:130px;font-size:11px;padding:3px 4px;border:1px solid ${c.bancoDestino ? '#6C2BD9' : '#E5E7EB'};border-radius:4px;font-weight:${c.bancoDestino ? '700' : '400'};color:${c.bancoDestino ? '#6C2BD9' : '#6B7280'};">
+          <option value="">Padrão${nome ? ' (' + nome + ')' : ''}</option>
+          ${regrasBancos.map(r => `<option value="${r.banco}" ${c.bancoDestino === r.banco ? 'selected' : ''}>${r.banco}</option>`).join('')}
+        </select>
+      </td>
       <td>${statusHtml}</td>
     </tr>`;
   }).join('');
@@ -6601,15 +6649,8 @@ function salvarParaDigitacao() {
   URL.revokeObjectURL(url);
 }
 
-// Contratos elegíveis do refim — mesma regra usada em calcRefim (separado)
-function _marcadosRefim(regra) {
-  return getContratosMarcados().filter(c =>
-    c.acao !== 'quitar' &&
-    (regra.taxaLivre ? true : parseBR(c.taxa) >= regra.entradaMin)
-  );
-}
-
-// Calcula o troco máximo de cada contrato de uma vez.
+// Calcula o troco máximo de cada contrato de uma vez, respeitando o banco destino
+// de cada um (cada grupo usa taxa, seguro e troco mínimo do SEU banco).
 // Teto de cada contrato: a parcela nova não pode superar a atual.
 //
 // cobrirMargem=false → máximo absoluto (todo contrato vai ao teto).
@@ -6618,69 +6659,87 @@ function _marcadosRefim(regra) {
 //   pela soma). Isso custa pv(margemNeg) de troco — como pv() é linear, o custo é
 //   o mesmo qualquer que seja o contrato reservado.
 function maximizarTrocos(cobrirMargem) {
-  const nomeBanco = document.getElementById('refimBanco').value;
-  const regra = regrasBancos.find(r => r.banco === nomeBanco);
-  if (!regra) { alert('Selecione o banco de destino antes de maximizar os trocos.'); return; }
-  const taxaRefim = getTaxaRefim(regra);
-  if (taxaRefim === null) { alert('Informe a taxa negociada antes de maximizar os trocos.'); return; }
+  const marcadosTodos = getContratosMarcados().filter(c => c.acao !== 'quitar');
+  if (!marcadosTodos.length) { alert('Nenhum contrato marcado para portar.'); return; }
 
-  const marcados = _marcadosRefim(regra);
-  if (!marcados.length) { alert('Nenhum contrato elegível para portar.'); return; }
+  const grupos = _gruposPorBancoDestino(marcadosTodos);
+  const margemNeg = parseBR(document.getElementById('refimMargemNeg')?.value || '0');
+  const prazo = 120; // refim com troco sempre em 120 meses
 
-  const margemNeg   = parseBR(document.getElementById('refimMargemNeg')?.value || '0');
-  const fatorSeguro = 1 + (Number(regra.seguro) || 0) / 100;
-  const minTroco    = regra.minTroco || 250;
-  const prazo       = 120; // refim com troco sempre em 120 meses
-  const price       = mkPrice(taxaRefim, prazo);
+  const saldoDe = c => c.acao === 'amortizar'
+    ? Math.max(0, parseBR(c.saldo) - (c.amort || 0))
+    : parseBR(c.saldo);
+
+  // 1ª passada: monta os candidatos elegíveis de cada grupo com seus parâmetros
+  const itens = [];   // { c, price, fatorSeguro, minTroco, saldo, reducaoMax }
+  const semRegra = [];
+  grupos.forEach(g => {
+    const regraG = g.regra;
+    if (!regraG) { semRegra.push(g.banco || '—'); return; }
+    const taxaG = getTaxaRefim(regraG);
+    if (taxaG === null) { semRegra.push(regraG.banco + ' (sem taxa)'); return; }
+    const fatorSeguro = 1 + (Number(regraG.seguro) || 0) / 100;
+    const minTroco    = regraG.minTroco || 250;
+    const price       = mkPrice(taxaG, prazo);
+    g.contratos
+      .filter(c => regraG.taxaLivre ? true : parseBR(c.taxa) >= regraG.entradaMin)
+      .forEach(c => {
+        const saldo = saldoDe(c);
+        itens.push({
+          c, price, fatorSeguro, minTroco, saldo,
+          reducaoMax: parseBR(c.parcela) - price.pmt(saldo * fatorSeguro),
+        });
+      });
+  });
+
+  if (!itens.length) {
+    alert('Nenhum contrato elegível para portar' + (semRegra.length ? ' (' + semRegra.join(', ') + ')' : '') + '.');
+    return;
+  }
 
   // Escolhe quem cobre a margem negativa. O critério NÃO é a maior parcela e sim a
-  // maior REDUÇÃO possível: com troco zero, a parcela cai para pmt(saldo) — se essa
-  // queda já não alcança o negativo, o contrato não consegue cobrir de jeito nenhum.
-  const reducaoMax = c => {
-    const s = c.acao === 'amortizar'
-      ? Math.max(0, parseBR(c.saldo) - (c.amort || 0))
-      : parseBR(c.saldo);
-    return parseBR(c.parcela) - price.pmt(s * fatorSeguro);
-  };
-  let idxCobre = -1;
+  // maior REDUÇÃO possível: com troco zero a parcela cai para pmt(saldo) — se essa
+  // queda já não alcança o negativo, o contrato não cobre de jeito nenhum.
+  let alvoCobre = null;
   if (cobrirMargem && margemNeg > 0) {
     let melhor = 0;
-    marcados.forEach((c, idx) => {
-      const red = reducaoMax(c);
-      if (red >= margemNeg - 0.01 && red > melhor) { melhor = red; idxCobre = idx; }
+    itens.forEach(it => {
+      if (it.reducaoMax >= margemNeg - 0.01 && it.reducaoMax > melhor) {
+        melhor = it.reducaoMax; alvoCobre = it;
+      }
     });
   }
 
   let abaixoMin = 0, semEspaco = 0;
-  marcados.forEach((c, idx) => {
-    const saldo = c.acao === 'amortizar'
-      ? Math.max(0, parseBR(c.saldo) - (c.amort || 0))
-      : parseBR(c.saldo);
+  itens.forEach(it => {
     // Só o contrato reservado abre mão de parcela para cobrir o negativo
-    const parcelaAlvo = Math.max(0, parseBR(c.parcela) - (idx === idxCobre ? margemNeg : 0));
+    const parcelaAlvo = Math.max(0, parseBR(it.c.parcela) - (it === alvoCobre ? margemNeg : 0));
     // Inverte a Price: quanto de troco cabe para a parcela chegar no alvo
-    const trocoBruto  = price.pv(parcelaAlvo) / fatorSeguro - saldo;
-    const trocoLiq    = trocoBruto > 0 ? trocoBruto / (1 + IOF_RATE) : 0;
+    const trocoBruto = it.price.pv(parcelaAlvo) / it.fatorSeguro - it.saldo;
+    const trocoLiq   = trocoBruto > 0 ? trocoBruto / (1 + IOF_RATE) : 0;
     if (trocoLiq <= 0) semEspaco++;
-    else if (trocoLiq < minTroco) abaixoMin++;
-    trocosSeparado[idx] = Math.max(0, Math.floor(trocoLiq * 100) / 100); // trunca p/ não estourar o teto
+    else if (trocoLiq < it.minTroco) abaixoMin++;
+    trocosSeparado[it.c.id] = Math.max(0, Math.floor(trocoLiq * 100) / 100); // trunca p/ não estourar o teto
   });
 
   calcRefim();
 
   // Custo de reservar um contrato para cobrir o negativo (pv da redução exigida)
-  const custoCobertura = margemNeg > 0
-    ? price.pv(margemNeg) / fatorSeguro / (1 + IOF_RATE)
-    : 0;
+  const custoCobertura = (margemNeg > 0 && alvoCobre)
+    ? alvoCobre.price.pv(margemNeg) / alvoCobre.fatorSeguro / (1 + IOF_RATE)
+    : (margemNeg > 0 && itens.length
+        ? itens[0].price.pv(margemNeg) / itens[0].fatorSeguro / (1 + IOF_RATE)
+        : 0);
 
+  const nBancos = new Set(itens.map(it => _bancoDoContrato(it.c))).size;
   let msg, alerta = semEspaco || abaixoMin;
   if (cobrirMargem) {
-    msg = idxCobre >= 0
-      ? `🛡️ Trocos no máximo com ${marcados[idxCobre].banco || 'um contrato'} cobrindo o negativo de ${fmtBRL(margemNeg)} — custa ${fmtBRL(custoCobertura)} de troco`
+    msg = alvoCobre
+      ? `🛡️ Trocos no máximo com ${alvoCobre.c.banco || 'um contrato'} cobrindo o negativo de ${fmtBRL(margemNeg)} — custa ${fmtBRL(custoCobertura)} de troco`
       : `⚠️ Nenhum contrato consegue cobrir o negativo de ${fmtBRL(margemNeg)} nem com troco zero — trocos ficaram no máximo`;
-    if (idxCobre < 0) alerta = true;
+    if (!alvoCobre) alerta = true;
   } else {
-    msg = `⚡ Trocos no máximo em ${marcados.length} contrato(s)`;
+    msg = `⚡ Trocos no máximo em ${itens.length} contrato(s)` + (nBancos > 1 ? ` · ${nBancos} bancos` : '');
     if (margemNeg > 0) {
       msg += ` — negativo de ${fmtBRL(margemNeg)} NÃO coberto (usar "Máx. cobrindo margem" custaria ${fmtBRL(custoCobertura)})`;
       alerta = true;
@@ -6688,18 +6747,24 @@ function maximizarTrocos(cobrirMargem) {
   }
   if (semEspaco) msg += ` · ${semEspaco} sem espaço para troco`;
   if (abaixoMin) msg += ` · ${abaixoMin} abaixo do troco mínimo`;
+  if (semRegra.length) { msg += ` · ignorados: ${semRegra.join(', ')}`; alerta = true; }
   _toastRefim(msg, alerta ? '#D97706' : '#16A34A');
 }
 
-// Volta todos os trocos para o mínimo do banco
+// Volta todos os trocos para o mínimo do banco destino de cada contrato
 function resetarTrocos() {
-  const nomeBanco = document.getElementById('refimBanco').value;
-  const regra = regrasBancos.find(r => r.banco === nomeBanco);
-  if (!regra) return;
-  const minTroco = regra.minTroco || 250;
-  _marcadosRefim(regra).forEach((c, idx) => { trocosSeparado[idx] = minTroco; });
+  const marcadosTodos = getContratosMarcados().filter(c => c.acao !== 'quitar');
+  if (!marcadosTodos.length) return;
+  const grupos = _gruposPorBancoDestino(marcadosTodos);
+  const nomes = [];
+  grupos.forEach(g => {
+    if (!g.regra) return;
+    const minTroco = g.regra.minTroco || 250;
+    g.contratos.forEach(c => { trocosSeparado[c.id] = minTroco; });
+    nomes.push(`${g.regra.banco} ${fmtBRL(minTroco)}`);
+  });
   calcRefim();
-  _toastRefim(`↺ Trocos redefinidos para o mínimo do ${nomeBanco} (${fmtBRL(minTroco)})`, '#6C2BD9');
+  _toastRefim(`↺ Trocos redefinidos para o mínimo — ${nomes.join(' · ')}`, '#6C2BD9');
 }
 
 function _toastRefim(msg, cor) {
@@ -6774,6 +6839,20 @@ function _calcRefimInterno() {
     return;
   }
 
+  // Unificado gera UMA parcela para o conjunto — não faz sentido misturar bancos
+  // destino diferentes (cada banco emite o seu contrato). Avisa e pede o modo Separado.
+  if (unificado) {
+    const bancosDistintos = new Set(
+      getContratosMarcados().filter(c => c.acao !== 'quitar').map(c => _bancoDoContrato(c))
+    );
+    if (bancosDistintos.size > 1) {
+      avisoEl.innerHTML = '<span style="color:#D97706;font-weight:600;">⚠️ Há contratos com bancos destino diferentes (' +
+        Array.from(bancosDistintos).join(', ') + '). O modo Unificado gera uma parcela única e não combina bancos — ' +
+        'troque para <b>Separado (prazo por contrato)</b> para simular todos de uma vez.</span>';
+      return;
+    }
+  }
+
   if (unificado) {
     // ── MODO UNIFICADO (comportamento atual) ──
     const prazo   = parseInt(document.getElementById('refimPrazo').value) || 120;
@@ -6829,104 +6908,161 @@ function _calcRefimInterno() {
 
   } else {
     // ── MODO SEPARADO — cada contrato no seu prazo restante ──
-    const minTroco = regra.minTroco || 250;
-    // Seguro prestamista: % somado ao valor financiado de cada contrato
-    const fatorSeguro = 1 + (Number(regra.seguro) || 0) / 100;
-    let totalSaldo = 0, totalTroco = 0, totalIOF = 0, totalParcela = 0, totalEncargos = 0;
-    const avisos = [];
+    // Suporta MÚLTIPLOS bancos destino: os contratos marcados são agrupados pelo
+    // banco escolhido em cada linha ("Padrão" = banco global) e cada grupo roda com
+    // as regras do SEU banco (taxa, entrada mínima, troco mínimo, seguro, saldo mín).
     let inputValor = 0;
-
     if (modo === 'troco') {
-      // Modo separado com troco: cada contrato usa trocosSeparado[idx] ?? minTroco
-      // Não precisa de inputValor — calcular direto
-      inputValor = 0; // não usado no modo troco separado
+      inputValor = 0; // no modo troco separado cada linha tem o seu
     } else {
       inputValor = parseBR(document.getElementById('refimParcelaInput').value);
       if (!inputValor) return;
     }
 
-    const linhas = marcados.map((c, idx) => {
-      const saldo        = c.acao === 'amortizar' ? Math.max(0, parseBR(c.saldo) - (c.amort || 0)) : parseBR(c.saldo);
-      const parc         = parseBR(c.parcela);
-      const prazoOriginal = parseInt(c.prazo) || 96;  // prazo restante do extrato (default 96 do contrato atual)
-      const prazo        = 120; // refim com troco sempre em 120 meses (mudou de 96 em 27/05/2026)
-      // IOF fixo 3,20% sobre troco líquido (global IOF_RATE)
-      const price  = mkPrice(taxaRefim, prazo);
+    const grupos = _gruposPorBancoDestino(
+      getContratosMarcados().filter(c => c.acao !== 'quitar')
+    );
 
-      let trocoBruto, iof, trocoLiquido, parcelaTotal, encargos, status = '', ok = true;
+    const linhas = [];   // todas as linhas, de todos os bancos (ordem de exibição)
+    const blocos = [];   // { banco, regra, linhas, subSaldo, subParcela, subTroco, subIOF, subFinanciado }
+    const avisos = [];
+    let totalSaldo = 0, totalTroco = 0, totalIOF = 0, totalParcela = 0;
+    let totalFinanciado = 0, totalTrocoBruto = 0, totalSeguro = 0;
+    let bancosTaxaLivre = 0;
 
-      if (modo === 'troco') {
-        // Troco editável por contrato — padrão = mínimo do banco
-        trocoLiquido = trocosSeparado[idx] ?? minTroco;
-        trocoBruto   = trocoBrutoDeLiquido(trocoLiquido);
-        iof          = calcIOF(trocoBruto);
-        parcelaTotal = price.pmt((saldo + trocoBruto) * fatorSeguro);
-      } else {
-        // Distribui a parcela proporcionalmente ao saldo de cada contrato
-        const totalSaldos = marcados.reduce((a,x) => { const xs = parseBR(x.saldo); return a + (x.acao === 'amortizar' ? Math.max(0, xs - (x.amort||0)) : xs); }, 0);
-        const parcelaProp = inputValor * (saldo / totalSaldos);
-        // Desfaz o seguro antes de separar o troco
-        trocoBruto   = price.pv(parcelaProp) / fatorSeguro - saldo;
-        if (trocoBruto <= 0) {
-          trocoBruto = 0; iof = 0; trocoLiquido = 0; parcelaTotal = price.pmt(saldo * fatorSeguro);
-          ok = false;
-          status = '<span style="color:#EF4444;font-weight:600;">❌ Sem troco</span>';
-        } else {
+    grupos.forEach(g => {
+      const regraG = g.regra;
+      if (!regraG) { avisos.push(`banco "${g.banco || '—'}" sem regra cadastrada`); return; }
+
+      const taxaG = getTaxaRefim(regraG);
+      if (taxaG === null) { avisos.push(`${regraG.banco}: informe a taxa negociada`); return; }
+      if (regraG.taxaLivre) bancosTaxaLivre++;
+
+      const minTrocoG    = regraG.minTroco || 250;
+      const fatorSeguroG = 1 + (Number(regraG.seguro) || 0) / 100;
+
+      // Elegibilidade pela regra DESTE banco
+      const elegiveis = g.contratos.filter(c =>
+        regraG.taxaLivre ? true : parseBR(c.taxa) >= regraG.entradaMin
+      );
+      if (!elegiveis.length) return;
+
+      const saldoDe = c => c.acao === 'amortizar'
+        ? Math.max(0, parseBR(c.saldo) - (c.amort || 0))
+        : parseBR(c.saldo);
+
+      // Saldo mínimo do banco vale sobre o saldo do GRUPO
+      const saldoGrupo = elegiveis.reduce((a, c) => a + saldoDe(c), 0);
+      if (regraG.saldoMin && saldoGrupo < regraG.saldoMin) {
+        avisos.push(`${regraG.banco}: saldo ${fmtBRL(saldoGrupo)} abaixo do mínimo ${fmtBRL(regraG.saldoMin)}`);
+        return;
+      }
+
+      const totalSaldosG = saldoGrupo;
+      let subSaldo = 0, subParcela = 0, subTroco = 0, subIOF = 0, subFinanciado = 0, subTrocoBruto = 0;
+
+      const linhasG = elegiveis.map(c => {
+        const saldo         = saldoDe(c);
+        const parc          = parseBR(c.parcela);
+        const prazoOriginal = parseInt(c.prazo) || 96;
+        const prazo         = 120; // refim com troco sempre em 120 meses
+        const price         = mkPrice(taxaG, prazo);
+
+        let trocoBruto, iof, trocoLiquido, parcelaTotal, encargos, status = '', ok = true;
+
+        if (modo === 'troco') {
+          trocoLiquido = trocosSeparado[c.id] ?? minTrocoG;
+          trocoBruto   = trocoBrutoDeLiquido(trocoLiquido);
           iof          = calcIOF(trocoBruto);
-          trocoLiquido = trocoBruto - iof;
-          parcelaTotal = parcelaProp;
-        }
-      }
-
-      encargos = ok ? parcelaTotal * prazo - (saldo + trocoBruto) : 0;
-
-      // Validações por contrato
-      if (ok) {
-        const erros = [];
-        if (trocoLiquido < minTroco - 0.01)
-          erros.push('troco < R$ ' + fmtBRL(minTroco).replace('R$ ',''));
-        if (parcelaTotal > parc + 0.01)
-          erros.push('parcela nova > original');
-        if (erros.length) {
-          ok = false;
-          status = '<span style="color:#F59E0B;font-weight:600;">⚠️ ' + erros.join(' | ') + '</span>';
-          if (!avisos.includes(erros[0])) avisos.push(erros[0]);
+          parcelaTotal = price.pmt((saldo + trocoBruto) * fatorSeguroG);
         } else {
-          status = '<span style="color:#16A34A;font-weight:600;">✅ Viável</span>';
+          // Distribui a parcela desejada proporcionalmente ao saldo DENTRO do grupo
+          const parcelaProp = inputValor * (saldo / totalSaldosG);
+          trocoBruto = price.pv(parcelaProp) / fatorSeguroG - saldo;
+          if (trocoBruto <= 0) {
+            trocoBruto = 0; iof = 0; trocoLiquido = 0;
+            parcelaTotal = price.pmt(saldo * fatorSeguroG);
+            ok = false;
+            status = '<span style="color:#EF4444;font-weight:600;">❌ Sem troco</span>';
+          } else {
+            iof          = calcIOF(trocoBruto);
+            trocoLiquido = trocoBruto - iof;
+            parcelaTotal = parcelaProp;
+          }
         }
-      }
 
-      totalSaldo   += saldo;
-      totalTroco   += trocoLiquido;
-      totalIOF     += iof;
-      totalParcela += parcelaTotal;
-      totalEncargos += encargos;
+        encargos = ok ? parcelaTotal * prazo - (saldo + trocoBruto) : 0;
 
-      _novasRefim[c.id] = { parcela: parcelaTotal, prazo, troco: trocoLiquido };
-      return { id: c.id, banco: c.banco, saldo, prazo, prazoOriginal, parcelaOriginal: parc, parcelaTotal, trocoBruto, iof, trocoLiquido, minTroco, status, ok };
+        if (ok) {
+          const erros = [];
+          if (trocoLiquido < minTrocoG - 0.01) erros.push('troco < ' + fmtBRL(minTrocoG));
+          if (parcelaTotal > parc + 0.01)      erros.push('parcela nova > original');
+          if (erros.length) {
+            ok = false;
+            status = '<span style="color:#F59E0B;font-weight:600;">⚠️ ' + erros.join(' | ') + '</span>';
+            const av = `${regraG.banco}: ${erros[0]}`;
+            if (!avisos.includes(av)) avisos.push(av);
+          } else {
+            status = '<span style="color:#16A34A;font-weight:600;">✅ Viável</span>';
+          }
+        }
+
+        const financiado = (saldo + trocoBruto) * fatorSeguroG;
+        subSaldo += saldo; subParcela += parcelaTotal; subTroco += trocoLiquido;
+        subIOF += iof; subFinanciado += financiado; subTrocoBruto += trocoBruto;
+
+        _novasRefim[c.id] = { parcela: parcelaTotal, prazo, troco: trocoLiquido };
+
+        return {
+          id: c.id, banco: c.banco, bancoDestino: regraG.banco, saldo, prazo, prazoOriginal,
+          parcelaOriginal: parc, parcelaTotal, trocoBruto, iof, trocoLiquido,
+          minTroco: minTrocoG, financiado, status, ok,
+        };
+      });
+
+      linhas.push(...linhasG);
+      blocos.push({
+        banco: regraG.banco, regra: regraG, taxa: taxaG, linhas: linhasG,
+        subSaldo, subParcela, subTroco, subIOF, subFinanciado, subTrocoBruto,
+        seguroPerc: (fatorSeguroG - 1) * 100,
+        subSeguro: subFinanciado - (subSaldo + subTrocoBruto),
+      });
+
+      totalSaldo += subSaldo; totalParcela += subParcela; totalTroco += subTroco;
+      totalIOF += subIOF; totalFinanciado += subFinanciado;
+      totalTrocoBruto += subTrocoBruto;
+      totalSeguro += subFinanciado - (subSaldo + subTrocoBruto);
     });
 
-    // Renderizar tabela separada
+    if (!linhas.length) {
+      avisoEl.innerHTML = avisos.length
+        ? '<span style="color:#EF4444;font-weight:600;">⚠️ ' + avisos.join(' · ') + '</span>'
+        : '<span style="color:#EF4444;font-weight:600;">Nenhum contrato elegível para portar.</span>';
+      return;
+    }
+
+    // ── Render da tabela: agrupada por banco destino quando há mais de um ──
     const tbody = document.getElementById('tbRefimSeparado');
-    if(!tbody) return;
-    // Identifica todas as linhas que cobrem individualmente a margem negativa
+    if (!tbody) return;
+
     const linhasCobrem = margemNeg > 0
       ? linhas.filter(l => (l.parcelaOriginal - l.parcelaTotal) >= margemNeg - 0.01)
       : [];
-  tbody.innerHTML = linhas.map((l, idx) => {
-    const diff = l.parcelaOriginal - l.parcelaTotal;
-    const diffColor = diff >= 0 ? '#16A34A' : '#EF4444';
-    const diffSign  = diff >= 0 ? '▼ ' : '▲ ';
-    const diffLabel = diffSign + fmtBRL(Math.abs(diff));
-    const esCobre   = linhasCobrem.includes(l);
-    const rowBg     = esCobre ? 'background:#FFFBEB;' : '';
-    const bancoBadge = esCobre
-      ? ' <span style="font-size:10px;background:#FEF3C7;color:#D97706;border:1px solid #FDE68A;border-radius:3px;padding:1px 5px;font-weight:700;white-space:nowrap;">★ Cobre o negativo</span>'
-      : '';
-    const statusExtra = esCobre
-      ? '<br><span style="font-size:10px;color:#D97706;font-weight:700;">⭐ Cadastrar 2 dias antes</span>'
-      : '';
-    return `
+    const multiBanco = blocos.length > 1;
+
+    const renderLinha = l => {
+      const diff       = l.parcelaOriginal - l.parcelaTotal;
+      const diffColor  = diff >= 0 ? '#16A34A' : '#EF4444';
+      const diffLabel  = (diff >= 0 ? '▼ ' : '▲ ') + fmtBRL(Math.abs(diff));
+      const esCobre    = linhasCobrem.includes(l);
+      const rowBg      = esCobre ? 'background:#FFFBEB;' : '';
+      const bancoBadge = esCobre
+        ? ' <span style="font-size:10px;background:#FEF3C7;color:#D97706;border:1px solid #FDE68A;border-radius:3px;padding:1px 5px;font-weight:700;white-space:nowrap;">★ Cobre o negativo</span>'
+        : '';
+      const statusExtra = esCobre
+        ? '<br><span style="font-size:10px;color:#D97706;font-weight:700;">⭐ Cadastrar 2 dias antes</span>'
+        : '';
+      return `
       <tr style="border-bottom:1px solid #F3F4F6;${rowBg}">
         <td style="padding:7px 8px;">${l.banco || '-'}${bancoBadge}</td>
         <td style="padding:7px 8px;text-align:right;">${fmtBRL(l.saldo)}</td>
@@ -6939,47 +7075,76 @@ function _calcRefimInterno() {
         <td style="padding:7px 8px;text-align:right;">
           <input type="number" value="${l.trocoLiquido.toFixed(2)}" min="${l.minTroco}" step="50"
             style="width:80px;text-align:right;border:1px solid #BBF7D0;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:700;color:#16A34A;"
-            title="Mínimo: R$ ${l.minTroco} — edite para simular outro troco"
-            onchange="trocosSeparado[${idx}]=parseBR(this.value);calcRefim()">
+            title="Mínimo: ${fmtBRL(l.minTroco)} — edite para simular outro troco"
+            onchange="trocosSeparado[${l.id}]=parseBR(this.value);calcRefim()">
         </td>
         <td style="padding:7px 8px;text-align:center;">${l.status}${statusExtra}</td>
       </tr>`;
-  }).join('');
+    };
 
-    const totalParcelaOriginal = linhas.reduce((a,l)=>a+l.parcelaOriginal,0);
-    const totalDiff = totalParcelaOriginal - totalParcela;
+    tbody.innerHTML = blocos.map(b => {
+      if (!multiBanco) return b.linhas.map(renderLinha).join('');
+      const subDiff = b.linhas.reduce((a, l) => a + (l.parcelaOriginal - l.parcelaTotal), 0);
+      return `
+      <tr style="background:#EDE9FE;">
+        <td colspan="10" style="padding:6px 8px;font-size:11px;font-weight:800;color:#4B1FA6;letter-spacing:.3px;">
+          ➜ ${b.banco}
+          <span style="font-weight:500;color:#6C2BD9;"> · taxa ${fmtPct(b.taxa * 100)}% a.m.${b.seguroPerc > 0 ? ' · seguro ' + fmtPct(b.seguroPerc) + '%' : ''} · ${b.linhas.length} contrato(s)</span>
+        </td>
+      </tr>
+      ${b.linhas.map(renderLinha).join('')}
+      <tr style="background:#FAFAFF;border-bottom:2px solid #DDD6FE;">
+        <td style="padding:5px 8px;font-size:11px;font-weight:700;color:#6B7280;">Subtotal ${b.banco}</td>
+        <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;">${fmtBRL(b.subSaldo)}</td>
+        <td></td>
+        <td style="padding:5px 8px;text-align:right;font-size:11px;color:#6B7280;">${fmtBRL(b.linhas.reduce((a,l)=>a+l.parcelaOriginal,0))}</td>
+        <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:#6C2BD9;">${fmtBRL(b.subParcela)}</td>
+        <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:${subDiff >= 0 ? '#16A34A' : '#EF4444'};">${(subDiff >= 0 ? '▼ ' : '▲ ') + fmtBRL(Math.abs(subDiff))}</td>
+        <td style="display:none;"></td>
+        <td style="padding:5px 8px;text-align:right;font-size:11px;color:#EA580C;">${fmtBRL(b.subIOF)}</td>
+        <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:#16A34A;">${fmtBRL(b.subTroco)}</td>
+        <td></td>
+      </tr>`;
+    }).join('');
+
+    const totalParcelaOriginal = linhas.reduce((a, l) => a + l.parcelaOriginal, 0);
+    const totalDiff      = totalParcelaOriginal - totalParcela;
     const totalDiffColor = totalDiff >= 0 ? '#16A34A' : '#EF4444';
     const totalDiffLabel = (totalDiff >= 0 ? '▼ ' : '▲ ') + fmtBRL(Math.abs(totalDiff));
     document.getElementById('tfRefimSeparado').innerHTML = `
       <tr style="border-top:2px solid #6C2BD9;">
-        <td style="padding:8px;font-weight:700;">TOTAL</td>
+        <td style="padding:8px;font-weight:700;">TOTAL${multiBanco ? ` <span style="font-weight:500;font-size:11px;color:#6C2BD9;">(${blocos.length} bancos)</span>` : ''}</td>
         <td style="padding:8px;text-align:right;font-weight:700;">${fmtBRL(totalSaldo)}</td>
         <td></td>
         <td style="padding:8px;text-align:right;font-weight:700;color:#6B7280;">${fmtBRL(totalParcelaOriginal)}</td>
         <td style="padding:8px;text-align:right;font-weight:800;color:#6C2BD9;">${fmtBRL(totalParcela)}</td>
         <td style="padding:8px;text-align:right;font-weight:800;color:${totalDiffColor};">${totalDiffLabel}</td>
-        <td style="display:none;">${fmtBRL(linhas.reduce((a,l)=>a+l.trocoBruto,0))}</td>
+        <td style="display:none;">${fmtBRL(totalTrocoBruto)}</td>
         <td style="padding:8px;text-align:right;font-weight:700;color:#EA580C;">${fmtBRL(totalIOF)}</td>
         <td style="padding:8px;text-align:right;font-weight:800;color:#16A34A;">${fmtBRL(totalTroco)}</td>
-        <td style="padding:8px;text-align:center;font-size:11px;color:#6B7280;">Taxa: ${fmtPct(taxaRefim*100)}% a.m.</td>
+        <td style="padding:8px;text-align:center;font-size:11px;color:#6B7280;">${multiBanco ? 'taxas por banco' : 'Taxa: ' + fmtPct(blocos[0].taxa * 100) + '% a.m.'}</td>
       </tr>`;
 
     const avisoSep = document.getElementById('refimSeparadoAviso');
-    // Valor financiado = (saldo + troco bruto) × (1 + seguro) — base real da parcela
-    const totalTrocoBruto = linhas.reduce((a,l)=>a+l.trocoBruto,0);
-    const totalFinanciado = (totalSaldo + totalTrocoBruto) * fatorSeguro;
-    if(!avisoSep) { } else avisoSep.innerHTML = avisos.length
-      ? '<span style="color:#F59E0B;font-weight:600;">⚠️ Atenção: ' + avisos.join('; ') + '</span>'
-      : '<span style="color:#16A34A;font-weight:600;">✅ Todos os contratos viáveis</span>';
+    if (avisoSep) {
+      let base = avisos.length
+        ? '<span style="color:#F59E0B;font-weight:600;">⚠️ Atenção: ' + avisos.join('; ') + '</span>'
+        : '<span style="color:#16A34A;font-weight:600;">✅ Todos os contratos viáveis</span>';
+      if (bancosTaxaLivre > 1) {
+        base += '<div style="margin-top:4px;color:#B45309;font-size:11px;">⚠️ Mais de um banco com taxa negociada: todos estão usando a mesma taxa do campo acima.</div>';
+      }
+      avisoSep.innerHTML = base;
+    }
 
-    // Valor financiado fica ABAIXO do bloco de margem negativa (ordem pedida pelo Fábio)
+    // Valor financiado (abaixo do bloco de margem negativa)
     const finSep = document.getElementById('rFinanciadoSep');
     if (finSep) {
-      if (fatorSeguro > 1) {
+      if (totalSeguro > 0.01) {
         finSep.innerHTML = `
           <div style="padding:8px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;font-size:12px;color:#92400E;">
             💰 <b>Valor financiado: ${fmtBRL(totalFinanciado)}</b>
-            <span style="color:#B45309;"> = saldo ${fmtBRL(totalSaldo)} + troco bruto ${fmtBRL(totalTrocoBruto)} + seguro ${fmtPct((fatorSeguro-1)*100)}% (${fmtBRL((totalSaldo + totalTrocoBruto) * (fatorSeguro-1))})</span>
+            <span style="color:#B45309;"> = saldo ${fmtBRL(totalSaldo)} + troco bruto ${fmtBRL(totalTrocoBruto)} + seguro ${fmtBRL(totalSeguro)}</span>
+            ${multiBanco ? `<div style="margin-top:4px;font-size:11px;">${blocos.filter(b => b.subSeguro > 0.01).map(b => `${b.banco}: ${fmtPct(b.seguroPerc)}% = ${fmtBRL(b.subSeguro)}`).join(' · ')}</div>` : ''}
           </div>`;
         finSep.style.display = '';
       } else {
@@ -6988,13 +7153,17 @@ function _calcRefimInterno() {
       }
     }
 
-    avisoEl.innerHTML = '<span style="color:#16A34A;font-weight:600;">✅ ' + marcados.length +
-      ' contrato(s) — saldo total: ' + fmtBRL(totalSaldo).replace('R$ ','') + '</span>';
+    avisoEl.innerHTML = '<span style="color:#16A34A;font-weight:600;">✅ ' + linhas.length +
+      ' contrato(s)' + (multiBanco ? ` em ${blocos.length} bancos` : '') +
+      ' — saldo total: ' + fmtBRL(totalSaldo).replace('R$ ', '') + '</span>';
 
     // Salva resultado separado para uso no Criador de Proposta
     _refimResult = {
       modo: 'separado',
-      linhas: linhas.map(l => ({ banco: l.banco, parcela: l.parcelaTotal, troco: l.trocoLiquido, prazo: l.prazo })),
+      linhas: linhas.map(l => ({
+        banco: l.banco, bancoDestino: l.bancoDestino,
+        parcela: l.parcelaTotal, troco: l.trocoLiquido, prazo: l.prazo,
+      })),
     };
 
     mostrarCoberturaMargem_sep(margemNeg, linhas, 'rMargemNegBlockSep');
@@ -7470,7 +7639,8 @@ function carregarContratosDaConsulta() {
       amort:           0,
       portar:          true,
       taxaPort:        1.30,
-      prazoPort:       48
+      prazoPort:       48,
+      bancoDestino:    c.bancoDestino || ''
     });
   });
 
