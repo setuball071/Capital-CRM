@@ -1745,6 +1745,9 @@ body { background: #F8F8FC !important; color: #111827 !important; }
       </div>
     </div>
 
+    <!-- RESULTADO CONSOLIDADO DA OPERAÇÃO (todos os contratos, por ação) -->
+    <div id="resultadoOperacao" style="display:none;margin-top:20px;"></div>
+
     <!-- BOTÕES FINAIS -->
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;">
       <button onclick="simularEEnviar()" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#7C3AED 0%,#EC4899 100%);border:none;color:white;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(124,58,237,.3);display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;letter-spacing:.01em;">
@@ -3048,6 +3051,11 @@ function limparSimulador() {
   document.getElementById('nomeCliente').value = '';
   document.getElementById('cpfCliente').value = '';
   document.getElementById('convenio').value = '';
+
+  // Esconde painel consolidado da operacao
+  const boxOper = document.getElementById('resultadoOperacao');
+  if (boxOper) { boxOper.style.display = 'none'; boxOper.innerHTML = ''; }
+  _novasSimples = {}; _novasRefim = {};
 
   // Esconde painel de margem do extrato
   const margemBox = document.getElementById('margemExtratoBox');
@@ -5920,6 +5928,9 @@ window.addEventListener('message', function(event) {
 
 // --- TIPO DE PORTABILIDADE ---
 let tipoPort = 'simples';
+// Parcela/prazo novos de cada contrato, por id — alimentam o painel Resultado da Operação
+let _novasSimples = {};
+let _novasRefim   = {};
 let prazosSeparado = {}; // não usado no refim (prazo sempre 120)
 let trocosSeparado = {}; // { idx: trocoLiquido } — troco editável por contrato no modo separado
 let prazosSimpSeparado = {}; // { idx: prazo } — prazo editável por contrato na port. simples separada
@@ -5991,6 +6002,7 @@ function getContratosMarcados() {
 // ── PORTABILIDADE SIMPLES ──────────────────────────────
 
 function calcSimples() {
+  _novasSimples = {};
   const taxa   = parseBR(document.getElementById('simpTaxa').value);
   const prazo  = parseInt(document.getElementById('simpPrazo').value) || 96;
   const modo   = document.getElementById('simpModo')?.value || 'separado';
@@ -6024,6 +6036,8 @@ function calcSimples() {
     // Modo junto: uma única linha com saldo e parcela consolidados
     const parcelaConsolidada = taxa > 0 ? calcParcela(totalSaldo * fatorSeguro, taxa, prazo) : 0;
     const economiaConsol = totalParcelaAtual - parcelaConsolidada;
+    // Modo junto: a nova parcela e unica; o painel consolidado usa o agregado
+    _novasSimples._junto = { parcela: parcelaConsolidada, prazo };
     tb.innerHTML = `<tr style="background:#F5F3FF;">
       <td style="font-weight:700;color:#6C2BD9;">${marcados.length} contrato(s) — parcela unificada</td>
       <td class="text-right" style="font-weight:700;">${fmtBRL(totalSaldo)}</td>
@@ -6067,6 +6081,7 @@ function calcSimples() {
       const parcelaNova = taxa > 0 ? calcParcela(saldo * fatorSeguro, taxa, prazoInd) : 0;
       const economia = parcelaAtual - parcelaNova;
       totalParcelaNovaSep += parcelaNova;
+      _novasSimples[c.id] = { parcela: parcelaNova, prazo: prazoInd };
 
       const linhaIdx = linhasSimpMarcadoIdx.indexOf(idx);
       const linha = linhaIdx >= 0 ? linhasSimp[linhaIdx] : null;
@@ -6130,6 +6145,136 @@ function calcSimples() {
       wrapConsol.style.display = 'none';
     }
   }
+
+  renderResultadoOperacao();
+}
+
+
+// ── RESULTADO CONSOLIDADO DA OPERAÇÃO ──────────────────────────────────────
+// Diferente das tabelas acima (que mostram só os contratos portados), este painel
+// olha TODOS os contratos pela sua ação — portar, quitar, amortizar ou manter — e
+// responde "o que o cliente recebe no fim": parcela mensal, total pago até o fim
+// do contrato e quanto de troco sobra depois de pagar as quitações.
+function renderResultadoOperacao() {
+  const box = document.getElementById('resultadoOperacao');
+  if (!box) return;
+  if (!contratos.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+  const novas = tipoPort === 'refim' ? _novasRefim : _novasSimples;
+  const junto = novas._junto; // modo unificado (refim) / junto (simples)
+
+  let parcelaHoje = 0, parcelaDepois = 0;
+  let totalHoje = 0, totalDepois = 0;   // parcela × prazo restante
+  let saldoQuitado = 0, trocoTotal = 0;
+  let qtdHoje = 0, qtdDepois = 0, qtdQuitados = 0;
+  let semCalculo = 0;
+  const portadosJunto = [];
+
+  contratos.forEach(c => {
+    const parc = parseBR(c.parcela);
+    const prz  = parseInt(c.prazo) || 0;
+    if (parc <= 0) return;
+    parcelaHoje += parc;
+    totalHoje   += parc * prz;
+    qtdHoje++;
+
+    if (c.acao === 'quitar') {
+      // Quitado: a parcela zera. O saldo é pago com o troco da operação.
+      saldoQuitado += parseBR(c.saldo);
+      qtdQuitados++;
+      return;
+    }
+
+    const nova = novas[c.id];
+    if (c.portar) {
+      if (nova) {
+        parcelaDepois += nova.parcela;
+        totalDepois   += nova.parcela * (nova.prazo || 0);
+        trocoTotal    += nova.troco || 0;
+        qtdDepois++;
+      } else if (junto) {
+        portadosJunto.push(c); // somados numa linha única mais abaixo
+      } else {
+        semCalculo++; // marcado para portar mas ainda sem taxa/prazo definidos
+      }
+    } else {
+      // Mantido como está
+      parcelaDepois += parc;
+      totalDepois   += parc * prz;
+      qtdDepois++;
+    }
+  });
+
+  // Modo junto/unificado: todos os portados viram UMA parcela
+  if (junto && portadosJunto.length) {
+    parcelaDepois += junto.parcela;
+    totalDepois   += junto.parcela * (junto.prazo || 0);
+    trocoTotal    += junto.troco || 0;
+    qtdDepois++;
+  }
+
+  if (!qtdHoje) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+  const economiaMes  = parcelaHoje - parcelaDepois;
+  const difTotal     = totalHoje - totalDepois;      // + = paga menos no total
+  const trocoSobra   = trocoTotal - saldoQuitado;    // troco após quitar
+  const resultadoFin = difTotal + trocoSobra;        // ganho financeiro real
+
+  const cor  = v => v >= 0 ? '#16A34A' : '#EF4444';
+  const seta = v => (v >= 0 ? '▼ ' : '▲ ');
+
+  const card = (label, valor, corTxt, extra) => `
+    <div style="flex:1;min-width:150px;">
+      <div style="font-size:11px;color:#6B7280;margin-bottom:2px;">${label}</div>
+      <div style="font-size:17px;font-weight:800;color:${corTxt};">${valor}</div>
+      ${extra ? `<div style="font-size:10px;color:#9CA3AF;margin-top:2px;">${extra}</div>` : ''}
+    </div>`;
+
+  box.innerHTML = `
+    <div style="border:2px solid #6C2BD9;border-radius:12px;overflow:hidden;">
+      <div style="background:#6C2BD9;color:#fff;padding:8px 16px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <span>📊 Resultado da Operação</span>
+        <span style="font-size:11px;font-weight:500;opacity:.9;">todos os contratos — portados, quitados, amortizados e mantidos</span>
+      </div>
+      <div style="padding:14px 16px;background:#FAFAFF;">
+
+        <div style="font-size:10px;font-weight:700;color:#6C2BD9;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Parcela mensal</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;">
+          ${card('Paga hoje', fmtBRL(parcelaHoje), '#EF4444', qtdHoje + ' contrato(s)')}
+          ${card('Vai pagar', fmtBRL(parcelaDepois), '#111827', qtdDepois + ' contrato(s)')}
+          ${card(economiaMes >= 0 ? 'Economia mensal' : 'Aumento mensal', seta(economiaMes) + fmtBRL(Math.abs(economiaMes)), cor(economiaMes), economiaMes >= 0 ? 'margem liberada' : 'parcela sobe')}
+        </div>
+
+        <div style="font-size:10px;font-weight:700;color:#6C2BD9;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;border-top:1px solid #EDE9FE;padding-top:12px;">Total pago até o fim</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;">
+          ${card('Sem a operação', fmtBRL(totalHoje), '#EF4444', 'seguindo como está')}
+          ${card('Com a operação', fmtBRL(totalDepois), '#111827', 'somando os novos prazos')}
+          ${card(difTotal >= 0 ? 'Economia no total' : 'Custo a mais no total', seta(difTotal) + fmtBRL(Math.abs(difTotal)), cor(difTotal), difTotal >= 0 ? 'paga menos até o fim' : 'paga mais até o fim')}
+        </div>
+
+        ${(trocoTotal > 0 || saldoQuitado > 0) ? `
+        <div style="font-size:10px;font-weight:700;color:#6C2BD9;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;border-top:1px solid #EDE9FE;padding-top:12px;">Dinheiro na mão</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;">
+          ${card('Troco liberado', fmtBRL(trocoTotal), '#16A34A', '')}
+          ${saldoQuitado > 0 ? card('(−) Quitações', fmtBRL(saldoQuitado), '#EA580C', qtdQuitados + ' contrato(s) quitado(s)') : ''}
+          ${saldoQuitado > 0 ? card('= Sobra pro cliente', fmtBRL(trocoSobra), cor(trocoSobra), trocoSobra < 0 ? 'troco não cobre as quitações' : '') : ''}
+        </div>` : ''}
+
+        <div style="border-top:2px solid #DDD6FE;padding-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div style="font-size:11px;color:#6B7280;">Resultado financeiro total ${trocoSobra !== 0 ? '(economia no total + troco que sobra)' : ''}</div>
+            <div style="font-size:21px;font-weight:800;color:${cor(resultadoFin)};">${resultadoFin >= 0 ? '' : '− '}${fmtBRL(Math.abs(resultadoFin))}</div>
+          </div>
+          <div style="text-align:right;font-size:12px;color:#6B7280;">
+            Contratos: <b style="color:#111827;">${qtdHoje}</b> → <b style="color:#6C2BD9;">${qtdDepois}</b>
+          </div>
+        </div>
+
+        ${semCalculo ? `<div style="margin-top:10px;padding:7px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;font-size:11px;color:#92400E;">⚠️ ${semCalculo} contrato(s) marcado(s) para portar ainda sem cálculo — defina taxa e prazo para o resultado ficar completo.</div>` : ''}
+        ${saldoQuitado > 0 ? `<div style="margin-top:8px;font-size:10px;color:#9CA3AF;">Quitações consideradas pagas com o troco da operação.</div>` : ''}
+      </div>
+    </div>`;
+  box.style.display = '';
 }
 
 // ── PORTABILIDADE COM REFIM ────────────────────────────
@@ -6569,7 +6714,15 @@ function _toastRefim(msg, cor) {
   }, 3000);
 }
 
+// Wrapper: garante que o painel consolidado seja atualizado em TODOS os caminhos,
+// inclusive nos returns antecipados do calculo (sem banco, sem saldo, etc).
 function calcRefim() {
+  _calcRefimInterno();
+  renderResultadoOperacao();
+}
+
+function _calcRefimInterno() {
+  _novasRefim = {};
   const nomeBanco = document.getElementById('refimBanco').value;
   const regra = regrasBancos.find(r => r.banco === nomeBanco);
   const avisoEl = document.getElementById('refimSaldoTotal');
@@ -6749,7 +6902,8 @@ function calcRefim() {
       totalParcela += parcelaTotal;
       totalEncargos += encargos;
 
-      return { banco: c.banco, saldo, prazo, prazoOriginal, parcelaOriginal: parc, parcelaTotal, trocoBruto, iof, trocoLiquido, minTroco, status, ok };
+      _novasRefim[c.id] = { parcela: parcelaTotal, prazo, troco: trocoLiquido };
+      return { id: c.id, banco: c.banco, saldo, prazo, prazoOriginal, parcelaOriginal: parc, parcelaTotal, trocoBruto, iof, trocoLiquido, minTroco, status, ok };
     });
 
     // Renderizar tabela separada
@@ -6888,6 +7042,8 @@ function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiqu
   document.getElementById('rTaxaRefim').textContent    = fmtPct(taxaRefim) + ' a.m.';
   document.getElementById('refimResultado').style.display = '';
   _refimResult = { modo: 'unificado', parcela: parcelaTotal, troco: trocoLiquido, prazo };
+  // Modo unificado: parcela unica para o conjunto — o painel consolidado usa o agregado
+  _novasRefim._junto = { parcela: parcelaTotal, prazo, troco: trocoLiquido };
 }
 
 // ── CPF: busca automática ao importar extrato ─────────────────────────────
