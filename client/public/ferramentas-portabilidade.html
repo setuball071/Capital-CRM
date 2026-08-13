@@ -1796,6 +1796,11 @@ body { background: #F8F8FC !important; color: #111827 !important; }
         <h4 style="margin:0 0 12px;font-size:13px;color:#374151;">+ Adicionar Banco</h4>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;align-items:end;">
           <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Nome</label><input id="novoRegBanco" placeholder="Ex: Bradesco" style="width:100%;"></div>
+          <div style="display:flex;align-items:center;gap:6px;padding-bottom:6px;" title="Banco sem taxa fixa (ex: Caixa): a taxa é digitada a cada simulação. Entrada mínima e taxa refim podem ficar em 0.">
+            <input type="checkbox" id="novoRegTaxaLivre" onchange="document.getElementById('novoRegRefim').placeholder = this.checked ? 'sugerida (opcional)' : '';">
+            <label for="novoRegTaxaLivre" style="font-size:11px;font-weight:600;cursor:pointer;">Taxa negociada<br><span style="font-weight:400;color:#6B7280;">(sem taxa fixa)</span></label>
+          </div>
+          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Seguro (%)</label><input id="novoRegSeguro" placeholder="0" style="width:100%;"></div>
           <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Entrada Mín (%)</label><input id="novoRegEntrada" placeholder="1,35" style="width:100%;"></div>
           <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Taxa Refim (%)</label><input id="novoRegRefim" placeholder="1,65" style="width:100%;"></div>
           <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Saldo Mín (R$)</label><input id="novoRegSaldoMin" placeholder="0" style="width:100%;"></div>
@@ -6685,7 +6690,6 @@ function calcRefim() {
   document.getElementById('rMargemNegBlock').style.display = 'none';
   document.getElementById('rMargemNegBlockSep').style.display = 'none';
 
-  if (!regra) return;
   const margemNeg = parseBR(document.getElementById('refimMargemNeg')?.value || '0');
   // Botão de maximizar cobrindo a margem só faz sentido com negativo informado
   const btnMaxMg = document.getElementById('btnMaxMargem');
@@ -6693,37 +6697,16 @@ function calcRefim() {
 
   renderTaxasLivres();
 
-  const taxaRefim = getTaxaRefim(regra);
-  if (taxaRefim === null) return; // Caixa sem taxa digitada ainda
-
   const modo     = document.getElementById('refimModo').value;
   const unificado = document.getElementById('refimUnificado').value === 'unificado';
 
-  // Contratos elegíveis — Caixa aceita todos (entradaMin=0); quitar = pago com troco, não porta
-  const marcados = getContratosMarcados().filter(c =>
-    c.acao !== 'quitar' &&
-    (regra.taxaLivre ? true : parseBR(c.taxa) >= regra.entradaMin)
-  );
-  const saldoPortado     = marcados.reduce((acc, c) => {
-    const s = parseBR(c.saldo);
-    return acc + (c.acao === 'amortizar' ? Math.max(0, s - (c.amort || 0)) : s);
-  }, 0);
-  const somaParcelasOrig = marcados.reduce((acc, c) => acc + parseBR(c.parcela), 0);
-
-  if (!saldoPortado) return;
-
-  // Validação saldo mínimo
-  const minSaldo = regra.saldoMin || 0;
-  if (minSaldo && saldoPortado < minSaldo) {
-    avisoEl.innerHTML = '<span style="color:#EF4444;font-weight:600;">⚠️ Saldo elegível (' +
-      fmtBRL(saldoPortado).replace('R$ ','') + ') abaixo do mínimo do ' + nomeBanco +
-      ' (R$ ' + fmtBRL(minSaldo).replace('R$ ','') + ').</span>';
-    return;
-  }
-
-  // Unificado gera UMA parcela para o conjunto — não faz sentido misturar bancos
-  // destino diferentes (cada banco emite o seu contrato). Avisa e pede o modo Separado.
+  // As validações do banco GLOBAL valem só para o modo Unificado (banco único por
+  // definição). No Separado cada grupo valida com a regra do SEU banco destino —
+  // guardas globais aqui abortavam o multi-banco antes do agrupamento rodar.
   if (unificado) {
+    // ── MODO UNIFICADO (banco único) ──
+    if (!regra) return;
+
     const bancosDistintos = new Set(
       getContratosMarcados().filter(c => c.acao !== 'quitar').map(c => _bancoDoContrato(c))
     );
@@ -6733,10 +6716,30 @@ function calcRefim() {
         'troque para <b>Separado (prazo por contrato)</b> para simular todos de uma vez.</span>';
       return;
     }
-  }
 
-  if (unificado) {
-    // ── MODO UNIFICADO (comportamento atual) ──
+    const taxaRefim = getTaxaRefim(regra);
+    if (taxaRefim === null) return; // Caixa sem taxa digitada ainda
+
+    // Contratos elegíveis — Caixa aceita todos (entradaMin=0); quitar = pago com troco, não porta
+    const marcados = getContratosMarcados().filter(c =>
+      c.acao !== 'quitar' &&
+      (regra.taxaLivre ? true : parseBR(c.taxa) >= regra.entradaMin)
+    );
+    const saldoPortado     = marcados.reduce((acc, c) => {
+      const s = parseBR(c.saldo);
+      return acc + (c.acao === 'amortizar' ? Math.max(0, s - (c.amort || 0)) : s);
+    }, 0);
+    const somaParcelasOrig = marcados.reduce((acc, c) => acc + parseBR(c.parcela), 0);
+
+    if (!saldoPortado) return;
+
+    const minSaldo = regra.saldoMin || 0;
+    if (minSaldo && saldoPortado < minSaldo) {
+      avisoEl.innerHTML = '<span style="color:#EF4444;font-weight:600;">⚠️ Saldo elegível (' +
+        fmtBRL(saldoPortado).replace('R$ ','') + ') abaixo do mínimo do ' + nomeBanco +
+        ' (R$ ' + fmtBRL(minSaldo).replace('R$ ','') + ').</span>';
+      return;
+    }
     const prazo   = parseInt(document.getElementById('refimPrazo').value) || 120;
     const price   = mkPrice(taxaRefim, prazo);
 
@@ -6806,6 +6809,7 @@ function calcRefim() {
     );
 
     const linhas = [];   // todas as linhas, de todos os bancos (ordem de exibição)
+    const inelegiveis = []; // contratos fora do cálculo — mostrados em cinza com o motivo
     const blocos = [];   // { banco, regra, linhas, subSaldo, subParcela, subTroco, subIOF, subFinanciado }
     const avisos = [];
     let totalSaldo = 0, totalTroco = 0, totalIOF = 0, totalParcela = 0;
@@ -6813,18 +6817,28 @@ function calcRefim() {
 
     grupos.forEach(g => {
       const regraG = g.regra;
-      if (!regraG) { avisos.push(`banco "${g.banco || '—'}" sem regra cadastrada`); return; }
+      if (!regraG) {
+        avisos.push(`banco "${g.banco || '—'}" sem regra cadastrada`);
+        g.contratos.forEach(c => inelegiveis.push({ c, motivo: `banco destino "${g.banco || '—'}" sem regra cadastrada` }));
+        return;
+      }
 
       const taxaG = getTaxaRefim(regraG);
-      if (taxaG === null) { avisos.push(`${regraG.banco}: informe a taxa negociada`); return; }
+      if (taxaG === null) {
+        avisos.push(`${regraG.banco}: informe a taxa negociada`);
+        g.contratos.forEach(c => inelegiveis.push({ c, motivo: `${regraG.banco}: aguardando taxa negociada` }));
+        return;
+      }
 
       const minTrocoG    = regraG.minTroco || 250;
       const fatorSeguroG = 1 + (Number(regraG.seguro) || 0) / 100;
 
       // Elegibilidade pela regra DESTE banco
-      const elegiveis = g.contratos.filter(c =>
-        regraG.taxaLivre ? true : parseBR(c.taxa) >= regraG.entradaMin
-      );
+      const elegiveis = [];
+      g.contratos.forEach(c => {
+        if (regraG.taxaLivre || parseBR(c.taxa) >= regraG.entradaMin) elegiveis.push(c);
+        else inelegiveis.push({ c, motivo: `taxa ${fmtPct(parseBR(c.taxa))}% < entrada mín. ${fmtPct(regraG.entradaMin)}% do ${regraG.banco}` });
+      });
       if (!elegiveis.length) return;
 
       const saldoDe = c => c.acao === 'amortizar'
@@ -6835,6 +6849,7 @@ function calcRefim() {
       const saldoGrupo = elegiveis.reduce((a, c) => a + saldoDe(c), 0);
       if (regraG.saldoMin && saldoGrupo < regraG.saldoMin) {
         avisos.push(`${regraG.banco}: saldo ${fmtBRL(saldoGrupo)} abaixo do mínimo ${fmtBRL(regraG.saldoMin)}`);
+        elegiveis.forEach(c => inelegiveis.push({ c, motivo: `${regraG.banco}: saldo do grupo abaixo do mínimo ${fmtBRL(regraG.saldoMin)}` }));
         return;
       }
 
@@ -6913,7 +6928,7 @@ function calcRefim() {
       totalSeguro += subFinanciado - (subSaldo + subTrocoBruto);
     });
 
-    if (!linhas.length) {
+    if (!linhas.length && !inelegiveis.length) {
       avisoEl.innerHTML = avisos.length
         ? '<span style="color:#EF4444;font-weight:600;">⚠️ ' + avisos.join(' · ') + '</span>'
         : '<span style="color:#EF4444;font-weight:600;">Nenhum contrato elegível para portar.</span>';
@@ -6961,6 +6976,13 @@ function calcRefim() {
       </tr>`;
     };
 
+    const renderIneleg = i => `
+      <tr style="opacity:.6;background:#F9FAFB;border-bottom:1px solid #F3F4F6;">
+        <td style="padding:6px 8px;">${i.c.banco || '-'}</td>
+        <td style="padding:6px 8px;text-align:right;">${fmtBRL(parseBR(i.c.saldo))}</td>
+        <td colspan="8" style="padding:6px 8px;font-size:11px;color:#9CA3AF;">🚫 Fora do cálculo — ${i.motivo}</td>
+      </tr>`;
+
     tbody.innerHTML = blocos.map(b => {
       if (!multiBanco) return b.linhas.map(renderLinha).join('');
       const subDiff = b.linhas.reduce((a, l) => a + (l.parcelaOriginal - l.parcelaTotal), 0);
@@ -6984,7 +7006,9 @@ function calcRefim() {
         <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:#16A34A;">${fmtBRL(b.subTroco)}</td>
         <td></td>
       </tr>`;
-    }).join('');
+    }).join('') + (inelegiveis.length ? `
+      <tr style="background:#F3F4F6;"><td colspan="10" style="padding:5px 8px;font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.5px;">Fora do cálculo (${inelegiveis.length})</td></tr>
+      ${inelegiveis.map(renderIneleg).join('')}` : '');
 
     const totalParcelaOriginal = linhas.reduce((a, l) => a + l.parcelaOriginal, 0);
     const totalDiff      = totalParcelaOriginal - totalParcela;
@@ -7438,24 +7462,39 @@ function removerExcecao(i, ei) {
 
 function addRegra() {
   if (!_isMaster) { alert('Apenas usuários master podem adicionar bancos.'); return; }
-  const banco    = document.getElementById('novoRegBanco').value.trim();
-  const entrada  = parseBR(document.getElementById('novoRegEntrada').value);
-  const refim    = parseBR(document.getElementById('novoRegRefim').value);
-  const saldoMin = parseBR(document.getElementById('novoRegSaldoMin').value) || 0;
-  const minTroco = parseBR(document.getElementById('novoRegMinTroco').value) || 250;
+  const banco     = document.getElementById('novoRegBanco').value.trim();
+  const entradaTx = document.getElementById('novoRegEntrada').value.trim();
+  const refimTx   = document.getElementById('novoRegRefim').value.trim();
+  const entrada   = parseBR(entradaTx);
+  const refim     = parseBR(refimTx);
+  const taxaLivre = document.getElementById('novoRegTaxaLivre')?.checked || false;
+  const seguro    = parseBR(document.getElementById('novoRegSeguro')?.value || '0') || 0;
+  const saldoMin  = parseBR(document.getElementById('novoRegSaldoMin').value) || 0;
+  const minTroco  = parseBR(document.getElementById('novoRegMinTroco').value) || 250;
   const pagasMinPortar    = parseInt(document.getElementById('novoRegPagasPortar').value) || 0;
   const pagasMinRemunerar = parseInt(document.getElementById('novoRegPagasRem').value)    || 0;
   const uneSaldoNegativo  = document.getElementById('novoRegUneNeg').checked;
-  if (!banco || !entrada || !refim) { alert('Preencha nome, entrada mínima e taxa refim.'); return; }
+
+  if (!banco) { alert('Informe o nome do banco.'); return; }
+  // 0 é valor válido (bancos de taxa negociada, ex: Caixa) — só exige
+  // entrada/refim preenchidos quando o banco tem taxa fixa.
+  if (!taxaLivre && (entradaTx === '' || refimTx === '')) {
+    alert('Preencha entrada mínima e taxa refim — ou marque "Taxa negociada" para bancos sem taxa fixa.');
+    return;
+  }
   if (regrasBancos.some(r => r.banco.toLowerCase() === banco.toLowerCase())) {
     alert(`Já existe um banco com o nome "${banco}".`); return;
   }
-  regrasBancos.push({ banco, entradaMin: entrada, taxaRefim: refim, saldoMin, minTroco,
-                      pagasMinPortar, pagasMinRemunerar, uneSaldoNegativo, excecoesOrigem: [] });
+  regrasBancos.push({
+    banco, entradaMin: entrada, taxaRefim: taxaLivre ? 0 : refim, saldoMin, minTroco,
+    taxaLivre, taxaSugerida: taxaLivre && refim > 0 ? refim : null, seguro,
+    pagasMinPortar, pagasMinRemunerar, uneSaldoNegativo, excecoesOrigem: [],
+  });
   salvarRegras();
   ['novoRegBanco','novoRegEntrada','novoRegRefim','novoRegSaldoMin','novoRegMinTroco',
-   'novoRegPagasPortar','novoRegPagasRem'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+   'novoRegPagasPortar','novoRegPagasRem','novoRegSeguro'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   document.getElementById('novoRegUneNeg').checked = false;
+  const tl = document.getElementById('novoRegTaxaLivre'); if (tl) tl.checked = false;
   renderTbRegras();
   popularSelectBancos();
 }
