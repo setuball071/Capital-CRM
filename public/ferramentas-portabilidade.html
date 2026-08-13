@@ -1602,17 +1602,8 @@ body { background: #F8F8FC !important; color: #111827 !important; }
       <div style="margin-top:20px;padding:16px;background:#F8F7FF;border:1px solid #DDD6FE;border-radius:8px;">
         <h3 style="font-size:14px;margin:0 0 14px 0;">⚙️ Configuração do Refinanciamento</h3>
 
-        <!-- Taxa livre (Caixa e bancos sem taxa fixa) -->
-        <div class="row" style="margin-bottom:12px;" id="wrapTaxaLivre" style="display:none;">
-          <div class="field" style="max-width:220px;">
-            <label>Taxa Negociada (% a.m.)</label>
-            <input id="refimTaxaLivre" type="number" step="0.01" placeholder="Ex: 1,40" oninput="calcRefim()"
-              style="border:2px solid #6C2BD9;font-weight:700;">
-          </div>
-          <div style="align-self:flex-end;padding-bottom:8px;font-size:12px;color:#6B7280;">
-            ⚡ Para a Caixa, entrada e refim usam a mesma taxa
-          </div>
-        </div>
+        <!-- Taxa negociada: um campo por banco SEM taxa fixa (ex: Caixa) -->
+        <div id="wrapTaxaLivre" style="display:none;margin-bottom:12px;"></div>
 
         <div class="row" style="margin-bottom:12px;">
           <div class="field" style="max-width:180px;">
@@ -1745,9 +1736,6 @@ body { background: #F8F8FC !important; color: #111827 !important; }
         <div id="rFinanciadoSep" style="display:none;margin-top:8px;"></div>
       </div>
     </div>
-
-    <!-- RESULTADO CONSOLIDADO DA OPERAÇÃO (todos os contratos, por ação) -->
-    <div id="resultadoOperacao" style="display:none;margin-top:20px;"></div>
 
     <!-- BOTÕES FINAIS -->
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;">
@@ -3053,11 +3041,6 @@ function limparSimulador() {
   document.getElementById('nomeCliente').value = '';
   document.getElementById('cpfCliente').value = '';
   document.getElementById('convenio').value = '';
-
-  // Esconde painel consolidado da operacao
-  const boxOper = document.getElementById('resultadoOperacao');
-  if (boxOper) { boxOper.style.display = 'none'; boxOper.innerHTML = ''; }
-  _novasSimples = {}; _novasRefim = {};
 
   // Esconde painel de margem do extrato
   const margemBox = document.getElementById('margemExtratoBox');
@@ -5931,9 +5914,6 @@ window.addEventListener('message', function(event) {
 
 // --- TIPO DE PORTABILIDADE ---
 let tipoPort = 'simples';
-// Parcela/prazo novos de cada contrato, por id — alimentam o painel Resultado da Operação
-let _novasSimples = {};
-let _novasRefim   = {};
 let prazosSeparado = {}; // não usado no refim (prazo sempre 120)
 let trocosSeparado = {}; // { contratoId: trocoLiquido } — troco editável por contrato (id, não índice: com múltiplos bancos os índices deixam de ser estáveis)
 let prazosSimpSeparado = {}; // { idx: prazo } — prazo editável por contrato na port. simples separada
@@ -6005,7 +5985,6 @@ function getContratosMarcados() {
 // ── PORTABILIDADE SIMPLES ──────────────────────────────
 
 function calcSimples() {
-  _novasSimples = {};
   const taxa   = parseBR(document.getElementById('simpTaxa').value);
   const prazo  = parseInt(document.getElementById('simpPrazo').value) || 96;
   const modo   = document.getElementById('simpModo')?.value || 'separado';
@@ -6039,8 +6018,6 @@ function calcSimples() {
     // Modo junto: uma única linha com saldo e parcela consolidados
     const parcelaConsolidada = taxa > 0 ? calcParcela(totalSaldo * fatorSeguro, taxa, prazo) : 0;
     const economiaConsol = totalParcelaAtual - parcelaConsolidada;
-    // Modo junto: a nova parcela e unica; o painel consolidado usa o agregado
-    _novasSimples._junto = { parcela: parcelaConsolidada, prazo };
     tb.innerHTML = `<tr style="background:#F5F3FF;">
       <td style="font-weight:700;color:#6C2BD9;">${marcados.length} contrato(s) — parcela unificada</td>
       <td class="text-right" style="font-weight:700;">${fmtBRL(totalSaldo)}</td>
@@ -6084,7 +6061,6 @@ function calcSimples() {
       const parcelaNova = taxa > 0 ? calcParcela(saldo * fatorSeguro, taxa, prazoInd) : 0;
       const economia = parcelaAtual - parcelaNova;
       totalParcelaNovaSep += parcelaNova;
-      _novasSimples[c.id] = { parcela: parcelaNova, prazo: prazoInd };
 
       const linhaIdx = linhasSimpMarcadoIdx.indexOf(idx);
       const linha = linhaIdx >= 0 ? linhasSimp[linhaIdx] : null;
@@ -6148,137 +6124,8 @@ function calcSimples() {
       wrapConsol.style.display = 'none';
     }
   }
-
-  renderResultadoOperacao();
 }
 
-
-// ── RESULTADO CONSOLIDADO DA OPERAÇÃO ──────────────────────────────────────
-// Diferente das tabelas acima (que mostram só os contratos portados), este painel
-// olha TODOS os contratos pela sua ação — portar, quitar, amortizar ou manter — e
-// responde "o que o cliente recebe no fim": parcela mensal, total pago até o fim
-// do contrato e quanto de troco sobra depois de pagar as quitações.
-function renderResultadoOperacao() {
-  const box = document.getElementById('resultadoOperacao');
-  if (!box) return;
-  if (!contratos.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-
-  const novas = tipoPort === 'refim' ? _novasRefim : _novasSimples;
-  const junto = novas._junto; // modo unificado (refim) / junto (simples)
-
-  let parcelaHoje = 0, parcelaDepois = 0;
-  let totalHoje = 0, totalDepois = 0;   // parcela × prazo restante
-  let saldoQuitado = 0, trocoTotal = 0;
-  let qtdHoje = 0, qtdDepois = 0, qtdQuitados = 0;
-  let semCalculo = 0;
-  const portadosJunto = [];
-
-  contratos.forEach(c => {
-    const parc = parseBR(c.parcela);
-    const prz  = parseInt(c.prazo) || 0;
-    if (parc <= 0) return;
-    parcelaHoje += parc;
-    totalHoje   += parc * prz;
-    qtdHoje++;
-
-    if (c.acao === 'quitar') {
-      // Quitado: a parcela zera. O saldo é pago com o troco da operação.
-      saldoQuitado += parseBR(c.saldo);
-      qtdQuitados++;
-      return;
-    }
-
-    const nova = novas[c.id];
-    if (c.portar) {
-      if (nova) {
-        parcelaDepois += nova.parcela;
-        totalDepois   += nova.parcela * (nova.prazo || 0);
-        trocoTotal    += nova.troco || 0;
-        qtdDepois++;
-      } else if (junto) {
-        portadosJunto.push(c); // somados numa linha única mais abaixo
-      } else {
-        semCalculo++; // marcado para portar mas ainda sem taxa/prazo definidos
-      }
-    } else {
-      // Mantido como está
-      parcelaDepois += parc;
-      totalDepois   += parc * prz;
-      qtdDepois++;
-    }
-  });
-
-  // Modo junto/unificado: todos os portados viram UMA parcela
-  if (junto && portadosJunto.length) {
-    parcelaDepois += junto.parcela;
-    totalDepois   += junto.parcela * (junto.prazo || 0);
-    trocoTotal    += junto.troco || 0;
-    qtdDepois++;
-  }
-
-  if (!qtdHoje) { box.style.display = 'none'; box.innerHTML = ''; return; }
-
-  const economiaMes  = parcelaHoje - parcelaDepois;
-  const difTotal     = totalHoje - totalDepois;      // + = paga menos no total
-  const trocoSobra   = trocoTotal - saldoQuitado;    // troco após quitar
-  const resultadoFin = difTotal + trocoSobra;        // ganho financeiro real
-
-  const cor  = v => v >= 0 ? '#16A34A' : '#EF4444';
-  const seta = v => (v >= 0 ? '▼ ' : '▲ ');
-
-  const card = (label, valor, corTxt, extra) => `
-    <div style="flex:1;min-width:150px;">
-      <div style="font-size:11px;color:#6B7280;margin-bottom:2px;">${label}</div>
-      <div style="font-size:17px;font-weight:800;color:${corTxt};">${valor}</div>
-      ${extra ? `<div style="font-size:10px;color:#9CA3AF;margin-top:2px;">${extra}</div>` : ''}
-    </div>`;
-
-  box.innerHTML = `
-    <div style="border:2px solid #6C2BD9;border-radius:12px;overflow:hidden;">
-      <div style="background:#6C2BD9;color:#fff;padding:8px 16px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <span>📊 Resultado da Operação</span>
-        <span style="font-size:11px;font-weight:500;opacity:.9;">todos os contratos — portados, quitados, amortizados e mantidos</span>
-      </div>
-      <div style="padding:14px 16px;background:#FAFAFF;">
-
-        <div style="font-size:10px;font-weight:700;color:#6C2BD9;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Parcela mensal</div>
-        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;">
-          ${card('Paga hoje', fmtBRL(parcelaHoje), '#EF4444', qtdHoje + ' contrato(s)')}
-          ${card('Vai pagar', fmtBRL(parcelaDepois), '#111827', qtdDepois + ' contrato(s)')}
-          ${card(economiaMes >= 0 ? 'Economia mensal' : 'Aumento mensal', seta(economiaMes) + fmtBRL(Math.abs(economiaMes)), cor(economiaMes), economiaMes >= 0 ? 'margem liberada' : 'parcela sobe')}
-        </div>
-
-        <div style="font-size:10px;font-weight:700;color:#6C2BD9;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;border-top:1px solid #EDE9FE;padding-top:12px;">Total pago até o fim</div>
-        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;">
-          ${card('Sem a operação', fmtBRL(totalHoje), '#EF4444', 'seguindo como está')}
-          ${card('Com a operação', fmtBRL(totalDepois), '#111827', 'somando os novos prazos')}
-          ${card(difTotal >= 0 ? 'Economia no total' : 'Custo a mais no total', seta(difTotal) + fmtBRL(Math.abs(difTotal)), cor(difTotal), difTotal >= 0 ? 'paga menos até o fim' : 'paga mais até o fim')}
-        </div>
-
-        ${(trocoTotal > 0 || saldoQuitado > 0) ? `
-        <div style="font-size:10px;font-weight:700;color:#6C2BD9;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;border-top:1px solid #EDE9FE;padding-top:12px;">Dinheiro na mão</div>
-        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;">
-          ${card('Troco liberado', fmtBRL(trocoTotal), '#16A34A', '')}
-          ${saldoQuitado > 0 ? card('(−) Quitações', fmtBRL(saldoQuitado), '#EA580C', qtdQuitados + ' contrato(s) quitado(s)') : ''}
-          ${saldoQuitado > 0 ? card('= Sobra pro cliente', fmtBRL(trocoSobra), cor(trocoSobra), trocoSobra < 0 ? 'troco não cobre as quitações' : '') : ''}
-        </div>` : ''}
-
-        <div style="border-top:2px solid #DDD6FE;padding-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-          <div>
-            <div style="font-size:11px;color:#6B7280;">Resultado financeiro total ${trocoSobra !== 0 ? '(economia no total + troco que sobra)' : ''}</div>
-            <div style="font-size:21px;font-weight:800;color:${cor(resultadoFin)};">${resultadoFin >= 0 ? '' : '− '}${fmtBRL(Math.abs(resultadoFin))}</div>
-          </div>
-          <div style="text-align:right;font-size:12px;color:#6B7280;">
-            Contratos: <b style="color:#111827;">${qtdHoje}</b> → <b style="color:#6C2BD9;">${qtdDepois}</b>
-          </div>
-        </div>
-
-        ${semCalculo ? `<div style="margin-top:10px;padding:7px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;font-size:11px;color:#92400E;">⚠️ ${semCalculo} contrato(s) marcado(s) para portar ainda sem cálculo — defina taxa e prazo para o resultado ficar completo.</div>` : ''}
-        ${saldoQuitado > 0 ? `<div style="margin-top:8px;font-size:10px;color:#9CA3AF;">Quitações consideradas pagas com o troco da operação.</div>` : ''}
-      </div>
-    </div>`;
-  box.style.display = '';
-}
 
 // ── PORTABILIDADE COM REFIM ────────────────────────────
 
@@ -6399,6 +6246,7 @@ function setBancoDestino(id, banco) {
   const c = contratos.find(x => x.id === id);
   if (!c) return;
   c.bancoDestino = banco || '';
+  renderTaxasLivres(); // o novo banco pode exigir taxa negociada
   // O conjunto por banco mudou: os trocos daquele contrato voltam ao padrão do novo banco
   delete trocosSeparado[c.id];
   pintarRefimContratos();
@@ -6521,9 +6369,57 @@ function atualizarVisibilidadeCampos() {
 }
 
 // Obtém taxa efetiva do banco (livre para Caixa, fixa para os demais)
+// Taxa negociada por banco sem taxa fixa: { 'Caixa': 1.40, ... }
+// Com multiplos bancos destino cada um precisa da sua taxa, entao nao da para
+// usar um campo unico na tela.
+let taxasLivres = {};
+
+function setTaxaLivre(banco, valor) {
+  const v = parseBR(valor);
+  if (v > 0) taxasLivres[banco] = v; else delete taxasLivres[banco];
+  calcRefim();
+}
+
+// Renderiza um campo de taxa para cada banco sem taxa fixa presente na simulacao
+function renderTaxasLivres() {
+  const wrap = document.getElementById('wrapTaxaLivre');
+  if (!wrap) return;
+
+  const bancos = [];
+  const add = r => { if (r && r.taxaLivre && !bancos.some(b => b.banco === r.banco)) bancos.push(r); };
+  _gruposPorBancoDestino(getContratosMarcados().filter(c => c.acao !== 'quitar'))
+    .forEach(g => add(g.regra));
+  add(regrasBancos.find(r => r.banco === document.getElementById('refimBanco')?.value));
+
+  if (!bancos.length) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+
+  // Primeira vez: parte da taxa sugerida do banco
+  bancos.forEach(r => {
+    if (taxasLivres[r.banco] == null && r.taxaSugerida) taxasLivres[r.banco] = Number(r.taxaSugerida);
+  });
+
+  const campos = bancos.map(r => `
+    <div class="field" style="max-width:200px;">
+      <label>Taxa ${r.banco} (% a.m.)</label>
+      <input type="number" step="0.01" placeholder="Ex: 1,40"
+        value="${taxasLivres[r.banco] != null ? String(taxasLivres[r.banco]).replace('.', ',') : ''}"
+        onchange="setTaxaLivre('${r.banco.replace(/'/g, "\\'")}', this.value)"
+        style="border:2px solid ${taxasLivres[r.banco] > 0 ? '#6C2BD9' : '#F59E0B'};font-weight:700;">
+    </div>`).join('');
+
+  wrap.innerHTML = `
+    <div class="row" style="align-items:flex-end;flex-wrap:wrap;gap:12px;">
+      ${campos}
+      <div style="align-self:flex-end;padding-bottom:8px;font-size:12px;color:#6B7280;">
+        ⚡ ${bancos.length > 1 ? 'Cada banco usa a sua taxa negociada' : 'Entrada e refim usam a mesma taxa'}
+      </div>
+    </div>`;
+  wrap.style.display = '';
+}
+
 function getTaxaRefim(regra) {
   if (regra.taxaLivre) {
-    const v = parseBR(document.getElementById('refimTaxaLivre').value);
+    const v = Number(taxasLivres[regra.banco]) || 0;
     return v > 0 ? v / 100 : null;
   }
   return regra.taxaRefim / 100;
@@ -6618,7 +6514,7 @@ function salvarParaDigitacao() {
     banco_destino: banco,
     taxa_refim: regra
       ? (regra.taxaLivre
-          ? parseBR(document.getElementById('refimTaxaLivre')?.value || '0')
+          ? (Number(taxasLivres[regra.banco]) || 0)
           : regra.taxaRefim)
       : null,
     contratos_originais: contratos.map(c => ({
@@ -6779,15 +6675,7 @@ function _toastRefim(msg, cor) {
   }, 3000);
 }
 
-// Wrapper: garante que o painel consolidado seja atualizado em TODOS os caminhos,
-// inclusive nos returns antecipados do calculo (sem banco, sem saldo, etc).
 function calcRefim() {
-  _calcRefimInterno();
-  renderResultadoOperacao();
-}
-
-function _calcRefimInterno() {
-  _novasRefim = {};
   const nomeBanco = document.getElementById('refimBanco').value;
   const regra = regrasBancos.find(r => r.banco === nomeBanco);
   const avisoEl = document.getElementById('refimSaldoTotal');
@@ -6803,13 +6691,7 @@ function _calcRefimInterno() {
   const btnMaxMg = document.getElementById('btnMaxMargem');
   if (btnMaxMg) btnMaxMg.style.display = margemNeg > 0 ? '' : 'none';
 
-  // Campo taxa livre (Caixa)
-  const taxaLivreWrap = document.getElementById('wrapTaxaLivre');
-  taxaLivreWrap.style.display = regra.taxaLivre ? '' : 'none';
-  if (regra.taxaLivre) {
-    const el = document.getElementById('refimTaxaLivre');
-    if (!el.value && regra.taxaSugerida) el.value = String(regra.taxaSugerida).replace('.', ',');
-  }
+  renderTaxasLivres();
 
   const taxaRefim = getTaxaRefim(regra);
   if (taxaRefim === null) return; // Caixa sem taxa digitada ainda
@@ -6928,7 +6810,6 @@ function _calcRefimInterno() {
     const avisos = [];
     let totalSaldo = 0, totalTroco = 0, totalIOF = 0, totalParcela = 0;
     let totalFinanciado = 0, totalTrocoBruto = 0, totalSeguro = 0;
-    let bancosTaxaLivre = 0;
 
     grupos.forEach(g => {
       const regraG = g.regra;
@@ -6936,7 +6817,6 @@ function _calcRefimInterno() {
 
       const taxaG = getTaxaRefim(regraG);
       if (taxaG === null) { avisos.push(`${regraG.banco}: informe a taxa negociada`); return; }
-      if (regraG.taxaLivre) bancosTaxaLivre++;
 
       const minTrocoG    = regraG.minTroco || 250;
       const fatorSeguroG = 1 + (Number(regraG.seguro) || 0) / 100;
@@ -7011,7 +6891,6 @@ function _calcRefimInterno() {
         subSaldo += saldo; subParcela += parcelaTotal; subTroco += trocoLiquido;
         subIOF += iof; subFinanciado += financiado; subTrocoBruto += trocoBruto;
 
-        _novasRefim[c.id] = { parcela: parcelaTotal, prazo, troco: trocoLiquido };
 
         return {
           id: c.id, banco: c.banco, bancoDestino: regraG.banco, saldo, prazo, prazoOriginal,
@@ -7127,13 +7006,9 @@ function _calcRefimInterno() {
 
     const avisoSep = document.getElementById('refimSeparadoAviso');
     if (avisoSep) {
-      let base = avisos.length
+      avisoSep.innerHTML = avisos.length
         ? '<span style="color:#F59E0B;font-weight:600;">⚠️ Atenção: ' + avisos.join('; ') + '</span>'
         : '<span style="color:#16A34A;font-weight:600;">✅ Todos os contratos viáveis</span>';
-      if (bancosTaxaLivre > 1) {
-        base += '<div style="margin-top:4px;color:#B45309;font-size:11px;">⚠️ Mais de um banco com taxa negociada: todos estão usando a mesma taxa do campo acima.</div>';
-      }
-      avisoSep.innerHTML = base;
     }
 
     // Valor financiado (abaixo do bloco de margem negativa)
@@ -7211,8 +7086,6 @@ function renderResultadoRefim(saldoPortado, valorRefim, iof, encargos, trocoLiqu
   document.getElementById('rTaxaRefim').textContent    = fmtPct(taxaRefim) + ' a.m.';
   document.getElementById('refimResultado').style.display = '';
   _refimResult = { modo: 'unificado', parcela: parcelaTotal, troco: trocoLiquido, prazo };
-  // Modo unificado: parcela unica para o conjunto — o painel consolidado usa o agregado
-  _novasRefim._junto = { parcela: parcelaTotal, prazo, troco: trocoLiquido };
 }
 
 // ── CPF: busca automática ao importar extrato ─────────────────────────────
@@ -7259,6 +7132,7 @@ async function salvarCotacao() {
   const dados = {
     contratos:        contratos.map(c => ({...c})),
     refimBanco:       document.getElementById('refimBanco')?.value       || '',
+    taxasLivres:      { ...taxasLivres },
     refimUnificado:   document.getElementById('refimUnificado')?.value   || 'separado',
     refimPrazo:       document.getElementById('refimPrazo')?.value       || '',
     refimModo:        document.getElementById('refimModo')?.value        || 'troco',
@@ -7375,6 +7249,7 @@ async function carregarCotacao(id, cpf) {
     // Restaura campos
     const set = (id, v) => { const el = document.getElementById(id); if(el && v != null) el.value = v; };
     set('refimBanco',        d.refimBanco);
+    taxasLivres = d.taxasLivres ? { ...d.taxasLivres } : {};
     set('refimUnificado',    d.refimUnificado);
     set('refimPrazo',        d.refimPrazo);
     set('refimModo',         d.refimModo);
