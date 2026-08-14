@@ -3032,6 +3032,128 @@ export const lancamentosCompensacoes = pgTable("lancamentos_compensacoes", {
 export type LancamentoCorretor = typeof lancamentosCorretor.$inferSelect;
 export type LancamentoCompensacao = typeof lancamentosCompensacoes.$inferSelect;
 
+// ═══════════════════════════════════════════════════════════════════
+// FINANCEIRO EMPRESARIAL — caixa consolidado, contas a pagar,
+// planejamento e revisão de custos (Master-only)
+// ═══════════════════════════════════════════════════════════════════
+
+// Contas bancárias da empresa (Nubank, Santander, Unicred, C6...)
+export const finContasBancarias = pgTable("fin_contas_bancarias", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  nome: varchar("nome", { length: 100 }).notNull(), // apelido: "Nubank PJ"
+  banco: varchar("banco", { length: 100 }), // instituição
+  cor: varchar("cor", { length: 20 }).default("#7c3aed"),
+  saldoInicial: decimal("saldo_inicial", { precision: 14, scale: 2 }).notNull().default("0"),
+  // Data a partir da qual o saldo_inicial vale (evita duplicar histórico pré-importação)
+  dataSaldoInicial: varchar("data_saldo_inicial", { length: 10 }),
+  ativa: boolean("ativa").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Categorias de entrada/saída (com teto mensal opcional p/ planejamento)
+export const finCategorias = pgTable("fin_categorias", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  nome: varchar("nome", { length: 100 }).notNull(),
+  tipo: varchar("tipo", { length: 10 }).notNull(), // 'entrada' | 'saida'
+  cor: varchar("cor", { length: 20 }).default("#6b7280"),
+  tetoMensal: decimal("teto_mensal", { precision: 14, scale: 2 }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Regras de auto-categorização na importação (padrão de texto → categoria)
+export const finRegrasCategorizacao = pgTable("fin_regras_categorizacao", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  padraoTexto: varchar("padrao_texto", { length: 255 }).notNull(), // substring case-insensitive
+  categoriaId: integer("categoria_id")
+    .references(() => finCategorias.id, { onDelete: "cascade" })
+    .notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Lançamentos do extrato consolidado (importados por OFX ou manuais)
+export const finLancamentos = pgTable(
+  "fin_lancamentos",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    contaId: integer("conta_id")
+      .references(() => finContasBancarias.id, { onDelete: "cascade" })
+      .notNull(),
+    data: varchar("data", { length: 10 }).notNull(), // YYYY-MM-DD
+    valor: decimal("valor", { precision: 14, scale: 2 }).notNull(), // + entrada / − saída
+    descricao: text("descricao"),
+    // FITID do OFX — chave de dedupe por conta (importar 2x não duplica)
+    fitid: varchar("fitid", { length: 255 }),
+    categoriaId: integer("categoria_id").references(() => finCategorias.id, { onDelete: "set null" }),
+    // Conciliação com contas a pagar (baixa automática)
+    contaPagarId: integer("conta_pagar_id"),
+    origem: varchar("origem", { length: 20 }).notNull().default("ofx"), // 'ofx' | 'manual'
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_fin_lanc_fitid").on(table.contaId, table.fitid),
+  ],
+);
+
+// Contas a pagar — à vista, a prazo, parceladas e recorrentes
+export const finContasPagar = pgTable("fin_contas_pagar", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  descricao: varchar("descricao", { length: 255 }).notNull(),
+  fornecedor: varchar("fornecedor", { length: 255 }),
+  categoriaId: integer("categoria_id").references(() => finCategorias.id, { onDelete: "set null" }),
+  contaId: integer("conta_id").references(() => finContasBancarias.id, { onDelete: "set null" }),
+  valor: decimal("valor", { precision: 14, scale: 2 }).notNull(),
+  vencimento: varchar("vencimento", { length: 10 }).notNull(), // YYYY-MM-DD
+  // 'avista' | 'prazo' | 'parcelada' | 'recorrente'
+  tipo: varchar("tipo", { length: 20 }).notNull().default("avista"),
+  parcelaNum: integer("parcela_num"), // 3 (de 12)
+  parcelaTotal: integer("parcela_total"), // 12
+  grupoParcelamento: varchar("grupo_parcelamento", { length: 50 }), // uid do lote de parcelas
+  // Recorrência mensal: ao pagar, gera a do mês seguinte automaticamente
+  recorrente: boolean("recorrente").notNull().default(false),
+  // 'aberta' | 'paga' | 'cancelada' (atraso é derivado: aberta + vencimento < hoje)
+  status: varchar("status", { length: 20 }).notNull().default("aberta"),
+  dataPagamento: varchar("data_pagamento", { length: 10 }),
+  lancamentoId: integer("lancamento_id"), // lançamento do extrato que baixou (conciliação)
+  boletoCodigo: varchar("boleto_codigo", { length: 60 }), // linha digitável
+  observacao: text("observacao"),
+  criadoPor: integer("criado_por").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Planejamento mensal: % de reserva, tetos e metas
+export const finPlanejamento = pgTable("fin_planejamento", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  mesReferencia: varchar("mes_referencia", { length: 7 }).notNull(), // YYYY-MM
+  pctReserva: decimal("pct_reserva", { precision: 5, scale: 2 }).notNull().default("0"),
+  // Tetos por categoria: { "categoriaId": teto }
+  tetosJson: jsonb("tetos_json"),
+  metaMargem: decimal("meta_margem", { precision: 5, scale: 2 }),
+  observacao: text("observacao"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type FinContaBancaria = typeof finContasBancarias.$inferSelect;
+export type FinLancamento = typeof finLancamentos.$inferSelect;
+export type FinContaPagar = typeof finContasPagar.$inferSelect;
+
 export type InsertProducaoContrato = z.infer<
   typeof insertProducaoContratoSchema
 >;

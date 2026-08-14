@@ -94,6 +94,10 @@ import MinhaAssinaturaPage from "@/pages/minha-assinatura";
 import HubBetaPage from "@/pages/hub-beta";
 import { Loader2, BarChart3, Settings } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
+import FinCaixaPage from "@/pages/fin-caixa";
+import FinContasPagarPage from "@/pages/fin-contas-pagar";
+import FinPlanejamentoPage from "@/pages/fin-planejamento";
+import FinRevisaoPage from "@/pages/fin-revisao";
 import { NotificationBell } from "@/components/notification-bell";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -597,6 +601,18 @@ function Router() {
               </Route>
               <Route path="/financeiro/proventos">
                 {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
+              </Route>
+              <Route path="/financeiro/caixa">
+                {() => <MasterRoute component={FinCaixaPage} />}
+              </Route>
+              <Route path="/financeiro/contas-pagar">
+                {() => <MasterRoute component={FinContasPagarPage} />}
+              </Route>
+              <Route path="/financeiro/planejamento">
+                {() => <MasterRoute component={FinPlanejamentoPage} />}
+              </Route>
+              <Route path="/financeiro/revisao">
+                {() => <MasterRoute component={FinRevisaoPage} />}
               </Route>
               <Route path="/financeiro/configuracoes">
                 {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}

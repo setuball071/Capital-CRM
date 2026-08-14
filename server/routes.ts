@@ -541,6 +541,7 @@ import * as os from "os";
 import Papa from "papaparse";
 import { createNotification } from "./notification-service";
 import { registerContractRoutes } from "./contracts";
+import { registerFinEmpresaRoutes } from "./fin-empresa";
 import { registerOcrRoutes } from "./ocr";
 import { registerAssistenteRoutes } from "./assistente";
 import { registerAssistenteAvisosRoutes } from "./assistente-avisos";
@@ -30635,6 +30636,9 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
   // ===== MÓDULO DE CONTRATOS =====
   registerContractRoutes(app, requireAuth);
+
+  // ===== FINANCEIRO EMPRESARIAL (caixa, contas a pagar, planejamento) =====
+  registerFinEmpresaRoutes(app, requireAuth);
 
   // ===== OCR DE DOCUMENTOS =====
   registerOcrRoutes(app, requireAuth);

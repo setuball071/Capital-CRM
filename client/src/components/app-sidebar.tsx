@@ -1,4 +1,4 @@
-import { Users, FileText, Table, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, Rocket, ScrollText, BookMarked, Wrench, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard, KeyRound, Layers } from "lucide-react";
+import { Users, FileText, Table, Landmark, Map, Database, ShoppingCart, UserSearch, ShieldCheck, DollarSign, GraduationCap, BookOpen, ClipboardCheck, MessageSquare, Settings, Briefcase, Target, Headphones, Tag, Calendar, Kanban, BarChart3, Search, Settings2, Building2, Palette, Upload, FileBarChart, History, Receipt, Brain, Sparkles, FlaskConical, Rocket, ScrollText, BookMarked, Wrench, Bell, FileSignature, FileSpreadsheet, TrendingUp, CreditCard, KeyRound, Layers, Wallet, CalendarClock, SearchCheck } from "lucide-react";
 
 import { useLocation } from "wouter";
 import { useState, useEffect, useRef, Fragment } from "react";
@@ -354,6 +354,10 @@ export function AppSidebar() {
       title: "Financeiro",
       icon: TrendingUp,
       items: [
+        { title: "Caixa", url: "/financeiro/caixa", icon: Wallet, masterOnly: true },
+        { title: "Contas a Pagar", url: "/financeiro/contas-pagar", icon: CalendarClock, masterOnly: true },
+        { title: "Planejamento", url: "/financeiro/planejamento", icon: Target, masterOnly: true },
+        { title: "Revisão de Custos", url: "/financeiro/revisao", icon: SearchCheck, masterOnly: true },
         { title: "Produção", url: "/financeiro/producao", icon: BarChart3, module: "modulo_financeiro", subItem: "producao" },
         { title: "Tabelas", url: "/financeiro/tabelas", icon: Table, module: "modulo_financeiro", subItem: "tabelas" },
         { title: "Pagamentos", url: "/financeiro/contratos", icon: FileText, module: "modulo_financeiro", subItem: "contratos" },

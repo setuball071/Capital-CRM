@@ -477,6 +477,103 @@ app.use((req, res, next) => {
           await migDb.execute(migSql`
             CREATE INDEX IF NOT EXISTS idx_lancamentos_corretor_tenant ON lancamentos_corretor(tenant_id, nome_corretor)
           `);
+          // ── Financeiro Empresarial: caixa, contas a pagar, planejamento ──
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS fin_contas_bancarias (
+              id                 SERIAL PRIMARY KEY,
+              tenant_id          INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              nome               VARCHAR(100) NOT NULL,
+              banco              VARCHAR(100),
+              cor                VARCHAR(20) DEFAULT '#7c3aed',
+              saldo_inicial      DECIMAL(14,2) NOT NULL DEFAULT 0,
+              data_saldo_inicial VARCHAR(10),
+              ativa              BOOLEAN NOT NULL DEFAULT true,
+              created_at         TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS fin_categorias (
+              id          SERIAL PRIMARY KEY,
+              tenant_id   INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              nome        VARCHAR(100) NOT NULL,
+              tipo        VARCHAR(10) NOT NULL,
+              cor         VARCHAR(20) DEFAULT '#6b7280',
+              teto_mensal DECIMAL(14,2),
+              created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS fin_regras_categorizacao (
+              id           SERIAL PRIMARY KEY,
+              tenant_id    INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              padrao_texto VARCHAR(255) NOT NULL,
+              categoria_id INTEGER NOT NULL REFERENCES fin_categorias(id) ON DELETE CASCADE,
+              created_at   TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS fin_lancamentos (
+              id             SERIAL PRIMARY KEY,
+              tenant_id      INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              conta_id       INTEGER NOT NULL REFERENCES fin_contas_bancarias(id) ON DELETE CASCADE,
+              data           VARCHAR(10) NOT NULL,
+              valor          DECIMAL(14,2) NOT NULL,
+              descricao      TEXT,
+              fitid          VARCHAR(255),
+              categoria_id   INTEGER REFERENCES fin_categorias(id) ON DELETE SET NULL,
+              conta_pagar_id INTEGER,
+              origem         VARCHAR(20) NOT NULL DEFAULT 'ofx',
+              created_at     TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_fin_lanc_fitid ON fin_lancamentos(conta_id, fitid)
+          `);
+          await migDb.execute(migSql`
+            CREATE INDEX IF NOT EXISTS idx_fin_lanc_tenant_data ON fin_lancamentos(tenant_id, data)
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS fin_contas_pagar (
+              id                 SERIAL PRIMARY KEY,
+              tenant_id          INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              descricao          VARCHAR(255) NOT NULL,
+              fornecedor         VARCHAR(255),
+              categoria_id       INTEGER REFERENCES fin_categorias(id) ON DELETE SET NULL,
+              conta_id           INTEGER REFERENCES fin_contas_bancarias(id) ON DELETE SET NULL,
+              valor              DECIMAL(14,2) NOT NULL,
+              vencimento         VARCHAR(10) NOT NULL,
+              tipo               VARCHAR(20) NOT NULL DEFAULT 'avista',
+              parcela_num        INTEGER,
+              parcela_total      INTEGER,
+              grupo_parcelamento VARCHAR(50),
+              recorrente         BOOLEAN NOT NULL DEFAULT false,
+              status             VARCHAR(20) NOT NULL DEFAULT 'aberta',
+              data_pagamento     VARCHAR(10),
+              lancamento_id      INTEGER,
+              boleto_codigo      VARCHAR(60),
+              observacao         TEXT,
+              criado_por         INTEGER,
+              created_at         TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE INDEX IF NOT EXISTS idx_fin_cp_tenant_venc ON fin_contas_pagar(tenant_id, vencimento)
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS fin_planejamento (
+              id             SERIAL PRIMARY KEY,
+              tenant_id      INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              mes_referencia VARCHAR(7) NOT NULL,
+              pct_reserva    DECIMAL(5,2) NOT NULL DEFAULT 0,
+              tetos_json     JSONB,
+              meta_margem    DECIMAL(5,2),
+              observacao     TEXT,
+              created_at     TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_fin_plan_mes ON fin_planejamento(tenant_id, mes_referencia)
+          `);
           // Campanhas: remove atribuições duplicadas (mesmo lead 2x na mesma campanha,
           // causado por distribuições concorrentes) — mantém a não-'novo' ou a mais antiga.
           // Depois cria índice único que impede novas duplicatas e recalcula contadores.
