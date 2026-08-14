@@ -109,6 +109,14 @@ export default function FinCaixa() {
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
+  // Categorização inline (linha a linha) — essencial no fluxo pós-importação OFX
+  const catInline = useMutation({
+    mutationFn: async ({ id, categoriaId }: { id: number; categoriaId: number | null }) =>
+      apiRequest("PATCH", "/api/fin/lancamentos/categorizar", { ids: [id], categoriaId }),
+    onSuccess: () => invalidar(),
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
   const categorizarLote = useMutation({
     mutationFn: async () => apiRequest("PATCH", "/api/fin/lancamentos/categorizar", {
       ids: [...sel],
@@ -318,11 +326,33 @@ export default function FinCaixa() {
                       {l.contaPagarId && <span className="ml-2 text-[10px] text-green-600 font-semibold">✓ conciliado</span>}
                     </TableCell>
                     <TableCell>
-                      {cat ? (
-                        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${cat.cor}22`, color: cat.cor }}>{cat.nome}</span>
-                      ) : (
-                        <span className="text-xs text-amber-600">sem categoria</span>
-                      )}
+                      <Select
+                        value={l.categoriaId ? String(l.categoriaId) : "none"}
+                        onValueChange={(v) => {
+                          if (v === "__nova") { setDlgCats(true); return; }
+                          catInline.mutate({ id: l.id, categoriaId: v === "none" ? null : Number(v) });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 w-44 text-xs border-dashed bg-transparent">
+                          {cat ? (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium truncate" style={{ background: `${cat.cor}22`, color: cat.cor }}>{cat.nome}</span>
+                          ) : (
+                            <span className="text-xs text-amber-600">sem categoria</span>
+                          )}
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— sem categoria —</SelectItem>
+                          {categorias.map(c => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="h-2 w-2 rounded-full" style={{ background: c.cor }} />
+                                {c.nome}
+                              </span>
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="__nova">＋ Criar nova categoria...</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell className={`text-right font-semibold whitespace-nowrap ${v < 0 ? "text-red-600" : "text-green-600"}`}>
                       {fmtBRL(v)}
