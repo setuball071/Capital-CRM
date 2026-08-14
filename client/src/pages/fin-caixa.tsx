@@ -275,7 +275,16 @@ export default function FinCaixa() {
           <SelectContent>
             <SelectItem value="all">Todas as categorias</SelectItem>
             <SelectItem value="sem">— Sem categoria —</SelectItem>
-            {categorias.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
+            {[...categorias]
+              .sort((a, b) => (a.tipo === b.tipo ? a.nome.localeCompare(b.nome, "pt-BR") : a.tipo === "entrada" ? -1 : 1))
+              .map(c => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full" style={{ background: c.cor }} />
+                    {c.nome}
+                  </span>
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
         <Input placeholder="🔍 Buscar na descrição..." value={busca} onChange={e => setBusca(e.target.value)} className="w-56" />
@@ -288,13 +297,32 @@ export default function FinCaixa() {
       </div>
 
       {/* Barra de categorização em lote */}
-      {sel.size > 0 && (
+      {sel.size > 0 && (() => {
+        // Tipo dominante da seleção: se só há saídas (ou só entradas), oferece
+        // apenas as categorias daquele lado; seleção mista mostra tudo.
+        const selecionados = (lancData?.lancamentos ?? []).filter(l => sel.has(l.id));
+        const temSaida = selecionados.some(l => parseFloat(l.valor) < 0);
+        const temEntrada = selecionados.some(l => parseFloat(l.valor) >= 0);
+        const tipoLote = temSaida && !temEntrada ? "saida" : !temSaida && temEntrada ? "entrada" : null;
+        const catsLote = tipoLote ? categorias.filter(c => c.tipo === tipoLote) : categorias;
+        return (
         <div className="flex items-center gap-3 flex-wrap rounded-lg border border-primary/40 border-l-4 border-l-primary bg-card p-3 shadow-sm">
-          <span className="text-sm font-semibold">{sel.size} selecionado(s)</span>
+          <span className="text-sm font-semibold">
+            {sel.size} selecionado(s)
+            {tipoLote && <span className="ml-1.5 text-xs font-normal text-muted-foreground">({tipoLote === "saida" ? "saídas" : "entradas"})</span>}
+            {!tipoLote && <span className="ml-1.5 text-xs font-normal text-amber-600">(entradas e saídas juntas)</span>}
+          </span>
           <Select value={catLote} onValueChange={setCatLote}>
             <SelectTrigger className="w-52"><SelectValue placeholder="Escolher categoria..." /></SelectTrigger>
             <SelectContent>
-              {categorias.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
+              {catsLote.map(c => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full" style={{ background: c.cor }} />
+                    {c.nome}
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Input placeholder='Criar regra: texto contém... (opcional)' value={regraTexto} onChange={e => setRegraTexto(e.target.value)} className="w-64" />
@@ -303,7 +331,8 @@ export default function FinCaixa() {
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}>Limpar</Button>
         </div>
-      )}
+        );
+      })()}
 
       {/* Extrato */}
       <Card>
@@ -370,14 +399,17 @@ export default function FinCaixa() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">— sem categoria —</SelectItem>
-                          {categorias.map(c => (
-                            <SelectItem key={c.id} value={String(c.id)}>
-                              <span className="inline-flex items-center gap-1.5">
-                                <span className="h-2 w-2 rounded-full" style={{ background: c.cor }} />
-                                {c.nome}
-                              </span>
-                            </SelectItem>
-                          ))}
+                          {/* Só as categorias do lado certo: valor < 0 → saídas, valor ≥ 0 → entradas */}
+                          {categorias
+                            .filter(c => c.tipo === (v < 0 ? "saida" : "entrada") || c.id === l.categoriaId)
+                            .map(c => (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="h-2 w-2 rounded-full" style={{ background: c.cor }} />
+                                  {c.nome}
+                                </span>
+                              </SelectItem>
+                            ))}
                           <SelectItem value="__nova">＋ Criar nova categoria...</SelectItem>
                         </SelectContent>
                       </Select>
