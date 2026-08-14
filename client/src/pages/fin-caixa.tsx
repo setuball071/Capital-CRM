@@ -132,20 +132,34 @@ export default function FinCaixa() {
   });
 
   async function importarOfx() {
-    const file = fileRef.current?.files?.[0];
+    const files = Array.from(fileRef.current?.files ?? []);
     if (!importConta) { toast({ title: "Selecione a conta bancária", variant: "destructive" }); return; }
-    if (!file) { toast({ title: "Selecione o arquivo OFX", variant: "destructive" }); return; }
+    if (!files.length) { toast({ title: "Selecione o(s) arquivo(s) OFX", variant: "destructive" }); return; }
     setImportando(true);
     try {
-      const fd = new FormData();
-      fd.append("contaId", importConta);
-      fd.append("arquivo", file);
-      const r = await fetch("/api/fin/importar-ofx", { method: "POST", body: fd, credentials: "include" });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.message || "Erro");
+      // Importa em sequência — o dedupe por FITID torna a ordem irrelevante
+      let inseridos = 0, duplicados = 0, conciliadas = 0;
+      const falhas: string[] = [];
+      for (const file of files) {
+        try {
+          const fd = new FormData();
+          fd.append("contaId", importConta);
+          fd.append("arquivo", file);
+          const r = await fetch("/api/fin/importar-ofx", { method: "POST", body: fd, credentials: "include" });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.message || "Erro");
+          inseridos += d.inseridos || 0;
+          duplicados += d.duplicados || 0;
+          conciliadas += d.conciliadas || 0;
+        } catch (e: any) {
+          falhas.push(`${file.name}: ${e.message}`);
+        }
+      }
+      if (falhas.length === files.length) throw new Error(falhas.join(" · "));
       toast({
-        title: "Extrato importado",
-        description: `${d.inseridos} novos · ${d.duplicados || 0} já existiam${d.conciliadas ? ` · ${d.conciliadas} conta(s) a pagar baixada(s)` : ""}`,
+        title: `${files.length - falhas.length} arquivo(s) importado(s)`,
+        description: `${inseridos} novos · ${duplicados} já existiam${conciliadas ? ` · ${conciliadas} conta(s) a pagar baixada(s)` : ""}${falhas.length ? ` · falhou: ${falhas.join("; ")}` : ""}`,
+        variant: falhas.length ? "destructive" : undefined,
       });
       setDlgImport(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -399,7 +413,7 @@ export default function FinCaixa() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Arquivo OFX</Label><Input ref={fileRef} type="file" accept=".ofx,.OFX" /></div>
+            <div><Label>Arquivo(s) OFX — pode selecionar vários</Label><Input ref={fileRef} type="file" accept=".ofx,.OFX" multiple /></div>
             <p className="text-xs text-muted-foreground">
               Importar o mesmo arquivo duas vezes não duplica nada — cada transação tem identificador único.
               Débitos que baterem com contas a pagar em aberto são baixados automaticamente.
