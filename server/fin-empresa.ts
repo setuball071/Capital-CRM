@@ -377,6 +377,20 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
       const txs = parseOfx(text);
       if (!txs.length) return res.status(400).json({ message: "Nenhuma transação encontrada no arquivo (é um OFX válido?)" });
 
+      // Blindagem: transação sem FITID ganha chave sintética determinística
+      // (data+valor+descrição+nº da ocorrência no arquivo) — assim o dedupe
+      // funciona mesmo com OFX mal-comportado, sem colapsar transações
+      // idênticas legítimas do mesmo dia.
+      const ocorrencias = new Map<string, number>();
+      for (const t of txs) {
+        if (!t.fitid) {
+          const chave = `${t.data}|${t.valor.toFixed(2)}|${(t.descricao || "").slice(0, 60)}`;
+          const n = (ocorrencias.get(chave) || 0) + 1;
+          ocorrencias.set(chave, n);
+          t.fitid = `syn-${Buffer.from(chave).toString("base64").slice(0, 40)}-${n}`;
+        }
+      }
+
       // Regras de auto-categorização
       const regras = await db.select().from(finRegrasCategorizacao)
         .where(eq(finRegrasCategorizacao.tenantId, tenantId));
