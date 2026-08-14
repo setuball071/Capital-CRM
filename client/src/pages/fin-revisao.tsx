@@ -100,6 +100,76 @@ export default function FinRevisao() {
               {resultado.contaCriada && <div className="sm:col-span-2 text-green-600 font-semibold text-xs">✓ Conta a pagar criada — veja em Contas a Pagar</div>}
             </div>
           )}
+
+          {/* Detalhamento da fatura: onde a revisão de custos realmente acontece */}
+          {resultado?.analiseItens && (
+            <div className="space-y-3">
+              <div className="flex items-baseline justify-between flex-wrap gap-2 border-t pt-3">
+                <p className="font-semibold text-sm">
+                  📑 {resultado.analiseItens.totalItens} compras nesta fatura
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  soma dos itens {fmtBRL(resultado.analiseItens.somaItens)}
+                  {resultado.analiseItens.divergencia != null && Math.abs(resultado.analiseItens.divergencia) > 0.5 && (
+                    <span className="text-amber-600 font-semibold"> · difere do total em {fmtBRL(Math.abs(resultado.analiseItens.divergencia))}</span>
+                  )}
+                </p>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-2">
+                {resultado.analiseItens.repetidos?.length > 0 && (
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-amber-600 mb-2">
+                      Cobrado mais de uma vez — possíveis assinaturas
+                    </p>
+                    <div className="space-y-1">
+                      {resultado.analiseItens.repetidos.map((r: any, i: number) => (
+                        <div key={i} className="flex justify-between gap-2 text-xs">
+                          <span className="truncate" title={r.descricao}>{r.descricao} <span className="text-muted-foreground">({r.ocorrencias}×)</span></span>
+                          <span className="font-mono font-semibold shrink-0">{fmtBRL(r.total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {resultado.analiseItens.parcelados?.length > 0 && (
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-primary mb-2">
+                      Parcelamentos em curso — comprometem os próximos meses
+                    </p>
+                    <div className="space-y-1">
+                      {resultado.analiseItens.parcelados.map((r: any, i: number) => (
+                        <div key={i} className="flex justify-between gap-2 text-xs">
+                          <span className="truncate" title={r.descricao}>{r.descricao}</span>
+                          <span className="font-mono font-semibold shrink-0">{fmtBRL(r.valor)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {resultado.analiseItens.maiores?.length > 0 && (
+                <details className="rounded-lg border p-3">
+                  <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide select-none">
+                    Maiores gastos da fatura ({resultado.analiseItens.maiores.length})
+                  </summary>
+                  <div className="space-y-1 mt-2">
+                    {resultado.analiseItens.maiores.map((r: any, i: number) => (
+                      <div key={i} className="flex justify-between gap-2 text-xs">
+                        <span className="truncate" title={r.descricao}>
+                          {r.data && <span className="text-muted-foreground mr-1.5">{fmtData(r.data)}</span>}
+                          {r.descricao}
+                        </span>
+                        <span className="font-mono font-semibold shrink-0">{fmtBRL(r.valor)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

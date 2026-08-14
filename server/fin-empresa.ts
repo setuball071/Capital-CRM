@@ -1004,9 +1004,17 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
   "valor": 123.45,
   "vencimento": "YYYY-MM-DD ou null",
   "linhaDigitavel": "se houver código de barras/linha digitável, os dígitos, senão null",
-  "categoriasugerida": "uma palavra: aluguel|energia|internet|telefonia|software|marketing|impostos|folha|outros",
-  "observacoes": "detalhes relevantes: período de referência, multa, itens principais"
+  "categoriasugerida": "uma palavra: aluguel|energia|internet|telefonia|software|marketing|impostos|folha|cartao|outros",
+  "observacoes": "detalhes relevantes: período de referência, multa, juros",
+  "itens": [ { "data": "YYYY-MM-DD ou null", "descricao": "estabelecimento/serviço", "valor": 12.34 } ]
 }
+
+REGRAS DOS ITENS — importante:
+- Se for FATURA DE CARTÃO, EXTRATO ou documento com VÁRIAS compras/lançamentos, liste TODOS os itens em "itens", um por compra, com o valor de cada um. Não resuma, não agrupe, não invente.
+- Parcelamentos: mantenha a descrição como está (ex: "LOJA X 03/12").
+- Estornos/créditos: valor negativo.
+- Se for um boleto/fatura de valor único (aluguel, energia), devolva "itens": [].
+- "valor" no topo é sempre o TOTAL a pagar do documento.
 Se não conseguir ler algum campo com segurança, use null — NÃO invente.`;
 
       // PDF: o modelo de visão não aceita application/pdf — extrai o texto e
@@ -1034,7 +1042,7 @@ Se não conseguir ler algum campo com segurança, use null — NÃO invente.`;
       const completion = await ocrClient.chat.completions.create({
         model: ocrModel,
         messages: [{ role: "user", content: userContent }],
-        max_tokens: 800,
+        max_tokens: 8000,
       });
 
       const raw = completion.choices?.[0]?.message?.content || "";
@@ -1068,7 +1076,49 @@ Se não conseguir ler algum campo com segurança, use null — NÃO invente.`;
         contaCriada = cp;
       }
 
-      return res.json({ ok: true, dados, contaCriada });
+      // Análise dos itens (fatura de cartão): maiores gastos, repetições no
+      // mesmo documento e possíveis assinaturas recorrentes.
+      let analiseItens: any = null;
+      const itens = Array.isArray(dados.itens) ? dados.itens.filter((i: any) => i && i.valor != null) : [];
+      if (itens.length) {
+        const norm2 = (t: string) => String(t || "").toUpperCase()
+          .replace(/\d{2}\/\d{2}(\/\d{2,4})?/g, "")
+          .replace(new RegExp('\\b\\d{1,2}\\/\\d{1,2}\\b', 'g'), "")
+          .replace(/\s+/g, " ").trim();
+        const porNome = new Map<string, { n: number; total: number; exemplo: string }>();
+        let somaItens = 0;
+        for (const i of itens) {
+          const v = parseFloat(String(i.valor)) || 0;
+          somaItens += v;
+          const k = norm2(i.descricao);
+          if (!k) continue;
+          if (!porNome.has(k)) porNome.set(k, { n: 0, total: 0, exemplo: i.descricao });
+          const g = porNome.get(k)!;
+          g.n++; g.total += v;
+        }
+        const repetidos = [...porNome.values()]
+          .filter(g => g.n >= 2)
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 15)
+          .map(g => ({ descricao: g.exemplo, ocorrencias: g.n, total: Math.round(g.total * 100) / 100 }));
+        const maiores = [...itens]
+          .map((i: any) => ({ descricao: i.descricao, data: i.data || null, valor: parseFloat(String(i.valor)) || 0 }))
+          .sort((a, b) => b.valor - a.valor)
+          .slice(0, 15);
+        // Parcelamentos em curso ("03/12") — comprometem meses futuros
+        const parcelados = itens
+          .filter((i: any) => /\b\d{1,2}\s*\/\s*\d{1,2}\b/.test(String(i.descricao || "")))
+          .map((i: any) => ({ descricao: i.descricao, valor: parseFloat(String(i.valor)) || 0 }))
+          .slice(0, 15);
+        analiseItens = {
+          totalItens: itens.length,
+          somaItens: Math.round(somaItens * 100) / 100,
+          divergencia: dados.valor ? Math.round((parseFloat(String(dados.valor)) - somaItens) * 100) / 100 : null,
+          maiores, repetidos, parcelados,
+        };
+      }
+
+      return res.json({ ok: true, dados, contaCriada, analiseItens });
     } catch (e: any) {
       console.error("[FIN-ANALISAR-FATURA]", e);
       return res.status(500).json({ message: "Erro ao analisar: " + (e.message || "") });
