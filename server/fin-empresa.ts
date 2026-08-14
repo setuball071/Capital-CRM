@@ -1085,22 +1085,40 @@ Se não conseguir ler algum campo com segurança, use null — NÃO invente.`;
           .replace(/\d{2}\/\d{2}(\/\d{2,4})?/g, "")
           .replace(new RegExp('\\b\\d{1,2}\\/\\d{1,2}\\b', 'g'), "")
           .replace(/\s+/g, " ").trim();
-        const porNome = new Map<string, { n: number; total: number; exemplo: string }>();
+        const porNome = new Map<string, { n: number; total: number; exemplo: string; ocorrencias: { data: string | null; valor: number; descricao: string }[] }>();
         let somaItens = 0;
         for (const i of itens) {
           const v = parseFloat(String(i.valor)) || 0;
           somaItens += v;
           const k = norm2(i.descricao);
           if (!k) continue;
-          if (!porNome.has(k)) porNome.set(k, { n: 0, total: 0, exemplo: i.descricao });
+          if (!porNome.has(k)) porNome.set(k, { n: 0, total: 0, exemplo: i.descricao, ocorrencias: [] });
           const g = porNome.get(k)!;
           g.n++; g.total += v;
+          g.ocorrencias.push({ data: i.data || null, valor: v, descricao: i.descricao });
         }
         const repetidos = [...porNome.values()]
           .filter(g => g.n >= 2)
           .sort((a, b) => b.total - a.total)
           .slice(0, 15)
-          .map(g => ({ descricao: g.exemplo, ocorrencias: g.n, total: Math.round(g.total * 100) / 100 }));
+          .map(g => {
+            // Suspeita real: mesmo valor cobrado mais de uma vez (não só o mesmo lugar)
+            const contagemPorValor = new Map<string, number>();
+            for (const o of g.ocorrencias) {
+              const kv = o.valor.toFixed(2);
+              contagemPorValor.set(kv, (contagemPorValor.get(kv) || 0) + 1);
+            }
+            const valorRepetido = [...contagemPorValor.values()].some(n => n >= 2);
+            return {
+              descricao: g.exemplo,
+              ocorrencias: g.n,
+              total: Math.round(g.total * 100) / 100,
+              valorRepetido,
+              detalhe: g.ocorrencias
+                .sort((a, b) => String(a.data || "").localeCompare(String(b.data || "")))
+                .map(o => ({ data: o.data, valor: Math.round(o.valor * 100) / 100, descricao: o.descricao })),
+            };
+          });
         const maiores = [...itens]
           .map((i: any) => ({ descricao: i.descricao, data: i.data || null, valor: parseFloat(String(i.valor)) || 0 }))
           .sort((a, b) => b.valor - a.valor)

@@ -122,11 +122,26 @@ export default function FinRevisao() {
                     <p className="text-xs font-bold uppercase tracking-wide text-amber-600 mb-2">
                       Cobrado mais de uma vez — possíveis assinaturas
                     </p>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {resultado.analiseItens.repetidos.map((r: any, i: number) => (
-                        <div key={i} className="flex justify-between gap-2 text-xs">
-                          <span className="truncate" title={r.descricao}>{r.descricao} <span className="text-muted-foreground">({r.ocorrencias}×)</span></span>
-                          <span className="font-mono font-semibold shrink-0">{fmtBRL(r.total)}</span>
+                        <div key={i} className={`rounded-md px-2 py-1.5 ${r.valorRepetido ? "bg-red-500/5 border border-red-500/30" : ""}`}>
+                          <div className="flex justify-between gap-2 text-xs">
+                            <span className="truncate font-medium" title={r.descricao}>
+                              {r.descricao} <span className="text-muted-foreground font-normal">({r.ocorrencias}×)</span>
+                              {r.valorRepetido && <span className="ml-1 text-red-600 font-semibold">· mesmo valor repetido</span>}
+                            </span>
+                            <span className="font-mono font-semibold shrink-0">{fmtBRL(r.total)}</span>
+                          </div>
+                          {r.detalhe?.length > 0 && (
+                            <div className="mt-1 pl-2 border-l-2 border-muted space-y-0.5">
+                              {r.detalhe.map((o: any, j: number) => (
+                                <div key={j} className="flex justify-between gap-2 text-[11px] text-muted-foreground">
+                                  <span>{o.data ? fmtData(o.data) : "sem data"}</span>
+                                  <span className="font-mono">{fmtBRL(o.valor)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
