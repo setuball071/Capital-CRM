@@ -139,6 +139,7 @@ export default function FinCaixa() {
     try {
       // Importa em sequência — o dedupe por FITID torna a ordem irrelevante
       let inseridos = 0, duplicados = 0, conciliadas = 0;
+      let saldoCalibrado: number | null = null;
       const falhas: string[] = [];
       for (const file of files) {
         try {
@@ -151,6 +152,7 @@ export default function FinCaixa() {
           inseridos += d.inseridos || 0;
           duplicados += d.duplicados || 0;
           conciliadas += d.conciliadas || 0;
+          if (d.saldoCalibrado != null) saldoCalibrado = d.saldoCalibrado;
         } catch (e: any) {
           falhas.push(`${file.name}: ${e.message}`);
         }
@@ -158,7 +160,7 @@ export default function FinCaixa() {
       if (falhas.length === files.length) throw new Error(falhas.join(" · "));
       toast({
         title: `${files.length - falhas.length} arquivo(s) importado(s)`,
-        description: `${inseridos} novos · ${duplicados} já existiam${conciliadas ? ` · ${conciliadas} conta(s) a pagar baixada(s)` : ""}${falhas.length ? ` · falhou: ${falhas.join("; ")}` : ""}`,
+        description: `${inseridos} novos · ${duplicados} já existiam${conciliadas ? ` · ${conciliadas} conta(s) a pagar baixada(s)` : ""}${saldoCalibrado != null ? ` · saldo ajustado pelo extrato: ${fmtBRL(saldoCalibrado)}` : ""}${falhas.length ? ` · falhou: ${falhas.join("; ")}` : ""}`,
         variant: falhas.length ? "destructive" : undefined,
       });
       setDlgImport(false);
@@ -413,10 +415,12 @@ export default function FinCaixa() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Arquivo(s) OFX — pode selecionar vários</Label><Input ref={fileRef} type="file" accept=".ofx,.OFX" multiple /></div>
+            <div><Label>Arquivo(s) OFX — pode selecionar vários</Label><Input ref={fileRef} type="file" accept=".ofx,.OFX,.qfx,.ofc,.money" multiple /></div>
             <p className="text-xs text-muted-foreground">
               Importar o mesmo arquivo duas vezes não duplica nada — cada transação tem identificador único.
-              Débitos que baterem com contas a pagar em aberto são baixados automaticamente.
+              Débitos que baterem com contas a pagar em aberto são baixados automaticamente, e o saldo da
+              conta é calibrado pelo saldo oficial que vem dentro do extrato.
+              <br />No <b>Santander</b>, exporte pela opção <b>"Money 2000 e superior"</b> — é o formato OFX.
             </p>
           </div>
           <DialogFooter>

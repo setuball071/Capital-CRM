@@ -33,6 +33,16 @@ function hojeISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Saldo oficial embutido no OFX (LEDGERBAL): valor + data de referência. */
+export function parseOfxLedger(text: string): { valor: number; data: string } | null {
+  const m = text.match(/<LEDGERBAL>[\s\S]*?<BALAMT>([^<\r\n]*)[\s\S]*?<DTASOF>(\d{8})/i);
+  if (!m) return null;
+  const valor = parseFloat(m[1].trim().replace(",", "."));
+  if (isNaN(valor)) return null;
+  const d = m[2];
+  return { valor, data: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` };
+}
+
 /** Parser OFX próprio (SGML 1.x e XML 2.x). Extrai blocos STMTTRN. */
 export function parseOfx(text: string): { fitid: string | null; data: string; valor: number; descricao: string }[] {
   const txs: { fitid: string | null; data: string; valor: number; descricao: string }[] = [];
@@ -421,6 +431,31 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
         inseridos += r.length;
       }
 
+      // Autocalibração do saldo: o OFX traz o saldo oficial da conta (LEDGERBAL).
+      // saldo_inicial := saldo_oficial − soma(lançamentos até a data do saldo).
+      // Assim o saldo do Caixa bate com o app do banco mesmo sem histórico completo.
+      let saldoCalibrado: number | null = null;
+      try {
+        const ledger = parseOfxLedger(text);
+        if (ledger) {
+          const [somaRow] = await db
+            .select({ soma: sql<string>`COALESCE(SUM(${finLancamentos.valor}), 0)` })
+            .from(finLancamentos)
+            .where(and(
+              eq(finLancamentos.tenantId, tenantId),
+              eq(finLancamentos.contaId, contaId),
+              lte(finLancamentos.data, ledger.data),
+            ));
+          const novoInicial = Math.round((ledger.valor - parseFloat(somaRow?.soma || "0")) * 100) / 100;
+          await db.update(finContasBancarias)
+            .set({ saldoInicial: String(novoInicial), dataSaldoInicial: ledger.data })
+            .where(and(eq(finContasBancarias.id, contaId), eq(finContasBancarias.tenantId, tenantId)));
+          saldoCalibrado = ledger.valor;
+        }
+      } catch (calErr) {
+        console.error("[FIN-OFX] calibração de saldo (non-fatal):", calErr);
+      }
+
       // Conciliação automática: contas a pagar abertas × débitos novos (valor exato, data ±3 dias)
       let conciliadas = 0;
       try {
@@ -469,6 +504,7 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
         duplicados: txs.length - inseridos - semFitid > 0 ? txs.length - inseridos : 0,
         semFitid,
         conciliadas,
+        saldoCalibrado,
       });
     } catch (e: any) {
       console.error("[FIN-IMPORTAR-OFX]", e);
