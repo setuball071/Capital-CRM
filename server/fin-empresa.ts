@@ -993,17 +993,11 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
       if (!req.file) return res.status(400).json({ message: "Nenhum arquivo enviado" });
 
       const { ocrClient, ocrModel } = await import("./openaiClient");
-      const mime = req.file.mimetype || "image/jpeg";
-      const b64 = req.file.buffer.toString("base64");
+      const mime = req.file.mimetype || "";
+      const nome = String(req.file.originalname || "");
+      const ehPdf = mime.includes("pdf") || /\.pdf$/i.test(nome);
 
-      const completion = await ocrClient.chat.completions.create({
-        model: ocrModel,
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `Você é um extrator de dados de faturas e boletos brasileiros. Analise o documento e retorne SOMENTE um JSON válido (sem markdown) com:
+      const INSTRUCAO = `Você é um extrator de dados de faturas e boletos brasileiros. Analise o documento e retorne SOMENTE um JSON válido (sem markdown) com:
 {
   "descricao": "o que está sendo cobrado (curto)",
   "fornecedor": "quem emitiu",
@@ -1013,11 +1007,33 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
   "categoriasugerida": "uma palavra: aluguel|energia|internet|telefonia|software|marketing|impostos|folha|outros",
   "observacoes": "detalhes relevantes: período de referência, multa, itens principais"
 }
-Se não conseguir ler algum campo com segurança, use null — NÃO invente.`,
-            },
-            { type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } },
-          ],
-        }],
+Se não conseguir ler algum campo com segurança, use null — NÃO invente.`;
+
+      // PDF: o modelo de visão não aceita application/pdf — extrai o texto e
+      // manda como texto. Imagem: manda como visão.
+      let userContent: any;
+      if (ehPdf) {
+        const { extractTextFromPdf } = await import("./roteiros-pdf-service");
+        let texto = "";
+        try {
+          texto = await extractTextFromPdf(req.file.buffer);
+        } catch (pdfErr: any) {
+          return res.status(422).json({
+            message: "Não consegui ler este PDF. Se ele for digitalizado (imagem), tire um print ou foto da fatura e envie como imagem.",
+          });
+        }
+        userContent = `${INSTRUCAO}\n\n--- TEXTO DO DOCUMENTO ---\n${texto.slice(0, 20000)}`;
+      } else {
+        const b64 = req.file.buffer.toString("base64");
+        userContent = [
+          { type: "text", text: INSTRUCAO },
+          { type: "image_url", image_url: { url: `data:${mime || "image/jpeg"};base64,${b64}` } },
+        ];
+      }
+
+      const completion = await ocrClient.chat.completions.create({
+        model: ocrModel,
+        messages: [{ role: "user", content: userContent }],
         max_tokens: 800,
       });
 
