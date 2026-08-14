@@ -984,18 +984,15 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
   });
 
   // ══ REVISÃO DE CUSTOS (Fase 4) ════════════════════════════════════
-
-  // Lê fatura/boleto (imagem ou PDF) com IA e devolve os campos extraídos;
-  // com criar=1 já cadastra a conta a pagar.
-  app.post("/api/fin/analisar-fatura", requireAuth, uploadOfx.single("arquivo"), async (req: any, res) => {
+  // Lê UMA OU VÁRIAS faturas/boletos (imagem ou PDF) com IA, devolve os campos
+  // extraídos e a análise consolidada dos itens. Com criar=1 cadastra as contas.
+  app.post("/api/fin/analisar-fatura", requireAuth, uploadOfx.array("arquivos", 10), async (req: any, res) => {
     try {
       const tenantId = guard(req, res); if (!tenantId) return;
-      if (!req.file) return res.status(400).json({ message: "Nenhum arquivo enviado" });
+      const files: any[] = req.files?.length ? req.files : (req.file ? [req.file] : []);
+      if (!files.length) return res.status(400).json({ message: "Nenhum arquivo enviado" });
 
       const { ocrClient, ocrModel } = await import("./openaiClient");
-      const mime = req.file.mimetype || "";
-      const nome = String(req.file.originalname || "");
-      const ehPdf = mime.includes("pdf") || /\.pdf$/i.test(nome);
 
       const INSTRUCAO = `Você é um extrator de dados de faturas e boletos brasileiros. Analise o documento e retorne SOMENTE um JSON válido (sem markdown) com:
 {
@@ -1017,126 +1014,170 @@ REGRAS DOS ITENS — importante:
 - "valor" no topo é sempre o TOTAL a pagar do documento.
 Se não conseguir ler algum campo com segurança, use null — NÃO invente.`;
 
-      // PDF: o modelo de visão não aceita application/pdf — extrai o texto e
-      // manda como texto. Imagem: manda como visão.
-      let userContent: any;
-      if (ehPdf) {
-        const { extractTextFromPdf } = await import("./roteiros-pdf-service");
-        let texto = "";
+      const criar = String(req.body?.criar) === "1";
+      const faturas: any[] = [];
+      const erros: string[] = [];
+      // Todos os itens de todas as faturas, marcados com a origem
+      const itensGlobais: { data: string | null; descricao: string; valor: number; origem: string }[] = [];
+
+      for (const file of files) {
+        const nomeArq = String(file.originalname || "documento");
         try {
-          texto = await extractTextFromPdf(req.file.buffer);
-        } catch (pdfErr: any) {
-          return res.status(422).json({
-            message: "Não consegui ler este PDF. Se ele for digitalizado (imagem), tire um print ou foto da fatura e envie como imagem.",
+          const mime = file.mimetype || "";
+          const ehPdf = mime.includes("pdf") || /\.pdf$/i.test(nomeArq);
+
+          let userContent: any;
+          if (ehPdf) {
+            const { extractTextFromPdf } = await import("./roteiros-pdf-service");
+            let texto = "";
+            try {
+              texto = await extractTextFromPdf(file.buffer);
+            } catch {
+              erros.push(`${nomeArq}: PDF sem texto legível (se for digitalizado, envie print/foto)`);
+              continue;
+            }
+            userContent = `${INSTRUCAO}\n\n--- TEXTO DO DOCUMENTO ---\n${texto.slice(0, 20000)}`;
+          } else {
+            const b64 = file.buffer.toString("base64");
+            userContent = [
+              { type: "text", text: INSTRUCAO },
+              { type: "image_url", image_url: { url: `data:${mime || "image/jpeg"};base64,${b64}` } },
+            ];
+          }
+
+          const completion = await ocrClient.chat.completions.create({
+            model: ocrModel,
+            messages: [{ role: "user", content: userContent }],
+            max_tokens: 8000,
           });
+
+          const raw = completion.choices?.[0]?.message?.content || "";
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) { erros.push(`${nomeArq}: a IA não conseguiu ler`); continue; }
+          let dados: any;
+          try { dados = JSON.parse(jsonMatch[0]); } catch { erros.push(`${nomeArq}: resposta fora do formato`); continue; }
+
+          if (dados.linhaDigitavel) {
+            const dec = decodificarBoleto(String(dados.linhaDigitavel));
+            if (dec?.valor && !dados.valor) dados.valor = dec.valor;
+            if (dec?.vencimento && !dados.vencimento) dados.vencimento = dec.vencimento;
+          }
+
+          // Rótulo curto da origem (para agrupar entre cartões)
+          const origem = String(dados.fornecedor || dados.descricao || nomeArq)
+            .replace(/banco|s\.?a\.?|\(brasil\)|cart(ã|a)o de cr(é|e)dito|fatura/gi, "")
+            .replace(/\s+/g, " ").trim().slice(0, 28) || nomeArq;
+
+          const itens = Array.isArray(dados.itens) ? dados.itens.filter((i: any) => i && i.valor != null) : [];
+          for (const i of itens) {
+            itensGlobais.push({
+              data: i.data || null,
+              descricao: String(i.descricao || ""),
+              valor: parseFloat(String(i.valor)) || 0,
+              origem,
+            });
+          }
+
+          let contaCriada = null;
+          if (criar && dados.valor && dados.descricao) {
+            const [cp] = await db.insert(finContasPagar).values({
+              tenantId,
+              descricao: String(dados.descricao).slice(0, 255),
+              fornecedor: dados.fornecedor ? String(dados.fornecedor).slice(0, 255) : null,
+              valor: String(Math.round(parseFloat(dados.valor) * 100) / 100),
+              vencimento: dados.vencimento || hojeISO(),
+              tipo: "avista",
+              boletoCodigo: dados.linhaDigitavel ? String(dados.linhaDigitavel).replace(/\D/g, "").slice(0, 60) : null,
+              observacao: dados.observacoes || "Cadastrada pela Revisão de Custos (IA)",
+              criadoPor: req.user?.id || null,
+            }).returning();
+            contaCriada = cp;
+          }
+
+          faturas.push({ arquivo: nomeArq, origem, dados, contaCriada, qtdItens: itens.length });
+        } catch (e: any) {
+          erros.push(`${nomeArq}: ${e.message || "erro"}`);
         }
-        userContent = `${INSTRUCAO}\n\n--- TEXTO DO DOCUMENTO ---\n${texto.slice(0, 20000)}`;
-      } else {
-        const b64 = req.file.buffer.toString("base64");
-        userContent = [
-          { type: "text", text: INSTRUCAO },
-          { type: "image_url", image_url: { url: `data:${mime || "image/jpeg"};base64,${b64}` } },
-        ];
       }
 
-      const completion = await ocrClient.chat.completions.create({
-        model: ocrModel,
-        messages: [{ role: "user", content: userContent }],
-        max_tokens: 8000,
-      });
-
-      const raw = completion.choices?.[0]?.message?.content || "";
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return res.status(422).json({ message: "A IA não conseguiu ler o documento", bruto: raw.slice(0, 300) });
-      let dados: any;
-      try { dados = JSON.parse(jsonMatch[0]); } catch {
-        return res.status(422).json({ message: "Resposta da IA fora do formato", bruto: raw.slice(0, 300) });
+      if (!faturas.length) {
+        return res.status(422).json({ message: erros.join(" · ") || "Nenhum documento pôde ser lido" });
       }
 
-      // Se veio linha digitável, refina valor/vencimento com o decodificador determinístico
-      if (dados.linhaDigitavel) {
-        const dec = decodificarBoleto(String(dados.linhaDigitavel));
-        if (dec?.valor && !dados.valor) dados.valor = dec.valor;
-        if (dec?.vencimento && !dados.vencimento) dados.vencimento = dec.vencimento;
-      }
-
-      let contaCriada = null;
-      if (String(req.body?.criar) === "1" && dados.valor && dados.descricao) {
-        const [cp] = await db.insert(finContasPagar).values({
-          tenantId,
-          descricao: String(dados.descricao).slice(0, 255),
-          fornecedor: dados.fornecedor ? String(dados.fornecedor).slice(0, 255) : null,
-          valor: String(Math.round(parseFloat(dados.valor) * 100) / 100),
-          vencimento: dados.vencimento || hojeISO(),
-          tipo: "avista",
-          boletoCodigo: dados.linhaDigitavel ? String(dados.linhaDigitavel).replace(/\D/g, "").slice(0, 60) : null,
-          observacao: dados.observacoes || "Cadastrada pela Revisão de Custos (IA)",
-          criadoPor: req.user?.id || null,
-        }).returning();
-        contaCriada = cp;
-      }
-
-      // Análise dos itens (fatura de cartão): maiores gastos, repetições no
-      // mesmo documento e possíveis assinaturas recorrentes.
+      // ── Análise CONSOLIDADA dos itens (cruza todas as faturas) ──
       let analiseItens: any = null;
-      const itens = Array.isArray(dados.itens) ? dados.itens.filter((i: any) => i && i.valor != null) : [];
-      if (itens.length) {
+      if (itensGlobais.length) {
         const norm2 = (t: string) => String(t || "").toUpperCase()
           .replace(/\d{2}\/\d{2}(\/\d{2,4})?/g, "")
           .replace(new RegExp('\\b\\d{1,2}\\/\\d{1,2}\\b', 'g'), "")
           .replace(/\s+/g, " ").trim();
-        const porNome = new Map<string, { n: number; total: number; exemplo: string; ocorrencias: { data: string | null; valor: number; descricao: string }[] }>();
+
+        const porNome = new Map<string, { n: number; total: number; exemplo: string; origens: Set<string>; ocorrencias: any[] }>();
         let somaItens = 0;
-        for (const i of itens) {
-          const v = parseFloat(String(i.valor)) || 0;
-          somaItens += v;
+        for (const i of itensGlobais) {
+          somaItens += i.valor;
           const k = norm2(i.descricao);
           if (!k) continue;
-          if (!porNome.has(k)) porNome.set(k, { n: 0, total: 0, exemplo: i.descricao, ocorrencias: [] });
+          if (!porNome.has(k)) porNome.set(k, { n: 0, total: 0, exemplo: i.descricao, origens: new Set(), ocorrencias: [] });
           const g = porNome.get(k)!;
-          g.n++; g.total += v;
-          g.ocorrencias.push({ data: i.data || null, valor: v, descricao: i.descricao });
+          g.n++; g.total += i.valor; g.origens.add(i.origem);
+          g.ocorrencias.push({ data: i.data, valor: i.valor, origem: i.origem });
         }
+
         const repetidos = [...porNome.values()]
           .filter(g => g.n >= 2)
           .sort((a, b) => b.total - a.total)
-          .slice(0, 15)
+          .slice(0, 20)
           .map(g => {
-            // Suspeita real: mesmo valor cobrado mais de uma vez (não só o mesmo lugar)
             const contagemPorValor = new Map<string, number>();
             for (const o of g.ocorrencias) {
               const kv = o.valor.toFixed(2);
               contagemPorValor.set(kv, (contagemPorValor.get(kv) || 0) + 1);
             }
-            const valorRepetido = [...contagemPorValor.values()].some(n => n >= 2);
             return {
               descricao: g.exemplo,
               ocorrencias: g.n,
               total: Math.round(g.total * 100) / 100,
-              valorRepetido,
+              valorRepetido: [...contagemPorValor.values()].some(n => n >= 2),
+              // O achado mais valioso: mesma cobrança em CARTÕES DIFERENTES
+              multiCartao: g.origens.size > 1,
+              cartoes: [...g.origens],
               detalhe: g.ocorrencias
                 .sort((a, b) => String(a.data || "").localeCompare(String(b.data || "")))
-                .map(o => ({ data: o.data, valor: Math.round(o.valor * 100) / 100, descricao: o.descricao })),
+                .map(o => ({ data: o.data, valor: Math.round(o.valor * 100) / 100, origem: o.origem })),
             };
           });
-        const maiores = [...itens]
-          .map((i: any) => ({ descricao: i.descricao, data: i.data || null, valor: parseFloat(String(i.valor)) || 0 }))
+
+        const maiores = [...itensGlobais]
           .sort((a, b) => b.valor - a.valor)
-          .slice(0, 15);
-        // Parcelamentos em curso ("03/12") — comprometem meses futuros
-        const parcelados = itens
-          .filter((i: any) => /\b\d{1,2}\s*\/\s*\d{1,2}\b/.test(String(i.descricao || "")))
-          .map((i: any) => ({ descricao: i.descricao, valor: parseFloat(String(i.valor)) || 0 }))
-          .slice(0, 15);
+          .slice(0, 20)
+          .map(i => ({ descricao: i.descricao, data: i.data, valor: Math.round(i.valor * 100) / 100, origem: i.origem }));
+
+        const parcelados = itensGlobais
+          .filter(i => /\b\d{1,2}\s*\/\s*\d{1,2}\b/.test(i.descricao))
+          .map(i => ({ descricao: i.descricao, valor: Math.round(i.valor * 100) / 100, origem: i.origem }))
+          .slice(0, 20);
+
+        // Totais por fatura/cartão
+        const porOrigem = new Map<string, { total: number; itens: number }>();
+        for (const i of itensGlobais) {
+          if (!porOrigem.has(i.origem)) porOrigem.set(i.origem, { total: 0, itens: 0 });
+          const g = porOrigem.get(i.origem)!;
+          g.total += i.valor; g.itens++;
+        }
+
         analiseItens = {
-          totalItens: itens.length,
+          totalItens: itensGlobais.length,
           somaItens: Math.round(somaItens * 100) / 100,
-          divergencia: dados.valor ? Math.round((parseFloat(String(dados.valor)) - somaItens) * 100) / 100 : null,
+          totalFaturas: Math.round(faturas.reduce((s, f) => s + (parseFloat(String(f.dados?.valor)) || 0), 0) * 100) / 100,
+          porCartao: [...porOrigem.entries()]
+            .map(([origem, g]) => ({ origem, total: Math.round(g.total * 100) / 100, itens: g.itens }))
+            .sort((a, b) => b.total - a.total),
           maiores, repetidos, parcelados,
         };
       }
 
-      return res.json({ ok: true, dados, contaCriada, analiseItens });
+      return res.json({ ok: true, faturas, analiseItens, erros });
     } catch (e: any) {
       console.error("[FIN-ANALISAR-FATURA]", e);
       return res.status(500).json({ message: "Erro ao analisar: " + (e.message || "") });
