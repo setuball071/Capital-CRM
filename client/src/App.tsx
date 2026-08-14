@@ -603,16 +603,16 @@ function Router() {
                 {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
               </Route>
               <Route path="/financeiro/caixa">
-                {() => <MasterRoute component={FinCaixaPage} />}
+                {() => <RoleRoute component={FinCaixaPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/financeiro/contas-pagar">
-                {() => <MasterRoute component={FinContasPagarPage} />}
+                {() => <RoleRoute component={FinContasPagarPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/financeiro/planejamento">
-                {() => <MasterRoute component={FinPlanejamentoPage} />}
+                {() => <RoleRoute component={FinPlanejamentoPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/financeiro/revisao">
-                {() => <MasterRoute component={FinRevisaoPage} />}
+                {() => <RoleRoute component={FinRevisaoPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/financeiro/configuracoes">
                 {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}

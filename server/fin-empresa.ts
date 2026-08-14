@@ -24,7 +24,9 @@ const uploadOfx = multer({
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function isMasterReq(req: any): boolean {
-  return !!(req.user?.isMaster || req.user?.role === "master");
+  // Coordenação tem os mesmos acessos do master no financeiro empresarial
+  // (pedido do Fábio: Manu com acesso igual ao dele)
+  return !!(req.user?.isMaster || req.user?.role === "master" || req.user?.role === "coordenacao");
 }
 
 function hojeISO(): string {
