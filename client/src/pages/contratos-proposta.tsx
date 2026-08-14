@@ -1492,20 +1492,34 @@ export default function ContratosPropostaPage() {
               <Button disabled={digits.length !== 11 || isLookingUp} onClick={doCpfSearch}>
                 {isLookingUp ? "Buscando..." : "Buscar"}
               </Button>
-              <Button
-                variant="outline"
-                disabled={digits.length !== 11 || isLookingUp}
-                onClick={goToConvenioFresh}
-                data-testid="button-comecar-do-zero"
-              >
-                Começar do zero
-              </Button>
             </div>
             {!cpfSearched && (
               <p className="text-xs text-muted-foreground mt-2">
-                <strong>Buscar</strong> verifica se o cliente já tem cadastro e documentos, para reaproveitar e evitar nova leitura por IA. <strong>Começar do zero</strong> pula essa verificação e cadastra tudo novo.
+                Verificamos se o cliente já tem cadastro e documentos no sistema, para reaproveitar e evitar nova leitura por IA e novo upload.
               </p>
             )}
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">ou</span>
+            </div>
+          </div>
+
+          <div>
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={isLookingUp}
+              onClick={goToConvenioFresh}
+              data-testid="button-comecar-do-zero"
+            >
+              Começar do zero — sem consultar CPF
+            </Button>
+            <p className="text-xs text-muted-foreground mt-2">
+              Abre direto o cadastro para anexar os documentos e digitar os dados. O CPF entra no formulário (ou vem da leitura do contracheque).
+            </p>
           </div>
 
           {cpfSearched && !isLookingUp && clientLookup && (
