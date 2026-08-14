@@ -836,6 +836,12 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
         .where(and(eq(finPlanejamento.tenantId, tenantId), eq(finPlanejamento.mesReferencia, mes))).limit(1);
       const pctReserva = plan ? parseFloat(plan.pctReserva || "0") : 0;
       const reservaDevida = Math.round(entradasMes * pctReserva / 100 * 100) / 100;
+      // Resultado e margem do mês (entradas − saídas) × meta definida no planejamento
+      const resultadoMes = Math.round((entradasMes - saidasMes) * 100) / 100;
+      const margemRealizada = entradasMes > 0 ? Math.round((resultadoMes / entradasMes) * 1000) / 10 : 0;
+      const metaMargem = plan?.metaMargem ? parseFloat(plan.metaMargem) : null;
+      // Saldo livre = o que sobra depois de honrar a reserva
+      const disponivel = Math.round((saldoConsolidado - reservaDevida) * 100) / 100;
 
       // Categorias (para tetos e nomes)
       const categorias = await db.select().from(finCategorias)
@@ -898,6 +904,14 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
       if (diaNegativo) alertas.push({ nivel: "critico", texto: `Com os compromissos atuais, o caixa fica NEGATIVO em ${diaNegativo.split("-").reverse().join("/")}` });
       else if (diaAbaixoReserva) alertas.push({ nivel: "warn", texto: `O caixa fura a reserva planejada em ${diaAbaixoReserva.split("-").reverse().join("/")}` });
       if (reservaDevida > 0) alertas.push({ nivel: "info", texto: `Reserva de ${mes.split("-").reverse().join("/")}: separar R$ ${reservaDevida.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (${pctReserva}% das entradas)` });
+      if (metaMargem != null && entradasMes > 0) {
+        if (margemRealizada < metaMargem) {
+          const falta = Math.round((entradasMes * metaMargem / 100 - resultadoMes) * 100) / 100;
+          alertas.push({ nivel: "warn", texto: `Margem em ${margemRealizada}% — abaixo da meta de ${metaMargem}%. Faltam R$ ${falta.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} de resultado (mais entradas ou menos custo).` });
+        } else {
+          alertas.push({ nivel: "info", texto: `Margem em ${margemRealizada}% — meta de ${metaMargem}% atingida` });
+        }
+      }
       for (const e of estouros as any[]) {
         if (e.pct >= 100) alertas.push({ nivel: "critico", texto: `Categoria "${e.categoria}" estourou o teto: ${e.pct}% usado` });
         else if (e.pct >= 80) alertas.push({ nivel: "warn", texto: `Categoria "${e.categoria}" em ${e.pct}% do teto` });
@@ -910,6 +924,12 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
         saidasMes: Math.round(saidasMes * 100) / 100,
         reservaDevida,
         pctReserva,
+        resultadoMes,
+        margemRealizada,
+        metaMargem,
+        disponivel,
+        totalLancamentosMes: doMes.length,
+        semCategoriaMes: doMes.filter(l => !l.categoriaId).length,
         comissoesAReceber: Math.round(comissoesAReceber * 100) / 100,
         totalAbertas60d: Math.round(abertas.reduce((s, c) => s + parseFloat(c.valor), 0) * 100) / 100,
         estouros,

@@ -18,6 +18,8 @@ interface Resumo {
   mes: string; saldoConsolidado: number; entradasMes: number; saidasMes: number;
   reservaDevida: number; pctReserva: number; comissoesAReceber: number;
   totalAbertas60d: number;
+  resultadoMes: number; margemRealizada: number; metaMargem: number | null; disponivel: number;
+  totalLancamentosMes: number; semCategoriaMes: number;
   estouros: { categoria: string; cor: string; teto: number; gasto: number; pct: number }[];
   projecao: { data: string; saldo: number; saidasDia: number }[];
   diaNegativo: string | null;
@@ -99,10 +101,24 @@ export default function FinPlanejamento() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><Target className="h-6 w-6 text-primary" /> Planejamento</h1>
-          <p className="text-sm text-muted-foreground">Diretrizes que operam sozinhas no seu fluxo de caixa</p>
+          <p className="text-sm text-muted-foreground">Você define as regras uma vez; o sistema vigia e avisa</p>
         </div>
         <Input type="month" value={mes} onChange={e => setMes(e.target.value)} className="w-40" />
       </div>
+
+      {/* Como funciona — a tela precisa se explicar */}
+      <Card className="border-primary/30 bg-primary/[0.03]">
+        <CardContent className="p-4 text-sm space-y-1.5">
+          <p className="font-semibold">Como esta tela funciona</p>
+          <p className="text-muted-foreground">
+            Lá embaixo, em <b>Diretrizes</b>, você define três coisas: quanto guardar
+            (<b>% de reserva</b>), quanto pode gastar em cada categoria (<b>tetos</b>) e qual
+            resultado quer ter (<b>meta de margem</b>). A partir daí o sistema compara essas
+            regras com o que realmente entrou e saiu no Caixa e te avisa aqui em cima quando
+            algo sai da linha — teto estourado, reserva não separada, caixa apertando.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Alertas acionáveis */}
       {(resumo?.alertas?.length ?? 0) > 0 && (
@@ -132,10 +148,24 @@ export default function FinPlanejamento() {
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><TrendingDown className="h-3 w-3 text-red-600" /> Saídas do mês</p>
           <p className="text-xl font-bold text-red-600">{fmtBRL(resumo?.saidasMes ?? 0)}</p>
         </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Resultado do mês</p>
+          <p className={`text-xl font-bold ${(resumo?.resultadoMes ?? 0) < 0 ? "text-red-600" : "text-green-600"}`}>{fmtBRL(resumo?.resultadoMes ?? 0)}</p>
+          <p className="text-[11px] text-muted-foreground">
+            margem {resumo?.margemRealizada ?? 0}%
+            {resumo?.metaMargem != null && (
+              <span className={(resumo.margemRealizada ?? 0) >= resumo.metaMargem ? "text-green-600 font-semibold" : "text-amber-600 font-semibold"}>
+                {" "}· meta {resumo.metaMargem}%
+              </span>
+            )}
+          </p>
+        </CardContent></Card>
         <Card className="border-primary/40"><CardContent className="p-4">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><PiggyBank className="h-3 w-3 text-primary" /> Reserva do mês ({resumo?.pctReserva ?? 0}%)</p>
           <p className="text-xl font-bold text-primary">{fmtBRL(resumo?.reservaDevida ?? 0)}</p>
-          <p className="text-[11px] text-muted-foreground">intocável na projeção</p>
+          <p className="text-[11px] text-muted-foreground">
+            sobra livre: <b className={(resumo?.disponivel ?? 0) < 0 ? "text-red-600" : ""}>{fmtBRL(resumo?.disponivel ?? 0)}</b>
+          </p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Comissões a receber</p>
@@ -151,9 +181,25 @@ export default function FinPlanejamento() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Projeção de caixa */}
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">📉 Projeção de caixa (só compromissos agendados)</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">📉 Projeção de caixa — próximos 60 dias</CardTitle></CardHeader>
           <CardContent>
-            {isLoading ? <p className="text-sm text-muted-foreground">Carregando...</p> : (
+            {isLoading ? <p className="text-sm text-muted-foreground">Carregando...</p> : (resumo?.totalAbertas60d ?? 0) === 0 ? (
+              <div className="text-sm space-y-2">
+                <p className="text-muted-foreground">
+                  A projeção está <b>plana</b> porque não há contas a pagar cadastradas — o sistema não
+                  sabe o que vai sair do caixa nos próximos dias.
+                </p>
+                <div className="rounded-md border border-dashed p-3">
+                  <p className="font-medium mb-1">Para esta projeção funcionar:</p>
+                  <p className="text-muted-foreground text-xs">
+                    Cadastre em <b>Contas a Pagar</b> os compromissos que você já conhece — aluguel,
+                    folha, impostos, parcelas. Marque os fixos como <b>Recorrente</b> (aluguel, CRM,
+                    internet) e eles se renovam sozinhos todo mês. Aí esta curva mostra o saldo real
+                    dia a dia e avisa se o caixa vai apertar.
+                  </p>
+                </div>
+              </div>
+            ) : (
               <div className="space-y-1.5">
                 {marcos.map((m, i) => (
                   <div key={m.data} className="flex items-center justify-between text-sm border-b last:border-0 pb-1.5">
@@ -169,7 +215,8 @@ export default function FinPlanejamento() {
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground mt-2">
-                    Projeção desconta as contas a pagar em aberto dos próximos 60 dias. Comissões a receber ({fmtBRL(resumo?.comissoesAReceber ?? 0)}) entram como colchão extra quando confirmadas.
+                    Desconta as contas a pagar em aberto ({fmtBRL(resumo?.totalAbertas60d ?? 0)}). As comissões
+                    a receber ({fmtBRL(resumo?.comissoesAReceber ?? 0)}) entram como colchão extra quando confirmadas.
                   </p>
                 )}
               </div>
@@ -179,9 +226,24 @@ export default function FinPlanejamento() {
 
         {/* Tetos por categoria — diretriz × realizado */}
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">📊 Tetos por categoria — diretriz × realizado</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">📊 Tetos por categoria — quanto já gastou</CardTitle></CardHeader>
           <CardContent className="space-y-2.5">
-            {(resumo?.estouros?.length ?? 0) === 0 && <p className="text-sm text-muted-foreground">Defina tetos abaixo para acompanhar aqui.</p>}
+            {(resumo?.estouros?.length ?? 0) === 0 && (
+              <div className="text-sm space-y-2">
+                <p className="text-muted-foreground">Nenhum teto definido ainda.</p>
+                <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  Em <b>Diretrizes</b> (abaixo), coloque um valor-limite mensal nas categorias que você
+                  quer controlar — ex: Tráfego Pago R$ 3.000. Conforme os gastos entram pelo extrato,
+                  a barra enche e você é avisado em 80% e ao estourar.
+                </div>
+              </div>
+            )}
+            {(resumo?.semCategoriaMes ?? 0) > 0 && (resumo?.estouros?.length ?? 0) > 0 && (
+              <p className="text-xs text-amber-600">
+                ⚠️ {resumo!.semCategoriaMes} lançamento(s) do mês estão sem categoria — esses gastos não
+                aparecem em nenhum teto. Classifique-os no Caixa.
+              </p>
+            )}
             {resumo?.estouros?.map((e: any) => (
               <div key={e.categoria}>
                 <div className="flex justify-between text-sm mb-1">
@@ -206,19 +268,32 @@ export default function FinPlanejamento() {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">⚙️ Diretrizes de {mes.split("-").reverse().join("/")}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
+          <div className="grid gap-4 sm:grid-cols-2 max-w-2xl">
             <div>
               <Label>% de reserva sobre entradas</Label>
               <Input type="number" step="0.5" min="0" max="100" value={pctReserva} onChange={e => setPctReserva(e.target.value)} placeholder="ex: 10" />
+              <p className="text-xs text-muted-foreground mt-1">
+                De tudo que entrar no mês, essa fatia é tratada como intocável. Com {pctReserva || 0}% sobre
+                {" "}{fmtBRL(resumo?.entradasMes ?? 0)} de entradas, você deveria separar{" "}
+                <b>{fmtBRL(resumo?.reservaDevida ?? 0)}</b>.
+              </p>
             </div>
             <div>
-              <Label>Meta de margem (%) — opcional</Label>
+              <Label>Meta de margem (%)</Label>
               <Input type="number" step="0.5" min="0" max="100" value={metaMargem} onChange={e => setMetaMargem(e.target.value)} placeholder="ex: 30" />
+              <p className="text-xs text-muted-foreground mt-1">
+                Quanto das entradas deve sobrar depois de todos os custos. Sua margem atual é{" "}
+                <b>{resumo?.margemRealizada ?? 0}%</b> ({fmtBRL(resumo?.entradasMes ?? 0)} entrou,{" "}
+                {fmtBRL(resumo?.saidasMes ?? 0)} saiu).
+              </p>
             </div>
           </div>
           {catsSaida.length > 0 && (
             <div>
-              <Label className="mb-2 block">Tetos mensais por categoria (R$)</Label>
+              <Label className="mb-1 block">Tetos mensais por categoria (R$)</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Deixe em branco o que não quer controlar. Você é avisado ao chegar em 80% e ao estourar.
+              </p>
               <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
                 {catsSaida.map((c: any) => (
                   <div key={c.id} className="flex items-center gap-2">
