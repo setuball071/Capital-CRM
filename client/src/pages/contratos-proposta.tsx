@@ -1413,6 +1413,9 @@ export default function ContratosPropostaPage() {
 
   function goToConvenioFresh() {
     setReusedDocs([]); // cadastrar do zero — não reaproveita documentos
+    // CPF já digitado neste passo segue pré-preenchido no formulário
+    const digits = cpfInput.replace(/\D/g, "");
+    if (digits.length === 11) form.setValue("clientCpf", formatCpf(digits));
     setStep("convenio");
   }
 
@@ -1489,10 +1492,18 @@ export default function ContratosPropostaPage() {
               <Button disabled={digits.length !== 11 || isLookingUp} onClick={doCpfSearch}>
                 {isLookingUp ? "Buscando..." : "Buscar"}
               </Button>
+              <Button
+                variant="outline"
+                disabled={digits.length !== 11 || isLookingUp}
+                onClick={goToConvenioFresh}
+                data-testid="button-comecar-do-zero"
+              >
+                Começar do zero
+              </Button>
             </div>
             {!cpfSearched && (
               <p className="text-xs text-muted-foreground mt-2">
-                Verificamos se o cliente já tem cadastro e documentos no sistema, para reaproveitar e evitar nova leitura por IA e novo upload.
+                <strong>Buscar</strong> verifica se o cliente já tem cadastro e documentos, para reaproveitar e evitar nova leitura por IA. <strong>Começar do zero</strong> pula essa verificação e cadastra tudo novo.
               </p>
             )}
           </div>
