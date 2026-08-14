@@ -222,7 +222,7 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
   app.post("/api/fin/categorias", requireAuth, async (req: any, res) => {
     try {
       const tenantId = guard(req, res); if (!tenantId) return;
-      const { nome, tipo, cor, tetoMensal } = req.body || {};
+      const { nome, tipo, cor, tetoMensal, especial } = req.body || {};
       if (!nome || !["entrada", "saida"].includes(tipo)) {
         return res.status(400).json({ message: "Informe nome e tipo (entrada/saida)" });
       }
@@ -230,6 +230,7 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
         tenantId, nome: String(nome), tipo,
         cor: cor || "#6b7280",
         tetoMensal: tetoMensal != null && tetoMensal !== "" ? String(parseFloat(tetoMensal) || 0) : null,
+        especial: ["aporte", "resgate"].includes(especial) ? especial : null,
       }).returning();
       return res.json({ ok: true, categoria: cat });
     } catch (e: any) {
@@ -275,8 +276,11 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
   app.post("/api/fin/categorias/seed", requireAuth, async (req: any, res) => {
     try {
       const tenantId = guard(req, res); if (!tenantId) return;
-      const VERMELHO = "#dc2626", VERDE = "#16a34a";
-      const PADRAO: { nome: string; tipo: "entrada" | "saida"; cor: string }[] = [
+      const VERMELHO = "#dc2626", VERDE = "#16a34a", AZUL = "#2563eb";
+      const PADRAO: { nome: string; tipo: "entrada" | "saida"; cor: string; especial?: string }[] = [
+        // Movimentos de reserva/investimento (não são despesa nem receita)
+        { nome: "Aporte em Reserva/Investimento", tipo: "saida", cor: AZUL, especial: "aporte" },
+        { nome: "Resgate de Reserva/Investimento", tipo: "entrada", cor: AZUL, especial: "resgate" },
         // Saídas (lista do Fábio, nomenclatura polida)
         { nome: "Aluguel", tipo: "saida", cor: VERMELHO },
         { nome: "Condomínio", tipo: "saida", cor: VERMELHO },
@@ -813,7 +817,14 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
       const saldoConsolidado = contas.reduce((s, c) =>
         s + parseFloat(c.saldoInicial || "0") + (somaPorConta.get(c.id) || 0), 0);
 
-      // Entradas/saídas do mês por categoria
+      // Categorias (nomes, tetos e marcação de aporte/resgate)
+      const categorias = await db.select().from(finCategorias)
+        .where(eq(finCategorias.tenantId, tenantId));
+      const especialPorCat = new Map(categorias.map(c => [c.id, c.especial]));
+
+      // Entradas/saídas do mês por categoria.
+      // Aporte/resgate de reserva NÃO são despesa/receita — movem dinheiro entre
+      // a conta corrente e a reserva, então ficam fora do resultado e da margem.
       const doMes = await db.select({
         valor: finLancamentos.valor,
         categoriaId: finLancamentos.categoriaId,
@@ -823,12 +834,27 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
           gte(finLancamentos.data, `${mes}-01`),
           lte(finLancamentos.data, `${mes}-31`),
         ));
-      let entradasMes = 0, saidasMes = 0;
+      let entradasMes = 0, saidasMes = 0, aportadoMes = 0, resgatadoMes = 0;
       const porCategoria = new Map<number | null, number>();
       for (const l of doMes) {
         const v = parseFloat(l.valor || "0");
+        const esp = l.categoriaId ? especialPorCat.get(l.categoriaId) : null;
+        if (esp === "aporte") { aportadoMes += Math.abs(v); continue; }
+        if (esp === "resgate") { resgatadoMes += Math.abs(v); continue; }
         if (v >= 0) entradasMes += v; else saidasMes += Math.abs(v);
         if (v < 0) porCategoria.set(l.categoriaId, (porCategoria.get(l.categoriaId) || 0) + Math.abs(v));
+      }
+
+      // Saldo acumulado da reserva (todo o histórico): aportes − resgates
+      const catAporte = categorias.filter(c => c.especial === "aporte").map(c => c.id);
+      const catResgate = categorias.filter(c => c.especial === "resgate").map(c => c.id);
+      let saldoReserva = 0;
+      if (catAporte.length || catResgate.length) {
+        const [row] = await db.select({
+          soma: sql<string>`COALESCE(SUM(ABS(${finLancamentos.valor}::numeric)) FILTER (WHERE ${finLancamentos.categoriaId} = ANY(${sql.raw(`ARRAY[${catAporte.length ? catAporte.join(",") : "NULL"}]::int[]`)})), 0)
+                          - COALESCE(SUM(ABS(${finLancamentos.valor}::numeric)) FILTER (WHERE ${finLancamentos.categoriaId} = ANY(${sql.raw(`ARRAY[${catResgate.length ? catResgate.join(",") : "NULL"}]::int[]`)})), 0)`,
+        }).from(finLancamentos).where(eq(finLancamentos.tenantId, tenantId));
+        saldoReserva = Math.round(parseFloat(row?.soma || "0") * 100) / 100;
       }
 
       // Planejamento do mês (reserva + tetos)
@@ -840,15 +866,15 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
       const resultadoMes = Math.round((entradasMes - saidasMes) * 100) / 100;
       const margemRealizada = entradasMes > 0 ? Math.round((resultadoMes / entradasMes) * 1000) / 10 : 0;
       const metaMargem = plan?.metaMargem ? parseFloat(plan.metaMargem) : null;
-      // Saldo livre = o que sobra depois de honrar a reserva
-      const disponivel = Math.round((saldoConsolidado - reservaDevida) * 100) / 100;
+      // Quanto ainda falta separar este mês (o que já foi aportado abate)
+      const reservaAportadaLiquida = Math.round((aportadoMes - resgatadoMes) * 100) / 100;
+      const reservaFaltante = Math.round(Math.max(0, reservaDevida - reservaAportadaLiquida) * 100) / 100;
+      // Saldo livre = o que há na conta corrente menos o que ainda falta guardar
+      const disponivel = Math.round((saldoConsolidado - reservaFaltante) * 100) / 100;
 
-      // Categorias (para tetos e nomes)
-      const categorias = await db.select().from(finCategorias)
-        .where(eq(finCategorias.tenantId, tenantId));
       const tetos: Record<string, number> = (plan?.tetosJson as any) || {};
       const estouros = categorias
-        .filter(c => c.tipo === "saida")
+        .filter(c => c.tipo === "saida" && !c.especial)
         .map(c => {
           const teto = tetos[String(c.id)] ?? (c.tetoMensal ? parseFloat(c.tetoMensal) : null);
           const gasto = porCategoria.get(c.id) || 0;
@@ -903,7 +929,16 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
       }
       if (diaNegativo) alertas.push({ nivel: "critico", texto: `Com os compromissos atuais, o caixa fica NEGATIVO em ${diaNegativo.split("-").reverse().join("/")}` });
       else if (diaAbaixoReserva) alertas.push({ nivel: "warn", texto: `O caixa fura a reserva planejada em ${diaAbaixoReserva.split("-").reverse().join("/")}` });
-      if (reservaDevida > 0) alertas.push({ nivel: "info", texto: `Reserva de ${mes.split("-").reverse().join("/")}: separar R$ ${reservaDevida.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (${pctReserva}% das entradas)` });
+      if (reservaDevida > 0) {
+        const fmt = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+        if (reservaFaltante <= 0) {
+          alertas.push({ nivel: "info", texto: `Reserva de ${mes.split("-").reverse().join("/")} cumprida: R$ ${fmt(reservaAportadaLiquida)} aportados (meta era R$ ${fmt(reservaDevida)})` });
+        } else if (reservaAportadaLiquida > 0) {
+          alertas.push({ nivel: "warn", texto: `Reserva de ${mes.split("-").reverse().join("/")}: já aportou R$ ${fmt(reservaAportadaLiquida)} de R$ ${fmt(reservaDevida)} — faltam R$ ${fmt(reservaFaltante)}` });
+        } else {
+          alertas.push({ nivel: "warn", texto: `Reserva de ${mes.split("-").reverse().join("/")}: separar R$ ${fmt(reservaDevida)} (${pctReserva}% das entradas) — nada aportado ainda` });
+        }
+      }
       if (metaMargem != null && entradasMes > 0) {
         if (margemRealizada < metaMargem) {
           const falta = Math.round((entradasMes * metaMargem / 100 - resultadoMes) * 100) / 100;
@@ -928,6 +963,11 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
         margemRealizada,
         metaMargem,
         disponivel,
+        saldoReserva,
+        aportadoMes: Math.round(aportadoMes * 100) / 100,
+        resgatadoMes: Math.round(resgatadoMes * 100) / 100,
+        reservaAportadaLiquida,
+        reservaFaltante,
         totalLancamentosMes: doMes.length,
         semCategoriaMes: doMes.filter(l => !l.categoriaId).length,
         comissoesAReceber: Math.round(comissoesAReceber * 100) / 100,
@@ -1091,19 +1131,24 @@ Se não conseguir ler algum campo com segurança, use null — NÃO invente.`,
         }
       }
 
-      // 2) Possíveis duplicidades no mesmo mês (mesma descrição normalizada + mesmo valor 2x)
+      // 2) Duplicidades — MESMO DIA + mesmo valor + descrição específica.
+      // Transferências genéricas (PIX/TED/DOC sem identificação) ficam de fora:
+      // dois PIX do mesmo valor no mês é rotina, não erro de cobrança.
+      const GENERICAS = /^(TRANSF|TRANSFER|PIX|TED|DOC|SAQUE|PAGAMENTO|DEBITO|DÉBITO|COMPRA|ENVIO|TARIFA)/;
       const vistos = new Map<string, number>();
       for (const d of debitos) {
-        const k = `${d.data.slice(0, 7)}|${norm(d.descricao || "")}|${Math.abs(parseFloat(d.valor)).toFixed(2)}`;
+        const desc = norm(d.descricao || "");
+        if (!desc || desc.length < 6) continue;
+        if (GENERICAS.test(desc) && desc.split(" ").length <= 4) continue; // "TRANSF ENVIADA PIX" etc.
+        const k = `${d.data}|${desc}|${Math.abs(parseFloat(d.valor)).toFixed(2)}`;
         vistos.set(k, (vistos.get(k) || 0) + 1);
       }
       for (const [k, n] of vistos) {
         if (n >= 2) {
-          const [mes, desc, val] = k.split("|");
-          if (!desc || desc.length < 4) continue;
+          const [dia, desc, val] = k.split("|");
           oportunidades.push({
             tipo: "duplicidade", titulo: desc.slice(0, 80),
-            detalhe: `${n}× o mesmo débito de R$ ${val} em ${mes.split("-").reverse().join("/")} — cobrança duplicada?`,
+            detalhe: `${n}× o mesmo débito de R$ ${val} no dia ${dia.split("-").reverse().join("/")} — confira se não foi cobrado em duplicidade`,
             custoAnual: parseFloat(val) * (n - 1), prioridade: 0,
           });
         }

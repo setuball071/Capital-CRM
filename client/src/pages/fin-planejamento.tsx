@@ -19,6 +19,8 @@ interface Resumo {
   reservaDevida: number; pctReserva: number; comissoesAReceber: number;
   totalAbertas60d: number;
   resultadoMes: number; margemRealizada: number; metaMargem: number | null; disponivel: number;
+  saldoReserva: number; aportadoMes: number; resgatadoMes: number;
+  reservaAportadaLiquida: number; reservaFaltante: number;
   totalLancamentosMes: number; semCategoriaMes: number;
   estouros: { categoria: string; cor: string; teto: number; gasto: number; pct: number }[];
   projecao: { data: string; saldo: number; saidasDia: number }[];
@@ -51,7 +53,8 @@ export default function FinPlanejamento() {
     },
   });
   const { data: catsData } = useQuery<{ categorias: any[] }>({ queryKey: ["/api/fin/categorias"] });
-  const catsSaida = (catsData?.categorias ?? []).filter((c: any) => c.tipo === "saida");
+  // Aporte/resgate não são gasto — não faz sentido pôr teto neles
+  const catsSaida = (catsData?.categorias ?? []).filter((c: any) => c.tipo === "saida" && !c.especial);
 
   // Carrega valores do planejamento salvo no form
   useEffect(() => {
@@ -135,46 +138,61 @@ export default function FinPlanejamento() {
       )}
 
       {/* KPIs */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(185px, 1fr))" }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
         <Card><CardContent className="p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Saldo consolidado</p>
-          <p className={`text-xl font-bold ${(resumo?.saldoConsolidado ?? 0) < 0 ? "text-red-600" : "text-primary"}`}>{fmtBRL(resumo?.saldoConsolidado ?? 0)}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Saldo em conta</p>
+          <p className={`text-2xl font-bold ${(resumo?.saldoConsolidado ?? 0) < 0 ? "text-red-600" : "text-primary"}`}>{fmtBRL(resumo?.saldoConsolidado ?? 0)}</p>
+          <p className="text-[11px] text-muted-foreground">
+            livre p/ usar: <b className={(resumo?.disponivel ?? 0) < 0 ? "text-red-600" : ""}>{fmtBRL(resumo?.disponivel ?? 0)}</b>
+          </p>
         </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3 w-3 text-green-600" /> Entradas do mês</p>
-          <p className="text-xl font-bold text-green-600">{fmtBRL(resumo?.entradasMes ?? 0)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><TrendingDown className="h-3 w-3 text-red-600" /> Saídas do mês</p>
-          <p className="text-xl font-bold text-red-600">{fmtBRL(resumo?.saidasMes ?? 0)}</p>
-        </CardContent></Card>
+
         <Card><CardContent className="p-4">
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Resultado do mês</p>
-          <p className={`text-xl font-bold ${(resumo?.resultadoMes ?? 0) < 0 ? "text-red-600" : "text-green-600"}`}>{fmtBRL(resumo?.resultadoMes ?? 0)}</p>
+          <p className={`text-2xl font-bold ${(resumo?.resultadoMes ?? 0) < 0 ? "text-red-600" : "text-green-600"}`}>{fmtBRL(resumo?.resultadoMes ?? 0)}</p>
           <p className="text-[11px] text-muted-foreground">
-            margem {resumo?.margemRealizada ?? 0}%
+            <span className="text-green-600">↑{fmtBRL(resumo?.entradasMes ?? 0)}</span>{" "}
+            <span className="text-red-600">↓{fmtBRL(resumo?.saidasMes ?? 0)}</span>{" · "}
+            margem <b>{resumo?.margemRealizada ?? 0}%</b>
             {resumo?.metaMargem != null && (
-              <span className={(resumo.margemRealizada ?? 0) >= resumo.metaMargem ? "text-green-600 font-semibold" : "text-amber-600 font-semibold"}>
-                {" "}· meta {resumo.metaMargem}%
+              <span className={(resumo.margemRealizada ?? 0) >= resumo.metaMargem ? "text-green-600" : "text-amber-600"}>
+                {" "}(meta {resumo.metaMargem}%)
               </span>
             )}
           </p>
         </CardContent></Card>
+
+        {/* Reserva: progresso do mês + total acumulado */}
         <Card className="border-primary/40"><CardContent className="p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><PiggyBank className="h-3 w-3 text-primary" /> Reserva do mês ({resumo?.pctReserva ?? 0}%)</p>
-          <p className="text-xl font-bold text-primary">{fmtBRL(resumo?.reservaDevida ?? 0)}</p>
-          <p className="text-[11px] text-muted-foreground">
-            sobra livre: <b className={(resumo?.disponivel ?? 0) < 0 ? "text-red-600" : ""}>{fmtBRL(resumo?.disponivel ?? 0)}</b>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+            <PiggyBank className="h-3 w-3 text-primary" /> Reserva acumulada
           </p>
+          <p className="text-2xl font-bold text-primary">{fmtBRL(resumo?.saldoReserva ?? 0)}</p>
+          {(resumo?.reservaDevida ?? 0) > 0 ? (
+            <>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1.5 mb-1">
+                <div className="h-full rounded-full bg-primary transition-all" style={{
+                  width: `${Math.min(100, Math.round(((resumo?.reservaAportadaLiquida ?? 0) / (resumo?.reservaDevida || 1)) * 100))}%`,
+                }} />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                mês: {fmtBRL(resumo?.reservaAportadaLiquida ?? 0)} de {fmtBRL(resumo?.reservaDevida ?? 0)}
+                {(resumo?.reservaFaltante ?? 0) > 0
+                  ? <span className="text-amber-600 font-semibold"> · faltam {fmtBRL(resumo!.reservaFaltante)}</span>
+                  : <span className="text-green-600 font-semibold"> · meta cumprida</span>}
+              </p>
+            </>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">defina o % de reserva abaixo</p>
+          )}
         </CardContent></Card>
+
         <Card><CardContent className="p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Comissões a receber</p>
-          <p className="text-xl font-bold text-green-600">{fmtBRL(resumo?.comissoesAReceber ?? 0)}</p>
-          <p className="text-[11px] text-muted-foreground">da Produção (sem data certa)</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><CalendarClock className="h-3 w-3" /> A pagar (60 dias)</p>
-          <p className="text-xl font-bold">{fmtBRL(resumo?.totalAbertas60d ?? 0)}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><CalendarClock className="h-3 w-3" /> Compromissos e previstos</p>
+          <p className="text-2xl font-bold">{fmtBRL(resumo?.totalAbertas60d ?? 0)}</p>
+          <p className="text-[11px] text-muted-foreground">
+            a pagar em 60d · a receber <span className="text-green-600 font-semibold">{fmtBRL(resumo?.comissoesAReceber ?? 0)}</span>
+          </p>
         </CardContent></Card>
       </div>
 
@@ -288,26 +306,44 @@ export default function FinPlanejamento() {
               </p>
             </div>
           </div>
-          {catsSaida.length > 0 && (
-            <div>
-              <Label className="mb-1 block">Tetos mensais por categoria (R$)</Label>
-              <p className="text-xs text-muted-foreground mb-2">
-                Deixe em branco o que não quer controlar. Você é avisado ao chegar em 80% e ao estourar.
-              </p>
-              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-                {catsSaida.map((c: any) => (
-                  <div key={c.id} className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: c.cor }} />
-                    <span className="text-sm flex-1 truncate">{c.nome}</span>
-                    <Input type="number" step="50" min="0" className="w-28 h-8 text-right"
-                      value={tetos[String(c.id)] ?? ""}
-                      onChange={e => setTetos({ ...tetos, [String(c.id)]: e.target.value })}
-                      placeholder="sem teto" />
-                  </div>
-                ))}
+          {catsSaida.length > 0 && (() => {
+            const comTeto = catsSaida.filter((c: any) => (tetos[String(c.id)] ?? "").trim() !== "");
+            const semTeto = catsSaida.filter((c: any) => (tetos[String(c.id)] ?? "").trim() === "");
+            const linha = (c: any) => (
+              <div key={c.id} className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: c.cor }} />
+                <span className="text-sm flex-1 truncate" title={c.nome}>{c.nome}</span>
+                <Input type="number" step="50" min="0" className="w-28 h-8 text-right"
+                  value={tetos[String(c.id)] ?? ""}
+                  onChange={e => setTetos({ ...tetos, [String(c.id)]: e.target.value })}
+                  placeholder="sem teto" />
               </div>
-            </div>
-          )}
+            );
+            return (
+              <div>
+                <Label className="mb-1 block">Tetos mensais por categoria (R$)</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Controle só o que importa — você é avisado aos 80% e ao estourar.
+                  {comTeto.length > 0 && <> Hoje há <b>{comTeto.length}</b> categoria(s) com teto.</>}
+                </p>
+                {comTeto.length > 0 && (
+                  <div className="grid gap-2.5 mb-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+                    {comTeto.map(linha)}
+                  </div>
+                )}
+                {semTeto.length > 0 && (
+                  <details className="rounded-md border border-dashed p-3">
+                    <summary className="cursor-pointer text-sm font-medium select-none">
+                      + Definir teto em outras categorias ({semTeto.length})
+                    </summary>
+                    <div className="grid gap-2.5 mt-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+                      {semTeto.map(linha)}
+                    </div>
+                  </details>
+                )}
+              </div>
+            );
+          })()}
           <Button disabled={salvar.isPending} onClick={() => salvar.mutate()}>
             <Save className="h-4 w-4 mr-1" /> Salvar diretrizes
           </Button>

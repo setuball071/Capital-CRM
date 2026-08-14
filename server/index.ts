@@ -503,6 +503,9 @@ app.use((req, res, next) => {
             )
           `);
           await migDb.execute(migSql`
+            ALTER TABLE fin_categorias ADD COLUMN IF NOT EXISTS especial VARCHAR(20)
+          `);
+          await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS fin_regras_categorizacao (
               id           SERIAL PRIMARY KEY,
               tenant_id    INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

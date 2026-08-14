@@ -3063,6 +3063,10 @@ export const finCategorias = pgTable("fin_categorias", {
   tipo: varchar("tipo", { length: 10 }).notNull(), // 'entrada' | 'saida'
   cor: varchar("cor", { length: 20 }).default("#6b7280"),
   tetoMensal: decimal("teto_mensal", { precision: 14, scale: 2 }),
+  // Movimento de reserva/investimento — não é despesa nem receita operacional:
+  // 'aporte'  = saída da conta corrente que ENTRA na reserva
+  // 'resgate' = entrada na conta corrente que SAI da reserva
+  especial: varchar("especial", { length: 20 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
