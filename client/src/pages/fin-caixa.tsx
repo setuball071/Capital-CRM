@@ -182,6 +182,18 @@ export default function FinCaixa() {
     onSuccess: () => { setCatNome(""); invalidar(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+  const seedCategorias = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/fin/categorias/seed"),
+    onSuccess: async (r) => {
+      const d = await r.json();
+      toast({
+        title: d.criadas ? `${d.criadas} categorias criadas` : "Nada a criar",
+        description: d.puladas ? `${d.puladas} já existiam e foram mantidas.` : undefined,
+      });
+      invalidar();
+    },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
   const delCategoria = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/fin/categorias/${id}`),
     onSuccess: () => invalidar(),
@@ -506,7 +518,16 @@ export default function FinCaixa() {
                   <Button variant="ghost" size="sm" className="ml-auto h-7 w-7 p-0" onClick={() => delCategoria.mutate(c.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
               ))}
-              {categorias.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma categoria ainda. Sugestões: Comissões (entrada), Folha, Marketing, Aluguel, Impostos, Assinaturas.</p>}
+              {categorias.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma categoria ainda — use o botão abaixo para criar o kit padrão da operação.</p>}
+            </div>
+            <div className="rounded-lg border border-dashed p-3 flex items-center gap-3 flex-wrap">
+              <div className="flex-1 min-w-[200px]">
+                <p className="text-sm font-medium">Kit padrão de categorias</p>
+                <p className="text-xs text-muted-foreground">Cria as categorias comuns da operação (aluguel, folha, impostos, tráfego pago, dízimo, etc.). Não duplica o que já existe.</p>
+              </div>
+              <Button size="sm" variant="outline" disabled={seedCategorias.isPending} onClick={() => seedCategorias.mutate()}>
+                {seedCategorias.isPending ? "Criando..." : "Criar categorias padrão"}
+              </Button>
             </div>
             {(catsData?.regras?.length ?? 0) > 0 && (
               <div>

@@ -271,6 +271,58 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
     }
   });
 
+  // Seed de categorias padrão (idempotente — pula as que já existem por nome)
+  app.post("/api/fin/categorias/seed", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = guard(req, res); if (!tenantId) return;
+      const VERMELHO = "#dc2626", VERDE = "#16a34a";
+      const PADRAO: { nome: string; tipo: "entrada" | "saida"; cor: string }[] = [
+        // Saídas (lista do Fábio, nomenclatura polida)
+        { nome: "Aluguel", tipo: "saida", cor: VERMELHO },
+        { nome: "Condomínio", tipo: "saida", cor: VERMELHO },
+        { nome: "Energia Elétrica", tipo: "saida", cor: VERMELHO },
+        { nome: "Internet", tipo: "saida", cor: VERMELHO },
+        { nome: "Telefonia", tipo: "saida", cor: VERMELHO },
+        { nome: "Softwares e Assinaturas (CRM)", tipo: "saida", cor: VERMELHO },
+        { nome: "Tráfego Pago / Agência", tipo: "saida", cor: VERMELHO },
+        { nome: "Transferências Enviadas", tipo: "saida", cor: VERMELHO },
+        { nome: "Financiamentos (parcelas)", tipo: "saida", cor: VERMELHO },
+        { nome: "Impostos e Taxas", tipo: "saida", cor: VERMELHO },
+        { nome: "Contabilidade", tipo: "saida", cor: VERMELHO },
+        { nome: "Cartão de Crédito (fatura)", tipo: "saida", cor: VERMELHO },
+        { nome: "Sindicato", tipo: "saida", cor: VERMELHO },
+        { nome: "Dízimo — Igreja", tipo: "saida", cor: VERMELHO },
+        { nome: "Oferta — Igreja", tipo: "saida", cor: VERMELHO },
+        { nome: "Equipamentos e Materiais", tipo: "saida", cor: VERMELHO },
+        { nome: "Serviços de Terceiros", tipo: "saida", cor: VERMELHO },
+        { nome: "Jurídico", tipo: "saida", cor: VERMELHO },
+        // Sugestões (vistas no extrato real / operação da empresa)
+        { nome: "Folha de Pagamento", tipo: "saida", cor: VERMELHO },
+        { nome: "Prêmios de Consultores", tipo: "saida", cor: VERMELHO },
+        { nome: "Pró-labore", tipo: "saida", cor: VERMELHO },
+        { nome: "Tarifas e Juros Bancários", tipo: "saida", cor: VERMELHO },
+        { nome: "Manutenção e Limpeza", tipo: "saida", cor: VERMELHO },
+        { nome: "Alimentação e Copa", tipo: "saida", cor: VERMELHO },
+        { nome: "Combustível e Deslocamento", tipo: "saida", cor: VERMELHO },
+        // Entradas (para o extrato fechar dos dois lados)
+        { nome: "Comissões de Parceiros", tipo: "entrada", cor: VERDE },
+        { nome: "Transferências Recebidas", tipo: "entrada", cor: VERDE },
+        { nome: "Outras Receitas", tipo: "entrada", cor: VERDE },
+      ];
+      const existentes = await db.select({ nome: finCategorias.nome }).from(finCategorias)
+        .where(eq(finCategorias.tenantId, tenantId));
+      const jaTem = new Set(existentes.map(c => c.nome.trim().toUpperCase()));
+      const novas = PADRAO.filter(p => !jaTem.has(p.nome.trim().toUpperCase()));
+      if (novas.length) {
+        await db.insert(finCategorias).values(novas.map(p => ({ tenantId, ...p })));
+      }
+      return res.json({ ok: true, criadas: novas.length, puladas: PADRAO.length - novas.length });
+    } catch (e: any) {
+      console.error("[FIN-CATEGORIAS-SEED]", e);
+      return res.status(500).json({ message: "Erro ao criar categorias padrão" });
+    }
+  });
+
   app.post("/api/fin/regras", requireAuth, async (req: any, res) => {
     try {
       const tenantId = guard(req, res); if (!tenantId) return;
