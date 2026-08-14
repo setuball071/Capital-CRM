@@ -31,5 +31,9 @@ export const ocrClient = geminiKey
   : openai;
 
 // Modelo de visão do OCR (configurável por OCR_MODEL); default por provedor.
+// Default = modelo GRANDE de cada provedor: RG brasileiro (guilhochê, fonte fina,
+// texto sobre imagem) derrubava os modelos "mini"/"flash" — eles alucinavam nomes
+// e datas plausíveis em vez de admitir que não leram. Custo por documento é
+// centavos; dado inventado em proposta custa a venda.
 export const ocrModel =
-  process.env.OCR_MODEL || (geminiKey ? "gemini-2.5-flash" : "gpt-4o-mini");
+  process.env.OCR_MODEL || (geminiKey ? "gemini-2.5-pro" : "gpt-4o");

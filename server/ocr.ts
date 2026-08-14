@@ -49,6 +49,33 @@ function nullifyStrings(obj: any): any {
   return obj;
 }
 
+// Dígito verificador oficial do CPF. Reprova sequências repetidas (111... etc.).
+function cpfValido(cpf: string): boolean {
+  if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) return false;
+  for (const t of [9, 10]) {
+    let soma = 0;
+    for (let i = 0; i < t; i++) soma += Number(cpf[i]) * (t + 1 - i);
+    const dv = ((soma * 10) % 11) % 10;
+    if (dv !== Number(cpf[t])) return false;
+  }
+  return true;
+}
+
+// Aceita só DD/MM/AAAA real e plausível; qualquer outra coisa vira null.
+// nascimento: 1900..hoje (documento é de pessoa viva). expedicao: 1970..hoje.
+function dataPlausivel(valor: string | null, tipo: "nascimento" | "expedicao"): string | null {
+  if (!valor) return null;
+  const m = valor.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const [, dd, mm, aaaa] = m;
+  const d = Number(dd), mes = Number(mm), ano = Number(aaaa);
+  const data = new Date(ano, mes - 1, d);
+  if (data.getFullYear() !== ano || data.getMonth() !== mes - 1 || data.getDate() !== d) return null;
+  if (data > new Date()) return null;
+  if (ano < (tipo === "nascimento" ? 1900 : 1970)) return null;
+  return `${dd}/${mm}/${aaaa}`;
+}
+
 export interface DocPhotoExtracted {
   tipo: "RG" | "CNH" | "outro";
   nome: string | null;
@@ -126,6 +153,10 @@ Formato exato:
         const response = await ocrClient.chat.completions.create({
           model: ocrModel,
           max_tokens: 1500,
+          // temperature 0: extração é transcrição, não criação. Com o default (1.0)
+          // o modelo "completava" trechos ilegíveis com nomes/datas plausíveis.
+          temperature: 0,
+          response_format: { type: "json_object" },
           messages: [
             { role: "system", content: systemPrompt },
             {
@@ -159,11 +190,18 @@ Formato exato:
             .json({ message: "Resposta do modelo inválida" });
         }
 
-        // Limpa CPF (remove pontuação se veio formatado)
+        // ── Validação: campo que não passa vira null (em branco o operador
+        // preenche; preenchido errado ele confia e a venda quebra) ───────────
         if (extracted.cpf) {
           extracted.cpf = extracted.cpf.replace(/\D/g, "");
-          if (extracted.cpf.length !== 11) extracted.cpf = null;
+          // Dígito verificador: derruba RG/número aleatório devolvido como CPF
+          if (!cpfValido(extracted.cpf)) {
+            console.warn("[OCR] CPF extraído reprovou no dígito verificador:", extracted.cpf);
+            extracted.cpf = null;
+          }
         }
+        extracted.dataNascimento = dataPlausivel(extracted.dataNascimento, "nascimento");
+        extracted.dataExpedicao = dataPlausivel(extracted.dataExpedicao, "expedicao");
 
         return res.json(extracted);
       } catch (e: any) {

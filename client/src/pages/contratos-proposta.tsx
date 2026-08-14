@@ -539,6 +539,18 @@ export default function ContratosPropostaPage() {
         throw new Error(serverMsg || "OCR falhou");
       }
       const data: DocPhotoData = cleanDocNulls(await res.json());
+      // CPF já confirmado no início do fluxo é a fonte de verdade. Se o OCR ler
+      // um CPF diferente, NÃO troca — zera e avisa (documento errado ou leitura ruim).
+      const cpfFormulario = (form.getValues("clientCpf") || "").replace(/\D/g, "");
+      const cpfOcr = (data.cpf || "").replace(/\D/g, "");
+      if (cpfFormulario.length === 11 && cpfOcr.length === 11 && cpfOcr !== cpfFormulario) {
+        data.cpf = null;
+        toast({
+          title: "CPF do documento diverge do CPF do cliente",
+          description: "O CPF lido no documento não bate com o informado no início. Confira se o documento é do cliente certo.",
+          variant: "destructive",
+        });
+      }
       setDocPhotoData(data);
       if (docFotoIsComplete(data)) {
         setDocPhotoSource("ocr");
