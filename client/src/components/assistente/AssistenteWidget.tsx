@@ -184,6 +184,18 @@ export default function AssistenteWidget() {
             )}
             {avisos.length > 0 && (
               <div className="space-y-2">
+                {avisos.length > 1 && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => marcarLidas.mutate(avisos.map((a) => a.id))}
+                      disabled={marcarLidas.isPending}
+                      className="text-xs text-primary underline hover:opacity-80"
+                      data-testid="button-marcar-todos-vistos"
+                    >
+                      Marcar todos como vistos ({avisos.length})
+                    </button>
+                  </div>
+                )}
                 {avisos.map((a) => (
                   <div key={a.id} className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
                     <div className="font-medium">{a.titulo}</div>
