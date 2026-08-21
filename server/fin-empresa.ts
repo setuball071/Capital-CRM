@@ -428,6 +428,89 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
     }
   });
 
+  // Editar um lançamento (descrição, valor, data)
+  app.patch("/api/fin/lancamentos/:id", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = guard(req, res); if (!tenantId) return;
+      const id = Number(req.params.id);
+      const { descricao, valor, data, categoriaId } = req.body || {};
+      const set: any = {};
+      if (descricao !== undefined) set.descricao = String(descricao).slice(0, 500) || null;
+      if (data !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(String(data))) set.data = String(data);
+      if (valor !== undefined) {
+        const v = parseFloat(String(valor));
+        if (isNaN(v) || v === 0) return res.status(400).json({ message: "Valor inválido" });
+        set.valor = String(Math.round(v * 100) / 100);
+      }
+      if (categoriaId !== undefined) set.categoriaId = categoriaId ? Number(categoriaId) : null;
+      if (!Object.keys(set).length) return res.status(400).json({ message: "Nada para atualizar" });
+      await db.update(finLancamentos).set(set)
+        .where(and(eq(finLancamentos.id, id), eq(finLancamentos.tenantId, tenantId)));
+      return res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[FIN-LANC-PATCH]", e);
+      return res.status(500).json({ message: "Erro ao editar lançamento" });
+    }
+  });
+
+  // Duplicados existentes: lista (dryRun) ou remove.
+  // Critério: mesma conta + data + valor + descrição. Mantém a ocorrência
+  // COM categoria (o trabalho já feito) e, entre iguais, a mais antiga.
+  app.post("/api/fin/lancamentos/duplicados", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = guard(req, res); if (!tenantId) return;
+      const remover = String(req.body?.remover) === "1";
+
+      const todos = await db.select().from(finLancamentos)
+        .where(eq(finLancamentos.tenantId, tenantId))
+        .orderBy(asc(finLancamentos.id));
+
+      const grupos = new Map<string, typeof todos>();
+      for (const l of todos) {
+        const k = `${l.contaId}|${l.data}|${parseFloat(l.valor).toFixed(2)}|${(l.descricao || "").trim().toUpperCase().slice(0, 60)}`;
+        if (!grupos.has(k)) grupos.set(k, [] as any);
+        grupos.get(k)!.push(l);
+      }
+
+      const paraRemover: number[] = [];
+      const amostra: any[] = [];
+      for (const [, lista] of grupos) {
+        if (lista.length < 2) continue;
+        // Prioriza manter: com categoria > conciliado com conta a pagar > mais antigo
+        const ordenada = [...lista].sort((a, b) => {
+          const ca = a.categoriaId ? 0 : 1, cb = b.categoriaId ? 0 : 1;
+          if (ca !== cb) return ca - cb;
+          const pa = a.contaPagarId ? 0 : 1, pb = b.contaPagarId ? 0 : 1;
+          if (pa !== pb) return pa - pb;
+          return a.id - b.id;
+        });
+        const [manter, ...descartar] = ordenada;
+        paraRemover.push(...descartar.map(d => d.id));
+        if (amostra.length < 20) {
+          amostra.push({
+            data: manter.data,
+            descricao: manter.descricao,
+            valor: parseFloat(manter.valor),
+            copias: lista.length,
+          });
+        }
+      }
+
+      if (remover && paraRemover.length) {
+        for (let i = 0; i < paraRemover.length; i += 500) {
+          await db.delete(finLancamentos).where(and(
+            eq(finLancamentos.tenantId, tenantId),
+            inArray(finLancamentos.id, paraRemover.slice(i, i + 500)),
+          ));
+        }
+      }
+
+      return res.json({ ok: true, encontrados: paraRemover.length, removidos: remover ? paraRemover.length : 0, amostra });
+    } catch (e: any) {
+      console.error("[FIN-DUPLICADOS]", e);
+      return res.status(500).json({ message: "Erro ao verificar duplicados" });
+    }
+  });
   // Importação de extrato OFX — dedupe por FITID; auto-categorização; conciliação
   app.post("/api/fin/importar-ofx", requireAuth, uploadOfx.single("arquivo"), async (req: any, res) => {
     try {
@@ -468,11 +551,96 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
         return null;
       };
 
-      // Insert em lotes com ON CONFLICT (conta_id, fitid) DO NOTHING → dedupe
+      // ── Dedupe em duas camadas ──────────────────────────────────────────
+      // 1) FITID (índice único) — funciona quando o banco mantém o mesmo id.
+      // 2) CONTEÚDO (data+valor+descrição) — rede de segurança para quando o
+      //    banco troca o FITID entre exportações ou o arquivo vem sem ele.
+      //    Usa CONTAGEM por chave: se o mês já tem 1 PIX de R$ 100 e o arquivo
+      //    traz 2, insere só o que falta (não engole transações legítimas
+      //    idênticas no mesmo dia).
+      const chaveConteudo = (data: string, valor: number, desc: string) =>
+        `${data}|${valor.toFixed(2)}|${(desc || "").trim().toUpperCase().slice(0, 60)}`;
+
+      const datas = txs.map(t => t.data).sort();
+      const existentes = await db
+        .select({ data: finLancamentos.data, valor: finLancamentos.valor, descricao: finLancamentos.descricao })
+        .from(finLancamentos)
+        .where(and(
+          eq(finLancamentos.tenantId, tenantId),
+          eq(finLancamentos.contaId, contaId),
+          gte(finLancamentos.data, datas[0]),
+          lte(finLancamentos.data, datas[datas.length - 1]),
+        ));
+      const jaExistem = new Map<string, number>();
+      for (const e of existentes) {
+        const k = chaveConteudo(e.data, parseFloat(e.valor), e.descricao || "");
+        jaExistem.set(k, (jaExistem.get(k) || 0) + 1);
+      }
+
+      const aInserir: typeof txs = [];
+      let duplicadosConteudo = 0;
+      for (const t of txs) {
+        const k = chaveConteudo(t.data, t.valor, t.descricao);
+        const restante = jaExistem.get(k) || 0;
+        if (restante > 0) {
+          jaExistem.set(k, restante - 1); // consome uma ocorrência já existente
+          duplicadosConteudo++;
+          continue;
+        }
+        aInserir.push(t);
+      }
+
+      // Lançamentos criados ao dar baixa em Contas a Pagar (origem manual,
+      // vinculados à conta) são PROVISÓRIOS: quando o débito real chega pelo
+      // extrato, o provisório é atualizado com os dados do banco em vez de
+      // gerar uma segunda linha do mesmo pagamento.
+      let convertidos = 0;
+      try {
+        const provisorios = await db.select().from(finLancamentos)
+          .where(and(
+            eq(finLancamentos.tenantId, tenantId),
+            eq(finLancamentos.contaId, contaId),
+            eq(finLancamentos.origem, "manual"),
+            sql`${finLancamentos.contaPagarId} IS NOT NULL`,
+            sql`${finLancamentos.fitid} IS NULL`,
+          ));
+        if (provisorios.length) {
+          const usados = new Set<number>();
+          const restantes: typeof aInserir = [];
+          for (const t of aInserir) {
+            if (t.valor >= 0) { restantes.push(t); continue; }
+            const alvoCent = Math.round(Math.abs(t.valor) * 100);
+            const tMs = new Date(t.data + "T12:00:00").getTime();
+            const match = provisorios.find(p => {
+              if (usados.has(p.id)) return false;
+              if (Math.round(Math.abs(parseFloat(p.valor)) * 100) !== alvoCent) return false;
+              const pMs = new Date(p.data + "T12:00:00").getTime();
+              return Math.abs(pMs - tMs) <= 5 * 86400000;
+            });
+            if (match) {
+              usados.add(match.id);
+              await db.update(finLancamentos).set({
+                data: t.data,
+                descricao: t.descricao || match.descricao,
+                fitid: t.fitid,
+                origem: "ofx",
+              }).where(eq(finLancamentos.id, match.id));
+              convertidos++;
+            } else {
+              restantes.push(t);
+            }
+          }
+          aInserir.length = 0;
+          aInserir.push(...restantes);
+        }
+      } catch (convErr) {
+        console.error("[FIN-OFX] conversão de provisórios (non-fatal):", convErr);
+      }
+
+      // Insert em lotes; ON CONFLICT (conta_id, fitid) segura o resto
       let inseridos = 0;
-      const semFitid = txs.filter(t => !t.fitid).length;
-      for (let i = 0; i < txs.length; i += 300) {
-        const chunk = txs.slice(i, i + 300).map(t => ({
+      for (let i = 0; i < aInserir.length; i += 300) {
+        const chunk = aInserir.slice(i, i + 300).map(t => ({
           tenantId, contaId,
           data: t.data,
           valor: String(Math.round(t.valor * 100) / 100),
@@ -557,8 +725,9 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
         ok: true,
         totalNoArquivo: txs.length,
         inseridos,
-        duplicados: txs.length - inseridos - semFitid > 0 ? txs.length - inseridos : 0,
-        semFitid,
+        duplicados: txs.length - inseridos,
+        duplicadosConteudo,
+        convertidos,
         conciliadas,
         saldoCalibrado,
       });
@@ -681,7 +850,10 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
         .where(and(eq(finContasPagar.id, id), eq(finContasPagar.tenantId, tenantId))).limit(1);
       if (!atual) return res.status(404).json({ message: "Conta não encontrada" });
 
-      const { descricao, fornecedor, categoriaId, contaId, valor, vencimento, observacao, acao, dataPagamento } = req.body || {};
+      const {
+        descricao, fornecedor, categoriaId, contaId, valor, vencimento, observacao,
+        acao, dataPagamento, valorPago, contaIdPagamento, lancarNoCaixa,
+      } = req.body || {};
       const set: any = {};
       if (descricao !== undefined) set.descricao = String(descricao);
       if (fornecedor !== undefined) set.fornecedor = fornecedor || null;
@@ -695,14 +867,52 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
       if (vencimento !== undefined) set.vencimento = String(vencimento);
       if (observacao !== undefined) set.observacao = observacao || null;
 
-      // Ações de ciclo de vida
+      let lancamentoCriado: any = null;
+
       if (acao === "pagar") {
+        const dPag = dataPagamento || hojeISO();
+        const vPago = valorPago != null && String(valorPago) !== ""
+          ? Math.round((parseFloat(String(valorPago)) || 0) * 100) / 100
+          : parseFloat(atual.valor);
+        if (!(vPago > 0)) return res.status(400).json({ message: "Valor pago inválido" });
+
         set.status = "paga";
-        set.dataPagamento = dataPagamento || hojeISO();
+        set.dataPagamento = dPag;
+        set.valorPago = String(vPago);
+
+        // Integração com o Caixa: pagar aqui já lança a saída na conta-corrente,
+        // sem digitar de novo. O lançamento fica vinculado (conta_pagar_id), então
+        // a importação do OFX depois reconhece e converte em vez de duplicar.
+        const contaLanc = contaIdPagamento ? Number(contaIdPagamento) : (atual.contaId || null);
+        const querLancar = lancarNoCaixa === undefined ? true : !!lancarNoCaixa;
+        if (querLancar && contaLanc && !atual.lancamentoId) {
+          const [lanc] = await db.insert(finLancamentos).values({
+            tenantId,
+            contaId: contaLanc,
+            data: dPag,
+            valor: String(-Math.abs(vPago)),
+            descricao: atual.descricao,
+            categoriaId: atual.categoriaId || null,
+            contaPagarId: id,
+            origem: "manual",
+          }).returning();
+          lancamentoCriado = lanc;
+          set.lancamentoId = lanc.id;
+          if (!set.contaId && !atual.contaId) set.contaId = contaLanc;
+        }
       } else if (acao === "reabrir") {
         set.status = "aberta";
         set.dataPagamento = null;
+        set.valorPago = null;
         set.lancamentoId = null;
+        // Desfaz o lançamento que ESTE fluxo criou (não mexe no que veio do banco)
+        if (atual.lancamentoId) {
+          await db.delete(finLancamentos).where(and(
+            eq(finLancamentos.tenantId, tenantId),
+            eq(finLancamentos.id, atual.lancamentoId),
+            eq(finLancamentos.origem, "manual"),
+          ));
+        }
       } else if (acao === "cancelar") {
         set.status = "cancelada";
       }
@@ -714,7 +924,7 @@ export function registerFinEmpresaRoutes(app: Express, requireAuth: any) {
       if (acao === "pagar" && atual.recorrente) {
         try { await gerarProximaRecorrencia(tenantId, atual); } catch (e) { console.error("[FIN-CP] recorrência:", e); }
       }
-      return res.json({ ok: true });
+      return res.json({ ok: true, lancamentoCriado });
     } catch (e: any) {
       console.error("[FIN-CP-PATCH]", e);
       return res.status(500).json({ message: "Erro ao atualizar conta" });

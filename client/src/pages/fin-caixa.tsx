@@ -19,7 +19,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Wallet, Upload, Plus, Landmark, Tags, Trash2, Pencil, RefreshCw,
+  Wallet, Upload, Plus, Landmark, Tags, Trash2, Pencil, RefreshCw, Copy, Check, X,
 } from "lucide-react";
 
 const fmtBRL = (v: number) =>
@@ -42,6 +42,9 @@ export default function FinCaixa() {
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [catLote, setCatLote] = useState("");
   const [regraTexto, setRegraTexto] = useState("");
+  // Edição inline da descrição
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editTexto, setEditTexto] = useState("");
 
   // Dialogs
   const [dlgConta, setDlgConta] = useState(false);
@@ -114,6 +117,40 @@ export default function FinCaixa() {
     mutationFn: async ({ id, categoriaId }: { id: number; categoriaId: number | null }) =>
       apiRequest("PATCH", "/api/fin/lancamentos/categorizar", { ids: [id], categoriaId }),
     onSuccess: () => invalidar(),
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  const excluirLanc = useMutation({
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/fin/lancamentos/${id}`),
+    onSuccess: () => { toast({ title: "Lançamento excluído" }); invalidar(); },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  const editarLanc = useMutation({
+    mutationFn: async ({ id, descricao }: { id: number; descricao: string }) =>
+      apiRequest("PATCH", `/api/fin/lancamentos/${id}`, { descricao }),
+    onSuccess: () => { setEditId(null); invalidar(); },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  const duplicadosMut = useMutation({
+    mutationFn: async (remover: boolean) =>
+      apiRequest("POST", "/api/fin/lancamentos/duplicados", { remover: remover ? "1" : "0" }),
+    onSuccess: async (r) => {
+      const d = await r.json();
+      if (d.removidos) {
+        toast({ title: `${d.removidos} duplicado(s) removido(s)`, description: "Mantida a versão já categorizada de cada um." });
+        invalidar();
+      } else if (d.encontrados) {
+        if (window.confirm(`Encontrei ${d.encontrados} lançamento(s) duplicado(s).
+
+Remover as cópias? A versão já categorizada de cada um é mantida.`)) {
+          duplicadosMut.mutate(true);
+        }
+      } else {
+        toast({ title: "Nenhum duplicado encontrado" });
+      }
+    },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
@@ -226,6 +263,9 @@ export default function FinCaixa() {
           <p className="text-sm text-muted-foreground">Conta-corrente consolidada da empresa</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => duplicadosMut.mutate(false)} disabled={duplicadosMut.isPending}>
+            <Copy className="h-4 w-4 mr-1" /> Duplicados
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setDlgCats(true)}><Tags className="h-4 w-4 mr-1" /> Categorias</Button>
           <Button variant="outline" size="sm" onClick={abrirNovaConta}><Landmark className="h-4 w-4 mr-1" /> Nova Conta</Button>
           <Button variant="outline" size="sm" onClick={() => setDlgLanc(true)}><Plus className="h-4 w-4 mr-1" /> Lançamento</Button>
@@ -351,13 +391,14 @@ export default function FinCaixa() {
                 <TableHead>Descrição</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
+                <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loadLanc ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : lancamentos.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                   Nenhum lançamento no período — importe um extrato OFX para começar.
                 </TableCell></TableRow>
               ) : lancamentos.map(l => {
@@ -378,9 +419,38 @@ export default function FinCaixa() {
                         {conta?.nome || "—"}
                       </span>
                     </TableCell>
-                    <TableCell className="max-w-[380px] truncate text-sm" title={l.descricao || ""}>
-                      {l.descricao || "—"}
-                      {l.contaPagarId && <span className="ml-2 text-[10px] text-green-600 font-semibold">✓ conciliado</span>}
+                    <TableCell className="max-w-[380px] text-sm">
+                      {editId === l.id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            className="h-7 text-sm"
+                            value={editTexto}
+                            autoFocus
+                            onChange={e => setEditTexto(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") editarLanc.mutate({ id: l.id, descricao: editTexto });
+                              if (e.key === "Escape") setEditId(null);
+                            }}
+                          />
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0"
+                            onClick={() => editarLanc.mutate({ id: l.id, descricao: editTexto })}>
+                            <Check className="h-3.5 w-3.5 text-green-600" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={() => setEditId(null)}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div
+                          className="truncate cursor-text hover:bg-muted/60 rounded px-1 -mx-1 group"
+                          title={`${l.descricao || ""} — clique para editar`}
+                          onClick={() => { setEditId(l.id); setEditTexto(l.descricao || ""); }}
+                        >
+                          {l.descricao || "—"}
+                          <Pencil className="inline h-3 w-3 ml-1.5 opacity-0 group-hover:opacity-50" />
+                          {l.contaPagarId && <span className="ml-2 text-[10px] text-green-600 font-semibold">✓ conciliado</span>}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Select
@@ -416,6 +486,14 @@ export default function FinCaixa() {
                     </TableCell>
                     <TableCell className={`text-right font-semibold whitespace-nowrap ${v < 0 ? "text-red-600" : "text-green-600"}`}>
                       {fmtBRL(v)}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Excluir lançamento"
+                        onClick={() => {
+                          if (window.confirm(`Excluir "${l.descricao || "lançamento"}" de ${fmtBRL(v)}?`)) excluirLanc.mutate(l.id);
+                        }}>
+                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );

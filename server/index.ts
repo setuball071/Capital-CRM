@@ -563,6 +563,9 @@ app.use((req, res, next) => {
             CREATE INDEX IF NOT EXISTS idx_fin_cp_tenant_venc ON fin_contas_pagar(tenant_id, vencimento)
           `);
           await migDb.execute(migSql`
+            ALTER TABLE fin_contas_pagar ADD COLUMN IF NOT EXISTS valor_pago DECIMAL(14,2)
+          `);
+          await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS fin_planejamento (
               id             SERIAL PRIMARY KEY,
               tenant_id      INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

@@ -3132,6 +3132,8 @@ export const finContasPagar = pgTable("fin_contas_pagar", {
   // 'aberta' | 'paga' | 'cancelada' (atraso é derivado: aberta + vencimento < hoje)
   status: varchar("status", { length: 20 }).notNull().default("aberta"),
   dataPagamento: varchar("data_pagamento", { length: 10 }),
+  // Valor efetivamente pago (pode diferir do previsto: juros, desconto, acordo)
+  valorPago: decimal("valor_pago", { precision: 14, scale: 2 }),
   lancamentoId: integer("lancamento_id"), // lançamento do extrato que baixou (conciliação)
   boletoCodigo: varchar("boleto_codigo", { length: 60 }), // linha digitável
   observacao: text("observacao"),

@@ -29,7 +29,7 @@ interface ContaPagar {
   id: number; descricao: string; fornecedor: string | null; categoriaId: number | null;
   contaId: number | null; valor: string; vencimento: string; tipo: string;
   parcelaNum: number | null; parcelaTotal: number | null; grupoParcelamento: string | null;
-  recorrente: boolean; status: string; dataPagamento: string | null;
+  recorrente: boolean; status: string; dataPagamento: string | null; valorPago: string | null;
   lancamentoId: number | null; boletoCodigo: string | null; observacao: string | null;
   statusDerivado: "paga" | "cancelada" | "atrasada" | "vencendo" | "em_dia";
 }
@@ -48,6 +48,12 @@ export default function FinContasPagar() {
   const [mes, setMes] = useState(mesAtual());
   const [fStatus, setFStatus] = useState("");
   const [dlg, setDlg] = useState(false);
+  // Diálogo de baixa: confirma valor efetivamente pago, data e conta
+  const [pagando, setPagando] = useState<ContaPagar | null>(null);
+  const [pagValor, setPagValor] = useState("");
+  const [pagData, setPagData] = useState("");
+  const [pagConta, setPagConta] = useState("");
+  const [pagLancar, setPagLancar] = useState(true);
 
   const { data: cpData, isLoading } = useQuery<{ contas: ContaPagar[] }>({
     queryKey: ["fin-cp", mes],
@@ -79,7 +85,35 @@ export default function FinContasPagar() {
     mutationFn: async ({ id, acao }: { id: number; acao: string }) =>
       apiRequest("PATCH", `/api/fin/contas-pagar/${id}`, { acao }),
     onSuccess: (_r, v) => {
-      toast({ title: v.acao === "pagar" ? "Conta baixada" : v.acao === "reabrir" ? "Conta reaberta" : "Conta cancelada" });
+      toast({ title: v.acao === "reabrir" ? "Conta reaberta — lançamento do caixa desfeito" : "Conta cancelada" });
+      invalidar();
+    },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  function abrirPagamento(c: ContaPagar) {
+    setPagando(c);
+    setPagValor(String(parseFloat(c.valor)));
+    setPagData(new Date().toISOString().slice(0, 10));
+    setPagConta(c.contaId ? String(c.contaId) : "");
+    setPagLancar(true);
+  }
+
+  const pagarMut = useMutation({
+    mutationFn: async () => apiRequest("PATCH", `/api/fin/contas-pagar/${pagando!.id}`, {
+      acao: "pagar",
+      valorPago: pagValor,
+      dataPagamento: pagData,
+      contaIdPagamento: pagConta || null,
+      lancarNoCaixa: pagLancar && !!pagConta,
+    }),
+    onSuccess: async (r) => {
+      const d = await r.json().catch(() => ({}));
+      toast({
+        title: "Conta baixada",
+        description: d.lancamentoCriado ? "Saída lançada no Caixa automaticamente" : "Sem lançamento no caixa (conta bancária não informada)",
+      });
+      setPagando(null);
       invalidar();
     },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
@@ -216,7 +250,14 @@ export default function FinContasPagar() {
                     <TableCell className="text-xs">
                       {c.tipo === "parcelada" ? `Parcela ${c.parcelaNum}/${c.parcelaTotal}` : c.recorrente ? "Recorrente" : c.tipo === "prazo" ? "A prazo" : "À vista"}
                     </TableCell>
-                    <TableCell className="text-right font-semibold whitespace-nowrap">{fmtBRL(parseFloat(c.valor))}</TableCell>
+                    <TableCell className="text-right font-semibold whitespace-nowrap">
+                      {c.valorPago != null && Math.abs(parseFloat(c.valorPago) - parseFloat(c.valor)) > 0.005 ? (
+                        <>
+                          <div>{fmtBRL(parseFloat(c.valorPago))}</div>
+                          <div className="text-[10px] font-normal text-muted-foreground line-through">{fmtBRL(parseFloat(c.valor))}</div>
+                        </>
+                      ) : fmtBRL(parseFloat(c.valor))}
+                    </TableCell>
                     <TableCell>
                       <span className={`text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${b.cls}`}>{b.label}</span>
                       {c.status === "paga" && c.dataPagamento && <div className="text-[10px] text-muted-foreground mt-0.5">{fmtData(c.dataPagamento)}</div>}
@@ -224,7 +265,7 @@ export default function FinContasPagar() {
                     <TableCell className="text-right whitespace-nowrap">
                       {c.status === "aberta" && (
                         <>
-                          <Button variant="ghost" size="sm" className="h-8 px-2" title="Marcar como paga" onClick={() => acaoMut.mutate({ id: c.id, acao: "pagar" })}>
+                          <Button variant="ghost" size="sm" className="h-8 px-2" title="Marcar como paga" onClick={() => abrirPagamento(c)}>
                             <CheckCircle2 className="h-4 w-4 text-green-600" />
                           </Button>
                           <Button variant="ghost" size="sm" className="h-8 px-2" title="Cancelar" onClick={() => acaoMut.mutate({ id: c.id, acao: "cancelar" })}>
@@ -252,6 +293,67 @@ export default function FinContasPagar() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Dialog: confirmar pagamento (valor efetivo + data + conta) */}
+      <Dialog open={!!pagando} onOpenChange={(o) => !o && setPagando(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Dar baixa na conta</DialogTitle></DialogHeader>
+          {pagando && (
+            <div className="space-y-3">
+              <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+                <p className="font-semibold">{pagando.descricao}</p>
+                <p className="text-xs text-muted-foreground">
+                  {pagando.fornecedor ? `${pagando.fornecedor} · ` : ""}vence {fmtData(pagando.vencimento)} · previsto {fmtBRL(parseFloat(pagando.valor))}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Valor pago (R$)</Label>
+                  <Input type="number" step="0.01" min="0.01" value={pagValor} onChange={e => setPagValor(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Data do pagamento</Label>
+                  <Input type="date" value={pagData} onChange={e => setPagData(e.target.value)} />
+                </div>
+              </div>
+              {pagValor && Math.abs(parseFloat(pagValor) - parseFloat(pagando.valor)) > 0.005 && (
+                <p className={`text-xs font-medium ${parseFloat(pagValor) > parseFloat(pagando.valor) ? "text-amber-600" : "text-green-600"}`}>
+                  {parseFloat(pagValor) > parseFloat(pagando.valor)
+                    ? `Pagou ${fmtBRL(parseFloat(pagValor) - parseFloat(pagando.valor))} a mais que o previsto (juros/multa?)`
+                    : `Pagou ${fmtBRL(parseFloat(pagando.valor) - parseFloat(pagValor))} a menos que o previsto (desconto?)`}
+                </p>
+              )}
+              <div>
+                <Label>Conta de onde saiu</Label>
+                <Select value={pagConta} onValueChange={setPagConta}>
+                  <SelectTrigger><SelectValue placeholder="Selecione a conta bancária" /></SelectTrigger>
+                  <SelectContent>
+                    {contasBancarias.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={pagLancar} disabled={!pagConta}
+                  onChange={e => setPagLancar(e.target.checked)} />
+                <span>
+                  Lançar a saída no Caixa automaticamente
+                  <span className="block text-xs text-muted-foreground">
+                    {pagConta
+                      ? "Evita digitar de novo. Quando o débito chegar pelo extrato, o sistema reconhece e não duplica."
+                      : "Escolha a conta bancária acima para habilitar."}
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPagando(null)}>Cancelar</Button>
+            <Button disabled={pagarMut.isPending || !pagValor || !pagData} onClick={() => pagarMut.mutate()}>
+              <CheckCircle2 className="h-4 w-4 mr-1" /> Confirmar pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog nova conta */}
       <Dialog open={dlg} onOpenChange={setDlg}>
