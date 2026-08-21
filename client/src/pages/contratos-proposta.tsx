@@ -488,7 +488,10 @@ export default function ContratosPropostaPage() {
   const [nameAlert,     setNameAlert]     = useState<string | null>(null);
 
   // Redimensiona imagem no browser antes de enviar (economiza banda + custo de IA)
-  async function resizeImageToBlob(file: File, maxPx = 1600): Promise<Blob> {
+  // 2800px & qualidade 0.92: a 1600px o RG dentro de uma foto de celular ficava
+  // com ~800px de largura e a filiação virava borrão — nenhum modelo lê isso, e
+  // o que ele não lê ele chuta. Usado só no fluxo de OCR.
+  async function resizeImageToBlob(file: File, maxPx = 2800): Promise<Blob> {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
@@ -502,7 +505,7 @@ export default function ContratosPropostaPage() {
         canvas.toBlob(
           (blob) => (blob ? resolve(blob) : reject(new Error("Falha ao comprimir imagem"))),
           "image/jpeg",
-          0.88
+          0.92
         );
       };
       img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Falha ao carregar imagem")); };

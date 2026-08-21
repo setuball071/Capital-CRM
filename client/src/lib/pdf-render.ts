@@ -13,7 +13,7 @@ export function isPdf(file: File): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
-export async function renderPdfFirstPageToBlob(file: File, maxPx = 2048): Promise<Blob> {
+export async function renderPdfFirstPageToBlob(file: File, maxPx = 2800): Promise<Blob> {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   const page = await pdf.getPage(1);

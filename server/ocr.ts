@@ -133,7 +133,12 @@ export function registerOcrRoutes(app: Express, requireAuth: Function) {
 Analise as imagens fornecidas (frente e, se disponível, verso do documento) e extraia os dados.
 Seja preciso: transcreva exatamente o que está escrito, sem corrigir ou inferir.
 ATENÇÃO à FILIAÇÃO: na seção "FILIAÇÃO" há dois nomes, um ACIMA do outro. Retorne-os EXATAMENTE na ordem em que aparecem, de cima para baixo. NÃO tente deduzir quem é pai ou mãe pelo nome — apenas preserve a ordem impressa. Por convenção do RG, o 1º (de cima) é o PAI e o 2º (de baixo) é a MÃE. Em CNH-e o documento pode estar embutido como imagem na página; leia mesmo assim.
-Para campos realmente não legíveis ou ausentes, use null.`;
+REGRA MAIS IMPORTANTE — NUNCA COMPLETE O QUE NÃO CONSEGUIU LER:
+- Se qualquer parte de um campo estiver borrada, cortada, coberta ou ilegível, devolva null NAQUELE CAMPO INTEIRO. Não devolva o pedaço que leu, não deduza o resto, não "arredonde" para um nome ou data que pareça provável.
+- Nome e filiação: se você não consegue ler TODAS as palavras com nitidez, devolva null. É preferível campo vazio a nome parecido. Não troque sobrenomes entre as pessoas, não invente segundo nome, não complete "NETO"/"JUNIOR"/"FILHO" que não esteja impresso.
+- Números (CPF, registro): só devolva se conseguir ler TODOS os dígitos. Dígito duvidoso = null no campo todo. NUNCA use o número do RG como CPF nem o CPF como registro — são campos diferentes e rotulados no documento.
+- Datas: só devolva se dia, mês e ano estiverem legíveis. Nunca estime idade ou ano.
+Campo em branco é resultado ACEITÁVEL e esperado. Campo preenchido com dado plausível porém não lido é ERRO GRAVE — alguém vai fechar um contrato com ele.`;
 
         const userPrompt = `Extraia os dados deste documento de identidade brasileiro e retorne SOMENTE um JSON válido, sem markdown, sem explicações.
 
@@ -171,6 +176,13 @@ Formato exato:
 
         const raw = response.choices[0]?.message?.content ?? "";
         const finish = response.choices[0]?.finish_reason ?? "?";
+
+        // Diagnóstico: sem isso, reclamação de "alucinou" vira chute. Imagem pequena
+        // é a causa mais comum — o tamanho abaixo diz na hora se foi isso.
+        const kb = (f?: Express.Multer.File) => (f ? `${Math.round(f.size / 1024)}KB` : "—");
+        console.log(
+          `[OCR] modelo=${ocrModel} frente=${kb(frenteFile)} verso=${kb(versoFile)} finish=${finish}`,
+        );
 
         // Extrai JSON da resposta (pode vir com markdown ```json ... ```)
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
