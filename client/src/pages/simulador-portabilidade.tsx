@@ -2,7 +2,6 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
 import { useProposta } from "@/contexts/proposta-context";
-import SimEvolucaoDivida from "@/pages/sim-evolucao-divida";
 
 interface SimState {
   contrato: number;
@@ -847,11 +846,6 @@ export default function SimuladorPortabilidadePage() {
               <div className="ri"><label>Remanescentes</label><div className="v">{rightState ? (rAnt ? rAnt.restantes : rightState.prazo) + "x" : "—"}</div></div>
             </div>
           </div>
-        </div>
-
-        {/* Evolução de Dívida — cálculo bidirecional taxa/saldo + tabela Price + simulação de antecipação */}
-        <div className="sim-section">
-          <SimEvolucaoDivida />
         </div>
 
         <div className="sim-section">
