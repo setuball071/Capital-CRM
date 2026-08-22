@@ -429,10 +429,14 @@ export default function SimuladorPortabilidadePage() {
   // Lado direito herda o saldo p/ portabilidade do lado esquerdo — já descontada a
   // amortização quando há "Valor para amortizar". Atualiza ao digitar.
   const saldoHerdado = leftState ? (lAnt ? lAnt.saldoRestante : leftState.comIof) : null;
+  // Valor do contrato (sem IOF) também herda já descontada a amortização — é ele que
+  // alimenta o coeficiente final, os cards da Estratégia e o cabeçalho da Evolução.
+  const contratoHerdado = leftState ? Math.max(0, leftState.contrato - (lAnt ? lAnt.custo : 0)) : null;
   useEffect(() => {
-    if (saldoHerdado == null) return;
+    if (saldoHerdado == null || contratoHerdado == null) return;
     if (rContratoRef.current) rContratoRef.current.value = saldoHerdado.toFixed(2);
-  }, [saldoHerdado]);
+    if (rContratoSemIofRef.current) rContratoSemIofRef.current.value = contratoHerdado.toFixed(2);
+  }, [saldoHerdado, contratoHerdado]);
 
   const calcRight = useCallback(() => {
     const contratoIof = parseFloat(rContratoRef.current?.value || "0") || 0;
