@@ -426,6 +426,14 @@ export default function SimuladorPortabilidadePage() {
   const lAnt = leftState ? calcAntecipacao(leftState.margem, leftState.taxa, leftState.prazo, parseValorBR(lCliente), leftState.saldo) : null;
   const rAnt = rightState ? calcAntecipacao(rightState.margem, rightState.taxa, rightState.prazo, parseValorBR(rCliente), rightState.saldo) : null;
 
+  // Lado direito herda o saldo p/ portabilidade do lado esquerdo — já descontada a
+  // amortização quando há "Valor para amortizar". Atualiza ao digitar.
+  const saldoHerdado = leftState ? (lAnt ? lAnt.saldoRestante : leftState.comIof) : null;
+  useEffect(() => {
+    if (saldoHerdado == null) return;
+    if (rContratoRef.current) rContratoRef.current.value = saldoHerdado.toFixed(2);
+  }, [saldoHerdado]);
+
   const calcRight = useCallback(() => {
     const contratoIof = parseFloat(rContratoRef.current?.value || "0") || 0;
     // Valor do contrato sem IOF — herdado do lado esquerdo quando disponível
@@ -818,7 +826,7 @@ export default function SimuladorPortabilidadePage() {
             <input type="number" ref={rContratoSemIofRef} style={{ display: "none" }} aria-hidden="true" />
             <div className="form-row">
               <div className="fg">
-                <label>Contrato + IOF (herdado)</label>
+                <label>Contrato + IOF (herdado){lAnt && lAnt.k > 0 && <span style={{ fontWeight: 400, color: "#6C2BD9" }}> · já com amortização</span>}</label>
                 <input type="number" ref={rContratoRef} placeholder="Calculado pelo lado esquerdo" step="0.01" readOnly data-testid="input-right-contrato" />
               </div>
               <div className="fg">
