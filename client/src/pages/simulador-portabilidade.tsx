@@ -83,6 +83,34 @@ function coefPrice(taxa_am_perc: number, n: number): number {
   return (i * f) / (f - 1);
 }
 
+interface Antecipacao { k: number; custo: number; sobra: number; restantes: number; saldoRestante: number; }
+
+// Quantas parcelas do FIM o valor do cliente abate (Tabela Price).
+// Identidade: a amortização do mês m equivale ao valor presente da parcela
+// nº (n − m + 1); logo abater as últimas k parcelas custa a soma das k primeiras
+// amortizações. Mesma lógica usada na seção Evolução de Dívida.
+function calcAntecipacao(parcela: number, taxaPerc: number, prazo: number, valor: number, saldo: number): Antecipacao | null {
+  if (!(parcela > 0) || !(taxaPerc > 0) || !(prazo > 0) || !(valor > 0)) return null;
+  const i = taxaPerc / 100;
+  let s = parcela * (1 - Math.pow(1 + i, -prazo)) / i;
+  let custo = 0, k = 0;
+  for (let m = 1; m <= prazo; m++) {
+    const amort = parcela - s * i;
+    if (custo + amort > valor) break;
+    custo += amort; k++;
+    s = Math.max(0, s - amort);
+  }
+  return { k, custo, sobra: valor - custo, restantes: prazo - k, saldoRestante: Math.max(0, saldo - custo) };
+}
+
+function parseValorBR(v: string): number {
+  const t = (v || "").trim();
+  if (!t) return 0;
+  // aceita "5.000,00", "5000,00" e "5000.00"
+  const norm = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t;
+  return parseFloat(norm) || 0;
+}
+
 function taxaDeCoef(coef: number, n: number): number {
   let t = Math.max(1e-7, coef - 1 / n);
   for (let k = 0; k < 600; k++) {
@@ -229,6 +257,9 @@ export default function SimuladorPortabilidadePage() {
   const [leftState, setLeftState] = useState<SimState | null>(null);
   const [rightState, setRightState] = useState<SimState | null>(null);
   const [leftCards, setLeftCards] = useState<PrazoCard[]>([]);
+  // Valor que o cliente vai usar para antecipar parcelas (esq = contrato novo, dir = contrato final)
+  const [lCliente, setLCliente] = useState("");
+  const [rCliente, setRCliente] = useState("");
   const [rightCards, setRightCards] = useState<PrazoCard[]>([]);
   const [cronograma, setCronograma] = useState<CronogramaState | null>(null);
   const [selectedCard, setSelectedCard] = useState<{ side: string; meses: number } | null>(null);
@@ -391,6 +422,10 @@ export default function SimuladorPortabilidadePage() {
     if (rContratoSemIofRef.current) rContratoSemIofRef.current.value = contrato.toFixed(2);
     if (rPrazoRef.current) rPrazoRef.current.value = String(prazo);
   }, [calcMode]);
+
+  // Antecipação pelo valor do cliente — recalcula ao digitar, sem precisar clicar em Calcular
+  const lAnt = leftState ? calcAntecipacao(leftState.margem, leftState.taxa, leftState.prazo, parseValorBR(lCliente), leftState.saldo) : null;
+  const rAnt = rightState ? calcAntecipacao(rightState.margem, rightState.taxa, rightState.prazo, parseValorBR(rCliente), rightState.saldo) : null;
 
   const calcRight = useCallback(() => {
     const contratoIof = parseFloat(rContratoRef.current?.value || "0") || 0;
@@ -738,10 +773,14 @@ export default function SimuladorPortabilidadePage() {
                 <input type="number" ref={lCoefRef} placeholder="Ex: 0.022000" step="0.000001" data-testid="input-left-coef" />
               </div>
             </div>
-            <div className="form-row single">
+            <div className="form-row">
               <div className="fg">
                 <label>IOF / Encargos (%)</label>
                 <input type="number" ref={lIofRef} step="0.01" defaultValue={4.5} min={4.5} data-testid="input-left-iof" />
+              </div>
+              <div className="fg">
+                <label>Valor do cliente (R$) <span style={{ fontWeight: 400, opacity: .7 }}>p/ antecipar</span></label>
+                <input type="text" value={lCliente} onChange={e => setLCliente(e.target.value)} placeholder="Ex: 5.000,00" data-testid="input-left-cliente" />
               </div>
             </div>
             <button className="btn-sim btn-sim-left" onClick={calcLeft} data-testid="button-calc-left">
@@ -752,9 +791,9 @@ export default function SimuladorPortabilidadePage() {
               <div className="ri"><label>Contrato + IOF</label><div className="v" data-testid="text-left-iof">{leftState ? fmtR(leftState.comIof) : "—"}</div></div>
               <div className="ri"><label>Taxa Implícita a.m.</label><div className="v" data-testid="text-left-taxa">{leftState ? fmtN(leftState.taxa, 4) + "%" : "—"}</div></div>
               <div className="ri"><label>Parcela</label><div className="v" data-testid="text-left-parcela">{leftState ? fmtR(leftState.margem) : "—"}</div></div>
-              <div className="ri"><label>Quanto Antecipado</label><div className="v">{leftState ? fmtR(0) : "—"}</div></div>
-              <div className="ri"><label>Saldo p/ Portabilidade</label><div className="v">{leftState ? fmtR(leftState.saldo) : "—"}</div></div>
-              <div className="ri"><label>Remanescentes</label><div className="v">{leftState ? leftState.prazo + "x" : "—"}</div></div>
+              <div className="ri"><label>Quanto Antecipado</label><div className="v">{leftState ? fmtR(lAnt?.custo ?? 0) : "—"}{lAnt && lAnt.k > 0 && <div style={{ fontSize: 10, fontWeight: 500, opacity: .75 }}>{lAnt.k} parcela(s) abatida(s) · sobra {fmtR(lAnt.sobra)}</div>}</div></div>
+              <div className="ri"><label>Saldo p/ Portabilidade</label><div className="v">{leftState ? fmtR(lAnt ? lAnt.saldoRestante : leftState.saldo) : "—"}</div></div>
+              <div className="ri"><label>Remanescentes</label><div className="v">{leftState ? (lAnt ? lAnt.restantes : leftState.prazo) + "x" : "—"}</div></div>
             </div>
           </div>
 
@@ -788,6 +827,12 @@ export default function SimuladorPortabilidadePage() {
                 <input type="number" ref={rTaxaRef} placeholder="Ex: 1.45" step="0.0001" data-testid="input-right-taxa" />
               </div>
             </div>
+            <div className="form-row single">
+              <div className="fg">
+                <label>Valor do cliente (R$) <span style={{ fontWeight: 400, opacity: .7 }}>p/ antecipar</span></label>
+                <input type="text" value={rCliente} onChange={e => setRCliente(e.target.value)} placeholder="Ex: 5.000,00" data-testid="input-right-cliente" />
+              </div>
+            </div>
             <button className="btn-sim btn-sim-right" onClick={calcRight} data-testid="button-calc-right">
               Calcular Contrato Final
             </button>
@@ -797,9 +842,9 @@ export default function SimuladorPortabilidadePage() {
               <div className="ri"><label>Coeficiente Final</label><div className="v">{rightState ? fmtN(rightState.coef, 6) : "—"}</div></div>
               <div className="ri"><label>Contrato + IOF</label><div className="v">{rightState ? fmtR(rightState.comIof) : "—"}</div></div>
               <div className="ri"><label>Taxa Média</label><div className="v">{rightState ? fmtN(rightState.taxa, 4) + "%" : "—"}</div></div>
-              <div className="ri"><label>Quanto Antecipado</label><div className="v">—</div></div>
-              <div className="ri"><label>Saldo p/ Portabilidade</label><div className="v">—</div></div>
-              <div className="ri"><label>Remanescentes</label><div className="v">{rightState ? rightState.prazo + "x" : "—"}</div></div>
+              <div className="ri"><label>Quanto Antecipado</label><div className="v">{rightState ? fmtR(rAnt?.custo ?? 0) : "—"}{rAnt && rAnt.k > 0 && <div style={{ fontSize: 10, fontWeight: 500, opacity: .75 }}>{rAnt.k} parcela(s) abatida(s) · sobra {fmtR(rAnt.sobra)}</div>}</div></div>
+              <div className="ri"><label>Saldo p/ Portabilidade</label><div className="v">{rightState ? fmtR(rAnt ? rAnt.saldoRestante : rightState.saldo) : "—"}</div></div>
+              <div className="ri"><label>Remanescentes</label><div className="v">{rightState ? (rAnt ? rAnt.restantes : rightState.prazo) + "x" : "—"}</div></div>
             </div>
           </div>
         </div>
