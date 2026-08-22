@@ -3,7 +3,6 @@ import CalculatorPage from "@/pages/calculator";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
-import SimEvolucaoDivida from "@/pages/sim-evolucao-divida";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
@@ -52,7 +51,6 @@ const TABS = [
   { id: "amortizacao", label: "Amortização", icon: "trending_down" },
   { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up" },
   { id: "contracheque", label: "Contracheque", icon: "description" },
-  { id: "evolucao-divida", label: "Evolução de Dívida", icon: "table_chart" },
 ];
 
 export default function SimuladoresHub() {
@@ -184,11 +182,6 @@ export default function SimuladoresHub() {
           {/* Renda Fixa — native React */}
           <div style={{ display: activeTab === "renda-fixa" ? "block" : "none", height: "100%", overflow: "auto" }}>
             <CalculadoraRendaFixaPage />
-          </div>
-
-          {/* Evolução de Dívida — native React */}
-          <div style={{ display: activeTab === "evolucao-divida" ? "block" : "none", height: "100%", overflow: "auto" }}>
-            <SimEvolucaoDivida />
           </div>
 
           {/* Contracheque — iframe */}
