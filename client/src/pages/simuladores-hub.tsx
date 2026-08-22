@@ -3,6 +3,7 @@ import CalculatorPage from "@/pages/calculator";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
+import SimAmortizacaoAnual from "@/pages/sim-amortizacao-anual";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
@@ -47,6 +48,7 @@ function IframeThemeSync({
 const TABS = [
   { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt" },
   { id: "amortizacao", label: "Amortização", icon: "trending_down" },
+  { id: "amortizacao-anual", label: "Amortização Anual", icon: "event_repeat" },
   { id: "contracheque", label: "Contracheque", icon: "description" },
   { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up" },
   { id: "compra", label: "Simulador de Compra", icon: "shopping_cart" },
@@ -177,6 +179,11 @@ export default function SimuladoresHub() {
           {/* Amortização — native React */}
           <div style={{ display: activeTab === "amortizacao" ? "block" : "none", height: "100%", overflow: "hidden" }}>
             <SimuladorPortabilidadePage />
+          </div>
+
+          {/* Amortização Anual — native React */}
+          <div style={{ display: activeTab === "amortizacao-anual" ? "block" : "none", height: "100%", overflow: "auto" }}>
+            <SimAmortizacaoAnual />
           </div>
 
           {/* Renda Fixa — native React */}
