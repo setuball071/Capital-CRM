@@ -45,12 +45,12 @@ function IframeThemeSync({
 
 // Ícones Material Symbols do design (Simuladores.dc.html → TAB_DEFS)
 const TABS = [
-  { id: "proposta", label: "Criador de Proposta", icon: "description" },
   { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt" },
-  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart" },
   { id: "amortizacao", label: "Amortização", icon: "trending_down" },
-  { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up" },
   { id: "contracheque", label: "Contracheque", icon: "description" },
+  { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up" },
+  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart" },
+  { id: "proposta", label: "Criador de Proposta", icon: "description" },
 ];
 
 export default function SimuladoresHub() {
@@ -58,7 +58,7 @@ export default function SimuladoresHub() {
   // ao levar os contratos marcados para o simulador em aba nova)
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = new URLSearchParams(window.location.search).get("tab");
-    return tabParam && TABS.some((t) => t.id === tabParam) ? tabParam : "proposta";
+    return tabParam && TABS.some((t) => t.id === tabParam) ? tabParam : "portabilidade";
   });
   const { theme } = useTheme();
   const { user } = useAuth();
