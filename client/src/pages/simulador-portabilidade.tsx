@@ -778,7 +778,7 @@ export default function SimuladorPortabilidadePage() {
                 <input type="number" ref={lIofRef} step="0.01" defaultValue={4.5} min={4.5} data-testid="input-left-iof" />
               </div>
               <div className="fg">
-                <label>Valor do cliente (R$) <span style={{ fontWeight: 400, opacity: .7 }}>p/ antecipar</span></label>
+                <label>Valor para amortizar (R$)</label>
                 <input type="text" value={lCliente} onChange={e => setLCliente(e.target.value)} placeholder="Ex: 5.000,00" data-testid="input-left-cliente" />
               </div>
             </div>
@@ -828,7 +828,7 @@ export default function SimuladorPortabilidadePage() {
             </div>
             <div className="form-row single">
               <div className="fg">
-                <label>Valor do cliente (R$) <span style={{ fontWeight: 400, opacity: .7 }}>p/ antecipar</span></label>
+                <label>Valor para amortizar (R$)</label>
                 <input type="text" value={rCliente} onChange={e => setRCliente(e.target.value)} placeholder="Ex: 5.000,00" data-testid="input-right-cliente" />
               </div>
             </div>
