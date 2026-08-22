@@ -97,7 +97,22 @@ export default function SimAmortizacaoAnual() {
 
     const custoEstrategia = pagoParcelas + pagoQuitacoes;
     const custoPadrao = nFatias * parcelaFatia * prazo;
+
+    // Taxa EQUIVALENTE: que taxa, num contrato único no prazo padrão, custaria o mesmo
+    // total da estratégia? (bisseção — custo total é crescente na taxa). A taxa real
+    // continua sendo a contratual: quitação pelo saldo devedor não muda a taxa, muda o tempo.
+    let taxaEquivalente: number | null = null;
+    if (custoEstrategia > valor && custoEstrategia < custoPadrao) {
+      let lo = 0.000001, hi = i;
+      for (let k = 0; k < 80; k++) {
+        const mid = (lo + hi) / 2;
+        if (pmt(valor, mid, prazo) * prazo < custoEstrategia) lo = mid; else hi = mid;
+      }
+      taxaEquivalente = ((lo + hi) / 2) * 100;
+    }
+
     return {
+      taxaEquivalente,
       fatia, parcelaFatia, parcelaInicial: nFatias * parcelaFatia, linhas,
       pagoParcelas, pagoQuitacoes, custoEstrategia, custoPadrao,
       economia: custoPadrao - custoEstrategia,
@@ -143,7 +158,7 @@ export default function SimAmortizacaoAnual() {
           </div>
 
           {/* Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             {card("Quita tudo em", `${res.mesesTotal} meses`, "text-violet-700 dark:text-violet-400",
               res.mesesTotal < prazo ? `${(prazo - res.mesesTotal)} meses antes do prazo (${prazo})` : "só termina no prazo normal")}
             {card("Custo com a estratégia", fmtR(res.custoEstrategia), "text-foreground",
@@ -153,6 +168,10 @@ export default function SimAmortizacaoAnual() {
             {card(res.economia >= 0 ? "Economia gerada" : "Custo a mais", fmtR(Math.abs(res.economia)),
               res.economia >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
               res.economia >= 0 ? "juros que o cliente deixa de pagar" : "")}
+            {card("Taxa equivalente",
+              res.taxaEquivalente != null ? `${fmtN(res.taxaEquivalente)}% a.m.` : "—",
+              "text-violet-700 dark:text-violet-400",
+              res.taxaEquivalente != null ? `no prazo padrão, pro mesmo custo (contrato: ${fmtN(taxa)}%)` : "")}
           </div>
 
           {res.anosSemQuitar > 0 && (
@@ -219,6 +238,8 @@ export default function SimAmortizacaoAnual() {
           <p className="text-[11px] text-muted-foreground">
             Quitação pelo saldo devedor (valor presente das parcelas restantes) no 12º mês de cada ano.
             A ordem e a data das quitações ficam a critério do cliente; a simulação assume uma quitação por ano.
+            <br />A taxa contratual não muda com a estratégia ({fmtN(taxa)}% a.m.) — a economia vem do tempo menor em que os juros correm.
+            A <strong>taxa equivalente</strong> é a taxa que, num contrato normal de {prazo} meses, custaria o mesmo total.
           </p>
         </>
       )}
