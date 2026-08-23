@@ -138,7 +138,18 @@ REGRA MAIS IMPORTANTE — NUNCA COMPLETE O QUE NÃO CONSEGUIU LER:
 - Nome e filiação: se você não consegue ler TODAS as palavras com nitidez, devolva null. É preferível campo vazio a nome parecido. Não troque sobrenomes entre as pessoas, não invente segundo nome, não complete "NETO"/"JUNIOR"/"FILHO" que não esteja impresso.
 - Números (CPF, registro): só devolva se conseguir ler TODOS os dígitos. Dígito duvidoso = null no campo todo. NUNCA use o número do RG como CPF nem o CPF como registro — são campos diferentes e rotulados no documento.
 - Datas: só devolva se dia, mês e ano estiverem legíveis. Nunca estime idade ou ano.
-Campo em branco é resultado ACEITÁVEL e esperado. Campo preenchido com dado plausível porém não lido é ERRO GRAVE — alguém vai fechar um contrato com ele.`;
+Campo em branco é resultado ACEITÁVEL e esperado. Campo preenchido com dado plausível porém não lido é ERRO GRAVE — alguém vai fechar um contrato com ele.
+
+ESPECÍFICO DA CNH (a CNH tem VÁRIOS números — não confunda):
+- "numeroRegistro" é SOMENTE o valor do campo rotulado "Nº REGISTRO" (fica na faixa inferior da frente). NÃO use o número grande impresso na vertical, na lateral esquerda do cartão — esse é o nº de segurança/espelho e NÃO serve. NÃO use o número do campo "DOC. IDENTIDADE" (esse é o RG).
+- "cpf" é SOMENTE o campo rotulado "CPF". NÃO use o "DOC. IDENTIDADE/ÓRG EMISSOR/UF".
+- "dataNascimento" é SOMENTE o campo "DATA NASCIMENTO". NÃO confunda com "VALIDADE", "1ª HABILITAÇÃO" nem "DATA EMISSÃO".
+- "dataExpedicao" é a "DATA EMISSÃO" (costuma estar no VERSO).
+- CNH NÃO POSSUI campo de naturalidade. Devolva "naturalidade": null. O campo "LOCAL" do verso é o local de EMISSÃO, não a naturalidade — nunca use ele.
+- "orgaoEmissor" da CNH é o DETRAN do estado emissor (ex.: DETRAN/BA).
+
+DÍGITOS — releia antes de responder:
+Para CPF, nº de registro e datas, releia dígito por dígito na imagem e confirme cada um. 1/7, 3/8, 5/6 e 0/8 se confundem em imagem de baixa resolução. Se restar dúvida em UM único dígito, devolva null no campo inteiro em vez de arriscar.`;
 
         const userPrompt = `Extraia os dados deste documento de identidade brasileiro e retorne SOMENTE um JSON válido, sem markdown, sem explicações.
 

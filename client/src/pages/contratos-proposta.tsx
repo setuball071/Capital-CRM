@@ -30,7 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { parseSiapeContracheque, type SiapeParsedData } from "@/lib/siape-pdf-parser";
-import { renderPdfFirstPageToBlob, isPdf } from "@/lib/pdf-render";
+import { renderPdfFirstPageToBlob, extractPdfImages, isPdf } from "@/lib/pdf-render";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -525,11 +525,21 @@ export default function ContratosPropostaPage() {
     setOcrError(null);
     try {
       const formData = new FormData();
-      const frenteBlob = await fileToImageBlob(frente);
-      formData.append("frente", new File([frenteBlob], "frente.jpg", { type: "image/jpeg" }));
-      if (verso) {
-        const versoBlob = await fileToImageBlob(verso);
-        formData.append("verso", new File([versoBlob], "verso.jpg", { type: "image/jpeg" }));
+      // CNH-e: o PDF traz frente e verso como imagens embutidas. Mandar essas
+      // imagens no tamanho nativo dá muito mais nitidez do que renderizar a
+      // página A4 inteira (onde o documento vira ~800px depois da redução).
+      const embutidas = isPdf(frente) ? await extractPdfImages(frente) : [];
+      if (embutidas.length >= 2 && !verso) {
+        formData.append("frente", new File([embutidas[0]], "frente.jpg", { type: "image/jpeg" }));
+        formData.append("verso", new File([embutidas[1]], "verso.jpg", { type: "image/jpeg" }));
+      } else {
+        const frenteBlob = embutidas.length === 1 ? embutidas[0] : await fileToImageBlob(frente);
+        formData.append("frente", new File([frenteBlob], "frente.jpg", { type: "image/jpeg" }));
+        if (verso) {
+          const versoEmb = isPdf(verso) ? await extractPdfImages(verso) : [];
+          const versoBlob = versoEmb.length ? versoEmb[versoEmb.length - 1] : await fileToImageBlob(verso);
+          formData.append("verso", new File([versoBlob], "verso.jpg", { type: "image/jpeg" }));
+        }
       }
       const res = await fetch("/api/ocr/document", {
         method: "POST",
