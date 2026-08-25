@@ -42,7 +42,7 @@ export default function SimAmortizacaoAnual() {
   const [fatiasStr, setFatiasStr] = useState("5");
   const [gratStr, setGratStr] = useState("20.000,00");
   const [taxaStr, setTaxaStr] = useState("1,80");
-  const [iofStr, setIofStr] = useState("4,5");
+  const [iofStr, setIofStr] = useState("3,7");
   const [prazoStr, setPrazoStr] = useState("96");
 
   const valor = parseBR(valorStr);
