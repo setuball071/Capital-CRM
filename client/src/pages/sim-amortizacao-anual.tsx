@@ -42,6 +42,7 @@ export default function SimAmortizacaoAnual() {
   const [fatiasStr, setFatiasStr] = useState("5");
   const [gratStr, setGratStr] = useState("20.000,00");
   const [taxaStr, setTaxaStr] = useState("1,80");
+  const [iofStr, setIofStr] = useState("4,5");
   const [prazoStr, setPrazoStr] = useState("96");
 
   const valor = parseBR(valorStr);
@@ -49,11 +50,14 @@ export default function SimAmortizacaoAnual() {
   const grat = parseBR(gratStr);
   const taxa = parseBR(taxaStr);
   const prazo = parseInt(prazoStr) || 0;
+  const iofPerc = parseBR(iofStr);
+  // O cliente recebe o valor liquido; o financiado embute IOF/encargos automaticamente
+  const financiado = valor * (1 + iofPerc / 100);
 
   const res = useMemo(() => {
     if (!(valor > 0) || !(nFatias > 0) || !(taxa > 0) || !(prazo > 0)) return null;
     const i = taxa / 100;
-    const fatia = valor / nFatias;
+    const fatia = financiado / nFatias;
     const parcelaFatia = pmt(fatia, i, prazo);
 
     const linhas: LinhaAno[] = [];
@@ -102,11 +106,11 @@ export default function SimAmortizacaoAnual() {
     // total da estratégia? (bisseção — custo total é crescente na taxa). A taxa real
     // continua sendo a contratual: quitação pelo saldo devedor não muda a taxa, muda o tempo.
     let taxaEquivalente: number | null = null;
-    if (custoEstrategia > valor && custoEstrategia < custoPadrao) {
+    if (custoEstrategia > financiado && custoEstrategia < custoPadrao) {
       let lo = 0.000001, hi = i;
       for (let k = 0; k < 80; k++) {
         const mid = (lo + hi) / 2;
-        if (pmt(valor, mid, prazo) * prazo < custoEstrategia) lo = mid; else hi = mid;
+        if (pmt(financiado, mid, prazo) * prazo < custoEstrategia) lo = mid; else hi = mid;
       }
       taxaEquivalente = ((lo + hi) / 2) * 100;
     }
@@ -119,7 +123,7 @@ export default function SimAmortizacaoAnual() {
       mesesTotal: mesQuitouTudo ?? prazo,
       anosSemQuitar,
     };
-  }, [valor, nFatias, grat, taxa, prazo]);
+  }, [valor, financiado, nFatias, grat, taxa, prazo]);
 
   const inputCls = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500/40";
   const labelCls = "block text-xs font-semibold mb-1.5";
@@ -141,20 +145,22 @@ export default function SimAmortizacaoAnual() {
         <strong>quitar fatias inteiras</strong> pelo saldo devedor — quantas couberem. A sobra do ano não acumula.
       </p>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        <div><label className={labelCls}>Valor desejado (R$)</label><input className={inputCls} value={valorStr} onChange={e => setValorStr(e.target.value)} /></div>
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+        <div><label className={labelCls}>Valor p/ o cliente (R$)</label><input className={inputCls} value={valorStr} onChange={e => setValorStr(e.target.value)} /></div>
         <div><label className={labelCls}>Nº de fatias</label><input className={inputCls} value={fatiasStr} onChange={e => setFatiasStr(e.target.value.replace(/\D/g, ""))} /></div>
         <div><label className={labelCls}>Gratificação anual (R$)</label><input className={inputCls} value={gratStr} onChange={e => setGratStr(e.target.value)} /></div>
         <div><label className={labelCls}>Taxa (% a.m.)</label><input className={inputCls} value={taxaStr} onChange={e => setTaxaStr(e.target.value)} /></div>
         <div><label className={labelCls}>Prazo (meses)</label><input className={inputCls} value={prazoStr} onChange={e => setPrazoStr(e.target.value.replace(/\D/g, ""))} /></div>
+        <div><label className={labelCls}>IOF / Encargos (%)</label><input className={inputCls} value={iofStr} onChange={e => setIofStr(e.target.value)} title="Embutido automaticamente no valor financiado — o cliente vê o valor líquido" /></div>
       </div>
 
       {res && (
         <>
           {/* Resumo da estrutura */}
           <div className="rounded-lg border border-violet-200 bg-violet-50 dark:bg-violet-950/30 dark:border-violet-900 px-4 py-2.5 text-[13px] mb-5">
-            <strong>{nFatias} contratos de {fmtR(res.fatia)}</strong> · parcela de {fmtR(res.parcelaFatia)} cada ·{" "}
+            Cliente recebe <strong>{fmtR(valor)}</strong> em <strong>{nFatias} contratos</strong> · parcela de {fmtR(res.parcelaFatia)} cada ·{" "}
             parcela total inicial <strong>{fmtR(res.parcelaInicial)}</strong> · {prazo} meses a {fmtN(taxa)}% a.m.
+            <span className="text-muted-foreground"> · IOF/encargos de {fmtN(iofPerc)}% já embutidos</span>
           </div>
 
           {/* Cards */}
