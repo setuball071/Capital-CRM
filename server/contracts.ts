@@ -19,6 +19,7 @@ import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { addToPortfolio } from "./portfolio";
 import { saveDocument, getDocument } from "./document-storage";
 import { notificarStatusProposta } from "./assistente-avisos";
+import { notificarPropostaCadastrada, notificarLoteCadastrado } from "./notificar-nova-proposta";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
@@ -383,6 +384,14 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         performedBy: user.id,
       });
 
+      // Avisa a responsável pelo andamento (popup + WhatsApp), best-effort
+      await notificarPropostaCadastrada({
+        tenantId,
+        autorId: user.id,
+        proposalId: proposal.id,
+        clientName: proposal.clientName,
+      });
+
       // Reaproveitar documentos de um cadastro anterior (mesmo arquivo — só novas linhas,
       // sem re-upload). Storage-agnóstico: aponta para o mesmo storage_key.
       // reuseDocIds = ids dos proposal_documents a reaproveitar (validados por tenant).
@@ -509,6 +518,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         action: "AVANCO",
         notes: `Clonada da proposta #${sourceId}`,
         performedBy: user.id,
+      });
+
+      await notificarPropostaCadastrada({
+        tenantId,
+        autorId: user.id,
+        proposalId: nova.id,
+        clientName: nova.clientName,
       });
 
       // Copia documentos de documentação (excluindo mensagens/outros sem storageKey)
@@ -808,6 +824,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
         created.push(proposal);
       }
+
+      // Avisa a responsável pelo andamento — uma notificação para o lote todo
+      await notificarLoteCadastrado({
+        tenantId,
+        autorId: user.id,
+        propostas: created.map((p: any) => ({ id: p.id, clientName: p.clientName })),
+      });
 
       return res.status(201).json(created);
     } catch (e: any) {

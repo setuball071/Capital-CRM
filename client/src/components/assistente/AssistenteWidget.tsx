@@ -51,6 +51,18 @@ export default function AssistenteWidget() {
   // Os avisos NÃO somem sozinhos ao abrir: ficam (com a bolinha) até o corretor
   // clicar em "Marcar como visto" em cada um.
 
+  // Proposta nova cadastrada por outro usuário ABRE o painel sozinha: quem cuida
+  // do andamento precisa ver na hora, não quando lembrar de clicar no balão.
+  // Só na transição (id novo) — reabrir depois de o usuário fechar seria brigar com ele.
+  const ultimoAbertoRef = useRef<number | null>(null);
+  useEffect(() => {
+    const nova = avisos.find((a) => a.tipo === "proposta_cadastrada");
+    if (!nova) return;
+    if (ultimoAbertoRef.current === nova.id) return;
+    ultimoAbertoRef.current = nova.id;
+    setAberto(true);
+  }, [avisos]);
+
   if (!user || !podeUsarChat) return null;
 
   const enviarTexto = () => {
