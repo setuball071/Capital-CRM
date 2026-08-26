@@ -17,13 +17,17 @@
  *   NOTIFICAR_PROPOSTA_WHATS     número com DDD, só dígitos      (default "48991496349")
  *   WHATS_CRM_URL                https://<ref>.supabase.co
  *   WHATS_CRM_KEY                service role key do WhatsApp CRM
- *   WHATS_CRM_INSTANCE_ID        uuid da instância oficial em whatsapp_instances
- *   WHATS_CRM_TEMPLATE           nome do template aprovado (ver nota abaixo)
+ *   WHATS_CRM_INSTANCE_ID        uuid da instância do SDR em whatsapp_instances
+ *   WHATS_CRM_TEMPLATE           (opcional) só se apontar para instância oficial
  *
- * NOTA DAS 24h: a Cloud API só aceita texto livre se a pessoa escreveu para o
- * número nas últimas 24h. Fora disso exige template aprovado (erro 131047).
- * Como esse aviso é iniciado pela empresa, o normal é precisar de template —
- * defina WHATS_CRM_TEMPLATE. Sem ele tentamos texto puro (funciona só na janela).
+ * CANAL: chamamos send-evolution-message, que é a porta única do WhatsApp CRM —
+ * ela roteia sozinha pelo provider_type da instância (oficial → delega pra
+ * send-meta-message; SDR/Evolution → manda direto). Quem decide o canal é o
+ * WHATS_CRM_INSTANCE_ID, não este código.
+ *
+ * Pelo SDR (Evolution) NÃO existe janela de 24h nem template: texto puro passa.
+ * WHATS_CRM_TEMPLATE só faz sentido se um dia apontar para a instância oficial,
+ * onde a Meta exige modelo aprovado fora da janela (erro 131047).
  */
 
 import { db } from "./storage";
@@ -69,7 +73,7 @@ async function enviarWhatsApp(texto: string, cliente: string, autor: string): Pr
     corpo.message_type = "text";
   }
 
-  const resp = await fetch(`${url.replace(/\/$/, "")}/functions/v1/send-meta-message`, {
+  const resp = await fetch(`${url.replace(/\/$/, "")}/functions/v1/send-evolution-message`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
