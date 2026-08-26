@@ -1455,6 +1455,10 @@ body { background: #F8F8FC !important; color: #111827 !important; }
         <span class="muted">Prazo Médio:</span>
         <strong id="prazoMedio">0 meses</strong>
       </div>
+      <div title="Soma de parcela × prazo restante de cada contrato — quanto o cliente ainda paga seguindo como está">
+        <span class="muted">Total a Pagar:</span>
+        <strong id="totalPagar" style="color:#DC2626;">R$ 0,00</strong>
+      </div>
     </div>
     
     <!-- INDICADOR DE SALDO DISPONÍVEL -->
@@ -3555,7 +3559,7 @@ function updateContratoCalc(id) {
 }
 
 function updateTotaisContratos() {
-  let total = 0, somaPar = 0, somaSal = 0, somaPrz = 0;
+  let total = 0, somaPar = 0, somaSal = 0, somaPrz = 0, totalPagar = 0;
   
   contratos.forEach(c => {
     if (c.parcela > 0) {
@@ -3564,6 +3568,8 @@ function updateTotaisContratos() {
       // Garante que saldo seja número válido
       somaSal += (c.saldo && !isNaN(c.saldo)) ? c.saldo : 0;
       somaPrz += c.prazo;
+      // Quanto o cliente ainda paga seguindo como está (parcela × prazo restante, por contrato)
+      totalPagar += c.parcela * (parseInt(c.prazo) || 0);
     }
   });
   
@@ -3573,6 +3579,8 @@ function updateTotaisContratos() {
   document.getElementById('somaParcelas').textContent = fmt(somaPar);
   document.getElementById('somaSaldos').textContent = fmt(somaSal);
   document.getElementById('prazoMedio').textContent = prazoMedio + ' meses';
+  const tpEl = document.getElementById('totalPagar');
+  if (tpEl) tpEl.textContent = fmt(totalPagar);
   
   // Calcula saldo disponível
   let totalLiberado = 0;
