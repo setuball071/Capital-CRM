@@ -1438,7 +1438,7 @@ function badgeComissao(st,onclick){const m={Aguardando:'b-aguardando ●',['A Pa
 // MASCARAMENTO (consultor)
 // ══════════════════════════════════════════════════════
 function _resetMask(){_maskedCells=new Map();_maskedCounter=0;}
-function msk(v,id){if(_isMasterUser)return v;const k=id||('m'+(++_maskedCounter));_maskedCells.set(k,v);return`<span class="cell-sensitive mask-txt" data-msk="${k}" onmouseenter="_showTip('${k}',event)" onmousemove="_moveTip(event)" onmouseleave="_hideTip()">●●●●●</span>`;}
+function msk(v,id){return v;} // mascaramento removido a pedido do Fabio (08/2026) — consultor ve os proprios numeros
 function _showTip(k,e){const tip=document.getElementById('sens-tip');tip.textContent=_maskedCells.get(k)||'';tip.classList.add('vis');_moveTip(e);}
 function _moveTip(e){const tip=document.getElementById('sens-tip');tip.style.left=(e.clientX+16)+'px';tip.style.top=(e.clientY-10)+'px';}
 function _hideTip(){document.getElementById('sens-tip').classList.remove('vis');}
