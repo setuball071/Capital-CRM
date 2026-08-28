@@ -565,6 +565,21 @@ app.use((req, res, next) => {
           await migDb.execute(migSql`
             ALTER TABLE fin_contas_pagar ADD COLUMN IF NOT EXISTS valor_pago DECIMAL(14,2)
           `);
+          // Contratos transferidos DEPOIS de pagos ficavam com o corretor antigo na
+          // produção (esteira mostrava um nome, financeiro outro). Realinha pelo
+          // vendedor atual da proposta vinculada.
+          await migDb.execute(migSql`
+            UPDATE producoes_contratos pc
+            SET vendedor_id = pa.vendor_id,
+                vendedor_nome = u.name,
+                nome_corretor = UPPER(TRIM(u.name))
+            FROM proposals pa
+            JOIN users u ON u.id = pa.vendor_id
+            WHERE pc.proposal_id = pa.id
+              AND pc.tenant_id = pa.tenant_id
+              AND pa.vendor_id IS NOT NULL
+              AND (pc.vendedor_id IS DISTINCT FROM pa.vendor_id)
+          `);
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS fin_planejamento (
               id             SERIAL PRIMARY KEY,

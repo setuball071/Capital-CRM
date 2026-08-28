@@ -29,6 +29,48 @@ const uploadDocMemory = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
+/**
+ * Propaga a troca de corretor da proposta para a produção já lançada.
+ * Sem isso, transferir um contrato DEPOIS de pago deixava o repasse e a
+ * contagem de produção no corretor antigo (a esteira mostrava um nome,
+ * o financeiro outro).
+ */
+async function sincronizarVendedorProducao(
+  tenantId: number,
+  proposalIds: number[],
+  novoVendorId: number | null,
+): Promise<number> {
+  if (!proposalIds.length) return 0;
+  let nomeVendedor: string | null = null;
+  if (novoVendorId) {
+    const [v] = await db.select({ name: users.name }).from(users).where(eq(users.id, novoVendorId)).limit(1);
+    nomeVendedor = v?.name || null;
+  }
+  // Vincula por proposalId e também pelo ADE (produção importada por CSV/relatório
+  // pode ter entrado antes do vínculo direto existir).
+  const props = await db
+    .select({ id: proposals.id, ade: proposals.ade, adeRefin: proposals.adeRefin })
+    .from(proposals)
+    .where(and(eq(proposals.tenantId, tenantId), inArray(proposals.id, proposalIds)));
+  const ades = props.flatMap((p) => [p.ade, p.adeRefin]).filter((a): a is string => !!a);
+
+  const cond = ades.length
+    ? sql`(${producoesContratos.proposalId} = ANY(${sql.raw(`ARRAY[${proposalIds.join(",")}]::int[]`)})
+           OR ${producoesContratos.contratoId} = ANY(${sql.raw(`ARRAY[${ades.map((a) => `'${a.replace(/'/g, "''")}'`).join(",")}]::varchar[]`)}))`
+    : sql`${producoesContratos.proposalId} = ANY(${sql.raw(`ARRAY[${proposalIds.join(",")}]::int[]`)})`;
+
+  const r = await db
+    .update(producoesContratos)
+    .set({
+      vendedorId: novoVendorId,
+      vendedorNome: nomeVendedor,
+      nomeCorretor: nomeVendedor ? nomeVendedor.trim().toUpperCase() : null,
+    })
+    .where(and(eq(producoesContratos.tenantId, tenantId), cond))
+    .returning({ id: producoesContratos.id });
+  return r.length;
+}
+
 // Content-Type simples por extensão (para servir o anexo com o tipo certo)
 function contentTypeFor(name: string): string {
   const ext = (name.split(".").pop() || "").toLowerCase();
@@ -1149,6 +1191,16 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
         .returning();
 
+      // Trocou o corretor? A produção já lançada precisa acompanhar.
+      let producaoSincronizada = 0;
+      if (vendorId !== undefined && current.vendorId !== updated.vendorId) {
+        try {
+          producaoSincronizada = await sincronizarVendedorProducao(tenantId, [id], updated.vendorId ?? null);
+        } catch (syncErr) {
+          console.error("[CONTRACTS] sincronizar vendedor na produção (non-fatal):", syncErr);
+        }
+      }
+
       await db.insert(proposalHistory).values({
         proposalId: id,
         fromStatus: current.status,
@@ -1158,7 +1210,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         performedBy: user.id,
       });
 
-      return res.json(updated);
+      return res.json({ ...updated, producaoSincronizada });
     } catch (e: any) {
       console.error("PATCH /api/contracts/proposals/:id error:", e);
       return res.status(500).json({ message: "Erro ao editar proposta" });
@@ -1452,6 +1504,14 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         .set({ vendorId: novoVendorId, updatedAt: new Date() })
         .where(and(inArray(proposals.id, okIds), eq(proposals.tenantId, tenantId)));
 
+      // Produção já lançada acompanha o novo corretor
+      let producaoSincronizada = 0;
+      try {
+        producaoSincronizada = await sincronizarVendedorProducao(tenantId, okIds, novoVendorId);
+      } catch (syncErr) {
+        console.error("[CONTRACTS] sincronizar vendedor na produção em lote (non-fatal):", syncErr);
+      }
+
       for (const r of rows) {
         await db.insert(proposalHistory).values({
           proposalId: r.id,
@@ -1463,7 +1523,7 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         });
       }
 
-      return res.json({ updated: rows.length });
+      return res.json({ updated: rows.length, producaoSincronizada });
     } catch (e: any) {
       console.error("POST /api/contracts/proposals/bulk-transfer error:", e);
       return res.status(500).json({ message: "Erro na transferência em lote" });
