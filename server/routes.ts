@@ -31430,7 +31430,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   // "tabelas" libera o catálogo de tabelas do Financeiro; "comissoes" acrescenta o
   // pctEmpresa nessa listagem. São separados de propósito: o WhatsApp CRM precisa
   // escolher a tabela, mas não pode ver quanto a empresa ganha (mesma regra da tela).
-  const ESCOPOS_VALIDOS = ["margens", "contratos", "tabelas", "comissoes"];
+  const ESCOPOS_VALIDOS = ["margens", "contratos", "tabelas", "comissoes", "propostas"];
   // Sem lista explícita a chave nasce com o par histórico — "tabelas" e "comissoes"
   // só entram quando pedidos, para não vazar preço/comissão numa chave antiga.
   const ESCOPOS_PADRAO = ["margens", "contratos"];
@@ -31729,6 +31729,8 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         nome: pessoa.nome,
         nascimento, // YYYY-MM-DD
         situacao_funcional: vinculoSelecionado.sitFunc ?? pessoa.sitFunc ?? null,
+        // Campo do cadastro de proposta — o vínculo sempre teve, a API não devolvia.
+        matricula: vinculoSelecionado.matricula ?? null,
         orgao: orgaoNome,
         orgao_codigo: orgaoCodigo,
         convenio: vinculoSelecionado.convenio ?? pessoa.convenio,

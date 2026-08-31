@@ -14,7 +14,9 @@ import {
   partners,
   producoesContratos,
   users,
+  userTenants,
 } from "../shared/schema";
+import { requireApiKey } from "./api-key-middleware";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { addToPortfolio } from "./portfolio";
 import { saveDocument, getDocument } from "./document-storage";
@@ -2243,4 +2245,330 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       return res.json({ count: 0 });
     }
   });
+
+  // ===================== API EXTERNA — PROPOSTAS =====================
+  // Consumida pelo WhatsApp CRM no modo em que a Manu cadastra a proposta a
+  // partir da conversa. Espelha as rotas internas; a diferença é a autenticação
+  // (chave de API em vez de sessão) e a resolução do autor, que sem sessão
+  // precisa ser explícita.
+
+  function exigirEscopo(req: any, res: any, escopo: string): boolean {
+    const escopos: string[] = req.apiKeyEscopos ?? [];
+    if (escopos.includes(escopo)) return true;
+    res.status(403).json({ error: `Chave sem escopo '${escopo}'.` });
+    return false;
+  }
+
+  /**
+   * Quem assina a proposta criada por chave de API.
+   * Com `vendedor_email`, resolve aquele usuário — desde que ele pertença ao
+   * tenant da chave. Sem ele, cai no admin mais antigo do tenant, para que a
+   * proposta sempre tenha autor e o vínculo de usuário siga sendo opcional.
+   */
+  async function resolverAutor(tenantId: number, email?: string): Promise<number | null> {
+    if (email) {
+      const [u] = await db
+        .select({ id: users.id })
+        .from(users)
+        .innerJoin(userTenants, eq(userTenants.userId, users.id))
+        .where(and(
+          sql`lower(${users.email}) = ${String(email).trim().toLowerCase()}`,
+          eq(users.isActive, true),
+          eq(userTenants.tenantId, tenantId),
+        ))
+        .limit(1);
+      return u?.id ?? null;
+    }
+    const [fallback] = await db
+      .select({ id: users.id })
+      .from(users)
+      .innerJoin(userTenants, eq(userTenants.userId, users.id))
+      .where(and(
+        eq(users.isActive, true),
+        eq(userTenants.tenantId, tenantId),
+        inArray(users.role, ["admin", "master", "operacional"]),
+      ))
+      .orderBy(asc(users.id))
+      .limit(1);
+    return fallback?.id ?? null;
+  }
+
+  // GET /api/external/v1/propostas?cpf=  — trava de duplicidade
+  app.get("/api/external/v1/propostas", requireApiKey, async (req: any, res) => {
+    try {
+      if (!exigirEscopo(req, res, "propostas")) return;
+      const tenantId: number = req.apiTenantId;
+      const cpf = String(req.query.cpf ?? "").replace(/\D/g, "");
+      if (cpf.length !== 11) return res.status(400).json({ error: "CPF inválido." });
+
+      const rows = await db
+        .select({
+          id: proposals.id,
+          cliente: proposals.clientName,
+          produto: proposals.product,
+          banco: proposals.bank,
+          valor: proposals.contractValue,
+          parcela: proposals.installmentValue,
+          prazo: proposals.term,
+          status: proposals.status,
+          ade: proposals.ade,
+          criada_em: proposals.createdAt,
+        })
+        .from(proposals)
+        // O CPF é gravado só com dígitos, mas cadastro antigo pode ter pontuação.
+        .where(and(
+          eq(proposals.tenantId, tenantId),
+          sql`regexp_replace(${proposals.clientCpf}, '\\D', '', 'g') = ${cpf}`,
+        ))
+        .orderBy(desc(proposals.createdAt));
+
+      const abertas = rows.filter((p) => !["PAGO", "CANCELADA", "REPROVADA"].includes(String(p.status)));
+      return res.json({ total: rows.length, em_aberto: abertas.length, propostas: rows });
+    } catch (e: any) {
+      console.error("[External API] GET propostas error:", e);
+      return res.status(500).json({ error: "Erro interno." });
+    }
+  });
+
+  // POST /api/external/v1/propostas — sempre em lote (uma proposta é lote de 1),
+  // para que portabilidade e contrato novo usem o mesmo formato.
+  app.post("/api/external/v1/propostas", requireApiKey, async (req: any, res) => {
+    try {
+      if (!exigirEscopo(req, res, "propostas")) return;
+      const tenantId: number = req.apiTenantId;
+      const { propostas: batch, observacao, vendedor_email } = req.body ?? {};
+
+      if (!Array.isArray(batch) || batch.length === 0) {
+        return res.status(400).json({ error: "Envie 'propostas' com pelo menos um item." });
+      }
+
+      const autorId = await resolverAutor(tenantId, vendedor_email);
+      if (!autorId) {
+        return res.status(400).json({
+          error: vendedor_email
+            ? `Usuário '${vendedor_email}' não encontrado neste ambiente.`
+            : "Nenhum usuário administrativo ativo neste ambiente para assinar a proposta.",
+        });
+      }
+
+      const obs = String(observacao || "").trim();
+      const criadas: any[] = [];
+      const recusadas: any[] = [];
+
+      for (const item of batch) {
+        const {
+          clientName, clientCpf, clientMatricula, clientConvenio,
+          bank, product, contractValue, installmentValue, term,
+          commissionPercentage, corretorCommissionPercentage, clientMeta, parceiroId,
+        } = item ?? {};
+
+        const cpfLimpo = String(clientCpf ?? "").replace(/\D/g, "");
+        if (!clientName || cpfLimpo.length !== 11) {
+          recusadas.push({ item, motivo: "Nome e CPF válido são obrigatórios." });
+          continue;
+        }
+
+        // Casamento de fluxo por banco + produto + convênio, igual à rota interna.
+        let matchedFlowId: number | null = null;
+        let firstStepId: number | null = null;
+        if (bank && product) {
+          const matchedFlows = await db
+            .select()
+            .from(contractFlows)
+            .where(and(
+              eq(contractFlows.tenantId, tenantId),
+              eq(contractFlows.isActive, true),
+              eq(contractFlows.bank, bank),
+              eq(contractFlows.product, product),
+              clientConvenio ? eq(contractFlows.convenio, clientConvenio) : sql`1=1`,
+            ))
+            .limit(1);
+          if (matchedFlows.length) {
+            matchedFlowId = matchedFlows[0].id;
+            const firstStep = await db
+              .select()
+              .from(contractFlowSteps)
+              .where(eq(contractFlowSteps.flowId, matchedFlowId))
+              .orderBy(asc(contractFlowSteps.stepOrder))
+              .limit(1);
+            firstStepId = firstStep.length ? firstStep[0].id : null;
+          }
+        }
+
+        const [proposal] = await db
+          .insert(proposals)
+          .values({
+            tenantId,
+            clientName,
+            clientCpf: cpfLimpo,
+            clientMatricula: clientMatricula || null,
+            clientConvenio: clientConvenio || null,
+            bank: bank || null,
+            product: product || null,
+            tableId: null,
+            contractValue: contractValue != null && contractValue !== "" ? String(contractValue) : null,
+            installmentValue: installmentValue != null && installmentValue !== "" ? String(installmentValue) : null,
+            term: term ? parseInt(String(term)) : null,
+            ade: null,
+            commissionPercentage: commissionPercentage != null && commissionPercentage !== ""
+              ? String(commissionPercentage) : null,
+            corretorCommissionPercentage: corretorCommissionPercentage != null && corretorCommissionPercentage !== ""
+              ? String(corretorCommissionPercentage) : null,
+            clientMeta: clientMeta || null,
+            parceiroId: parceiroId ? parseInt(String(parceiroId)) : null,
+            status: "CADASTRADA",
+            isPaused: false,
+            flowId: matchedFlowId,
+            currentStepId: firstStepId,
+            vendorId: autorId,
+            createdBy: autorId,
+          })
+          .returning();
+
+        await db.insert(proposalHistory).values({
+          proposalId: proposal.id,
+          toStatus: "CADASTRADA",
+          action: "AVANCO",
+          notes: obs ? `Cadastrada pelo WhatsApp CRM — ${obs}` : "Cadastrada pelo WhatsApp CRM",
+          performedBy: autorId,
+        });
+
+        // Refin de Portabilidade: proposta irmã só do troco, quando o banco paga
+        // saldo e troco separados. Mesma regra da rota interna em lote.
+        const rp = item.refinDePort;
+        const trocoNum = rp ? parseFloat(String(rp.troco || 0)) : 0;
+        if (rp && rp.tableId && trocoNum > 0) {
+          const metaBase = (clientMeta as Record<string, any>) || {};
+          const [refinProp] = await db
+            .insert(proposals)
+            .values({
+              tenantId,
+              clientName,
+              clientCpf: cpfLimpo,
+              clientMatricula: clientMatricula || null,
+              clientConvenio: clientConvenio || null,
+              bank: bank || null,
+              product: "REFIN_PORTABILIDADE",
+              tableId: null,
+              contractValue: String(trocoNum),
+              installmentValue: null,
+              term: rp.novoPrazo ? parseInt(String(rp.novoPrazo)) : (term ? parseInt(String(term)) : null),
+              ade: null,
+              commissionPercentage: rp.commissionPercentage != null && rp.commissionPercentage !== ""
+                ? String(rp.commissionPercentage) : null,
+              corretorCommissionPercentage: rp.corretorCommissionPercentage != null && rp.corretorCommissionPercentage !== ""
+                ? String(rp.corretorCommissionPercentage) : null,
+              clientMeta: {
+                ...metaBase,
+                tipoContrato: "REFIN_PORTABILIDADE",
+                tabelaFinanceiroId: rp.tableId,
+                tabelaNome: rp.tabelaNome || null,
+                refinDePortDe: proposal.id,
+              },
+              parceiroId: parceiroId ? parseInt(String(parceiroId)) : null,
+              status: "CADASTRADA",
+              isPaused: false,
+              vendorId: autorId,
+              createdBy: autorId,
+            })
+            .returning();
+
+          await db.insert(proposalHistory).values({
+            proposalId: refinProp.id,
+            toStatus: "CADASTRADA",
+            action: "AVANCO",
+            notes: `Criada automaticamente — Refin de Portabilidade (troco) da proposta #${proposal.id}`,
+            performedBy: autorId,
+          });
+
+          await db.update(proposals)
+            .set({ clientMeta: { ...metaBase, refinPropostaId: refinProp.id } })
+            .where(eq(proposals.id, proposal.id));
+
+          criadas.push(refinProp);
+        }
+
+        criadas.push(proposal);
+      }
+
+      if (criadas.length === 0) {
+        return res.status(400).json({ error: "Nenhuma proposta criada.", recusadas });
+      }
+
+      // Mesma notificação do cadastro pela tela — quem acompanha não fica sabendo
+      // menos por a proposta ter entrado pelo WhatsApp.
+      await notificarLoteCadastrado({
+        tenantId,
+        autorId,
+        propostas: criadas.map((p) => ({ id: p.id, clientName: p.clientName })),
+      });
+
+      return res.status(201).json({
+        total: criadas.length,
+        propostas: criadas.map((p) => ({ id: p.id, cliente: p.clientName, produto: p.product, status: p.status })),
+        ...(recusadas.length ? { recusadas } : {}),
+      });
+    } catch (e: any) {
+      console.error("[External API] POST propostas error:", e);
+      return res.status(500).json({ error: `Erro ao criar propostas: ${String(e?.message || e)}` });
+    }
+  });
+
+  // POST /api/external/v1/propostas/:id/documentos — anexa por chave de API.
+  app.post(
+    "/api/external/v1/propostas/:id/documentos",
+    requireApiKey,
+    uploadDocMemory.single("file"),
+    async (req: any, res) => {
+      try {
+        if (!exigirEscopo(req, res, "propostas")) return;
+        const tenantId: number = req.apiTenantId;
+        const proposalId = parseInt(req.params.id);
+        if (!Number.isFinite(proposalId)) return res.status(400).json({ error: "Proposta inválida." });
+        if (!req.file) return res.status(400).json({ error: "Arquivo não enviado." });
+
+        const documentType: string = req.body.documentType || "OUTRO";
+
+        const [proposal] = await db
+          .select({ id: proposals.id })
+          .from(proposals)
+          .where(and(eq(proposals.id, proposalId), eq(proposals.tenantId, tenantId)))
+          .limit(1);
+        if (!proposal) return res.status(404).json({ error: "Proposta não encontrada." });
+
+        const autorId = await resolverAutor(tenantId, req.body.vendedor_email);
+        if (!autorId) return res.status(400).json({ error: "Nenhum usuário para assinar o anexo." });
+
+        const ext = path.extname(req.file.originalname);
+        const fileName = `${documentType}-${Date.now()}${ext}`;
+        const objectPath = `proposals/${proposalId}/${fileName}`;
+
+        await saveDocument(
+          objectPath,
+          req.file.buffer,
+          req.file.mimetype || "application/octet-stream",
+        );
+
+        const [doc] = await db
+          .insert(proposalDocuments)
+          .values({
+            proposalId,
+            documentType,
+            fileUrl: "",
+            storageKey: objectPath,
+            fileName: req.file.originalname,
+            uploadedBy: autorId,
+          })
+          .returning();
+
+        const fileUrl = `/api/contracts/documents/${doc.id}/file`;
+        await db.update(proposalDocuments).set({ fileUrl }).where(eq(proposalDocuments.id, doc.id));
+
+        return res.status(201).json({ id: doc.id, nome: doc.fileName, tipo: doc.documentType });
+      } catch (e: any) {
+        console.error("[External API] POST documentos error:", e);
+        return res.status(500).json({ error: `Erro ao anexar: ${String(e?.message || e)}` });
+      }
+    },
+  );
 }
