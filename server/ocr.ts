@@ -86,6 +86,9 @@ export interface DocPhotoExtracted {
   dataExpedicao: string | null;
   orgaoEmissor: string | null;
   naturalidade: string | null;
+  // Impresso no RG e na CNH. Oportunista: só preenche o cadastro quando lido,
+  // e nunca entra na checagem de documento completo.
+  sexo: "MASCULINO" | "FEMININO" | null;
 }
 
 export function registerOcrRoutes(app: Express, requireAuth: Function) {
@@ -147,6 +150,8 @@ ESPECÍFICO DA CNH (a CNH tem VÁRIOS números — não confunda):
 - "dataExpedicao" é a "DATA EMISSÃO" (costuma estar no VERSO).
 - CNH NÃO POSSUI campo de naturalidade. Devolva "naturalidade": null. O campo "LOCAL" do verso é o local de EMISSÃO, não a naturalidade — nunca use ele.
 - "orgaoEmissor" da CNH é o DETRAN do estado emissor (ex.: DETRAN/BA).
+
+SEXO: o RG traz "SEXO" e a CNH traz "SEXO" (M ou F). Devolva "MASCULINO" ou "FEMININO" conforme o campo impresso. NÃO deduza pelo nome nem pela foto — sem o campo impresso e legível, devolva null.
 
 DÍGITOS — releia antes de responder:
 Para CPF, nº de registro e datas, releia dígito por dígito na imagem e confirme cada um. 1/7, 3/8, 5/6 e 0/8 se confundem em imagem de baixa resolução. Se restar dúvida em UM único dígito, devolva null no campo inteiro em vez de arriscar.`;
@@ -223,6 +228,11 @@ Formato exato:
             extracted.cpf = null;
           }
         }
+        // Sexo só é aceito nas duas formas que o cadastro entende — leitura torta
+        // ("M", "masc", nome próprio) vira null e o operador escolhe.
+        const sexoLido = String((extracted as any).sexo ?? "").trim().toUpperCase();
+        extracted.sexo = sexoLido === "MASCULINO" || sexoLido === "FEMININO" ? (sexoLido as any) : null;
+
         extracted.dataNascimento = dataPlausivel(extracted.dataNascimento, "nascimento");
         extracted.dataExpedicao = dataPlausivel(extracted.dataExpedicao, "expedicao");
 

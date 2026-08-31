@@ -462,6 +462,9 @@ export default function ContratosPropostaPage() {
     dataExpedicao: string | null;
     orgaoEmissor: string | null;
     naturalidade: string | null;
+    // Lido do RG/CNH quando o campo está impresso e legível. Oportunista: nunca
+    // entra em docFotoIsComplete, então documento sem sexo não trava a proposta.
+    sexo?: "MASCULINO" | "FEMININO" | null;
   }
   // Todos os campos do documento são obrigatórios — se a IA não leu algum, o usuário
   // precisa preencher manualmente antes de a proposta poder avançar.
@@ -564,6 +567,10 @@ export default function ContratosPropostaPage() {
           variant: "destructive",
         });
       }
+      // Sexo é o único campo do documento que alimenta o formulário direto —
+      // e só quando ainda está vazio, para não desfazer escolha do operador.
+      if (data.sexo && !form.getValues("clientSexo")) form.setValue("clientSexo", data.sexo);
+
       setDocPhotoData(data);
       if (docFotoIsComplete(data)) {
         setDocPhotoSource("ocr");
@@ -615,6 +622,7 @@ export default function ContratosPropostaPage() {
       if (savedDoc?.tipo) {
         // ✅ Dados já existem — usa sem chamar IA
         const cleaned = cleanDocNulls(savedDoc as DocPhotoData);
+        if (cleaned.sexo && !form.getValues("clientSexo")) form.setValue("clientSexo", cleaned.sexo);
         setDocPhotoData(cleaned);
         if (docFotoIsComplete(cleaned)) {
           setDocPhotoSource("cached");
@@ -674,6 +682,10 @@ export default function ContratosPropostaPage() {
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [bankMode, setBankMode] = useState<"select" | "text">("select");
+  // Nem toda operação exige e-mail. Marcado, o campo deixa de ser obrigatório e o
+  // cadastro guarda semEmail — que é diferente de vazio por esquecimento, e evita
+  // o endereço falso que virava e-mail de verdade na hora de disparar.
+  const [semEmail, setSemEmail] = useState(false);
   const [showComercial, setShowComercial] = useState(false);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [docDragOver, setDocDragOver] = useState(false);
@@ -957,6 +969,7 @@ export default function ContratosPropostaPage() {
                   filiacao:        docPhotoData.filiacao,
                   cpf:             docPhotoData.cpf,
                   naturalidade:    docPhotoData.naturalidade,
+                  sexo:            docPhotoData.sexo ?? null,
                 },
               }),
             }
@@ -989,6 +1002,7 @@ export default function ContratosPropostaPage() {
           // Contato
           ...(data.clientPhone ? { telefone: data.clientPhone } : {}),
           ...(data.clientEmail ? { email:    data.clientEmail } : {}),
+          ...(semEmail ? { semEmail: true } : {}),
           // Endereço
           ...(data.clientCep ? {
             endereco: {
@@ -1092,12 +1106,14 @@ export default function ContratosPropostaPage() {
           filiacao:       docPhotoData.filiacao,
           cpf:            docPhotoData.cpf,
           naturalidade:   docPhotoData.naturalidade,
+          sexo:           docPhotoData.sexo ?? null,
         };
       }
       if (v.clientSexo) sharedMeta.sexo = v.clientSexo;
       if (v.margemCliente) sharedMeta.margemCliente = v.margemCliente;
       if (v.clientPhone) sharedMeta.telefone = v.clientPhone;
       if (v.clientEmail) sharedMeta.email    = v.clientEmail;
+      if (semEmail) sharedMeta.semEmail = true;
       if (v.clientCep) {
         sharedMeta.endereco = {
           cep: v.clientCep, logradouro: v.clientLogradouro,
@@ -1365,6 +1381,8 @@ export default function ContratosPropostaPage() {
       contractValue: "", installmentValue: "", term: "",
       ade: "", commissionPercentage: "", corretorCommissionPercentage: "",
     });
+    // Cliente já cadastrado sem e-mail volta marcado assim, em vez de exigir de novo.
+    setSemEmail(!!meta.semEmail);
 
     // Adiciona todos os arquivos carregados à seção de Documentos
     setAttachments((prev) => {
@@ -1474,6 +1492,7 @@ export default function ContratosPropostaPage() {
       bank: "", product: "", tableId: "", contractValue: "", installmentValue: "", term: "",
       ade: "", commissionPercentage: "", corretorCommissionPercentage: "",
     });
+    setSemEmail(!!meta.semEmail);
     setStep("dados-cadastrais");
   }
 
@@ -2167,6 +2186,7 @@ export default function ContratosPropostaPage() {
                                 form.setValue("clientPhone", m.telefone);
                               if (!form.getValues("clientEmail") && m.email)
                                 form.setValue("clientEmail", m.email);
+                              if (m.semEmail) setSemEmail(true);
                               if (!form.getValues("clientCep") && en.cep) {
                                 form.setValue("clientCep",         en.cep);
                                 form.setValue("clientLogradouro",  en.logradouro  ?? "");
@@ -2245,11 +2265,31 @@ export default function ContratosPropostaPage() {
                 name="clientEmail"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>E-mail *</FormLabel>
+                    <FormLabel>{semEmail ? "E-mail" : "E-mail *"}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="email" placeholder="cliente@email.com" />
+                      <Input
+                        {...field}
+                        type="email"
+                        disabled={semEmail}
+                        placeholder={semEmail ? "cliente não tem e-mail" : "cliente@email.com"}
+                      />
                     </FormControl>
-                    <FormMessage />
+                    <label className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 cursor-pointer"
+                        checked={semEmail}
+                        onChange={(e) => {
+                          setSemEmail(e.target.checked);
+                          if (e.target.checked) {
+                            form.setValue("clientEmail", "");
+                            form.clearErrors("clientEmail");
+                          }
+                        }}
+                      />
+                      Cliente não tem e-mail
+                    </label>
+                    {!semEmail && <FormMessage />}
                   </FormItem>
                 )}
               />
@@ -2730,10 +2770,11 @@ export default function ContratosPropostaPage() {
               onClick={async () => {
                 const valid = await form.trigger([
                   "clientName", "clientCpf", "clientSexo",
-                  "clientPhone", "clientEmail",
+                  "clientPhone",
+                  ...(semEmail ? [] : ["clientEmail" as const]),
                   "clientCep", "clientLogradouro", "clientNumero",
                   "clientBairro", "clientCidade", "clientEstado",
-                ]);
+                ] as any);
                 if (!valid) {
                   // Foca o primeiro campo com erro para ajudar o usuário
                   const firstError = Object.keys(form.formState.errors)[0];
