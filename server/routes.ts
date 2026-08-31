@@ -31791,22 +31791,38 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const tipoAlvo = tipoQuery ? (rotuloDoProduto[norm(tipoQuery)] ?? tipoQuery) : "";
       const convenio = req.query.convenio ? norm(req.query.convenio) : "";
       const banco = req.query.banco ? norm(req.query.banco) : "";
-      const prazo = req.query.prazo ? String(req.query.prazo).replace(/\D/g, "") : "";
 
-      const filtradas = todas.filter((t) => {
-        if (t?.vigenciaFim) return false;                      // vigência fechada
-        if (tipoAlvo && norm(t.tipo) !== norm(tipoAlvo)) return false;
-        // Tabela sem convênio vale para todos — mesma regra da tela.
-        if (convenio && t.convenio && norm(t.convenio) !== convenio) return false;
-        if (banco && norm(t.banco) !== banco) return false;
-        if (prazo && String(t.prazo ?? "").replace(/\D/g, "") !== prazo) return false;
-        return true;
-      });
+      // Filtro em etapas para poder DIZER qual delas esvaziou. Lista vazia sem
+      // explicação manda quem chamou procurar tabela que existe.
+      // Prazo não filtra: a tela de proposta também não filtra por prazo, e
+      // fazer isso aqui derrubava tabelas boas em silêncio.
+      const unicos = (arr: any[]): string[] =>
+        arr.filter((v, i) => v && arr.indexOf(v) === i).map(String);
+      const vigentes = todas.filter((t) => !t?.vigenciaFim);
+      const porTipo = tipoAlvo
+        ? vigentes.filter((t) => norm(t.tipo) === norm(tipoAlvo))
+        : vigentes;
+      // Tabela sem convênio vale para todos — mesma regra da tela.
+      const porConvenio = convenio
+        ? porTipo.filter((t) => !t.convenio || norm(t.convenio) === convenio)
+        : porTipo;
+      const filtradas = banco
+        ? porConvenio.filter((t) => norm(t.banco) === banco)
+        : porConvenio;
 
       const verComissao = escopos.includes("comissoes");
 
       return res.json({
         total: filtradas.length,
+        // Diagnóstico: com isso quem chamou consegue dizer "existem N tabelas
+        // desse tipo, mas para estes outros bancos" em vez de só "nenhuma".
+        diagnostico: {
+          vigentes: vigentes.length,
+          por_tipo: porTipo.length,
+          por_convenio: porConvenio.length,
+          convenios_disponiveis: unicos(porTipo.map((t) => t.convenio)),
+          bancos_disponiveis: unicos(porConvenio.map((t) => t.banco)).sort(),
+        },
         tabelas: filtradas.map((t) => ({
           id: String(t.id),
           nome: t.nome ?? null,
