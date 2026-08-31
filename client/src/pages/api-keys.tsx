@@ -45,6 +45,9 @@ interface ApiKeyWithChave extends ApiKey {
 const ESCOPOS = [
   { id: "margens", label: "Margens", desc: "Margem 35%, cartão 5%, total 70%, salário" },
   { id: "contratos", label: "Contratos", desc: "Empréstimos ativos: banco, parcela, saldo devedor" },
+  { id: "tabelas", label: "Tabelas", desc: "Catálogo do Financeiro: banco, tipo, prazo e coeficiente" },
+  { id: "propostas", label: "Propostas", desc: "Consultar, cadastrar e anexar documento em proposta" },
+  { id: "comissoes", label: "Comissões", desc: "Acrescenta o % da empresa nas tabelas — só para uso interno" },
 ] as const;
 
 function formatDate(v: string | Date | null | undefined): string {
