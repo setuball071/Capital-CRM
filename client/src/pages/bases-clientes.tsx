@@ -158,7 +158,9 @@ export default function BasesClientes() {
   const [fastImportTipo, setFastImportTipo] = useState<string>("folha");
   const [fastImportConvenio, setFastImportConvenio] = useState("");
   const [fastImportCompetencia, setFastImportCompetencia] = useState("");
-  const [fastImportLayoutD8, setFastImportLayoutD8] = useState<string>("servidor");
+  // "" = detectar por arquivo (o backend identifica pelo campo m_instituidor),
+  // o que permite mandar servidor e pensionista na mesma fila
+  const [fastImportLayoutD8, setFastImportLayoutD8] = useState<string>("");
   const [fastImportRunId, setFastImportRunId] = useState<number | null>(null);
   const [fastImportStatus, setFastImportStatus] = useState<any>(null);
   const [isPolling, setIsPolling] = useState(false);
@@ -426,7 +428,7 @@ export default function BasesClientes() {
       formData.append("convenio", item.convenio);
       formData.append("competencia", item.competencia);
       if (item.tipo === "d8") {
-        formData.append("layout_d8", item.layoutD8);
+        if (item.layoutD8) formData.append("layout_d8", item.layoutD8);
         formData.append("banco", "DIVERSOS");
       }
 
@@ -586,7 +588,7 @@ export default function BasesClientes() {
     formData.append("convenio", fastImportConvenio);
     formData.append("competencia", fastImportCompetencia);
     if (fastImportTipo === "d8") {
-      formData.append("layout_d8", fastImportLayoutD8);
+      if (fastImportLayoutD8) formData.append("layout_d8", fastImportLayoutD8);
       formData.append("banco", "DIVERSOS");
     }
     
@@ -1869,15 +1871,21 @@ export default function BasesClientes() {
                 {fastImportTipo === "d8" && (
                   <div className="space-y-2">
                     <Label htmlFor="fast-layout">Layout D8</Label>
-                    <Select value={fastImportLayoutD8} onValueChange={setFastImportLayoutD8}>
+                    <Select value={fastImportLayoutD8 || "auto"} onValueChange={(v) => setFastImportLayoutD8(v === "auto" ? "" : v)}>
                       <SelectTrigger data-testid="select-fast-layout">
                         <SelectValue placeholder="Selecione o layout" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="auto">Detectar automaticamente (recomendado)</SelectItem>
                         <SelectItem value="servidor">Servidor</SelectItem>
                         <SelectItem value="pensionista">Pensionista (com Instituidor)</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {fastImportLayoutD8
+                        ? "Todos os arquivos da fila serão lidos neste layout."
+                        : "Cada arquivo é identificado pelo seu próprio cabeçalho — dá para mandar servidor e pensionista juntos."}
+                    </p>
                   </div>
                 )}
                 
