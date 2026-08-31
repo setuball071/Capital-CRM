@@ -31427,9 +31427,15 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   }
 
   // Escopos válidos que uma chave pode retornar (além dos dados básicos, sempre incluídos)
-  const ESCOPOS_VALIDOS = ["margens", "contratos"];
+  // "tabelas" libera o catálogo de tabelas do Financeiro; "comissoes" acrescenta o
+  // pctEmpresa nessa listagem. São separados de propósito: o WhatsApp CRM precisa
+  // escolher a tabela, mas não pode ver quanto a empresa ganha (mesma regra da tela).
+  const ESCOPOS_VALIDOS = ["margens", "contratos", "tabelas", "comissoes"];
+  // Sem lista explícita a chave nasce com o par histórico — "tabelas" e "comissoes"
+  // só entram quando pedidos, para não vazar preço/comissão numa chave antiga.
+  const ESCOPOS_PADRAO = ["margens", "contratos"];
   function sanitizeEscopos(input: any): string[] {
-    if (!Array.isArray(input)) return [...ESCOPOS_VALIDOS];
+    if (!Array.isArray(input)) return [...ESCOPOS_PADRAO];
     return ESCOPOS_VALIDOS.filter((e) => input.includes(e));
   }
 
@@ -31747,6 +31753,75 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       return res.json(resposta);
     } catch (err: any) {
       console.error("[External API] clientes/:cpf error:", err);
+      return res.status(500).json({ error: "Erro interno." });
+    }
+  });
+
+  // GET /api/external/v1/tabelas
+  // Catálogo de tabelas do Financeiro, filtrado do mesmo jeito que a tela de
+  // proposta filtra: só vigentes, por convênio, tipo, banco e prazo.
+  app.get("/api/external/v1/tabelas", requireApiKey, async (req: any, res) => {
+    try {
+      const escopos: string[] = req.apiKeyEscopos ?? [];
+      if (!escopos.includes("tabelas")) {
+        return res.status(403).json({ error: "Chave sem escopo 'tabelas'." });
+      }
+
+      const rows = await db
+        .select()
+        .from(financeiroConfig)
+        .where(eq(financeiroConfig.tenantId, String(req.apiTenantId)));
+      const todas: any[] = (rows[0]?.dados as any)?.tabelas ?? [];
+
+      // O chamador pode mandar o código do produto (PORTABILIDADE) ou o rótulo
+      // ("Portabilidade"). O catálogo guarda o rótulo.
+      const rotuloDoProduto: Record<string, string> = {
+        NOVO: "Novo",
+        PORTABILIDADE: "Portabilidade",
+        PORTABILIDADE_REFIN: "Portabilidade",
+        COMPRA_DIVIDA: "Portabilidade",
+        REFINANCIAMENTO: "Refinanciamento",
+        REFIN_PORTABILIDADE: "Refin de Portabilidade",
+        CARTAO: "Cartão",
+      };
+      const norm = (s: any) => String(s ?? "").trim().toUpperCase();
+      const tipoQuery = req.query.tipo ? String(req.query.tipo).trim() : "";
+      const tipoAlvo = tipoQuery ? (rotuloDoProduto[norm(tipoQuery)] ?? tipoQuery) : "";
+      const convenio = req.query.convenio ? norm(req.query.convenio) : "";
+      const banco = req.query.banco ? norm(req.query.banco) : "";
+      const prazo = req.query.prazo ? String(req.query.prazo).replace(/\D/g, "") : "";
+
+      const filtradas = todas.filter((t) => {
+        if (t?.vigenciaFim) return false;                      // vigência fechada
+        if (tipoAlvo && norm(t.tipo) !== norm(tipoAlvo)) return false;
+        // Tabela sem convênio vale para todos — mesma regra da tela.
+        if (convenio && t.convenio && norm(t.convenio) !== convenio) return false;
+        if (banco && norm(t.banco) !== banco) return false;
+        if (prazo && String(t.prazo ?? "").replace(/\D/g, "") !== prazo) return false;
+        return true;
+      });
+
+      const verComissao = escopos.includes("comissoes");
+
+      return res.json({
+        total: filtradas.length,
+        tabelas: filtradas.map((t) => ({
+          id: String(t.id),
+          nome: t.nome ?? null,
+          banco: t.banco ?? null,
+          convenio: t.convenio || null,
+          tipo: t.tipo ?? null,
+          prazo: t.prazo ?? null,
+          coeficiente: t.coef ?? null,
+          srcc: !!t.srcc,
+          remunera_menos_12: !!t.remuneraMenos12,
+          vigencia_inicio: t.vigenciaInicio ?? t.criadoEm ?? null,
+          // Percentual da empresa não trafega sem escopo próprio.
+          ...(verComissao ? { pct_empresa: t.pctEmpresa ?? null } : {}),
+        })),
+      });
+    } catch (err: any) {
+      console.error("[External API] tabelas error:", err);
       return res.status(500).json({ error: "Erro interno." });
     }
   });
