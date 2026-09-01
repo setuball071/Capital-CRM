@@ -31694,12 +31694,20 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             bruta: folhaAtual.margemBruta5 != null ? parseFloat(folhaAtual.margemBruta5) : null,
             utilizada: folhaAtual.margemUtilizada5 != null ? parseFloat(folhaAtual.margemUtilizada5) : null,
             saldo: credito5.saldo,
+            // O saldo acima já vem limitado pela margem global. Quem precisa do
+            // valor da faixa em si — para exibir como a Consulta exibe, ou para
+            // deduzir o utilizado quando `utilizada` vem vazia — tem que usar
+            // este, senão o limite entra na conta como se fosse consumo.
+            saldo_sem_limite: safeSaldoServer(
+              folhaAtual.margemSaldo5, folhaAtual.margemBruta5, folhaAtual.margemUtilizada5),
             limitado_por_global: credito5.limitadoPorGlobal,
           },
           cartao_beneficio_5: {
             bruta: folhaAtual.margemBeneficioBruta5 != null ? parseFloat(folhaAtual.margemBeneficioBruta5) : null,
             utilizada: folhaAtual.margemBeneficioUtilizada5 != null ? parseFloat(folhaAtual.margemBeneficioUtilizada5) : null,
             saldo: beneficio5.saldo,
+            saldo_sem_limite: safeSaldoServer(
+              folhaAtual.margemBeneficioSaldo5, folhaAtual.margemBeneficioBruta5, folhaAtual.margemBeneficioUtilizada5),
             limitado_por_global: beneficio5.limitadoPorGlobal,
           },
           total_70: {
