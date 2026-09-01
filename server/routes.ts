@@ -31751,6 +31751,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       if (escopos.includes("contratos")) {
         resposta.contratos = contratos.map((c) => ({
           tipo: c.tipoContrato,
+          // O tipo é gravado como código de rubrica. A tela da Consulta resolve
+          // pelo catálogo de nomenclaturas na hora de exibir; quem consome a API
+          // não tinha esse catálogo e ficava com "350661" na frente do operador.
+          tipo_nome: mapNomenclaturaServer(noms, "TIPO_CONTRATO", c.tipoContrato ?? null),
           banco: c.banco,
           valor_parcela: c.valorParcela ? parseFloat(c.valorParcela) : null,
           saldo_devedor: c.saldoDevedor ? parseFloat(c.saldoDevedor) : null,
