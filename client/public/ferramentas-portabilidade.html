@@ -2774,6 +2774,7 @@ function extrairMargemENome(texto, items, rotate) {
   let nome = '';
   let brutaFacult = null, utilFacult = null, utilCartao = null, utilCartaoBenef = null;
   let liquidaComp = null; // Líquida Compulsória — limitadora de todas as margens
+  let brutaCartao = null, brutaCartaoBenef = null; // margens próprias dos cartões (formato 35+5+5)
 
   for (let i = 0; i < linhas.length; i++) {
     const l = linhas[i];
@@ -2790,7 +2791,12 @@ function extrairMargemENome(texto, items, rotate) {
     if (brutaFacult === null && /Bruta\s+Facult/i.test(l)) {
       for (let j = i; j <= i + 2 && j < linhas.length; j++) {
         const vals = money(linhas[j]);
-        if (vals.length >= 6) { liquidaComp = vals[1]; brutaFacult = vals[2]; break; }
+        if (vals.length >= 6) {
+          liquidaComp = vals[1]; brutaFacult = vals[2];
+          brutaCartao = vals[4] ?? null;
+          brutaCartaoBenef = vals[6] ?? null;
+          break;
+        }
       }
     }
 
@@ -2809,10 +2815,18 @@ function extrairMargemENome(texto, items, rotate) {
     }
   }
 
+  // Formato 45% dividido (35 empréstimo + 5 cartão + 5 benefício), vigente desde a
+  // queda da MP da margem 40% (09/2026): cartão e benefício consomem as SUAS margens,
+  // não a de empréstimo. Subtrair os dois da facultativa gerava falso negativo.
   const margem = (brutaFacult !== null && utilFacult !== null)
-    ? brutaFacult - utilFacult - (utilCartao || 0) - (utilCartaoBenef || 0)
+    ? brutaFacult - utilFacult
     : null;
-  return { nome, brutaFacult, utilFacult, utilCartao, utilCartaoBenef, liquidaComp, margem };
+  const margemCartao = (brutaCartao !== null && utilCartao !== null)
+    ? brutaCartao - utilCartao : null;
+  const margemCartaoBenef = (brutaCartaoBenef !== null && utilCartaoBenef !== null)
+    ? brutaCartaoBenef - utilCartaoBenef : null;
+  return { nome, brutaFacult, utilFacult, utilCartao, utilCartaoBenef, liquidaComp,
+           brutaCartao, brutaCartaoBenef, margem, margemCartao, margemCartaoBenef };
 }
 
 // Pinta o painel de margem do extrato e, se negativa, alimenta os campos
@@ -2850,13 +2864,17 @@ function mostrarMargemExtrato(info) {
   box.innerHTML = `
     <div style="border:1px solid ${neg ? '#FECACA' : '#A7F3D0'};background:${neg ? '#FEF2F2' : '#ECFDF5'};border-radius:8px;padding:12px 16px;max-width:420px;">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin-bottom:6px;">Margem do cliente (extrato)</div>
-      ${linha('Bruta Facult. Global', info.brutaFacult, '')}
+      ${linha('Bruta Facultativa (empréstimo)', info.brutaFacult, '')}
       ${linha('Utilizada Facultativa', info.utilFacult, '−')}
-      ${linha('Utilizada Cartão', info.utilCartao || 0, '−')}
-      ${linha('Utilizada Cartão Benefício', info.utilCartaoBenef || 0, '−')}
       <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:${cor};border-top:1px solid ${neg ? '#FECACA' : '#A7F3D0'};margin-top:6px;padding-top:6px;">
-        <span>${neg ? '⚠️ Margem NEGATIVA' : '✅ Margem disponível'}</span><span>${fmt(info.margem)}</span>
+        <span>${neg ? '⚠️ Margem NEGATIVA' : '✅ Margem empréstimo'}</span><span>${fmt(info.margem)}</span>
       </div>
+      ${(info.margemCartao !== null || info.margemCartaoBenef !== null) ? `
+      <div style="border-top:1px dashed #D1D5DB;margin-top:8px;padding-top:6px;font-size:11px;color:#6B7280;">
+        Margens próprias (não consomem a de empréstimo):
+        ${info.margemCartao !== null ? `<div style="display:flex;justify-content:space-between;padding:1px 0;"><span>Cartão</span><span style="font-weight:600;color:${info.margemCartao < 0 ? '#DC2626' : '#374151'};">${fmt(info.margemCartao)}</span></div>` : ''}
+        ${info.margemCartaoBenef !== null ? `<div style="display:flex;justify-content:space-between;padding:1px 0;"><span>Cartão Benefício</span><span style="font-weight:600;color:${info.margemCartaoBenef < 0 ? '#DC2626' : '#374151'};">${fmt(info.margemCartaoBenef)}</span></div>` : ''}
+      </div>` : ''}
       ${neg ? `<div style="font-size:11px;color:#92400E;margin-top:6px;">Preenchido automaticamente em "Margem negativa atual" (Simples e Com Troco).</div>` : ''}
     </div>`;
   box.style.display = 'block';
