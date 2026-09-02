@@ -2984,7 +2984,10 @@ function extrairContratos(texto, items) {
     if (!line) continue;
 
     if (state === S.IDLE) {
-      if (RE_CONTRATO.test(line) && !RE_MMYYYY.test(line) && !RE_DATA.test(line) && line.length >= 6) {
+      // Mínimo 3 chars: contratos da CEF chegam com 4-5 dígitos (ex: 2430, 63476) e o
+      // filtro de 6 os descartava. 3 ainda barra os fragmentos de sequência (1 char)
+      // e prioridade (2 chars); um falso positivo morre no estado seguinte (exige rubrica).
+      if (RE_CONTRATO.test(line) && !RE_MMYYYY.test(line) && !RE_DATA.test(line) && line.length >= 3) {
         cur = { contrato: line }; state = S.RUB;
       }
     } else if (state === S.RUB) {
