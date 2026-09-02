@@ -394,6 +394,8 @@ export default function ContratosPropostaPage() {
   const [showManualConfirm,      setShowManualConfirm]      = useState(false);
   // Observação escrita na revisão (Conferência) — vai para o histórico da proposta
   const [obsCadastro,            setObsCadastro]            = useState("");
+  // Quantas propostas idênticas criar de uma vez (mesmo cliente, ADE diferente em cada)
+  const [qtdCopias,             setQtdCopias]              = useState(1);
 
   // ── Portabilidade em lote ────────────────────────────────────────────────────
   const [portContratos,    setPortContratos]    = useState<PortabilidadeContrato[]>([]);
@@ -898,7 +900,9 @@ export default function ContratosPropostaPage() {
 
   // ── Mutation ────────────────────────────────────────────────────────────────
   // Faz upload dos anexos para uma proposta; surfaça falhas (não engole silenciosamente)
-  async function uploadAttachments(proposalIdToUpload: number, atts: FileAttachment[]) {
+  // Devolve os ids dos documentos criados — as cópias reaproveitam esses ids
+  // (mesmo storage_key) em vez de subir os mesmos arquivos várias vezes.
+  async function uploadAttachments(proposalIdToUpload: number, atts: FileAttachment[]): Promise<number[]> {
     const results = await Promise.allSettled(
       atts.map((att) => {
         const fd = new FormData();
@@ -913,6 +917,7 @@ export default function ContratosPropostaPage() {
     );
     let failed = 0;
     let firstErr = "";
+    const ids: number[] = [];
     for (const r of results) {
       if (r.status === "rejected") {
         failed++;
@@ -923,6 +928,11 @@ export default function ContratosPropostaPage() {
           try { firstErr = (await r.value.json())?.message || `HTTP ${r.value.status}`; }
           catch { firstErr = `HTTP ${r.value.status}`; }
         }
+      } else {
+        try {
+          const doc = await r.value.json();
+          if (doc?.id) ids.push(Number(doc.id));
+        } catch { /* upload deu certo; só não deu pra ler o id */ }
       }
     }
     if (failed > 0) {
@@ -932,6 +942,7 @@ export default function ContratosPropostaPage() {
         variant: "destructive",
       });
     }
+    return ids;
   }
 
   const createMutation = useMutation({
@@ -975,6 +986,10 @@ export default function ContratosPropostaPage() {
             }
           : undefined;
 
+      // Cria UMA proposta. `ade` e `reuseDocIds` variam por cópia: a 1ª leva o ADE
+      // digitado e sobe os anexos; as demais nascem SEM ADE (cada contrato tem o
+      // seu, preenchido depois) e reaproveitam os mesmos arquivos.
+      const criarUma = async (adeDaCopia: string | undefined, docIds: number[] | undefined) => {
       const _res = await apiRequest("POST", "/api/contracts/proposals", {
         ...data,
         clientConvenio: selectedConvenio?.id,
@@ -982,9 +997,9 @@ export default function ContratosPropostaPage() {
         installmentValue: parseBrNumber(data.installmentValue),
         tableId: undefined, // FK aponta para coefficient_tables (legado) — não enviar; ID real fica em clientMeta
         term: data.term || undefined,
-        ade: data.ade || undefined,
+        ade: adeDaCopia,
         parceiroId: canSetParceiro && parceiroId ? parceiroId : undefined,
-        reuseDocIds: reusedDocs.length ? reusedDocs.map((d) => d.id) : undefined,
+        reuseDocIds: docIds && docIds.length ? docIds : (reusedDocs.length ? reusedDocs.map((d) => d.id) : undefined),
         observacao: obsCadastro.trim() || undefined, // vai para o histórico da proposta
         // Comissões calculadas a partir da tabela do Financeiro (não digitadas pelo usuário)
         commissionPercentage: selectedTabela?.pctEmpresa
@@ -1051,18 +1066,38 @@ export default function ContratosPropostaPage() {
           })(),
         } || undefined,
       });
-      const proposal: any = await _res.json();
+        return await _res.json();
+      };
 
-      // Upload dos anexos para a proposta criada
-      if (attachments.length > 0 && proposal?.id) {
-        await uploadAttachments(proposal.id, attachments);
+      const copias = Math.min(Math.max(1, Number(qtdCopias) || 1), 20);
+
+      // 1ª proposta: leva o ADE digitado e sobe os anexos de verdade
+      const primeira: any = await criarUma(data.ade || undefined, undefined);
+      let docIds: number[] = [];
+      if (attachments.length > 0 && primeira?.id) {
+        docIds = await uploadAttachments(primeira.id, attachments);
       }
 
-      return proposal;
+      // Cópias: sem ADE e reaproveitando os mesmos arquivos (nada sobe de novo)
+      const herdados = docIds.length
+        ? docIds
+        : (reusedDocs.length ? reusedDocs.map((d) => d.id) : []);
+      for (let i = 1; i < copias; i++) {
+        await criarUma(undefined, herdados.length ? herdados : undefined);
+      }
+
+      return { proposal: primeira, copias };
     },
-    onSuccess: () => {
+    onSuccess: (r: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
-      toast({ title: "Proposta cadastrada com sucesso!" });
+      toast({
+        title: r?.copias > 1
+          ? `${r.copias} propostas cadastradas com sucesso!`
+          : "Proposta cadastrada com sucesso!",
+        description: r?.copias > 1
+          ? "As cópias nasceram sem ADE — preencha o ADE de cada uma na ficha."
+          : undefined,
+      });
       setLocation("/contratos");
     },
     onError: (e: any) => {
@@ -4355,14 +4390,40 @@ export default function ContratosPropostaPage() {
                 : `✓ Cadastrar ${portContratos.length} Proposta(s)`}
             </Button>
           ) : (
-            <Button
-              type="button"
-              disabled={createMutation.isPending}
-              className="bg-green-600 hover:bg-green-700 text-white"
-              onClick={() => createMutation.mutate(form.getValues())}
-            >
-              {createMutation.isPending ? "Cadastrando..." : "✓ Confirmar e Cadastrar Proposta"}
-            </Button>
+            <>
+              {/* Cópias idênticas: mesmo cliente e mesmos valores, ADE de cada uma
+                  preenchida depois na ficha. Portabilidade não usa (já é em lote). */}
+              <div className="flex items-center gap-2">
+                <label htmlFor="qtd-copias" className="text-sm text-muted-foreground whitespace-nowrap">
+                  Quantidade
+                </label>
+                <Input
+                  id="qtd-copias"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={qtdCopias}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    setQtdCopias(isNaN(n) ? 1 : Math.min(Math.max(1, n), 20));
+                  }}
+                  className="w-20"
+                  data-testid="input-qtd-copias"
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={createMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => createMutation.mutate(form.getValues())}
+              >
+                {createMutation.isPending
+                  ? "Cadastrando..."
+                  : qtdCopias > 1
+                    ? `✓ Confirmar e Cadastrar ${qtdCopias} Propostas`
+                    : "✓ Confirmar e Cadastrar Proposta"}
+              </Button>
+            </>
           )}
         </div>
       </div>
