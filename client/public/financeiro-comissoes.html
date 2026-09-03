@@ -2850,7 +2850,7 @@ function renderTabelas(){
       <td>${badgesFlags(t)}</td>
       <td><span class="pct-corretor">${Number(pctCorr).toFixed(2).replace('.',',')}%</span> <span style="font-size:11px;color:var(--muted)">(${myRep}% repasse)</span></td>
       <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtData(t.vigenciaInicio||t.criadoEm)}${inat?` → ${fmtData(t.vigenciaFim)}`:''}${(t.historico&&t.historico.length)?` <span title="${t.historico.length} alteração(ões)" style="color:var(--accent);cursor:default">●</span>`:''}</td>
-      <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="abrirModalTabela('${t.id}')">Editar</button> ${inat
+      <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="abrirModalTabela('${t.id}')">Editar</button> <button class="btn btn-ghost btn-sm" title="Criar outra tabela com os mesmos dados (ex.: mudar só o tipo de cartão)" onclick="duplicarTabela('${t.id}')">⧉ Duplicar</button> ${inat
         ?`<button class="btn btn-ghost btn-sm" title="Reabrir vigência" onclick="reativarTabela('${t.id}')">↩ Reativar</button>`
         :`<button class="btn btn-ghost btn-sm" title="Fechar vigência (sai de uso, sem excluir)" onclick="inativarTabela('${t.id}')">⏸ Inativar</button>`} <button class="btn btn-danger btn-sm" onclick="excluirTabela('${t.id}')">Excluir</button></td>
     </tr>`;}
@@ -2962,6 +2962,26 @@ function atualizarPreviewTabela(){
     const extra=rep!==g.repasse?` <span style="font-size:10px;color:var(--accent)">(regra ${tipo}: ${rep}%)</span>`:'';
     return`<span style="margin-right:14px;color:var(--muted)">${g.nome} (${g.repasse}%)${extra} → <strong style="color:${g.cor}">${Number(flat).toFixed(2).replace('.',',')}%</strong></span>`;
   }).join('');
+}
+// Duplicar: a maioria dos bancos usa a mesma tabela para produtos diferentes,
+// então abre o modal de nova tabela já preenchido com os dados da original —
+// basta trocar o que muda (normalmente o tipo) e salvar.
+function duplicarTabela(id){
+  const t=tabelaById(id);if(!t)return;
+  abrirModalTabela(null);
+  document.getElementById('t-banco').value=t.banco||'';
+  document.getElementById('t-nome').value=t.nome||'';
+  document.getElementById('t-conv').value=t.convenio||'';
+  document.getElementById('t-tipo').value=t.tipo||'';
+  document.getElementById('t-prazo').value=t.prazo||'';
+  document.getElementById('t-coef').value=t.coef||'';
+  document.getElementById('t-pct').value=t.pctEmpresa||'';
+  document.getElementById('t-srcc').checked=!!t.srcc;
+  document.getElementById('t-rem12').checked=!!t.remuneraMenos12;
+  const ttl=document.getElementById('tab-modal-title');
+  if(ttl)ttl.textContent='Duplicar Tabela';
+  if(typeof atualizarPreviewTabela==='function')atualizarPreviewTabela();
+  const tp=document.getElementById('t-tipo');if(tp)tp.focus();
 }
 function salvarTabela(){
   // Normaliza para UPPER — evita duplicata de banco por diferença de maiúsculas/minúsculas
