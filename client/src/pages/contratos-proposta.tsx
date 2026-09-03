@@ -687,6 +687,9 @@ export default function ContratosPropostaPage() {
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [bankMode, setBankMode] = useState<"select" | "text">("select");
+  // Modalidade do cartão: consignado (RMC) x benefício (RCC). Não é persistida —
+  // serve para filtrar as tabelas, e o tipo real fica gravado na tabela escolhida.
+  const [cardModality, setCardModality] = useState<"RMC" | "RCC">("RMC");
   // Nem toda operação exige e-mail. Marcado, o campo deixa de ser obrigatório e o
   // cadastro guarda semEmail — que é diferente de vazio por esquecimento, e evita
   // o endereço falso que virava e-mail de verdade na hora de disparar.
@@ -809,7 +812,8 @@ export default function ContratosPropostaPage() {
       case "PORTABILIDADE_REFIN": return "Portabilidade";
       case "REFINANCIAMENTO": return "Refinanciamento";
       case "COMPRA_DIVIDA": return "Compra de Dívida";
-      case "CARTAO": return "Cartão";
+      case "CARTAO":
+        return cardModality === "RCC" ? "Cartão Benefício (RCC)" : "Cartão Consignado (RMC)";
       default: return null;
     }
   }
@@ -825,7 +829,11 @@ export default function ContratosPropostaPage() {
     return financeiroTabelas.filter((t: any) => {
       if (!tabelaAtiva(t)) return false;
       const okConv = !conv || (t.convenio || "").toUpperCase() === conv.toUpperCase();
-      const okTipo = !tipoAlvo || (t.tipo || "") === tipoAlvo;
+      // Cartão: além da modalidade escolhida, aceita as tabelas legadas cadastradas
+      // apenas como "Cartão" (antes de RMC/RCC existirem como tipos separados).
+      const tTipo = t.tipo || "";
+      const okTipo = !tipoAlvo || tTipo === tipoAlvo
+        || (contractType === "CARTAO" && tTipo === "Cartão");
       return okConv && okTipo;
     });
   })();
@@ -3285,6 +3293,26 @@ export default function ContratosPropostaPage() {
                   />
                 )}
 
+                {/* ── Modalidade do cartão: filtra as tabelas de RMC x RCC ── */}
+                {contractType === "CARTAO" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Modalidade do Cartão</label>
+                    <Select
+                      value={cardModality}
+                      onValueChange={(v) => {
+                        setCardModality(v as "RMC" | "RCC");
+                        form.setValue("tableId", "");
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="RMC">Cartão Consignado (RMC)</SelectItem>
+                        <SelectItem value="RCC">Cartão Benefício (RCC)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 {/* ── Banco credor / destino / emissor ── */}
                 <FormField
                   control={form.control}
@@ -3334,51 +3362,49 @@ export default function ContratosPropostaPage() {
                   )}
                 />
 
-                {/* ── Tabela (filtrada por convênio + tipo + banco; oculta em cartão) ── */}
-                {contractType !== "CARTAO" && (
-                  <FormField
-                    control={form.control}
-                    name="tableId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          Tabela
-                          {!watchedBank && (
-                            <span className="text-xs font-normal text-muted-foreground ml-1">(selecione o banco primeiro)</span>
-                          )}
-                        </FormLabel>
-                        <Select
-                          value={field.value}
-                          disabled={!watchedBank}
-                          onValueChange={(v) => {
-                            field.onChange(v);
-                            const tbl = filteredTables.find((t: any) => String(t.id) === v);
-                            if (tbl?.prazo) form.setValue("term", String(tbl.prazo));
-                          }}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={
-                                watchedBank && filteredTables.length === 0
-                                  ? "Nenhuma tabela para este banco"
-                                  : "Selecione..."
-                              } />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {filteredTables.map((t: any) => (
-                              <SelectItem key={t.id} value={String(t.id)}>
-                                {t.nome}
-                                {t.prazo ? ` · ${t.prazo}m` : ""}
-                                {t.coef ? ` · coef ${Number(t.coef).toFixed(5).replace(".", ",")}` : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )}
-                  />
-                )}
+                {/* ── Tabela (filtrada por convênio + tipo + banco) ── */}
+                <FormField
+                  control={form.control}
+                  name="tableId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Tabela
+                        {!watchedBank && (
+                          <span className="text-xs font-normal text-muted-foreground ml-1">(selecione o banco primeiro)</span>
+                        )}
+                      </FormLabel>
+                      <Select
+                        value={field.value}
+                        disabled={!watchedBank}
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          const tbl = filteredTables.find((t: any) => String(t.id) === v);
+                          if (tbl?.prazo) form.setValue("term", String(tbl.prazo));
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={
+                              watchedBank && filteredTables.length === 0
+                                ? "Nenhuma tabela para este banco"
+                                : "Selecione..."
+                            } />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {filteredTables.map((t: any) => (
+                            <SelectItem key={t.id} value={String(t.id)}>
+                              {t.nome}
+                              {t.prazo ? ` · ${t.prazo}m` : ""}
+                              {t.coef ? ` · coef ${Number(t.coef).toFixed(5).replace(".", ",")}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
 
                 {/* ── Prazo: auto-preenchido pela tabela no NOVO; editável nos demais ── */}
                 {contractType === "NOVO" ? (
@@ -3552,7 +3578,8 @@ export default function ContratosPropostaPage() {
                     toast({ title: "Selecione o banco", variant: "destructive" });
                     return;
                   }
-                  if (contractType !== "CARTAO" && !form.getValues("tableId")) {
+                  const exigeTabela = contractType !== "CARTAO" || filteredTables.length > 0;
+                  if (exigeTabela && !form.getValues("tableId")) {
                     toast({ title: "Selecione a tabela", variant: "destructive" });
                     return;
                   }

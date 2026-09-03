@@ -474,7 +474,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
     <input class="search" id="tb-busca" placeholder="🔍 Buscar tabela ou banco..." oninput="renderTabelas()"/>
     <select class="filter-select" id="tb-banco" onchange="renderTabelas()"><option value="">Todos os bancos</option></select>
     <select class="filter-select" id="tb-conv" onchange="renderTabelas()"><option value="">Todos convênios</option><option>SIAPE</option><option>INSS</option><option>Militar</option><option>Privado</option><option>Outro</option></select>
-    <select class="filter-select" id="tb-tipo" onchange="renderTabelas()"><option value="">Todos os tipos</option><option>Novo</option><option>Portabilidade</option><option>Refin de Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
+    <select class="filter-select" id="tb-tipo" onchange="renderTabelas()"><option value="">Todos os tipos</option><option>Novo</option><option>Portabilidade</option><option>Refin de Portabilidade</option><option>Cartão Consignado (RMC)</option><option>Cartão Benefício (RCC)</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
     <select class="filter-select" id="tb-prazo" onchange="renderTabelas()"><option value="">Todos os prazos</option></select>
     <select class="filter-select" id="tb-situacao" onchange="renderTabelas()">
       <option value="ativas">Ativas</option>
@@ -1024,7 +1024,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
           <select id="t-conv" onchange="atualizarPreviewTabela()"><option>SIAPE</option><option>INSS</option><option>Militar</option><option>Privado</option></select>
         </div>
         <div class="form-group"><label>Tipo</label>
-          <select id="t-tipo" onchange="atualizarPreviewTabela()"><option>Novo</option><option>Portabilidade</option><option>Refin de Portabilidade</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
+          <select id="t-tipo" onchange="atualizarPreviewTabela()"><option>Novo</option><option>Portabilidade</option><option>Refin de Portabilidade</option><option>Cartão Consignado (RMC)</option><option>Cartão Benefício (RCC)</option><option>Cartão</option><option>Refinanciamento</option><option>Compra de Dívida</option><option>Outro</option></select>
         </div>
       </div>
       <div class="form-grid-2">
@@ -1414,7 +1414,7 @@ function flatPct(c){
   if(!t||!cor)return 0;const tipo=t.tipo||c._tipo||'';return(t.pctEmpresa*corretorRepasse(cor,tipo))/100;
 }
 function tagConvenio(v){const m={SIAPE:'tag-siape',INSS:'tag-inss',Militar:'tag-militar',Privado:'tag-privado'};return`<span class="tag ${m[v]||'tag-outro'}">${v||'—'}</span>`;}
-function tagTipo(v){const m={Novo:'tag-novo',Portabilidade:'tag-port',Cartão:'tag-cartao',Refinanciamento:'tag-refin','Compra de Dívida':'tag-refin'};return`<span class="tag ${m[v]||'tag-outro'}">${v||'—'}</span>`;}
+function tagTipo(v){const m={Novo:'tag-novo',Portabilidade:'tag-port',Cartão:'tag-cartao','Cartão Consignado (RMC)':'tag-cartao','Cartão Benefício (RCC)':'tag-cartao',Refinanciamento:'tag-refin','Compra de Dívida':'tag-refin'};return`<span class="tag ${m[v]||'tag-outro'}">${v||'—'}</span>`;}
 function fmtCoef(v){return Number(v).toFixed(5).replace('.',',');}
 // Robusto: aceita DD/MM/AAAA (retorna como está), ISO AAAA-MM-DD (converte sem fuso) e timestamps
 function fmtData(iso){
@@ -3165,7 +3165,7 @@ function renderCorretores(){
 }
 // ── Regras de repasse por tipo de produto ─────────────────────
 // Tipos padrão do sistema — mesmos do campo "Tipo" nas tabelas
-const TIPOS_PADRAO=['Novo','Portabilidade','Refin de Portabilidade','Refinanciamento','Cartão','Compra de Dívida','Outro'];
+const TIPOS_PADRAO=['Novo','Portabilidade','Refin de Portabilidade','Refinanciamento','Cartão Consignado (RMC)','Cartão Benefício (RCC)','Cartão','Compra de Dívida','Outro'];
 function _tipoOpts(selected){
   return`<option value="">Selecione o tipo...</option>`+TIPOS_PADRAO.map(t=>`<option value="${t}"${t===selected?' selected':''}>${t}</option>`).join('');
 }
@@ -3179,12 +3179,19 @@ function getRepasseForTipo(grupo,tipo){
   if(!regra&&typeof mapTipoFront==='function'){
     const tipoStd=mapTipoFront(tipo);
     regra=rules.find(r=>r.tipo&&r.tipo===tipoStd);
+    // Regra antiga cadastrada como 'Cartão' cobre RMC e RCC enquanto o grupo
+    // não tiver exceção própria para a modalidade — evita cair no % padrão.
+    if(!regra&&String(tipoStd).startsWith('Cartão'))regra=rules.find(r=>r.tipo==='Cartão');
   }
   return regra!=null?Number(regra.repasse):Number(grupo.repasse);
 }
 function mapTipoFront(t){
   const s=(t||'').toLowerCase();
-  if(s.includes('cart')||s.includes('benef')||s.includes('saque'))return'Cartão';
+  // Cartão: benefício (RCC) x consignado (RMC). Genérico sem pista fica no
+  // 'Cartão' legado, que ainda casa com as regras de repasse já cadastradas.
+  if(s.includes('benef')||s.includes('rcc'))return'Cartão Benefício (RCC)';
+  if(s.includes('rmc'))return'Cartão Consignado (RMC)';
+  if(s.includes('cart')||s.includes('saque'))return'Cartão';
   // Refin de Portabilidade (troco pago separado, ex. Paraná) — testar ANTES de 'port'.
   // Começa com 'refin' p/ não capturar o legado PORTABILIDADE_REFIN (que é Portabilidade).
   if(s.startsWith('refin')&&s.includes('port'))return'Refin de Portabilidade';
