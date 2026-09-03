@@ -992,6 +992,8 @@ export default function ContratosListaPage() {
   // ── Somatória da produção por caixa ──────────────────────────────────────────
   // Regra: cancelados não somam; PAGO conta só se pago no mês corrente (paidAt);
   // demais status somam o valor do contrato integralmente.
+  // As exclusões abaixo espelham as do financeiro (/api/financeiro/producao) para
+  // que o total da esteira bata com o da produção e do dashboard.
   const CANCEL_STATUSES = ["CANCELADA", "PERDIDA"];
   const _now = new Date();
   const isCurrentMonth = (raw: any) => {
@@ -1006,6 +1008,12 @@ export default function ContratosListaPage() {
     if (tabelaId && tabelasRepasseZerado.has(String(tabelaId))) return 0; // tabela sem repasse (% Empresa = 0)
     const val = parseFloat(p.contractValue || "0") || 0;
     if (p.status === "PAGO") {
+      // Comissão zerada não é produção efetiva — a empresa não ganhou nada.
+      // Mesmo critério do financeiro, que já esconde esses contratos.
+      const comissao =
+        parseFloat(p.corretorCommissionValue || "0") ||
+        parseFloat(p.companyCommissionValue || "0") || 0;
+      if (comissao <= 0) return 0;
       return isCurrentMonth(p.paidAt || p.updatedAt) ? val : 0;
     }
     return val;

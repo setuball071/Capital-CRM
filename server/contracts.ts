@@ -992,10 +992,15 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         if (corretorPctInput !== undefined) updateData.corretorCommissionPercentage = String(corretorPctInput);
         if (corretorCommInput !== undefined) updateData.corretorCommissionValue = String(corretorCommInput);
         updateData.commissionStatus = "PENDENTE"; // aguarda recebimento do banco
-        // Data do pagamento: usa a informada (YYYY-MM-DD, pode ser anterior) ou hoje
-        updateData.paidAt = /^\d{4}-\d{2}-\d{2}$/.test(String(dataPagamentoInput || ""))
-          ? new Date(`${dataPagamentoInput}T12:00:00`)
-          : new Date();
+        // Data do pagamento: só é definida quando o contrato PASSA a pago, ou
+        // quando a data é informada explicitamente. Editar um contrato já pago
+        // (corrigir comissão, trocar corretor) não pode reescrever essa data —
+        // senão a produção migra de mês a cada atualização.
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(dataPagamentoInput || ""))) {
+          updateData.paidAt = new Date(`${dataPagamentoInput}T12:00:00`);
+        } else if (!current.paidAt) {
+          updateData.paidAt = new Date();
+        }
       }
 
       const [updated] = await db
@@ -1055,10 +1060,12 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             const [v] = await db.select({ name: users.name }).from(users).where(eq(users.id, updated.vendorId)).limit(1);
             vendedorNome = v?.name || null;
           }
-          // Data do pagamento: usa a informada (YYYY-MM-DD) ou hoje
-          const dPag = /^\d{4}-\d{2}-\d{2}$/.test(String(dataPagamentoInput || ""))
-            ? new Date(`${dataPagamentoInput}T12:00:00`)
-            : new Date();
+          // Data do pagamento: a MESMA que ficou gravada em paidAt. Nunca recalcula
+          // com "hoje" numa reedição, senão o contrato troca de mês de referência
+          // e a produção deixa de bater com a data em que foi realmente pago.
+          const dPag = updateData.paidAt instanceof Date
+            ? updateData.paidAt
+            : (current.paidAt ? new Date(current.paidAt) : new Date());
           const mesRef = `${dPag.getFullYear()}-${String(dPag.getMonth() + 1).padStart(2, "0")}`;
           // Dashboard lê a data via TO_DATE(data_pagamento,'DD/MM/YYYY') — gravar no formato BR
           const dataPag = `${String(dPag.getDate()).padStart(2, "0")}/${String(dPag.getMonth() + 1).padStart(2, "0")}/${dPag.getFullYear()}`;
