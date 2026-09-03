@@ -1533,6 +1533,7 @@ body { background: #F8F8FC !important; color: #111827 !important; }
             <th style="width:85px;">Taxa Atual</th>
             <th style="width:85px;" class="text-right">Parcela Atual</th>
             <th style="width:75px;text-align:center;">Prazo ✏️</th>
+            <th style="width:130px;text-align:center;" title="Banco destino do contrato — usa a taxa e o seguro cadastrados na regra dele">Banco Destino</th>
             <th style="width:100px;" class="text-right">Nova Parcela</th>
             <th style="width:90px;" class="text-right">Economia/mês</th>
           </tr>
@@ -6022,6 +6023,25 @@ function getContratosMarcados() {
 
 // ── PORTABILIDADE SIMPLES ──────────────────────────────
 
+// Na Portabilidade Simples, o contrato com banco destino escolhido usa a REGRA
+// daquele banco (taxa e seguro cadastrados); sem banco destino, cai na taxa/seguro
+// digitados no topo — preservando o comportamento de quem usa um banco só.
+function _regraSimplesDoContrato(c) {
+  if (!c || !c.bancoDestino) return null;
+  return regrasBancos.find(x => x.banco === c.bancoDestino) || null;
+}
+function _taxaSimplesDoContrato(c, taxaManual) {
+  const r = _regraSimplesDoContrato(c);
+  if (!r) return taxaManual;
+  if (r.taxaLivre) return Number(taxasLivres[r.banco]) || 0; // negociada (Caixa etc.)
+  return Number(r.taxaRefim) || 0;
+}
+function _fatorSeguroSimplesDoContrato(c, fatorManual) {
+  const r = _regraSimplesDoContrato(c);
+  if (!r) return fatorManual;
+  return 1 + (Number(r.seguro) || 0) / 100;
+}
+
 function calcSimples() {
   const taxa   = parseBR(document.getElementById('simpTaxa').value);
   const prazo  = parseInt(document.getElementById('simpPrazo').value) || 96;
@@ -6049,8 +6069,26 @@ function calcSimples() {
     if (saldoEfetivo <= 0) return; // quitado — não conta
     totalSaldo += saldoEfetivo;
     totalParcelaAtual += parseBR(c.parcela);
-    totalParcelaNova += taxa > 0 ? calcParcela(saldoEfetivo * fatorSeguro, taxa, prazo) : 0;
+    const taxaC = _taxaSimplesDoContrato(c, taxa);
+    const fsC   = _fatorSeguroSimplesDoContrato(c, fatorSeguro);
+    totalParcelaNova += taxaC > 0 ? calcParcela(saldoEfetivo * fsC, taxaC, prazo) : 0;
   });
+
+  // Bancos destino em uso — alimenta os campos de taxa negociada e o aviso do modo junto
+  const bancosSimples = Array.from(new Set(
+    marcados.filter(c => c.bancoDestino).map(c => c.bancoDestino)
+  ));
+  renderTaxasLivres();
+
+  if (modo === 'junto' && bancosSimples.length > 1) {
+    // Uma parcela única não combina bancos diferentes — cada banco emite o seu contrato
+    tb.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#D97706;padding:16px;font-size:13px;">
+      ⚠️ Há contratos com bancos destino diferentes (${bancosSimples.join(', ')}).
+      O modo <b>Junto</b> gera uma parcela única e não combina bancos — use <b>Separado (por contrato)</b>.
+    </td></tr>`;
+    document.getElementById('totaisSimples').style.display = 'none';
+    return;
+  }
 
   if (modo === 'junto') {
     // Modo junto: uma única linha com saldo e parcela consolidados
@@ -6079,7 +6117,9 @@ function calcSimples() {
       if (saldoEfetivo <= 0) return;
       const parcelaAtual = parseBR(c.parcela);
       const prazoInd = prazosSimpSeparado[idx] ?? prazo;
-      const parcelaNova = taxa > 0 ? calcParcela(saldoEfetivo * fatorSeguro, taxa, prazoInd) : 0;
+      const taxaC = _taxaSimplesDoContrato(c, taxa);
+      const fsC   = _fatorSeguroSimplesDoContrato(c, fatorSeguro);
+      const parcelaNova = taxaC > 0 ? calcParcela(saldoEfetivo * fsC, taxaC, prazoInd) : 0;
       linhasSimp.push({ banco: c.banco || '-', parcelaOriginal: parcelaAtual, parcelaTotal: parcelaNova });
       linhasSimpMarcadoIdx.push(idx);
     });
@@ -6096,7 +6136,9 @@ function calcSimples() {
       const saldo = saldoEfetivo;
       const parcelaAtual = parseBR(c.parcela);
       const prazoInd = prazosSimpSeparado[idx] ?? prazo;
-      const parcelaNova = taxa > 0 ? calcParcela(saldo * fatorSeguro, taxa, prazoInd) : 0;
+      const taxaC = _taxaSimplesDoContrato(c, taxa);
+      const fsC   = _fatorSeguroSimplesDoContrato(c, fatorSeguro);
+      const parcelaNova = taxaC > 0 ? calcParcela(saldo * fsC, taxaC, prazoInd) : 0;
       const economia = parcelaAtual - parcelaNova;
       totalParcelaNovaSep += parcelaNova;
 
@@ -6121,8 +6163,16 @@ function calcSimples() {
             style="width:56px;text-align:center;border:1px solid #DDD6FE;border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;color:#6C2BD9;"
             onchange="prazosSimpSeparado[${idx}]=parseInt(this.value)||prazo;calcSimples()">
         </td>
-        <td class="text-right" style="color:#16A34A;font-weight:600;">${taxa > 0 ? fmtBRL(parcelaNova) : '-'}</td>
-        <td class="text-right" style="color:${economia > 0 ? '#6C2BD9' : '#EF4444'};font-weight:600;">${taxa > 0 ? fmtBRL(economia) : '-'}${economiaExtra}</td>
+        <td style="text-align:center;">
+          <select onchange="setBancoDestino(${c.id}, this.value)"
+            style="width:120px;font-size:11px;padding:3px 4px;border:1px solid ${c.bancoDestino ? '#6C2BD9' : '#E5E7EB'};border-radius:4px;font-weight:${c.bancoDestino ? '700' : '400'};color:${c.bancoDestino ? '#6C2BD9' : '#6B7280'};">
+            <option value="">Taxa do topo</option>
+            ${regrasBancos.map(r => `<option value="${r.banco}" ${c.bancoDestino === r.banco ? 'selected' : ''}>${r.banco}</option>`).join('')}
+          </select>
+          ${c.bancoDestino ? `<div style="font-size:9px;color:#6C2BD9;margin-top:1px;">${fmtPct(taxaC)}%${fsC > 1 ? ' · seg ' + fmtPct((fsC-1)*100) + '%' : ''}</div>` : ''}
+        </td>
+        <td class="text-right" style="color:#16A34A;font-weight:600;">${taxaC > 0 ? fmtBRL(parcelaNova) : '-'}</td>
+        <td class="text-right" style="color:${economia > 0 ? '#6C2BD9' : '#EF4444'};font-weight:600;">${taxaC > 0 ? fmtBRL(economia) : '-'}${economiaExtra}</td>
       </tr>`;
     }).join('');
     // Atualiza totalParcelaNova para os totais abaixo
@@ -6562,13 +6612,28 @@ function salvarParaDigitacao() {
       taxa: c.taxa, saldo: c.saldo, acao: c.acao, portar: c.portar,
       numeroContrato: c.numero_contrato || ''
     })),
-    contratos_selecionados: marcados.map(c => ({
-      banco:          c.banco,
-      parcela:        c.parcela,
-      prazo:          c.prazo,
-      taxa:           c.taxa,
-      saldo:          c.saldo,
-      numeroContrato: c.numero_contrato || '',
+    contratos_selecionados: marcados.map(c => {
+      const bd = _bancoDoContrato(c) || banco || '';
+      const rBd = regrasBancos.find(x => x.banco === bd);
+      return {
+        banco:          c.banco,
+        parcela:        c.parcela,
+        prazo:          c.prazo,
+        taxa:           c.taxa,
+        saldo:          c.saldo,
+        numeroContrato: c.numero_contrato || '',
+        // Destino POR CONTRATO — permite portar parte para um banco e parte para outro
+        bancoDestino:   bd,
+        taxaDestino:    rBd ? (rBd.taxaLivre ? (Number(taxasLivres[rBd.banco]) || null) : Number(rBd.taxaRefim) || null) : null,
+      };
+    }),
+    // Resumo por banco destino (o CRM usa quando há mais de um banco na operação)
+    operacoes: _gruposPorBancoDestino(marcados.filter(c => c.acao !== 'quitar')).map(g => ({
+      banco_destino: g.banco,
+      taxa: g.regra ? (g.regra.taxaLivre ? (Number(taxasLivres[g.regra.banco]) || null) : Number(g.regra.taxaRefim) || null) : null,
+      seguro: g.regra ? (Number(g.regra.seguro) || 0) : 0,
+      contratos: g.contratos.map(c => c.numero_contrato || c.banco || ''),
+      qtd: g.contratos.length,
     })),
     resultado: _refimResult,
     margem_negativa: parseBR(document.getElementById('refimMargemNeg')?.value || '0') || null

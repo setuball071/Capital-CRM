@@ -253,6 +253,7 @@ interface SimulacaoPort {
   banco_destino?: string;
   contratos?: Array<{
     banco: string;
+    banco_destino?: string;  // destino POR contrato (simulacao com mais de um banco)
     numero_contrato: string;
     parcela_atual: number;
     prazo_restante: number;
@@ -274,6 +275,8 @@ interface SimulacaoPort {
     taxa: number;
     saldo: number;
     numeroContrato?: string;
+    bancoDestino?: string;   // destino POR contrato (simulacao com mais de um banco)
+    taxaDestino?: number;
   }>;
   resultado?: {
     modo?: string;
@@ -1281,6 +1284,9 @@ export default function ContratosPropostaPage() {
         );
         const rawBd = sim.banco_destino || "";
         const bdPort = availBanks.has(rawBd) ? rawBd : "";
+        // Cada contrato pode ir para um banco diferente. Usa o destino da linha quando
+        // ele existe e tem tabela de Portabilidade no convenio; senao cai no global.
+        const bdDoContrato = (b?: string) => (b && availBanks.has(b) ? b : bdPort);
 
         let novos: PortabilidadeContrato[] = [];
 
@@ -1298,7 +1304,7 @@ export default function ContratosPropostaPage() {
             fim:            "",
             taxa:           c.taxa_atual      ? String(c.taxa_atual)     : "",
             saldoDevedor:   c.saldo_devedor   ? String(c.saldo_devedor)  : "",
-            bancoDestino:   bdPort,
+            bancoDestino:   bdDoContrato(c.banco_destino),
             novaParcela:    c.nova_parcela    ? String(c.nova_parcela)   : "",
             troco:          c.troco           ? String(c.troco)          : "0",
             novoPrazo:      c.prazo_novo      ? String(c.prazo_novo)     : "",
@@ -1319,7 +1325,7 @@ export default function ContratosPropostaPage() {
               fim:            "",
               taxa:           c.taxa    ? String(c.taxa)    : "",
               saldoDevedor:   c.saldo   ? String(Math.round(c.saldo * 100) / 100) : "",
-              bancoDestino:   bdPort,
+              bancoDestino:   bdDoContrato(c.bancoDestino),
               novaParcela:    linha?.parcela ? String(Math.round(linha.parcela * 100) / 100) : "",
               troco:          linha?.troco   ? String(linha.troco) : "0",
               novoPrazo:      linha?.prazo   ? String(linha.prazo) : "",
