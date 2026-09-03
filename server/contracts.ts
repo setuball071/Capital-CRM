@@ -1076,6 +1076,9 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             tenantId, proposalId: id, contratoId: contratoIdVal,
             nomeCliente: current.clientName, cpfCliente: current.clientCpf,
             banco: updated.bank, tipoContrato: updated.product, convenio: current.clientConvenio,
+            // Meta e ranking somam cartão só por is_cartao; sem gravar aqui, cartão
+            // digitado no CRM entrava como false e sumia do card (o import já seta).
+            isCartao: /cart|saque complementar/i.test(String(updated.product || "")),
             prazo: updated.term ? String(updated.term) : null,
             vendedorId: updated.vendorId || null, vendedorNome,
             nomeCorretor: vendedorNome,

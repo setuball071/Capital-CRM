@@ -580,6 +580,16 @@ app.use((req, res, next) => {
               AND pa.vendor_id IS NOT NULL
               AND (pc.vendedor_id IS DISTINCT FROM pa.vendor_id)
           `);
+          // Cartão marcado PAGO no Operacional entrava na produção sem a flag
+          // is_cartao (só o import de planilha preenchia), então sumia do card
+          // Cartão da meta e do ranking. Recupera os já pagos pelo tipo.
+          await migDb.execute(migSql`
+            UPDATE producoes_contratos
+            SET is_cartao = true
+            WHERE COALESCE(is_cartao, false) = false
+              AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%'
+                   OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%saque complementar%')
+          `);
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS fin_planejamento (
               id             SERIAL PRIMARY KEY,

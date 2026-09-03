@@ -1123,7 +1123,7 @@ export default function ContratosListaPage() {
     const statusLabel = (k: string) => statusList.find((s) => s.key === k)?.label || k;
     const money = (v: any) => (parseFloat(v || "0") || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const header = ["#", "Órgão", "CPF", "Nome", "Corretor", "Tipo", "Banco", "Parcela", "Contrato", "ADE", "Status", "Parceiro", "Cadastro", "Última consulta"];
+    const header = ["#", "Órgão", "CPF", "Nome", "Corretor", "Tipo", "Banco", "Parcela", "Contrato", "ADE", "Status", "Pago em", "Parceiro", "Cadastro", "Última consulta"];
     const linhas = [header.map(esc).join(";")];
     for (const p of rows) {
       linhas.push([
@@ -1138,6 +1138,7 @@ export default function ContratosListaPage() {
         money(p.contractValue),
         p.ade || "",
         statusLabel(p.status),
+        p.paidAt ? new Date(p.paidAt).toLocaleDateString("pt-BR") : "",
         p.parceiroNome || "",
         p.createdAt ? new Date(p.createdAt).toLocaleDateString("pt-BR") : "",
         p.ultimaConsulta ? new Date(p.ultimaConsulta).toLocaleString("pt-BR") : "",
@@ -1639,6 +1640,11 @@ export default function ContratosListaPage() {
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <StatusBadge status={p.status} configMap={statusConfigMap} />
+                      {p.status === "PAGO" && p.paidAt && (
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap" title="Data do pagamento">
+                          {new Date(p.paidAt).toLocaleDateString("pt-BR")}
+                        </span>
+                      )}
                       {p.unificadaEmId && (
                         <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={`Unificada na proposta #${p.unificadaEmId}`}>Unificada</span>
                       )}

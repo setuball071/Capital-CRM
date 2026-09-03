@@ -23050,7 +23050,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           TO_DATE(data_pagamento, 'DD/MM/YYYY') as dia,
           COUNT(*)::int as quantidade,
           COALESCE(SUM(valor_base), 0)::numeric as valor_total,
-          COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as valor_cartao
+          COALESCE(SUM(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN valor_base ELSE 0 END), 0)::numeric as valor_cartao
         FROM producoes_contratos
         WHERE vendedor_id = ${userId}
           AND tenant_id = ${tenantId}
@@ -23091,9 +23091,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         SELECT
           COUNT(*)::int as total_contratos,
           COALESCE(SUM(valor_base), 0)::numeric as total_valor,
-          COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as total_cartao,
-          COALESCE(SUM(CASE WHEN is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as total_portabilidade,
-          COALESCE(SUM(CASE WHEN is_cartao = false AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as total_novo
+          COALESCE(SUM(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN valor_base ELSE 0 END), 0)::numeric as total_cartao,
+          COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as total_portabilidade,
+          COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as total_novo
         FROM producoes_contratos
         WHERE vendedor_id = ${userId}
           AND tenant_id = ${tenantId}
@@ -23253,9 +23253,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const allVendedoresRanking = await db.execute(sql`
         SELECT u.id as user_id,
-          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0)) AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
+          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0)) AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
           + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()}), 0)::numeric as prod_geral,
-          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND pc.is_cartao = true AND pc.pt_1000 > 0 AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0)) AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
+          COALESCE((SELECT SUM(pc.valor_base) FROM producoes_contratos pc WHERE pc.vendedor_id = u.id AND pc.tenant_id = ${tenantId} AND pc.mes_referencia = ${mesRef} AND pc.confirmado = true AND (pc.is_cartao = true OR LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%cart%') AND pc.comissao_repasse_valor > 0 AND NOT EXISTS (SELECT 1 FROM proposals pa WHERE pa.tenant_id = pc.tenant_id AND (pa.unificada_em_id IS NOT NULL OR EXISTS (SELECT 1 FROM financeiro_config fc CROSS JOIN LATERAL jsonb_array_elements(COALESCE(fc.dados->'tabelas','[]'::jsonb)) AS tb WHERE fc.tenant_id = pa.tenant_id::text AND (tb->>'id') = (pa.client_meta->>'tabelaFinanceiroId') AND COALESCE((tb->>'pctEmpresa')::numeric, 0) = 0)) AND (pa.id = pc.proposal_id OR pa.ade = pc.contrato_id))), 0)::numeric
           + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()} AND (LOWER(vc.tipo_operacao) LIKE '%cartão%' OR LOWER(vc.tipo_operacao) LIKE '%cartao%')), 0)::numeric as prod_cartao
         FROM users u
         INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
@@ -23437,11 +23437,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const prodResult = await db.execute(sql`
           SELECT
             COALESCE(SUM(valor_base), 0)::numeric as prod_total,
-            COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as prod_cartao,
-            COALESCE(SUM(CASE WHEN is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as prod_portabilidade,
-            COALESCE(SUM(CASE WHEN is_cartao = false AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as prod_novo,
+            COALESCE(SUM(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN valor_base ELSE 0 END), 0)::numeric as prod_cartao,
+            COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as prod_portabilidade,
+            COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as prod_novo,
             COUNT(*)::int as contratos_total,
-            COUNT(CASE WHEN is_cartao = true THEN 1 END)::int as contratos_cartao
+            COUNT(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN 1 END)::int as contratos_cartao
           FROM producoes_contratos
           WHERE vendedor_id = ${vendedorId}
             AND tenant_id = ${tenantId}
@@ -23712,11 +23712,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const prodResult = await db.execute(sql`
           SELECT
             COALESCE(SUM(valor_base), 0)::numeric as prod_total,
-            COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as prod_cartao,
-            COALESCE(SUM(CASE WHEN is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as prod_portabilidade,
-            COALESCE(SUM(CASE WHEN is_cartao = false AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as prod_novo,
+            COALESCE(SUM(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN valor_base ELSE 0 END), 0)::numeric as prod_cartao,
+            COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as prod_portabilidade,
+            COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as prod_novo,
             COUNT(*)::int as contratos_total,
-            COUNT(CASE WHEN is_cartao = true THEN 1 END)::int as contratos_cartao
+            COUNT(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN 1 END)::int as contratos_cartao
           FROM producoes_contratos
           WHERE vendedor_id = ${vendedorId}
             AND tenant_id = ${tenantId}
@@ -24083,7 +24083,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const totalGeralPCResult = await db.execute(sql`
         SELECT 
           COALESCE(SUM(valor_base), 0)::numeric as total,
-          COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END), 0)::numeric as total_cartao
+          COALESCE(SUM(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN valor_base ELSE 0 END), 0)::numeric as total_cartao
         FROM producoes_contratos
         WHERE vendedor_id = ${vendedorId}
           AND tenant_id = ${tenantId}
