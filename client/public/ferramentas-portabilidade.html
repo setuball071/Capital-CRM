@@ -2972,7 +2972,12 @@ function extrairContratos(texto, items) {
   const RE_PARCELA  = /^(\d+)\/(\d+)$/;
   const RE_DATA     = /^\d{2}\/\d{2}\/\d{4}/;
   const RE_MMYYYY   = /^\d{2}\/\d{4}$/;
-  const RE_CONTRATO = /^[A-Za-z0-9\-/.]+$/;
+  // Separadores (- / . espaco) sao aceitos apenas ENTRE grupos alfanumericos: a Caixa
+  // emite numero com espaco no meio ("1011 12492351"). Assim nao confunde com a linha
+  // da rubrica ("34113 - EMPREST BCO OFICIAL - CEF"), que tem " - " com espaco duplo.
+  // Exige ao menos um digito: sem isso, palavras do cabecalho ("Fim") entravam como
+  // contrato e desincronizavam a maquina de estados, comendo o registro seguinte.
+  const RE_CONTRATO = /^(?=.*\d)[A-Za-z0-9]+(?:[-/. ][A-Za-z0-9]+)*$/;
   const RE_SKIP     = /CARTAO CREDITO|CARTAO BENEFICIO|AMORT CARTAO/i;
 
   const S = {IDLE:0,RUB:1,SEQ:2,PRIOR:3,DATA:4,VALOR:5,PARCELA:6,INICIO:7,FIM:8};
