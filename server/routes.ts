@@ -25022,7 +25022,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const isMaster = req.user?.isMaster || req.user?.role === "master" || req.user?.role === "coordenacao";
       if (!isMaster) return res.status(403).json({ message: "Sem permissão" });
 
-      const { contratoIds, recebido, dataRecebimento } = req.body || {};
+      const { contratoIds, recebido, dataRecebimento, valorTotalRecebido, obsRecebimento } = req.body || {};
       if (!Array.isArray(contratoIds) || !contratoIds.length) {
         return res.status(400).json({ message: "contratoIds vazio" });
       }
@@ -25032,6 +25032,33 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       if (recebido) {
         const dt = dataRecebimento && /^\d{4}-\d{2}-\d{2}$/.test(String(dataRecebimento)) ? String(dataRecebimento) : null;
         const hoje = new Date().toISOString().slice(0, 10);
+
+        // Recebimento parcial: o parceiro abateu estorno/acordo do repasse. O valor
+        // informado é o total do lote, então é rateado entre os contratos na mesma
+        // proporção da comissão de cada um. O prêmio do consultor NÃO muda —
+        // compensar ou não é decisão do gestor, feita em Proventos e Descontos.
+        const totalInformado = Number(valorTotalRecebido);
+        if (valorTotalRecebido != null && Number.isFinite(totalInformado) && totalInformado >= 0) {
+          const linhas = await db
+            .select({ id: producoesContratos.id, comissao: producoesContratos.comissaoEmpresaValor })
+            .from(producoesContratos)
+            .where(and(eq(producoesContratos.tenantId, tenantId), inArray(producoesContratos.id, ids)));
+
+          const previsto = linhas.reduce((acc, l) => acc + (parseFloat(String(l.comissao || "0")) || 0), 0);
+          let distribuido = 0;
+          for (let i = 0; i < linhas.length; i++) {
+            const base = parseFloat(String(linhas[i].comissao || "0")) || 0;
+            // Última linha absorve o arredondamento para o rateio fechar no centavo.
+            const parte = i === linhas.length - 1
+              ? Math.round((totalInformado - distribuido) * 100) / 100
+              : (previsto > 0 ? Math.round((totalInformado * base / previsto) * 100) / 100 : 0);
+            distribuido += parte;
+            await db.update(producoesContratos)
+              .set({ valorRecebido: String(parte), obsRecebimento: obsRecebimento || null })
+              .where(and(eq(producoesContratos.tenantId, tenantId), eq(producoesContratos.id, linhas[i].id)));
+          }
+        }
+
         await db
           .update(producoesContratos)
           .set({
@@ -25046,7 +25073,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       } else {
         await db
           .update(producoesContratos)
-          .set({ dataRecebimento: null, parceiroRelatorio: null, status: "Importado" })
+          .set({ dataRecebimento: null, parceiroRelatorio: null, status: "Importado", valorRecebido: null, obsRecebimento: null })
           .where(and(eq(producoesContratos.tenantId, tenantId), inArray(producoesContratos.id, ids)));
       }
       return res.json({ ok: true, atualizados: ids.length });

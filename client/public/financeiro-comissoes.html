@@ -773,6 +773,33 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
 </div>
 
 <!-- Modal: Ajuste manual de repasse -->
+<div class="overlay" id="modal-recebimento">
+  <div class="modal" style="width:520px;max-width:97vw">
+    <div class="modal-header"><h3>✔ Confirmar Recebimento</h3><button class="modal-close" onclick="fecharModal('modal-recebimento')">✕</button></div>
+    <div class="modal-body">
+      <div id="rec-info" style="background:var(--surface2);padding:12px;border-radius:8px;margin-bottom:14px;font-size:13px"></div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Data do recebimento</label>
+        <input type="date" id="rec-data" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)"/>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Vazio = usa a data de pagamento de cada contrato.</div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Valor que entrou de fato (R$)</label>
+        <input type="number" id="rec-valor" step="0.01" min="0" oninput="atualizarPreviewRecebimento()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)"/>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Já vem com o previsto. Mude só se o parceiro abateu algo.</div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Motivo do abatimento (opcional)</label>
+        <textarea id="rec-obs" rows="2" placeholder="ex: estorno do contrato 12345, 2ª de 4 parcelas" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);resize:vertical"></textarea>
+      </div>
+      <div id="rec-preview" style="padding:12px;background:var(--surface2);border-radius:8px;font-size:13px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modal-recebimento')">Cancelar</button>
+      <button class="btn btn-green" id="rec-btn-salvar" onclick="salvarRecebimento()">Confirmar Recebimento</button>
+    </div>
+  </div>
+</div>
 <div class="overlay" id="modal-ajuste">
   <div class="modal" style="width:520px;max-width:97vw">
     <div class="modal-header"><h3>✏️ Ajustar Repasse</h3><button class="modal-close" onclick="fecharModal('modal-ajuste')">✕</button></div>
@@ -2239,12 +2266,17 @@ function renderTabelaProducaoAPI(data) {
   atualizarSetasProd();
 
   // Recalcula totais aplicando regra do grupo
-  let totVal = 0, totEmp = 0, totFlat = 0, totRecebido = 0, totAReceber = 0;
+  let totVal = 0, totEmp = 0, totFlat = 0, totRecebido = 0, totAReceber = 0, totAbatido = 0;
   lista.forEach(c => {
     totVal += parseFloat(c.valorBruto||0);
     const emp = parseFloat(c.comissaoEmpresaValor||0) || parseFloat(c.comissaoRepasseValor||0);
     totEmp += emp;
-    if (c.dataRecebimento) totRecebido += emp; else totAReceber += emp;
+    // Recebido conta o que entrou de fato quando houve abatimento do parceiro.
+    if (c.dataRecebimento) {
+      const real = c.valorRecebido != null ? (parseFloat(c.valorRecebido)||0) : emp;
+      totRecebido += real;
+      totAbatido += emp - real;
+    } else totAReceber += emp;
     const pct = calcRepasseConsultorProd(c);
     totFlat += Math.round(emp * pct / 100 * 100) / 100;
   });
@@ -2255,7 +2287,7 @@ function renderTabelaProducaoAPI(data) {
       <div class="kpi-card"><div class="kpi-label">Contratos</div><div class="kpi-value kpi-accent">${lista.length}</div></div>
       <div class="kpi-card"><div class="kpi-label">Produção (bruto)</div><div class="kpi-value kpi-green">${fmtBRL(totVal)}</div></div>
       <div class="kpi-card"><div class="kpi-label">Comissão A Receber</div><div class="kpi-value kpi-yellow">${fmtBRL(totAReceber)}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Comissão Recebida</div><div class="kpi-value kpi-green">${fmtBRL(totRecebido)}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Comissão Recebida</div><div class="kpi-value kpi-green">${fmtBRL(totRecebido)}</div>${totAbatido>0.005?`<div style="font-size:11px;color:var(--red);margin-top:2px">${fmtBRL(totAbatido)} abatido</div>`:''}</div>
       <div class="kpi-card"><div class="kpi-label">Val. Empresa</div><div class="kpi-value kpi-yellow">${fmtBRL(totEmp)}</div></div>
       <div class="kpi-card"><div class="kpi-label">Comissão Total (consultor)</div><div class="kpi-value kpi-blue">${fmtBRL(totFlat)}</div></div>
     `;
@@ -2279,8 +2311,11 @@ function renderTabelaProducaoAPI(data) {
     const pctFlat = valorBruto>0 ? (vf / valorBruto * 100) : 0;
     const stFlat = c.statusComissao || 'Aguardando';
     const bFlat = `<span class="badge ${stFlat==='Pago'?'b-pago':stFlat==='A Pagar'?'b-a-pagar':'b-aguardando'}">${stFlat==='A Pagar'?'A pagar':stFlat}</span>`;
+    // Abatimento do parceiro (estorno/acordo): mostra o que entrou de fato
+    const recReal = c.valorRecebido != null ? (parseFloat(c.valorRecebido)||0) : null;
+    const abatido = recReal != null ? Math.round((empValor - recReal)*100)/100 : 0;
     const bReceb = c.dataRecebimento
-      ? `<span class="badge b-recebido">Recebido</span><div class="td-muted" style="font-size:10px;margin-top:2px">${fmtData(c.dataRecebimento)}${c.parceiroRelatorio?' · '+escHtml(c.parceiroRelatorio):''}</div>`
+      ? `<span class="badge b-recebido">Recebido</span><div class="td-muted" style="font-size:10px;margin-top:2px">${fmtData(c.dataRecebimento)}${c.parceiroRelatorio?' · '+escHtml(c.parceiroRelatorio):''}</div>${Math.abs(abatido)>0.005?`<div style="font-size:10px;color:var(--red);margin-top:2px"${c.obsRecebimento?` title="${escHtml(c.obsRecebimento)}"`:''}>entrou ${fmtBRL(recReal)} · -${fmtBRL(abatido)}</div>`:''}`
       : `<span class="badge b-aguardando">A Receber</span>`;
     const corNome = c.vendedorNome || c.nomeCorretor || '—';
     const temOverride = !!((c.repassePercOverride!==null&&c.repassePercOverride!==undefined&&c.repassePercOverride!=='')||c.grupoIdOverride);
@@ -2337,20 +2372,77 @@ function atualizarBarraProducao(){
       <button class="btn btn-ghost btn-sm" onclick="desmarcarSelecionadosProd()">✕ Desmarcar</button>
     </div>`;
 }
+// Recebimento com valor real: o parceiro às vezes abate estorno ou parcela de
+// acordo, então o que entra na conta é menor que o previsto. O valor informado é
+// o total do lote e é rateado no backend, proporcional à comissão de cada
+// contrato. O prêmio do consultor não muda — compensar é decisão do gestor.
+let _recIds=[];
+function abrirModalRecebimento(ids){
+  _recIds=ids;
+  const previsto=ids.reduce((acc,id)=>{
+    const c=_producaoContratosCache.find(x=>Number(x.id)===Number(id));
+    if(!c)return acc;
+    return acc+(parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0)||0);
+  },0);
+  document.getElementById('rec-info').innerHTML=
+    `<b>${ids.length}</b> contrato${ids.length>1?'s':''} • Comissão prevista: <b class="v-accent">${fmtBRL(previsto)}</b>`;
+  document.getElementById('rec-data').value='';
+  document.getElementById('rec-obs').value='';
+  const inp=document.getElementById('rec-valor');
+  inp.value=previsto.toFixed(2);
+  inp.dataset.previsto=String(previsto);
+  atualizarPreviewRecebimento();
+  abrirModal('modal-recebimento');
+}
+function atualizarPreviewRecebimento(){
+  const inp=document.getElementById('rec-valor');
+  const previsto=parseFloat(inp.dataset.previsto||0)||0;
+  const recebido=parseFloat(inp.value||0)||0;
+  const dif=Math.round((previsto-recebido)*100)/100;
+  const el=document.getElementById('rec-preview');
+  if(Math.abs(dif)<0.01){
+    el.innerHTML=`<span style="color:var(--green)">✔ Recebimento integral — nada abatido.</span>`;
+  } else if(dif>0){
+    el.innerHTML=`<div style="display:flex;justify-content:space-between"><span>Abatido pelo parceiro:</span><b style="color:var(--red)">${fmtBRL(dif)}</b></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Fica registrado no contrato. O prêmio do consultor não muda — para descontar dele, use Proventos e Descontos.</div>`;
+  } else {
+    el.innerHTML=`<div style="display:flex;justify-content:space-between"><span>Recebido a mais:</span><b>${fmtBRL(-dif)}</b></div>`;
+  }
+}
+async function salvarRecebimento(){
+  const btn=document.getElementById('rec-btn-salvar');
+  const inp=document.getElementById('rec-valor');
+  const previsto=parseFloat(inp.dataset.previsto||0)||0;
+  const recebido=parseFloat(inp.value||0);
+  if(!Number.isFinite(recebido)||recebido<0){toast('Informe o valor recebido',true);return;}
+  const d=document.getElementById('rec-data').value;
+  btn.disabled=true;btn.textContent='Salvando...';
+  try{
+    const resp=await fetch('/api/financeiro/producao/recebimento',{
+      method:'PATCH',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        contratoIds:_recIds,recebido:true,
+        dataRecebimento:d||null,
+        // só grava valor quando difere do previsto — recebimento cheio não polui o dado
+        valorTotalRecebido:Math.abs(previsto-recebido)<0.01?null:recebido,
+        obsRecebimento:document.getElementById('rec-obs').value.trim()||null,
+      }),
+    });
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.message||'Erro');}
+    fecharModal('modal-recebimento');
+    toast(`${_recIds.length} contrato${_recIds.length>1?'s':''} marcado${_recIds.length>1?'s':''} como Recebido`);
+    _selectedProducao.clear();
+    carregarProducaoAPI();
+  }catch(e){toast('Erro: '+(e.message||e),true);}
+  finally{btn.disabled=false;btn.textContent='Confirmar Recebimento';}
+}
 async function marcarRecebido(recebido){
   const ids=[..._selectedProducao].map(Number);
   if(!ids.length){toast('Selecione ao menos um',true);return;}
+  // Marcar: passa pelo modal (data + valor real). Desfazer: direto.
+  if(recebido){abrirModalRecebimento(ids);return;}
   let dataRecebimento=null;
-  if(recebido){
-    const d=prompt('Data do recebimento (DD/MM/AAAA).\nDeixe vazio para usar a data de pagamento de cada contrato.','');
-    if(d===null)return;
-    const dt=d.trim();
-    if(dt){
-      const m=dt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-      if(!m){toast('Data inválida. Use DD/MM/AAAA',true);return;}
-      dataRecebimento=`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-    }
-  }
   try{
     const resp=await fetch('/api/financeiro/producao/recebimento',{
       method:'PATCH',credentials:'include',

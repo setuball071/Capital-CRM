@@ -2923,6 +2923,11 @@ export const producoesContratos = pgTable(
     // Recebimento da comissão pela empresa (confirmado via relatório de parceiro importado)
     dataRecebimento: varchar("data_recebimento", { length: 20 }),
     parceiroRelatorio: varchar("parceiro_relatorio", { length: 100 }),
+    // Quanto entrou de fato. Fica null quando recebeu o valor cheio; preenchido
+    // quando o parceiro abateu algo (estorno, acordo parcelado). Não altera o
+    // prêmio do consultor — compensação é decisão do gestor, em Proventos.
+    valorRecebido: decimal("valor_recebido", { precision: 14, scale: 2 }),
+    obsRecebimento: text("obs_recebimento"),
     // Status de pagamento ao consultor (fluxo interno):
     //   'Aguardando' | 'A Pagar' | 'Pago' | 'Cancelado'
     statusComissao: varchar("status_comissao", { length: 50 }).default("Aguardando"),

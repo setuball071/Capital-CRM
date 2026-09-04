@@ -580,6 +580,13 @@ app.use((req, res, next) => {
               AND pa.vendor_id IS NOT NULL
               AND (pc.vendedor_id IS DISTINCT FROM pa.vendor_id)
           `);
+          // Recebimento parcial: parceiro abate estorno/acordo da comissão.
+          await migDb.execute(migSql`
+            ALTER TABLE producoes_contratos ADD COLUMN IF NOT EXISTS valor_recebido DECIMAL(14,2)
+          `);
+          await migDb.execute(migSql`
+            ALTER TABLE producoes_contratos ADD COLUMN IF NOT EXISTS obs_recebimento TEXT
+          `);
           // Cartão marcado PAGO no Operacional entrava na produção sem a flag
           // is_cartao (só o import de planilha preenchia), então sumia do card
           // Cartão da meta e do ranking. Recupera os já pagos pelo tipo.
