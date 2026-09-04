@@ -96,6 +96,61 @@ REGRAS INEGOCIÁVEIS:
 5. NUNCA invente números, percentuais, nomes de banco ou regras que não estejam nos trechos.
 6. NUNCA abra com clichês de IA — proibido começar com "Boa pergunta", "Ótima pergunta", "Excelente pergunta", "Com certeza", "Claro!", "Fico feliz em ajudar", "Entendi sua dúvida" ou parecidos. Na maioria das vezes já vá DIRETO à resposta. Quando abrir com algo, varie e soe humano ("Olha,", "Então,", "Pra esse caso,", "É assim:", "Deixa eu te explicar,", "Bora lá,"), e nunca use sempre a mesma abertura. Cada resposta deve soar espontânea, não um modelo pronto.`;
 
+/** Regras de portabilidade vigentes no simulador, em texto para o prompt.
+ *  Os NUMEROS moram aqui (portability_bank_rules) e alimentam o calculo real —
+ *  o Jarvis precisa responder com eles, nao com o que um artigo antigo diz. */
+async function obterRegrasBancos(tenantId: number): Promise<string> {
+  try {
+    const r = await db.execute(sql`
+      SELECT banco,
+             entrada_min::float  AS "entradaMin",
+             taxa_refim::float   AS "taxaRefim",
+             saldo_min::float    AS "saldoMin",
+             min_troco::float    AS "minTroco",
+             taxa_livre          AS "taxaLivre",
+             COALESCE(seguro, 0)::float          AS "seguro",
+             COALESCE(pagas_min_portar, 0)       AS "pagasMinPortar",
+             COALESCE(pagas_min_remunerar, 0)    AS "pagasMinRemunerar",
+             COALESCE(une_saldo_negativo, false) AS "uneSaldoNegativo",
+             excecoes_origem                     AS "excecoesOrigem",
+             obs
+      FROM portability_bank_rules
+      WHERE tenant_id = ${tenantId}
+      ORDER BY banco
+    `);
+    const linhas = (r.rows as any[]).map((b) => {
+      const brl = (v: any) => `R$ ${(Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+      const pct = (v: any) => `${(Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}%`;
+      const partes = [
+        b.taxaLivre ? "taxa negociada (sem taxa fixa)" : `taxa refim ${pct(b.taxaRefim)} a.m.`,
+        `entrada mínima ${pct(b.entradaMin)} a.m.`,
+        `saldo mínimo ${brl(b.saldoMin)}`,
+        `troco mínimo ${brl(b.minTroco)}`,
+        `${b.pagasMinPortar} parcela(s) paga(s) para portar`,
+        `${b.pagasMinRemunerar} para remunerar`,
+      ];
+      if (Number(b.seguro) > 0) partes.push(`seguro prestamista ${pct(b.seguro)}`);
+      if (b.uneSaldoNegativo) partes.push("une saldo de vários contratos para cobrir margem negativa");
+      const exc = Array.isArray(b.excecoesOrigem) ? b.excecoesOrigem : [];
+      const excTxt = exc.length
+        ? ` Exceções por banco de origem: ${exc.map((e: any) => `${e.bancoOrigem} (porta com ${e.pagasMinPortar ?? 0}, remunera com ${e.pagasMinRemunerar ?? 0})`).join("; ")}.`
+        : "";
+      const obs = Array.isArray(b.obs) && b.obs.length
+        ? ` Observações: ${b.obs.map((o: any) => o.txt).filter(Boolean).join("; ")}.`
+        : "";
+      return `- ${b.banco}: ${partes.join(", ")}.${excTxt}${obs}`;
+    });
+    if (!linhas.length) return "";
+    return `\n\n===== REGRAS DE PORTABILIDADE EM VIGOR NO SIMULADOR =====\n` +
+      `Estes são os parâmetros que o simulador usa HOJE para calcular. Se um trecho da base ` +
+      `disser número diferente, avise que há divergência e trate estes como os vigentes.\n` +
+      linhas.join("\n");
+  } catch (err) {
+    console.warn("[assistente] não foi possível carregar regras de bancos:", err);
+    return ""; // nunca derruba o chat por causa disso
+  }
+}
+
 async function obterPersona(): Promise<string> {
   try {
     const [row] = await db
@@ -563,7 +618,8 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
         .map((c, i) => `[${i + 1}] (Artigo: "${c.titulo}"${c.banco ? `, Banco: ${c.banco}` : ""})\n${c.texto}`)
         .join("\n\n---\n\n");
       const persona = await obterPersona();
-      const system = `${persona}\n\n===== TRECHOS DA BASE DE CONHECIMENTO =====\n${trechos}`;
+      const regrasBancos = await obterRegrasBancos(req.tenantId);
+      const system = `${persona}\n\n===== TRECHOS DA BASE DE CONHECIMENTO =====\n${trechos}${regrasBancos}`;
 
       let resposta = "";
       const timer = setTimeout(() => ac.abort(), 45_000); // teto duro de 45s (upstream travado)

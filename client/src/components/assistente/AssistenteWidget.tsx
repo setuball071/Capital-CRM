@@ -54,6 +54,27 @@ export default function AssistenteWidget() {
   // Proposta nova cadastrada por outro usuário ABRE o painel sozinha: quem cuida
   // do andamento precisa ver na hora, não quando lembrar de clicar no balão.
   // Só na transição (id novo) — reabrir depois de o usuário fechar seria brigar com ele.
+  // Simulador de Portabilidade (iframe) avisa qual banco foi escolhido: abre o
+  // Jarvis ja perguntando as regras daquele banco. Guarda o ultimo para nao
+  // repetir a pergunta se o usuario voltar ao mesmo banco.
+  const ultimoBancoRef = useRef<string | null>(null);
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type !== "CAPITAL_CRM_JARVIS_BANCO") return;
+      const banco = String(e.data.banco || "").trim();
+      if (!banco || banco === ultimoBancoRef.current) return;
+      ultimoBancoRef.current = banco;
+      setAberto(true);
+      enviar(
+        `Regras do ${banco} para portabilidade: quem ele aceita e quem nao aceita, ` +
+        `travas, carencias, excecoes por banco de origem e qualquer detalhe que eu ` +
+        `precise saber antes de montar a proposta.`
+      );
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [enviar]);
+
   const ultimoAbertoRef = useRef<number | null>(null);
   useEffect(() => {
     const nova = avisos.find((a) => a.tipo === "proposta_cadastrada");

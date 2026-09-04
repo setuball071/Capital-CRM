@@ -6260,7 +6260,15 @@ function onBancoChange() {
   info.style.display = '';
   renderRefimContratos();
   calcRefim();
+
+  // Abre o Jarvis com as regras deste banco (quem aceita, travas, excecoes).
+  // So dispara quando o banco realmente muda, para nao reabrir a cada recalculo.
+  if (nome && nome !== _ultimoBancoJarvis && window.parent !== window) {
+    _ultimoBancoJarvis = nome;
+    window.parent.postMessage({ type: 'CAPITAL_CRM_JARVIS_BANCO', banco: nome }, '*');
+  }
 }
+let _ultimoBancoJarvis = '';
 
 // Chamar quando o CONJUNTO de contratos marcados muda (checkbox, excluir, trocar banco):
 // reseta os trocos/prazos por contrato porque os índices deixam de fazer sentido.
