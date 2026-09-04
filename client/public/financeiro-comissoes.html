@@ -773,30 +773,30 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
 </div>
 
 <!-- Modal: Ajuste manual de repasse -->
-<div class="overlay" id="modal-recebimento">
+<div class="overlay" id="modal-receb-lote">
   <div class="modal" style="width:520px;max-width:97vw">
-    <div class="modal-header"><h3>✔ Confirmar Recebimento</h3><button class="modal-close" onclick="fecharModal('modal-recebimento')">✕</button></div>
+    <div class="modal-header"><h3>✔ Confirmar Recebimento</h3><button class="modal-close" onclick="fecharModal('modal-receb-lote')">✕</button></div>
     <div class="modal-body">
-      <div id="rec-info" style="background:var(--surface2);padding:12px;border-radius:8px;margin-bottom:14px;font-size:13px"></div>
+      <div id="recl-info" style="background:var(--surface2);padding:12px;border-radius:8px;margin-bottom:14px;font-size:13px"></div>
       <div style="margin-bottom:14px">
         <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Data do recebimento</label>
-        <input type="date" id="rec-data" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)"/>
+        <input type="date" id="recl-data" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)"/>
         <div style="font-size:11px;color:var(--muted);margin-top:4px">Vazio = usa a data de pagamento de cada contrato.</div>
       </div>
       <div style="margin-bottom:14px">
         <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Valor que entrou de fato (R$)</label>
-        <input type="number" id="rec-valor" step="0.01" min="0" oninput="atualizarPreviewRecebimento()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)"/>
+        <input type="number" id="recl-valor" step="0.01" min="0" oninput="atualizarPreviewRecebimento()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)"/>
         <div style="font-size:11px;color:var(--muted);margin-top:4px">Já vem com o previsto. Mude só se o parceiro abateu algo.</div>
       </div>
       <div style="margin-bottom:14px">
         <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Motivo do abatimento (opcional)</label>
-        <textarea id="rec-obs" rows="2" placeholder="ex: estorno do contrato 12345, 2ª de 4 parcelas" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);resize:vertical"></textarea>
+        <textarea id="recl-obs" rows="2" placeholder="ex: estorno do contrato 12345, 2ª de 4 parcelas" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);resize:vertical"></textarea>
       </div>
-      <div id="rec-preview" style="padding:12px;background:var(--surface2);border-radius:8px;font-size:13px"></div>
+      <div id="recl-preview" style="padding:12px;background:var(--surface2);border-radius:8px;font-size:13px"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="fecharModal('modal-recebimento')">Cancelar</button>
-      <button class="btn btn-green" id="rec-btn-salvar" onclick="salvarRecebimento()">Confirmar Recebimento</button>
+      <button class="btn btn-ghost" onclick="fecharModal('modal-receb-lote')">Cancelar</button>
+      <button class="btn btn-green" id="recl-btn-salvar" onclick="salvarRecebimento()">Confirmar Recebimento</button>
     </div>
   </div>
 </div>
@@ -2384,22 +2384,22 @@ function abrirModalRecebimento(ids){
     if(!c)return acc;
     return acc+(parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0)||0);
   },0);
-  document.getElementById('rec-info').innerHTML=
+  document.getElementById('recl-info').innerHTML=
     `<b>${ids.length}</b> contrato${ids.length>1?'s':''} • Comissão prevista: <b class="v-accent">${fmtBRL(previsto)}</b>`;
-  document.getElementById('rec-data').value='';
-  document.getElementById('rec-obs').value='';
-  const inp=document.getElementById('rec-valor');
+  document.getElementById('recl-data').value='';
+  document.getElementById('recl-obs').value='';
+  const inp=document.getElementById('recl-valor');
   inp.value=previsto.toFixed(2);
   inp.dataset.previsto=String(previsto);
   atualizarPreviewRecebimento();
-  abrirModal('modal-recebimento');
+  abrirModal('modal-receb-lote');
 }
 function atualizarPreviewRecebimento(){
-  const inp=document.getElementById('rec-valor');
+  const inp=document.getElementById('recl-valor');
   const previsto=parseFloat(inp.dataset.previsto||0)||0;
   const recebido=parseFloat(inp.value||0)||0;
   const dif=Math.round((previsto-recebido)*100)/100;
-  const el=document.getElementById('rec-preview');
+  const el=document.getElementById('recl-preview');
   if(Math.abs(dif)<0.01){
     el.innerHTML=`<span style="color:var(--green)">✔ Recebimento integral — nada abatido.</span>`;
   } else if(dif>0){
@@ -2410,12 +2410,12 @@ function atualizarPreviewRecebimento(){
   }
 }
 async function salvarRecebimento(){
-  const btn=document.getElementById('rec-btn-salvar');
-  const inp=document.getElementById('rec-valor');
+  const btn=document.getElementById('recl-btn-salvar');
+  const inp=document.getElementById('recl-valor');
   const previsto=parseFloat(inp.dataset.previsto||0)||0;
   const recebido=parseFloat(inp.value||0);
   if(!Number.isFinite(recebido)||recebido<0){toast('Informe o valor recebido',true);return;}
-  const d=document.getElementById('rec-data').value;
+  const d=document.getElementById('recl-data').value;
   btn.disabled=true;btn.textContent='Salvando...';
   try{
     const resp=await fetch('/api/financeiro/producao/recebimento',{
@@ -2426,11 +2426,11 @@ async function salvarRecebimento(){
         dataRecebimento:d||null,
         // só grava valor quando difere do previsto — recebimento cheio não polui o dado
         valorTotalRecebido:Math.abs(previsto-recebido)<0.01?null:recebido,
-        obsRecebimento:document.getElementById('rec-obs').value.trim()||null,
+        obsRecebimento:document.getElementById('recl-obs').value.trim()||null,
       }),
     });
     if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.message||'Erro');}
-    fecharModal('modal-recebimento');
+    fecharModal('modal-receb-lote');
     toast(`${_recIds.length} contrato${_recIds.length>1?'s':''} marcado${_recIds.length>1?'s':''} como Recebido`);
     _selectedProducao.clear();
     carregarProducaoAPI();
