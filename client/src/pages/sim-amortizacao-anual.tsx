@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 
 // ── Tabela Price ───────────────────────────────────────────────────────
 function pmt(pv: number, i: number, n: number): number {
@@ -15,6 +15,15 @@ function saldoApos(parcela: number, i: number, restantes: number): number {
 
 const fmtR = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtN = (v: number, d = 2) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+/** Máscara de digitação 000.000.000-00 */
+function formatarCpf(v: string): string {
+  const d = (v || "").replace(/\D/g, "").slice(0, 11);
+  return d
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+}
+
 function parseBR(v: string): number {
   const t = (v || "").trim();
   if (!t) return 0;
@@ -44,6 +53,97 @@ export default function SimAmortizacaoAnual() {
   const [taxaStr, setTaxaStr] = useState("1,80");
   const [iofStr, setIofStr] = useState("3,7");
   const [prazoStr, setPrazoStr] = useState("96");
+
+  // ── Salvar / retomar simulação (mesma tabela do simulador de portabilidade,
+  //    marcada com tipoSimulador para os dois não misturarem as listas) ──
+  const [cpf, setCpf] = useState("");
+  const [nomeCliente, setNomeCliente] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [salvas, setSalvas] = useState<any[]>([]);
+  const [statusSalvar, setStatusSalvar] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const cpfLimpo = cpf.replace(/\D/g, "");
+
+  const buscarSalvas = useCallback(async (doc: string) => {
+    const limpo = (doc || "").replace(/\D/g, "");
+    if (limpo.length !== 11) { setSalvas([]); return 0; }
+    try {
+      const r = await fetch(`/api/cotacoes-simulador?cpf=${encodeURIComponent(formatarCpf(limpo))}`, { credentials: "include" });
+      if (!r.ok) { setSalvas([]); return 0; }
+      const lista = await r.json();
+      const so = (Array.isArray(lista) ? lista : []).filter((c: any) => c.tipoSimulador === "amortizacao-anual");
+      setSalvas(so);
+      return so.length;
+    } catch { setSalvas([]); return 0; }
+  }, []);
+
+  const salvarSimulacao = async () => {
+    if (cpfLimpo.length !== 11) { setStatusSalvar("Informe os 11 dígitos do CPF."); return; }
+    if (!res) { setStatusSalvar("Preencha os dados da simulação primeiro."); return; }
+    setSalvando(true);
+    setStatusSalvar("Salvando…");
+    try {
+      const r = await fetch("/api/cotacoes-simulador", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          cpf: formatarCpf(cpfLimpo),
+          nomeCliente: nomeCliente || null,
+          descricao: descricao || `${nFatias} fatias · ${fmtR(valor)} · ${prazo}m`,
+          dados: {
+            tipoSimulador: "amortizacao-anual",
+            valorStr, fatiasStr, gratStr, taxaStr, iofStr, prazoStr,
+            nomeCliente,
+            // resumo para conferência rápida (não é usado ao retomar)
+            resumo: {
+              quitaEm: res.mesesTotal,
+              custoEstrategia: res.custoEstrategia,
+              custoPadrao: res.custoPadrao,
+              economia: res.economia,
+              taxaEquivalente: res.taxaEquivalente,
+            },
+          },
+        }),
+      });
+      if (!r.ok) throw new Error((await r.json()).message || "erro");
+      setStatusSalvar("✅ Simulação salva");
+      buscarSalvas(cpfLimpo);
+    } catch (e: any) {
+      setStatusSalvar(`Erro ao salvar: ${e.message}`);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const retomar = async (id: number) => {
+    if (!confirm("Retomar esta simulação? Os valores atuais da tela serão substituídos.")) return;
+    try {
+      const r = await fetch(`/api/cotacoes-simulador/${id}`, { credentials: "include" });
+      if (!r.ok) throw new Error("não foi possível carregar");
+      const cot = await r.json();
+      const d = cot.dados || {};
+      if (d.valorStr)  setValorStr(d.valorStr);
+      if (d.fatiasStr) setFatiasStr(d.fatiasStr);
+      if (d.gratStr)   setGratStr(d.gratStr);
+      if (d.taxaStr)   setTaxaStr(d.taxaStr);
+      if (d.iofStr)    setIofStr(d.iofStr);
+      if (d.prazoStr)  setPrazoStr(d.prazoStr);
+      if (d.nomeCliente) setNomeCliente(d.nomeCliente);
+      setStatusSalvar("Simulação retomada.");
+    } catch (e: any) {
+      setStatusSalvar(`Erro ao retomar: ${e.message}`);
+    }
+  };
+
+  const excluir = async (id: number) => {
+    if (!confirm("Excluir esta simulação salva?")) return;
+    try {
+      await fetch(`/api/cotacoes-simulador/${id}`, { method: "DELETE", credentials: "include" });
+      buscarSalvas(cpfLimpo);
+    } catch { /* silencioso */ }
+  };
 
   const valor = parseBR(valorStr);
   const nFatias = Math.max(1, parseInt(fatiasStr) || 0);
@@ -144,6 +244,46 @@ export default function SimAmortizacaoAnual() {
         O contrato é dividido em <strong>fatias iguais</strong>. A cada 12 meses o cliente usa a gratificação para{" "}
         <strong>quitar fatias inteiras</strong> pelo saldo devedor — quantas couberem. A sobra do ano não acumula.
       </p>
+
+      {/* Cliente + salvar */}
+      <div className="rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/60 dark:bg-violet-950/20 p-3 mb-5">
+        <div className="flex flex-wrap items-end gap-3">
+          <div style={{ width: 150 }}>
+            <label className={labelCls}>CPF do cliente</label>
+            <input className={inputCls} value={cpf} placeholder="000.000.000-00" maxLength={14}
+              onChange={e => { const v = formatarCpf(e.target.value); setCpf(v); setStatusSalvar(""); if (v.replace(/\D/g, "").length === 11) buscarSalvas(v); }} />
+          </div>
+          <div style={{ width: 200 }}>
+            <label className={labelCls}>Nome</label>
+            <input className={inputCls} value={nomeCliente} onChange={e => setNomeCliente(e.target.value)} placeholder="Opcional" />
+          </div>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <label className={labelCls}>Descrição</label>
+            <input className={inputCls} value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Ex: 9 fatias com 13º de 25 mil" />
+          </div>
+          <button onClick={salvarSimulacao} disabled={salvando}
+            className="rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-xs font-semibold px-4 h-[38px] whitespace-nowrap">
+            {salvando ? "Salvando…" : "Salvar simulação"}
+          </button>
+          {statusSalvar && <span className="text-[12px] text-muted-foreground">{statusSalvar}</span>}
+        </div>
+
+        {salvas.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-violet-200 dark:border-violet-900">
+            <div className="text-[11px] font-bold text-violet-700 dark:text-violet-400 mb-1.5">Simulações salvas deste CPF</div>
+            <div className="flex flex-col gap-1">
+              {salvas.map((c: any) => (
+                <div key={c.id} className="flex items-center gap-2 text-[12px] py-1 border-b border-violet-100 dark:border-violet-950 last:border-0">
+                  <span className="font-semibold">{new Date(c.criadoEm).toLocaleDateString("pt-BR")}</span>
+                  {c.descricao && <span className="text-muted-foreground flex-1 truncate">— {c.descricao}</span>}
+                  <button onClick={() => retomar(c.id)} className="rounded bg-violet-600 text-white px-2.5 py-1 text-[11px] font-bold">▶ Retomar</button>
+                  <button onClick={() => excluir(c.id)} className="rounded bg-red-100 text-red-700 px-2 py-1 text-[11px]">✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
         <div><label className={labelCls}>Valor p/ o cliente (R$)</label><input className={inputCls} value={valorStr} onChange={e => setValorStr(e.target.value)} /></div>

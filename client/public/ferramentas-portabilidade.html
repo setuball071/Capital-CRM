@@ -7390,7 +7390,9 @@ async function buscarCotacoesPorCpf(cpf) {
   try {
     const resp = await fetch(`/api/cotacoes-simulador?cpf=${encodeURIComponent(cpf)}`, { credentials: 'include' });
     if (!resp.ok) return 0;
-    const lista = await resp.json();
+    const todas = await resp.json();
+    // Nao mistura com as simulacoes da aba Amortizacao Anual (mesma tabela, tipo diferente)
+    const lista = (Array.isArray(todas) ? todas : []).filter(c => (c.tipoSimulador || 'portabilidade') === 'portabilidade');
     if (!lista.length) { panel.innerHTML = ''; return 0; }
     panel.innerHTML = `
       <div style="margin-bottom:12px;padding:12px 16px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;">

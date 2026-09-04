@@ -29824,6 +29824,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const result = await db.execute(sql`
         SELECT id, cpf, nome_cliente AS "nomeCliente", descricao,
                dados->>'refimBanco' AS "refimBanco",
+               COALESCE(dados->>'tipoSimulador', 'portabilidade') AS "tipoSimulador",
                criado_em AS "criadoEm"
         FROM cotacoes_simulador
         WHERE tenant_id = ${tenantId} AND cpf = ${cpf}
