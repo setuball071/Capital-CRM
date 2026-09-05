@@ -230,6 +230,7 @@ interface PortabilidadeContrato {
   uid: string;
   source: "extrato" | "manual";
   banco: string;
+  bancoCodigo: string;   // código do banco de origem — digitado, não vem no extrato
   numeroContrato: string;
   parcelaAtual: string;
   prazoAtual: string;
@@ -1228,6 +1229,7 @@ export default function ContratosPropostaPage() {
             ...sharedMeta,
             ...(tabela ? { tabelaFinanceiroId: c.tableId, tabelaNome: tabela.nome } : {}),
             ...(c.banco           ? { bancoOrigem:      c.banco }                  : {}),
+            ...(c.bancoCodigo     ? { bancoOrigemCodigo: c.bancoCodigo.trim() }    : {}),
             ...(c.numeroContrato  ? { numeroContrato:   c.numeroContrato }         : {}),
             ...(c.parcelaAtual    ? { parcelaOriginal:  parseFloat(c.parcelaAtual) } : {}),
             ...(c.prazoAtual      ? { prazoAtual:       parseInt(c.prazoAtual) }   : {}),
@@ -1304,6 +1306,7 @@ export default function ContratosPropostaPage() {
             uid:            makePortUid(),
             source:         "extrato" as const,
             banco:          c.banco,
+            bancoCodigo:    "",
             numeroContrato: c.numero_contrato || "",
             parcelaAtual:   c.parcela_atual   ? String(c.parcela_atual)  : "",
             prazoAtual:     c.prazo_restante  ? String(c.prazo_restante) : "",
@@ -1325,6 +1328,7 @@ export default function ContratosPropostaPage() {
               uid:            makePortUid(),
               source:         "extrato" as const,
               banco:          c.banco,
+              bancoCodigo:    "",
               numeroContrato: c.numeroContrato || "",
               parcelaAtual:   c.parcela ? String(c.parcela) : "",
               prazoAtual:     c.prazo   ? String(c.prazo)   : "",
@@ -3764,7 +3768,7 @@ export default function ContratosPropostaPage() {
               <Button size="sm" variant="outline" type="button"
                 onClick={() => setPortContratos((prev) => [...prev, {
                   uid: makePortUid(), source: "manual",
-                  banco: "", numeroContrato: "",
+                  banco: "", bancoCodigo: "", numeroContrato: "",
                   parcelaAtual: "", prazoAtual: "", prazoTotal: "",
                   inicio: "", fim: "",
                   taxa: "", saldoDevedor: "",
@@ -3865,6 +3869,7 @@ export default function ContratosPropostaPage() {
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Banco Origem</th>
+                      <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Cód.</th>
                       <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Nº Contrato</th>
                       <th className="text-right py-2 pr-2 font-medium text-muted-foreground">Parc. Atual</th>
                       <th className="text-right py-2 pr-2 font-medium text-muted-foreground">Prazo Rest.</th>
@@ -3885,6 +3890,11 @@ export default function ContratosPropostaPage() {
                           <input className="w-28 border rounded px-1.5 py-0.5 text-xs bg-background"
                             value={c.banco} onChange={(e) => updatePortContrato(c.uid, "banco", e.target.value)}
                             placeholder="ex: AGIBANK" />
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <input className="w-14 border rounded px-1.5 py-0.5 text-xs bg-background font-mono"
+                            value={c.bancoCodigo} onChange={(e) => updatePortContrato(c.uid, "bancoCodigo", e.target.value)}
+                            placeholder="000" />
                         </td>
                         <td className="py-1.5 pr-2">
                           <input className="w-28 border rounded px-1.5 py-0.5 text-xs bg-background font-mono"
