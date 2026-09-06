@@ -4205,6 +4205,7 @@ export default function ContratosPropostaPage() {
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Banco Origem</th>
+                      <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Cód.</th>
                       <th className="text-left py-1.5 pr-2 font-medium text-muted-foreground">Nº Contrato</th>
                       <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Parc. Atual</th>
                       <th className="text-right py-1.5 pr-2 font-medium text-muted-foreground">Nova Parc.</th>
@@ -4217,6 +4218,7 @@ export default function ContratosPropostaPage() {
                     {portContratos.map((c) => (
                       <tr key={c.uid} className="border-b last:border-0">
                         <td className="py-1.5 pr-2 font-medium">{c.banco || "—"}</td>
+                        <td className="py-1.5 pr-2 font-mono">{c.bancoCodigo || "—"}</td>
                         <td className="py-1.5 pr-2 font-mono text-muted-foreground">{c.numeroContrato || "—"}</td>
                         <td className="py-1.5 pr-2 text-right">{c.parcelaAtual ? `R$ ${c.parcelaAtual}` : "—"}</td>
                         <td className="py-1.5 pr-2 text-right text-green-700 dark:text-green-400 font-medium">{c.novaParcela ? `R$ ${c.novaParcela}` : "—"}</td>

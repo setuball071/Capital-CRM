@@ -588,6 +588,7 @@ export default function ContratosDetalhePage() {
       case "ade":              body = { ade: editVal.trim() }; break;
       case "adeRefin":         body = { adeRefin: editVal.trim() }; break;
       case "numeroContrato":   body = { clientMetaPatch: { numeroContrato: editVal.trim() } }; break;
+      case "bancoOrigemCodigo": body = { clientMetaPatch: { bancoOrigemCodigo: editVal.trim() } }; break;
       case "dataCip":          body = { clientMetaPatch: { dataCip: editVal.trim() || null } }; break;
       case "saldoDevedor":     body = { clientMetaPatch: { saldoDevedor: parseBrNum(editVal) } }; break;
       case "prazoInformado":   body = { clientMetaPatch: { prazoInformado: editVal.trim() ? parseInt(editVal) : null } }; break;
@@ -999,6 +1000,7 @@ export default function ContratosDetalhePage() {
           {isPortabilidade && (
             <>
               {renderField({ fieldKey: "bancoOrigem", label: "Banco Origem", value: m.bancoOrigem })}
+              {renderField({ fieldKey: "bancoOrigemCodigo", label: "Cód. Banco Origem", value: m.bancoOrigemCodigo, mono: true, editable: true })}
               {renderField({ fieldKey: "numeroContrato", label: "Nº Contrato Origem", value: m.numeroContrato, mono: true, editable: true })}
               {/* Taxa usada no cálculo do saldo (a da operação nova já vem da tabela selecionada) */}
               {renderField({ fieldKey: "taxa", label: "Taxa (%)", value: (m.taxa ?? m.taxaAtual) != null ? String(m.taxa ?? m.taxaAtual) : "", editable: true, copyable: false })}
@@ -1061,6 +1063,7 @@ export default function ContratosDetalhePage() {
               {renderField({ fieldKey: "taxa", label: "Taxa (%)", value: m.taxa != null ? String(m.taxa) : "", editable: true, copyable: false })}
               {renderField({ fieldKey: "ade", label: "ADE", value: proposal.ade, mono: true, editable: true, isAde: true })}
               {m.bancoOrigem && renderField({ fieldKey: "bancoOrigem", label: "Banco Origem", value: m.bancoOrigem })}
+              {m.bancoOrigem && renderField({ fieldKey: "bancoOrigemCodigo", label: "Cód. Banco Origem", value: m.bancoOrigemCodigo, mono: true, editable: true })}
             </>
           )}
           {/* Data CIP + contador de dias úteis (portabilidade) */}
