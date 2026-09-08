@@ -31,6 +31,7 @@ import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { parseSiapeContracheque, type SiapeParsedData } from "@/lib/siape-pdf-parser";
 import { renderPdfFirstPageToBlob, extractPdfImages, isPdf } from "@/lib/pdf-render";
+import { BANCOS_REDCONSIG, rotuloRedConsig, destinoUsaRedConsig } from "@/lib/bancos-redconsig";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -231,6 +232,7 @@ interface PortabilidadeContrato {
   source: "extrato" | "manual";
   banco: string;
   bancoCodigo: string;   // código do banco de origem — digitado, não vem no extrato
+  bancoCnpj: string;     // CNPJ da instituição (BRB/RedConsig: código sozinho não é único)
   numeroContrato: string;
   parcelaAtual: string;
   prazoAtual: string;
@@ -1230,6 +1232,7 @@ export default function ContratosPropostaPage() {
             ...(tabela ? { tabelaFinanceiroId: c.tableId, tabelaNome: tabela.nome } : {}),
             ...(c.banco           ? { bancoOrigem:      c.banco }                  : {}),
             ...(c.bancoCodigo     ? { bancoOrigemCodigo: c.bancoCodigo.trim() }    : {}),
+            ...(c.bancoCnpj       ? { bancoOrigemCnpj:   c.bancoCnpj.trim() }      : {}),
             ...(c.numeroContrato  ? { numeroContrato:   c.numeroContrato }         : {}),
             ...(c.parcelaAtual    ? { parcelaOriginal:  parseFloat(c.parcelaAtual) } : {}),
             ...(c.prazoAtual      ? { prazoAtual:       parseInt(c.prazoAtual) }   : {}),
@@ -1307,6 +1310,7 @@ export default function ContratosPropostaPage() {
             source:         "extrato" as const,
             banco:          c.banco,
             bancoCodigo:    "",
+            bancoCnpj:      "",
             numeroContrato: c.numero_contrato || "",
             parcelaAtual:   c.parcela_atual   ? String(c.parcela_atual)  : "",
             prazoAtual:     c.prazo_restante  ? String(c.prazo_restante) : "",
@@ -1329,6 +1333,7 @@ export default function ContratosPropostaPage() {
               source:         "extrato" as const,
               banco:          c.banco,
               bancoCodigo:    "",
+              bancoCnpj:      "",
               numeroContrato: c.numeroContrato || "",
               parcelaAtual:   c.parcela ? String(c.parcela) : "",
               prazoAtual:     c.prazo   ? String(c.prazo)   : "",
@@ -3768,7 +3773,7 @@ export default function ContratosPropostaPage() {
               <Button size="sm" variant="outline" type="button"
                 onClick={() => setPortContratos((prev) => [...prev, {
                   uid: makePortUid(), source: "manual",
-                  banco: "", bancoCodigo: "", numeroContrato: "",
+                  banco: "", bancoCodigo: "", bancoCnpj: "", numeroContrato: "",
                   parcelaAtual: "", prazoAtual: "", prazoTotal: "",
                   inicio: "", fim: "",
                   taxa: "", saldoDevedor: "",
@@ -3892,9 +3897,31 @@ export default function ContratosPropostaPage() {
                             placeholder="ex: AGIBANK" />
                         </td>
                         <td className="py-1.5 pr-2">
-                          <input className="w-14 border rounded px-1.5 py-0.5 text-xs bg-background font-mono"
-                            value={c.bancoCodigo} onChange={(e) => updatePortContrato(c.uid, "bancoCodigo", e.target.value)}
-                            placeholder="000" />
+                          {destinoUsaRedConsig(c.bancoDestino || simPortData?.banco_destino) ? (
+                            /* BRB: a instituição credora vem de lista fixa da esteira (RedConsig).
+                               Guarda código E CNPJ — 748/756 se repetem em dezenas de cooperativas. */
+                            <select
+                              className="w-44 border rounded px-1 py-0.5 text-xs bg-background"
+                              value={c.bancoCodigo && c.bancoCnpj ? `${c.bancoCodigo}|${c.bancoCnpj}` : ""}
+                              onChange={(e) => {
+                                const [cod, cnpj] = e.target.value.split("|");
+                                updatePortContrato(c.uid, "bancoCodigo", cod || "");
+                                updatePortContrato(c.uid, "bancoCnpj", cnpj || "");
+                              }}
+                              title="Instituição Credora Original (lista do BRB)"
+                            >
+                              <option value="">Selecione...</option>
+                              {BANCOS_REDCONSIG.map((b) => (
+                                <option key={`${b.codigo}|${b.cnpj}`} value={`${b.codigo}|${b.cnpj}`}>
+                                  {rotuloRedConsig(b)}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input className="w-14 border rounded px-1.5 py-0.5 text-xs bg-background font-mono"
+                              value={c.bancoCodigo} onChange={(e) => updatePortContrato(c.uid, "bancoCodigo", e.target.value)}
+                              placeholder="000" />
+                          )}
                         </td>
                         <td className="py-1.5 pr-2">
                           <input className="w-28 border rounded px-1.5 py-0.5 text-xs bg-background font-mono"
@@ -4218,7 +4245,7 @@ export default function ContratosPropostaPage() {
                     {portContratos.map((c) => (
                       <tr key={c.uid} className="border-b last:border-0">
                         <td className="py-1.5 pr-2 font-medium">{c.banco || "—"}</td>
-                        <td className="py-1.5 pr-2 font-mono">{c.bancoCodigo || "—"}</td>
+                        <td className="py-1.5 pr-2 font-mono">{c.bancoCodigo ? (c.bancoCnpj ? `${c.bancoCodigo} / ${c.bancoCnpj}` : c.bancoCodigo) : "—"}</td>
                         <td className="py-1.5 pr-2 font-mono text-muted-foreground">{c.numeroContrato || "—"}</td>
                         <td className="py-1.5 pr-2 text-right">{c.parcelaAtual ? `R$ ${c.parcelaAtual}` : "—"}</td>
                         <td className="py-1.5 pr-2 text-right text-green-700 dark:text-green-400 font-medium">{c.novaParcela ? `R$ ${c.novaParcela}` : "—"}</td>
