@@ -402,6 +402,8 @@ export default function ContratosPropostaPage() {
   const [obsCadastro,            setObsCadastro]            = useState("");
   // Quantas propostas idênticas criar de uma vez (mesmo cliente, ADE diferente em cada)
   const [qtdCopias,             setQtdCopias]              = useState(1);
+  // Texto digitado na busca de instituição credora (BRB), por linha
+  const [buscaCredora,          setBuscaCredora]           = useState<Record<string, string>>({});
 
   // ── Portabilidade em lote ────────────────────────────────────────────────────
   const [portContratos,    setPortContratos]    = useState<PortabilidadeContrato[]>([]);
@@ -3870,11 +3872,17 @@ export default function ContratosPropostaPage() {
                   </div>
                 )}
               <div className="overflow-x-auto">
+                {/* Opções da busca de instituição credora (BRB) — uma vez para a tabela toda */}
+                <datalist id="lista-credoras-redconsig">
+                  {BANCOS_REDCONSIG.map((b) => (
+                    <option key={`${b.codigo}|${b.cnpj}`} value={rotuloRedConsig(b)} />
+                  ))}
+                </datalist>
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Banco Origem</th>
-                      <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Cód.</th>
+                      <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Instituição Credora</th>
                       <th className="text-left py-2 pr-2 font-medium text-muted-foreground">Nº Contrato</th>
                       <th className="text-right py-2 pr-2 font-medium text-muted-foreground">Parc. Atual</th>
                       <th className="text-right py-2 pr-2 font-medium text-muted-foreground">Prazo Rest.</th>
@@ -3897,27 +3905,33 @@ export default function ContratosPropostaPage() {
                             placeholder="ex: AGIBANK" />
                         </td>
                         <td className="py-1.5 pr-2">
-                          {destinoUsaRedConsig(c.bancoDestino || simPortData?.banco_destino) ? (
-                            /* BRB: a instituição credora vem de lista fixa da esteira (RedConsig).
-                               Guarda código E CNPJ — 748/756 se repetem em dezenas de cooperativas. */
-                            <select
-                              className="w-44 border rounded px-1 py-0.5 text-xs bg-background"
-                              value={c.bancoCodigo && c.bancoCnpj ? `${c.bancoCodigo}|${c.bancoCnpj}` : ""}
-                              onChange={(e) => {
-                                const [cod, cnpj] = e.target.value.split("|");
-                                updatePortContrato(c.uid, "bancoCodigo", cod || "");
-                                updatePortContrato(c.uid, "bancoCnpj", cnpj || "");
-                              }}
-                              title="Instituição Credora Original (lista do BRB)"
-                            >
-                              <option value="">Selecione...</option>
-                              {BANCOS_REDCONSIG.map((b) => (
-                                <option key={`${b.codigo}|${b.cnpj}`} value={`${b.codigo}|${b.cnpj}`}>
-                                  {rotuloRedConsig(b)}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
+                          {destinoUsaRedConsig(c.bancoDestino || simPortData?.banco_destino) ? (() => {
+                            /* BRB: instituição credora vem de lista fixa da esteira (RedConsig).
+                               Campo de busca (datalist) em vez de select: são 137 itens e rolar
+                               a lista inteira era inviável. Guarda código E CNPJ — 748/756 se
+                               repetem em dezenas de cooperativas. */
+                            const escolhido = BANCOS_REDCONSIG.find(
+                              (b) => b.codigo === c.bancoCodigo && b.cnpj === c.bancoCnpj,
+                            );
+                            const texto = buscaCredora[c.uid] ?? (escolhido ? rotuloRedConsig(escolhido) : "");
+                            const pendente = texto.trim() !== "" && !escolhido;
+                            return (
+                              <input
+                                list="lista-credoras-redconsig"
+                                className={`w-56 border rounded px-1.5 py-0.5 text-xs bg-background ${pendente ? "border-destructive" : ""}`}
+                                value={texto}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setBuscaCredora((prev) => ({ ...prev, [c.uid]: v }));
+                                  const achado = BANCOS_REDCONSIG.find((b) => rotuloRedConsig(b) === v);
+                                  updatePortContrato(c.uid, "bancoCodigo", achado ? achado.codigo : "");
+                                  updatePortContrato(c.uid, "bancoCnpj", achado ? achado.cnpj : "");
+                                }}
+                                placeholder="digite o banco..."
+                                title={pendente ? "Escolha um item da lista — texto solto não é aceito" : "Instituição Credora Original (lista do BRB)"}
+                              />
+                            );
+                          })() : (
                             <input className="w-14 border rounded px-1.5 py-0.5 text-xs bg-background font-mono"
                               value={c.bancoCodigo} onChange={(e) => updatePortContrato(c.uid, "bancoCodigo", e.target.value)}
                               placeholder="000" />
