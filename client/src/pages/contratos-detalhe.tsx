@@ -588,6 +588,16 @@ export default function ContratosDetalhePage() {
       case "ade":              body = { ade: editVal.trim() }; break;
       case "adeRefin":         body = { adeRefin: editVal.trim() }; break;
       case "numeroContrato":   body = { clientMetaPatch: { numeroContrato: editVal.trim() } }; break;
+      // Telefone: guarda formatado e com o nono dígito (celular antigo de 10 dígitos ganha o 9)
+      case "telefone": {
+        let d = editVal.replace(/\D/g, "").slice(0, 11);
+        if (d.length === 10 && /[6-9]/.test(d[2])) d = d.slice(0, 2) + "9" + d.slice(2);
+        const fmt = d.length > 10
+          ? d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3")
+          : d.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+        body = { clientMetaPatch: { telefone: fmt } };
+        break;
+      }
       case "bancoOrigemCodigo": body = { clientMetaPatch: { bancoOrigemCodigo: editVal.trim() } }; break;
       case "dataCip":          body = { clientMetaPatch: { dataCip: editVal.trim() || null } }; break;
       case "saldoDevedor":     body = { clientMetaPatch: { saldoDevedor: parseBrNum(editVal) } }; break;
@@ -891,7 +901,8 @@ export default function ContratosDetalhePage() {
           {m.uf && renderField({ fieldKey: "uf", label: "UF", value: m.uf })}
           {m.regJuridico && renderField({ fieldKey: "regJuridico", label: "Reg. Jurídico", value: m.regJuridico })}
           {m.vinculo && renderField({ fieldKey: "vinculo", label: "Vínculo", value: m.vinculo })}
-          {m.telefone && renderField({ fieldKey: "telefone", label: "Telefone", value: m.telefone })}
+          {/* Editável para corrigir celular sem o nono dígito sem recadastrar a proposta */}
+          {renderField({ fieldKey: "telefone", label: "Telefone", value: m.telefone, editable: true })}
           {m.email && renderField({ fieldKey: "email", label: "Email", value: m.email })}
           {/* Endereço — campos separados para copiar individualmente */}
           {end.cep && renderField({ fieldKey: "end_cep", label: "CEP", value: end.cep, mono: true })}

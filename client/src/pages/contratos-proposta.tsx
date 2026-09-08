@@ -145,7 +145,12 @@ const formSchema = z.object({
   clientMatricula: z.string().optional(),
   clientSexo: z.string().min(1, "Sexo obrigatório"),
   // Contato
-  clientPhone: z.string().min(10, "Telefone obrigatório"),
+  // Valida sobre os DÍGITOS, não sobre o texto formatado (o min(10) antigo
+  // passava qualquer coisa: "(48) 9999-3874" tem 14 caracteres).
+  clientPhone: z.string().refine((v) => {
+    const n = v.replace(/\D/g, "").length;
+    return n === 10 || n === 11;
+  }, "Telefone inválido — informe DDD + número (celular tem 11 dígitos)"),
   clientEmail: z.string().email("E-mail inválido"),
   // Endereço
   clientCep: z.string().min(8, "CEP obrigatório"),
@@ -208,6 +213,21 @@ function formatPhone(value: string) {
   if (d.length <= 10)
     return d.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
   return d.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+}
+
+// Celular no Brasil tem 11 dígitos desde 2016. Número local de 8 dígitos
+// começando em 6-9 é celular antigo SEM o nono dígito — o banco recusa.
+// Insere o 9 depois do DDD: "48 9999-3874" → "48 99999-3874".
+// Fixo (local começando em 2-5) é deixado como está; o aviso fica com a tela.
+function normalizePhoneDigits(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 11);
+  if (d.length === 10 && /[6-9]/.test(d[2])) return d.slice(0, 2) + "9" + d.slice(2);
+  return d;
+}
+
+function phoneLooksLandline(value: string): boolean {
+  const d = value.replace(/\D/g, "");
+  return d.length === 10 && /[2-5]/.test(d[2]);
 }
 
 function formatCep(value: string) {
@@ -1031,7 +1051,7 @@ export default function ContratosPropostaPage() {
           ...(data.tableId ? { tabelaFinanceiroId: data.tableId, tabelaNome: selectedTabela?.nome } : {}),
           ...(data.clientSexo ? { sexo: data.clientSexo } : {}),
           // Contato
-          ...(data.clientPhone ? { telefone: data.clientPhone } : {}),
+          ...(data.clientPhone ? { telefone: formatPhone(normalizePhoneDigits(data.clientPhone)) } : {}),
           ...(data.clientEmail ? { email:    data.clientEmail } : {}),
           ...(semEmail ? { semEmail: true } : {}),
           // Endereço
@@ -1162,7 +1182,7 @@ export default function ContratosPropostaPage() {
       }
       if (v.clientSexo) sharedMeta.sexo = v.clientSexo;
       if (v.margemCliente) sharedMeta.margemCliente = v.margemCliente;
-      if (v.clientPhone) sharedMeta.telefone = v.clientPhone;
+      if (v.clientPhone) sharedMeta.telefone = formatPhone(normalizePhoneDigits(v.clientPhone));
       if (v.clientEmail) sharedMeta.email    = v.clientEmail;
       if (semEmail) sharedMeta.semEmail = true;
       if (v.clientCep) {
@@ -1427,7 +1447,7 @@ export default function ContratosPropostaPage() {
       clientMatricula:  matricula,
       clientSexo:       meta.sexo ?? "",
       // Contato — reutiliza do cadastro anterior se disponível
-      clientPhone:      meta.telefone ?? "",
+      clientPhone:      formatPhone(normalizePhoneDigits(meta.telefone ?? "")), // conserta número velho ao reaproveitar
       clientEmail:      meta.email    ?? "",
       // Endereço — reutiliza do cadastro anterior se disponível
       clientCep:        end.cep         ?? "",
@@ -1544,7 +1564,7 @@ export default function ContratosPropostaPage() {
       clientCpf: formatCpf((clientLookup.clientCpf || cpfInput).replace(/\D/g, "")),
       clientMatricula: clientLookup.clientMatricula || "",
       clientSexo: meta.sexo ?? "",
-      clientPhone: meta.telefone ?? "",
+      clientPhone: formatPhone(normalizePhoneDigits(meta.telefone ?? "")),
       clientEmail: meta.email ?? "",
       clientCep: end.cep ?? "", clientLogradouro: end.logradouro ?? "",
       clientNumero: end.numero ?? "", clientComplemento: end.complemento ?? "",
@@ -2243,7 +2263,7 @@ export default function ContratosPropostaPage() {
                               const m = found.clientMeta ?? {};
                               const en = m.endereco ?? {};
                               if (!form.getValues("clientPhone") && m.telefone)
-                                form.setValue("clientPhone", m.telefone);
+                                form.setValue("clientPhone", formatPhone(normalizePhoneDigits(m.telefone)));
                               if (!form.getValues("clientEmail") && m.email)
                                 form.setValue("clientEmail", m.email);
                               if (m.semEmail) setSemEmail(true);
@@ -2313,8 +2333,27 @@ export default function ContratosPropostaPage() {
                         {...field}
                         placeholder="(11) 99999-9999"
                         onChange={(e) => field.onChange(formatPhone(e.target.value))}
+                        // Corrige ao SAIR do campo, não enquanto digita: inserir o 9 no
+                        // meio da digitação de um número já com 11 dígitos estragaria ele.
+                        onBlur={() => {
+                          const antes = (field.value || "").replace(/\D/g, "");
+                          const depois = normalizePhoneDigits(antes);
+                          if (depois !== antes) {
+                            field.onChange(formatPhone(depois));
+                            toast({
+                              title: "Nono dígito adicionado",
+                              description: `Celular corrigido para ${formatPhone(depois)} — confira se está certo.`,
+                            });
+                          }
+                          field.onBlur();
+                        }}
                       />
                     </FormControl>
+                    {phoneLooksLandline(field.value || "") && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Parece telefone fixo (10 dígitos). Os bancos costumam exigir celular com 11 dígitos — confira antes de seguir.
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
