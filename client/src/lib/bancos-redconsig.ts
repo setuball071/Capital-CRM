@@ -154,5 +154,10 @@ export function rotuloRedConsig(b: BancoRedConsig): string {
 
 /** O destino usa a esteira do BRB? (aceita "BRB", "BRB RED", "BRB - REFIN"...) */
 export function destinoUsaRedConsig(bancoDestino?: string | null): boolean {
-  return /BRB/i.test(bancoDestino || "");
+  // Compara por palavra inteira para BRBANCO nao passar por BRB. Feito com
+  // split em vez de borda de palavra no regex de proposito: a versao anterior
+  // foi gerada por script e o escape virou um caractere de backspace literal,
+  // entao a condicao nunca batia e o dropdown nao aparecia.
+  const palavras = (bancoDestino || "").toUpperCase().split(/[^A-Z0-9]+/);
+  return palavras.includes("BRB");
 }
