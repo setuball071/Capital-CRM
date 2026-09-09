@@ -140,8 +140,16 @@ const PRODUCT_LABEL: Record<string, string> = {
   PORTABILIDADE: "Portabilidade",
   REFIN_PORTABILIDADE: "Refin de Port.",
   REFINANCIAMENTO: "Refinanciamento",
+  COMPRA_DIVIDA: "Compra de Dívida",
   CARTAO: "Cartão",
 };
+
+// Cartão tem duas modalidades, gravadas em clientMeta.modalidadeCartao (RMC/RCC)
+function productLabel(p: { product?: string | null; clientMeta?: any }): string {
+  const mod = p.clientMeta?.modalidadeCartao;
+  if (p.product === "CARTAO" && mod) return mod === "RCC" ? "Cartão Benefício" : "Cartão Consignado";
+  return PRODUCT_LABEL[p.product || ""] || p.product || "";
+}
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -1140,7 +1148,7 @@ export default function ContratosListaPage() {
         (p.clientCpf || "").replace(/\D/g, ""),
         p.clientName || "",
         p.vendorName || "",
-        PRODUCT_LABEL[p.product] || p.product || "",
+        productLabel(p),
         p.bank || "",
         money(parcelaExibida(p).value), // mesma regra da tela (port. sem ADE de refin = parcela original)
         money(p.contractValue),
@@ -1605,7 +1613,7 @@ export default function ContratosListaPage() {
                     ) : "—"}
                   </TableCell>
                   {showCorretorCol && <TableCell className="text-sm text-muted-foreground">{p.vendorName || "—"}</TableCell>}
-                  <TableCell className="text-sm">{PRODUCT_LABEL[p.product] || p.product || "—"}</TableCell>
+                  <TableCell className="text-sm">{productLabel(p) || "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.bank || "—"}</TableCell>
                   <TableCell className="text-right text-sm">
                     {(() => {

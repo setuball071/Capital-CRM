@@ -116,7 +116,9 @@ const CONTRACT_TYPES = [
     description: "Quitação de dívida externa com consignado",
     Icon: Coins,
     iconColor: "text-amber-600 dark:text-amber-400",
-    product: "PORTABILIDADE",
+    // Era "PORTABILIDADE": a proposta nascia como portabilidade no banco (ficha,
+    // lista e CIP tratavam errado). Ficha e lista já sabem exibir COMPRA_DIVIDA.
+    product: "COMPRA_DIVIDA",
   },
   {
     id: "REFINANCIAMENTO",
@@ -1075,6 +1077,9 @@ export default function ContratosPropostaPage() {
         clientMeta: {
           ...(clientMeta || {}),
           ...(contractType ? { tipoContrato: contractType } : {}),
+          // Cartão: a modalidade escolhida (RMC = consignado, RCC = benefício) precisa ser
+          // gravada — antes só filtrava a tabela e a ficha mostrava "CARTAO" sem distinguir
+          ...(contractType === "CARTAO" ? { modalidadeCartao: cardModality } : {}),
           // Referência à tabela do financeiro config (ID do JSONB, não FK do banco)
           ...(data.tableId ? { tabelaFinanceiroId: data.tableId, tabelaNome: selectedTabela?.nome } : {}),
           ...(data.clientSexo ? { sexo: data.clientSexo } : {}),
@@ -1677,7 +1682,22 @@ export default function ContratosPropostaPage() {
                 <div><span className="text-muted-foreground">Propostas anteriores: </span><span className="font-medium">{clientLookup.proposalCount}</span></div>
                 {!!clientLookup.documents?.length && (
                   <div>
-                    <span className="text-muted-foreground">Documentos no cadastro — selecione os que quer reaproveitar:</span>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-muted-foreground">Documentos no cadastro — selecione os que quer reaproveitar:</span>
+                      {/* Cadastro antigo acumula dezenas de arquivos: dá pra zerar e marcar só o que interessa */}
+                      <span className="flex gap-3 text-xs">
+                        <button type="button" className="text-primary underline"
+                          onClick={() => setSelectedReuseDocIds((clientLookup.documents ?? []).map((d) => d.id))}
+                          data-testid="button-reuse-marcar-todos">
+                          Marcar todos
+                        </button>
+                        <button type="button" className="text-primary underline"
+                          onClick={() => setSelectedReuseDocIds([])}
+                          data-testid="button-reuse-desmarcar-todos">
+                          Desmarcar todos
+                        </button>
+                      </span>
+                    </div>
                     <ul className="mt-1.5 space-y-1">
                       {clientLookup.documents.map((d) => {
                         const checked = selectedReuseDocIds.includes(d.id);

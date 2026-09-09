@@ -984,7 +984,16 @@ export default function ContratosDetalhePage() {
           <CardTitle className="text-base flex items-center gap-2"><CreditCard className="h-4 w-4" /> Operação</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-          {renderField({ fieldKey: "produto", label: "Produto", value: proposal.product === "REFIN_PORTABILIDADE" ? "REFIN DE PORTABILIDADE" : proposal.product, copyable: false })}
+          {renderField({
+            fieldKey: "produto",
+            label: "Produto",
+            value: proposal.product === "REFIN_PORTABILIDADE" ? "REFIN DE PORTABILIDADE"
+              : proposal.product === "COMPRA_DIVIDA" ? "COMPRA DE DÍVIDA"
+              // Cartão: mostra a modalidade gravada no cadastro (RMC consignado / RCC benefício)
+              : proposal.product === "CARTAO" && m.modalidadeCartao ? (m.modalidadeCartao === "RCC" ? "CARTÃO BENEFÍCIO (RCC)" : "CARTÃO CONSIGNADO (RMC)")
+              : proposal.product,
+            copyable: false,
+          })}
           {/* Banco — edição via select (bancos disponíveis para o tipo de operação) */}
           <div className="group min-w-0">
             <p className="text-xs text-muted-foreground">Banco</p>
