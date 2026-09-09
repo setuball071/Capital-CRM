@@ -603,6 +603,13 @@ export default function ContratosDetalhePage() {
       case "dataCip":          body = { clientMetaPatch: { dataCip: editVal.trim() || null } }; break;
       case "saldoDevedor":     body = { clientMetaPatch: { saldoDevedor: parseBrNum(editVal) } }; break;
       case "parcelaOriginal":  body = { clientMetaPatch: { parcelaOriginal: parseBrNum(editVal) } }; break;
+      // Aceita "F"/"M" e grava no mesmo formato do cadastro (FEMININO/MASCULINO).
+      // Qualquer outra coisa vira vazio — melhor em branco do que sexo errado no banco.
+      case "sexo": {
+        const v = editVal.trim().toUpperCase();
+        body = { clientMetaPatch: { sexo: v.startsWith("F") ? "FEMININO" : v.startsWith("M") ? "MASCULINO" : null } };
+        break;
+      }
       case "prazoInformado":   body = { clientMetaPatch: { prazoInformado: editVal.trim() ? parseInt(editVal) : null } }; break;
       case "troco":            body = { clientMetaPatch: { troco: parseBrNum(editVal) } }; break;
       // Conta bancária de crédito: grava o objeto completo em contaSelecionada (origem manual)
@@ -898,6 +905,8 @@ export default function ContratosDetalhePage() {
           {renderField({ fieldKey: "nome", label: "Nome", value: proposal.clientName })}
           {renderField({ fieldKey: "cpf", label: "CPF", value: proposal.clientCpf, mono: true })}
           {renderField({ fieldKey: "matricula", label: "Matrícula", value: proposal.clientMatricula, mono: true })}
+          {/* Sexo: o RedConsig exige na digitação; sem exibir aqui não havia como corrigir */}
+          {renderField({ fieldKey: "sexo", label: "Sexo", value: m.sexo, editable: true, copyable: false })}
           {renderField({ fieldKey: "convenio", label: "Convênio", value: proposal.clientConvenio })}
           {m.orgao && renderField({ fieldKey: "orgao", label: "Órgão", value: m.orgao })}
           {m.uf && renderField({ fieldKey: "uf", label: "UF", value: m.uf })}
