@@ -919,6 +919,13 @@ export default function ContratosPropostaPage() {
   // Valor Liberado = Valor Total − Saldo Devedor (só calculado, nunca digitado)
   const valorLiberadoCompra = isCompra ? contractValNum - (parseBrNumber(watchedSaldoDevedor) || 0) : 0;
 
+
+  // ── Cálculo do repasse LÍQUIDO do corretor (sem expor pctEmpresa) ──────────
+  const watchedTableId = form.watch("tableId");
+  const selectedTabela = financeiroTabelas.find((t: any) => String(t.id) === String(watchedTableId));
+
+  // (Fica DEPOIS de selectedTabela de propósito: usar antes da declaração era
+  //  ReferenceError e derrubava a tela inteira ao escolher Compra de Dívida.)
   // Compra de Dívida: Valor Total é derivado, então recalcula sempre que a
   // parcela OU a tabela mudar. O onChange da parcela sozinho não bastava: na
   // ordem nova a parcela vem ANTES da tabela, e quem digitava 450 sem coef
@@ -931,10 +938,6 @@ export default function ContratosPropostaPage() {
     const total = parc > 0 && coefCompra > 0 ? formatBRNumber(parc / coefCompra) : "";
     if ((form.getValues("contractValue") || "") !== total) form.setValue("contractValue", total);
   }, [isCompra, watchedInstallment, coefCompra]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Cálculo do repasse LÍQUIDO do corretor (sem expor pctEmpresa) ──────────
-  const watchedTableId = form.watch("tableId");
-  const selectedTabela = financeiroTabelas.find((t: any) => String(t.id) === String(watchedTableId));
 
   /** Grupo do usuário logado — busca por email no array de corretores */
   const myCorretor = financeiroCorretores.find(
