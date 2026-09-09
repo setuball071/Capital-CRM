@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -918,6 +918,19 @@ export default function ContratosPropostaPage() {
   const watchedSaldoDevedor = form.watch("saldoDevedor");
   // Valor Liberado = Valor Total − Saldo Devedor (só calculado, nunca digitado)
   const valorLiberadoCompra = isCompra ? contractValNum - (parseBrNumber(watchedSaldoDevedor) || 0) : 0;
+
+  // Compra de Dívida: Valor Total é derivado, então recalcula sempre que a
+  // parcela OU a tabela mudar. O onChange da parcela sozinho não bastava: na
+  // ordem nova a parcela vem ANTES da tabela, e quem digitava 450 sem coef
+  // ficava com o total vazio mesmo depois de escolher a tabela.
+  const watchedInstallment = form.watch("installmentValue");
+  const coefCompra = isCompra ? Number(selectedTabela?.coef) || 0 : 0;
+  useEffect(() => {
+    if (!isCompra) return;
+    const parc = parseBrNumber(watchedInstallment || "") || 0;
+    const total = parc > 0 && coefCompra > 0 ? formatBRNumber(parc / coefCompra) : "";
+    if ((form.getValues("contractValue") || "") !== total) form.setValue("contractValue", total);
+  }, [isCompra, watchedInstallment, coefCompra]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Cálculo do repasse LÍQUIDO do corretor (sem expor pctEmpresa) ──────────
   const watchedTableId = form.watch("tableId");
