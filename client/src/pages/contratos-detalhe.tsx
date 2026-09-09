@@ -483,6 +483,7 @@ export default function ContratosDetalhePage() {
   const currentStatusDef = statusList.find((s) => s.key === proposal.status);
   const isTerminal = TERMINAL.includes(proposal.status);
   const isPortabilidade = proposal.product === "PORTABILIDADE";
+  const isCompraDivida = proposal.product === "COMPRA_DIVIDA";
   const isFinalStatus = !!currentStatusDef?.isFinal || FINAL_FALLBACK.includes(proposal.status);
   // CIP só acompanha enquanto a operação não foi finalizada
   const cip = (isPortabilidade && !isFinalStatus) ? cipInfo(m.dataCip) : null;
@@ -601,6 +602,7 @@ export default function ContratosDetalhePage() {
       case "bancoOrigemCodigo": body = { clientMetaPatch: { bancoOrigemCodigo: editVal.trim() } }; break;
       case "dataCip":          body = { clientMetaPatch: { dataCip: editVal.trim() || null } }; break;
       case "saldoDevedor":     body = { clientMetaPatch: { saldoDevedor: parseBrNum(editVal) } }; break;
+      case "parcelaOriginal":  body = { clientMetaPatch: { parcelaOriginal: parseBrNum(editVal) } }; break;
       case "prazoInformado":   body = { clientMetaPatch: { prazoInformado: editVal.trim() ? parseInt(editVal) : null } }; break;
       case "troco":            body = { clientMetaPatch: { troco: parseBrNum(editVal) } }; break;
       // Conta bancária de crédito: grava o objeto completo em contaSelecionada (origem manual)
@@ -1068,8 +1070,17 @@ export default function ContratosDetalhePage() {
             </>
           ) : (
             <>
-              {renderField({ fieldKey: "contractValue", label: "Valor Contrato", value: proposal.contractValue, money: true, editable: true })}
-              {renderField({ fieldKey: "installmentValue", label: "Parcela", value: proposal.installmentValue, money: true, editable: true })}
+              {/* Compra de Dívida: Valor Total (bruto, base do prêmio) e o líquido que sai = total − saldo */}
+              {renderField({ fieldKey: "contractValue", label: isCompraDivida ? "Valor Total" : "Valor Contrato", value: proposal.contractValue, money: true, editable: true })}
+              {renderField({ fieldKey: "installmentValue", label: isCompraDivida ? "Parcela Utilizada" : "Parcela", value: proposal.installmentValue, money: true, editable: true })}
+              {isCompraDivida && renderField({ fieldKey: "parcelaOriginal", label: "Parcela Original", value: m.parcelaOriginal, money: true, editable: true })}
+              {isCompraDivida && renderField({ fieldKey: "saldoDevedor", label: "Saldo Devedor", value: m.saldoDevedor, money: true, editable: true })}
+              {isCompraDivida && renderField({
+                fieldKey: "valorLiberadoCompra",
+                label: "Valor Liberado",
+                value: String((parseBrNum(String(proposal.contractValue ?? "")) || 0) - (parseBrNum(String(m.saldoDevedor ?? "")) || 0)),
+                money: true,
+              })}
               {renderField({ fieldKey: "term", label: "Prazo (meses)", value: proposal.term != null ? String(proposal.term) : "", editable: true, copyable: false })}
               {renderField({ fieldKey: "taxa", label: "Taxa (%)", value: m.taxa != null ? String(m.taxa) : "", editable: true, copyable: false })}
               {renderField({ fieldKey: "ade", label: "ADE", value: proposal.ade, mono: true, editable: true, isAde: true })}

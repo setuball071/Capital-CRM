@@ -172,6 +172,7 @@ const formSchema = z.object({
   // Portabilidade / Compra de Dívida
   bancoOrigem: z.string().optional(),
   saldoDevedor: z.string().optional(),
+  parcelaOriginal: z.string().optional(), // Compra de Dívida: parcela da dívida quitada (informativo)
   prazoAtual: z.string().optional(),
   margemCliente: z.string().optional(),
   // Conta bancária para crédito (manual)
@@ -891,7 +892,7 @@ export default function ContratosPropostaPage() {
       bank: "", product: "", tableId: "",
       contractValue: "", installmentValue: "", term: "",
       ade: "", commissionPercentage: "", corretorCommissionPercentage: "",
-      bancoOrigem: "", saldoDevedor: "", prazoAtual: "", margemCliente: "",
+      bancoOrigem: "", saldoDevedor: "", parcelaOriginal: "", prazoAtual: "", margemCliente: "",
     },
   });
 
@@ -906,6 +907,17 @@ export default function ContratosPropostaPage() {
     : tabelasDoTipo;
 
   const contractValNum = parseBrNumber(watchedContractValue) || 0;
+
+  // Compra de Dívida: os campos são os mesmos JSX dos outros tipos, então a ordem
+  // pedida (origem → parcela original → saldo → destino → parcela utilizada →
+  // tabela → prazo → total → liberado → ADE) é feita por CSS order no grid.
+  // Classes literais de propósito: o Tailwind não gera `order-${n}` dinâmico.
+  const isCompra = contractType === "COMPRA_DIVIDA";
+  const ORD_COMPRA = ["", "order-1", "order-2", "order-3", "order-4", "order-5", "order-6", "order-7", "order-8", "order-9", "order-10"];
+  const ordCompra = (n: number) => (isCompra ? ORD_COMPRA[n] : undefined);
+  const watchedSaldoDevedor = form.watch("saldoDevedor");
+  // Valor Liberado = Valor Total − Saldo Devedor (só calculado, nunca digitado)
+  const valorLiberadoCompra = isCompra ? contractValNum - (parseBrNumber(watchedSaldoDevedor) || 0) : 0;
 
   // ── Cálculo do repasse LÍQUIDO do corretor (sem expor pctEmpresa) ──────────
   const watchedTableId = form.watch("tableId");
@@ -1068,6 +1080,9 @@ export default function ContratosPropostaPage() {
           } : {}),
           ...(data.bancoOrigem ? { bancoOrigem: data.bancoOrigem } : {}),
           ...(data.saldoDevedor ? { saldoDevedor: data.saldoDevedor } : {}),
+          // Compra de Dívida: parcela da dívida quitada e o líquido que sai (total − saldo)
+          ...(isCompra && data.parcelaOriginal ? { parcelaOriginal: parseBrNumber(data.parcelaOriginal) } : {}),
+          ...(isCompra && data.contractValue ? { valorLiberado: (parseBrNumber(data.contractValue) || 0) - (parseBrNumber(data.saldoDevedor) || 0) } : {}),
           ...(data.prazoAtual ? { prazoAtual: data.prazoAtual } : {}),
           ...(extratoFile ? {
             extrato: {
@@ -3301,10 +3316,26 @@ export default function ContratosPropostaPage() {
                     control={form.control}
                     name="bancoOrigem"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className={ordCompra(1)}>
                         <FormLabel>Banco de Origem</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Banco atual do cliente" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {/* ── Parcela Original (compra de dívida): parcela da dívida que está sendo quitada ── */}
+                {isCompra && (
+                  <FormField
+                    control={form.control}
+                    name="parcelaOriginal"
+                    render={({ field }) => (
+                      <FormItem className={ordCompra(2)}>
+                        <FormLabel>Parcela Original (R$)</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="0,00" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -3317,7 +3348,7 @@ export default function ContratosPropostaPage() {
                     control={form.control}
                     name="saldoDevedor"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className={ordCompra(3)}>
                         <FormLabel>Saldo Devedor (R$)</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="0,00" />
@@ -3368,7 +3399,7 @@ export default function ContratosPropostaPage() {
                   control={form.control}
                   name="bank"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className={ordCompra(4)}>
                       <FormLabel>
                         {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN" || contractType === "COMPRA_DIVIDA")
                           ? "Banco de Destino"
@@ -3417,7 +3448,7 @@ export default function ContratosPropostaPage() {
                   control={form.control}
                   name="tableId"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className={ordCompra(6)}>
                       <FormLabel>
                         Tabela
                         {!watchedBank && (
@@ -3471,7 +3502,7 @@ export default function ContratosPropostaPage() {
                     control={form.control}
                     name="term"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className={ordCompra(7)}>
                         <FormLabel>
                           {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN")
                             ? "Novo Prazo (meses)"
@@ -3490,10 +3521,11 @@ export default function ContratosPropostaPage() {
                   control={form.control}
                   name="contractValue"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className={ordCompra(8)}>
                       <FormLabel className="flex items-center gap-2">
                         {contractType === "CARTAO" ? "Valor do Saque (R$)"
                           : contractType === "PORTABILIDADE_REFIN" ? "Troco / Refinanciamento (R$)"
+                          : isCompra ? "Valor Total (R$)"
                           : "Valor Liberado (R$)"}
                         {selectedTabela?.coef > 0 && (
                           <span className="text-[10px] font-normal text-muted-foreground">
@@ -3504,7 +3536,10 @@ export default function ContratosPropostaPage() {
                       <FormControl>
                         <Input
                           {...field}
-                          placeholder="0,00"
+                          placeholder={isCompra ? "calculado pela parcela" : "0,00"}
+                          // Compra de Dívida: Valor Total é só calculado (parcela ÷ coef), não se digita
+                          readOnly={isCompra}
+                          className={isCompra ? "bg-muted/50" : undefined}
                           onChange={(e) => {
                             field.onChange(e.target.value);
                             const coef = selectedTabela?.coef;
@@ -3528,10 +3563,11 @@ export default function ContratosPropostaPage() {
                   control={form.control}
                   name="installmentValue"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className={ordCompra(5)}>
                       <FormLabel className="flex items-center gap-2">
                         {(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN")
                           ? "Nova Parcela (R$)"
+                          : isCompra ? "Parcela Utilizada (R$)"
                           : "Valor da Parcela (R$)"}
                       </FormLabel>
                       <FormControl>
@@ -3556,13 +3592,26 @@ export default function ContratosPropostaPage() {
                   )}
                 />
 
+                {/* ── Valor Liberado (compra de dívida) = Valor Total − Saldo Devedor, só leitura ── */}
+                {isCompra && (
+                  <div className={`space-y-2 ${ordCompra(9)}`}>
+                    <label className="text-sm font-medium">Valor Liberado (R$)</label>
+                    <div className={`h-10 px-3 flex items-center rounded-md border bg-muted/50 text-sm font-semibold ${valorLiberadoCompra < 0 ? "text-destructive" : ""}`}>
+                      {contractValNum > 0 ? fmtBRL(valorLiberadoCompra) : <span className="text-muted-foreground font-normal">total − saldo devedor</span>}
+                    </div>
+                    {valorLiberadoCompra < 0 && contractValNum > 0 && (
+                      <p className="text-xs text-destructive">Saldo devedor maior que o valor total — a operação não libera valor.</p>
+                    )}
+                  </div>
+                )}
+
                 {/* ── ADE — somente para operações que precisam (não no Contrato Novo) ── */}
                 {contractType !== "NOVO" && (
                   <FormField
                     control={form.control}
                     name="ade"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className={ordCompra(10)}>
                         <FormLabel>ADE / Nº Protocolo</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Número do banco (opcional)" />
@@ -4328,13 +4377,15 @@ export default function ContratosPropostaPage() {
               {selectedTabela && <InfoField label="Tabela" value={selectedTabela.nome} wide />}
               {selectedTabela?.prazo && <InfoField label="Prazo" value={`${selectedTabela.prazo} meses`} />}
               <InfoField
-                label={contractType === "CARTAO" ? "Valor do Saque" : contractType === "PORTABILIDADE_REFIN" ? "Troco" : "Valor Liberado"}
+                label={contractType === "CARTAO" ? "Valor do Saque" : contractType === "PORTABILIDADE_REFIN" ? "Troco" : isCompra ? "Valor Total" : "Valor Liberado"}
                 value={fmtBRL(valorContrato)}
               />
               <InfoField
-                label={(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? "Nova Parcela" : "Parcela"}
+                label={(contractType === "PORTABILIDADE" || contractType === "PORTABILIDADE_REFIN") ? "Nova Parcela" : isCompra ? "Parcela Utilizada" : "Parcela"}
                 value={fmtBRL(valorParcela)}
               />
+              {isCompra && v.parcelaOriginal && <InfoField label="Parcela Original" value={`R$ ${v.parcelaOriginal}`} />}
+              {isCompra && <InfoField label="Valor Liberado" value={fmtBRL(valorContrato - (parseBrNumber(v.saldoDevedor) || 0))} />}
               {v.bancoOrigem && <InfoField label="Banco de Origem" value={v.bancoOrigem} />}
               {v.saldoDevedor && <InfoField label="Saldo Devedor" value={`R$ ${v.saldoDevedor}`} />}
               {v.prazoAtual && <InfoField label="Prazo Restante" value={`${v.prazoAtual} meses`} />}
