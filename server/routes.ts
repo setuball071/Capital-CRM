@@ -16402,10 +16402,35 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         sit_func:         (cliente as any).situacaoFuncionalAtual ?? (cliente as any).sit_func ?? null,
       } : null;
 
+      // Cartao do Banco Master (ex-Banco Maxima): o banco entrou em liquidacao,
+      // parou de descontar o cartao em nov/2025 e NAO soltou a averbacao. O SIAPE
+      // devolve a margem de cartao beneficio como livre, mas outro banco nao
+      // consegue averbar -- e margem fantasma. A lista vem do Bigdata (o CRM so
+      // guarda contratos de jul/ago 2026); ver scripts/carregar-master-cartao-preso.mjs
+      let alertaMaster: { parcelaNov2025: number | null; contratos: string | null } | null = null;
+      try {
+        const cpfNum = String((cliente as any).cpf || "").replace(/\D/g, "");
+        if (cpfNum.length === 11) {
+          const [row] = (await db.execute(sql`
+            SELECT parcela_nov2025, contratos FROM master_cartao_preso WHERE cpf = ${cpfNum} LIMIT 1
+          `)).rows as any[];
+          if (row) {
+            alertaMaster = {
+              parcelaNov2025: row.parcela_nov2025 != null ? parseFloat(String(row.parcela_nov2025)) : null,
+              contratos: row.contratos ?? null,
+            };
+          }
+        }
+      } catch (e) {
+        // tabela ainda nao carregada -- a ficha simplesmente nao mostra o alerta
+        console.warn("[MASTER] alerta indisponivel:", (e as Error).message);
+      }
+
       return res.json({
         clienteBase: clienteBaseNorm,
         folhaAtual: folhaFormatada,
         contratos,
+        alertaMaster,
         higienizacao: {
           telefones: uniqueTelefones,
           emails: uniqueEmails,

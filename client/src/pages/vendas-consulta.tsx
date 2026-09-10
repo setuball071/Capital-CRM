@@ -83,6 +83,7 @@ interface ConsultaData {
   clienteBase: any | null;
   folhaAtual: any | null;
   contratos: any[];
+  alertaMaster?: AlertaMaster | null;
   higienizacao?: {
     telefones: HigienizacaoTelefone[];
     emails: string[];
@@ -111,6 +112,11 @@ interface ConsultaData {
   tem_multiplos_vinculos?: boolean;
   pessoaId?: number;
   leadId?: number;
+}
+
+interface AlertaMaster {
+  parcelaNov2025: number | null;
+  contratos: string | null;
 }
 
 interface HistoricoFolhaItem {
@@ -1803,6 +1809,27 @@ export default function VendasConsulta() {
                       // Layout SIAPE padrão: 4 cards (70% / 35% / 5% Cartão / 5% Benefício)
                       return (
                         <>
+                        {consultaData.alertaMaster && (
+                          <div
+                            className="mb-4 rounded-lg border-l-4 border-red-600 bg-red-50 dark:bg-red-950/40 p-3"
+                            data-testid="alerta-cartao-master"
+                          >
+                            <p className="text-sm font-semibold text-red-800 dark:text-red-300">
+                              &#x26A0; Cartão do Banco Master &mdash; margem de benefício pode estar presa
+                            </p>
+                            <p className="text-xs text-red-700 dark:text-red-400 mt-1">
+                              Este cliente tinha cartão do Banco Master (ex-Banco Máxima) descontando até
+                              <strong> nov/2025</strong>
+                              {consultaData.alertaMaster.parcelaNov2025 != null && (
+                                <> , parcela de <strong>{formatCurrency(consultaData.alertaMaster.parcelaNov2025)}</strong></>
+                              )}
+                              . O banco entrou em liquidação e parou de descontar, mas a averbação continua
+                              presa &mdash; o cliente precisa liquidar para soltar. A margem de
+                              <strong> Benefício 5%</strong> abaixo pode aparecer livre e não ser averbável.
+                            </p>
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                           <Card className="bg-muted/50" data-testid="card-margem-70">
                             <CardContent className="p-4">
