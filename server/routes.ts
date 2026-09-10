@@ -31801,6 +31801,27 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
         resposta.margens = margens;
       }
 
+      // Cartao preso no Banco Master (ex-Banco Maxima). O banco entrou em
+      // liquidacao e parou de descontar o cartao em nov/2025, mas NAO soltou a
+      // averbacao: o SIAPE devolve a margem de BENEFICIO como livre e outro
+      // banco nao consegue averbar. Sem este aviso, quem consulta pela API ve
+      // margem que nao existe e monta proposta que nao entra.
+      try {
+        const [linhaMaster] = (await db.execute(sql`
+          SELECT parcela_nov2025, contratos FROM master_cartao_preso WHERE cpf = ${rawCpf} LIMIT 1
+        `)).rows as any[];
+        if (linhaMaster) {
+          resposta.alerta_master = {
+            parcela_nov2025: linhaMaster.parcela_nov2025 != null
+              ? parseFloat(String(linhaMaster.parcela_nov2025)) : null,
+            contratos: linhaMaster.contratos ?? null,
+          };
+        }
+      } catch (e) {
+        // tabela ainda nao carregada — a resposta simplesmente nao traz o alerta
+        console.warn("[API externa] alerta Master indisponivel:", (e as Error).message);
+      }
+
       if (escopos.includes("contratos")) {
         resposta.contratos = contratos.map((c) => ({
           tipo: c.tipoContrato,
