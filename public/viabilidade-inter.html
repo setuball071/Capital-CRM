@@ -205,7 +205,7 @@ td{color:#111827!important}
             <th style="width:11%;">Prazo / total</th>
             <th style="width:12.5%;">Saldo / taxa</th>
             <th style="width:10.5%;">Tabela refin</th>
-            <th style="width:11.5%;text-align:right;">Troco</th>
+            <th style="width:11.5%;text-align:right;">Troco líq.</th>
             <th style="width:8.5%;text-align:right;">Ponderada</th>
             <th style="width:17%;">Parecer</th>
             <th style="width:3.5%;"></th>
@@ -242,6 +242,10 @@ function days360(d1, d2) {
   return (y2 - y1) * 360 + (m2 - m1) * 30 + (dd2 - dd1);
 }
 function addMeses(d, n) { const x = new Date(d.getTime()); x.setMonth(x.getMonth() + n); return x; }
+
+// Alíquotas de IOF usadas pela planilha do banco
+const IOF_DIA = 0.000082;      // ao dia, limitado a 365 dias
+const IOF_ADICIONAL = 0.0038;  // fixo
 
 function xirr(vals, dias) {
   let lo = -0.9, hi = 10;
@@ -301,9 +305,32 @@ function motorInter(p) {
   const fluxo = [-totalFinanciado].concat(fluxoPort.map((v, i) => v + fluxoRefin[i]));
   const tirAno = xirr(fluxo, [0].concat(diasReais));
   if (!isFinite(tirAno)) return null;
+  const taxaPonderada = Math.pow(1 + tirAno, 1 / 12) - 1;
 
-  return { troco: troco, totalFinanciado: totalFinanciado, tirAno: tirAno,
-           taxaPonderada: Math.pow(1 + tirAno, 1 / 12) - 1 };
+  // ── IOF ──────────────────────────────────────────────────────────────────
+  // O troco que o cliente recebe é LÍQUIDO de IOF — é o número que a planilha
+  // do banco mostra em "Troco". O IOF incide só sobre o dinheiro novo (o saldo
+  // portado não paga), e a base não é o troco direto: a planilha refaz o valor
+  // financiado a partir da parcela do refin, descontada à TAXA PONDERADA.
+  const carencia = days360(p.dataContrato, p.primeiroVenc);
+  const fator  = taxaPonderada / (1 - Math.pow(1 + taxaPonderada, -prazoRefin));
+  const ajuste = Math.pow(1 + taxaPonderada, (carencia - 30) / 30);
+  const baseIof = (novaParcela / fator) / ajuste - saldoPortado;
+  const pmtBase = fator * (baseIof * ajuste);
+
+  let saldo = baseIof, iof = 0;
+  for (let m = 1; m <= prazoRefin; m++) {
+    const novo = saldo * Math.pow(1 + taxaPonderada, (m === 1 ? carencia : 30) / 30) - pmtBase;
+    const amortizado = saldo - novo;
+    // 0,0082% ao dia limitado a 365 dias + 0,38% fixo, sobre cada amortização
+    iof += Math.min(diasReais[m - 1], 365) * amortizado * IOF_DIA + amortizado * IOF_ADICIONAL;
+    saldo = novo;
+  }
+  if (!(iof >= 0)) iof = 0;
+
+  return { trocoBruto: troco, iof: iof, troco: troco - iof,
+           totalFinanciado: totalFinanciado, tirAno: tirAno,
+           taxaPonderada: taxaPonderada };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -422,8 +449,14 @@ function regraAtual() {
   };
 }
 
+const SEM_SEGURO_DISPONIVEL = ['Marinha', 'Exército', 'Aeronáutica'];
+
 function avaliar(taxaPondPct, regra) {
   if (!regra) return { ok: false, msg: 'Convênio sem regra cadastrada', tabela: '' };
+  // a planilha do banco recusa direto: "Seguro não disponível"
+  if (comSeguro && SEM_SEGURO_DISPONIVEL.indexOf(document.getElementById('convenio').value) >= 0) {
+    return { ok: false, msg: 'Seguro não disponível para este convênio', tabela: '' };
+  }
   const t = Math.round(taxaPondPct * 10000) / 10000;
   if (t < regra.min) return { ok: false, msg: 'Abaixo do mínimo (' + fmtPct(regra.min, 2) + ')', tabela: '' };
   if (t > regra.max) return { ok: false, msg: 'Acima do máximo (' + fmtPct(regra.max, 2) + ')', tabela: '' };
@@ -496,7 +529,9 @@ function render() {
         '<div class="vi-apoio"><span>taxa</span>' +
         inp('taxaAtual', l.taxaAtual ? l.taxaAtual.toFixed(4) : '') + '<span>%</span></div></td>' +
       '<td><select onchange="setCampo(' + l.id + ',&quot;tabelaRefin&quot;,this.value)">' + opTab + '</select></td>' +
-      '<td class="vi-out vi-valor">' + (l.calc ? fmtBRL(l.calc.troco) : '—') + '</td>' +
+      '<td class="vi-out vi-valor"' + (l.calc ? ' title="Bruto ' + fmtBRL(l.calc.trocoBruto) +
+        ' − IOF ' + fmtBRL(l.calc.iof) + '"' : '') + '>' +
+        (l.calc ? fmtBRL(l.calc.troco) : '—') + '</td>' +
       '<td class="vi-out vi-taxa" style="color:' + (l.parecer.ok ? 'var(--green)' : 'var(--red)') + ';"' +
         (l.calc ? ' title="' + fmtPct(l.calc.taxaPonderada * 100, 4) + ' — valor cheio, usado no parecer"' : '') + '>' +
         (l.calc ? fmtPct(l.calc.taxaPonderada * 100, 2) : '—') + '</td>' +
@@ -668,9 +703,13 @@ function setSeguro(v) {
 
 function onConvenio() {
   const regra = regraAtual();
-  document.getElementById('faixaInfo').innerHTML = regra
-    ? '<span class="vi-chip">' + fmtPct(regra.min, 2) + ' a ' + fmtPct(regra.max, 2) + ' a.m.</span>'
-    : '<span class="vi-chip alerta">convênio sem regra cadastrada</span>';
+  const conv = document.getElementById('convenio').value;
+  const semSeguro = comSeguro && SEM_SEGURO_DISPONIVEL.indexOf(conv) >= 0;
+  document.getElementById('faixaInfo').innerHTML = !regra
+    ? '<span class="vi-chip alerta">convênio sem regra cadastrada</span>'
+    : ('<span class="vi-chip">' + fmtPct(regra.min, 2) + ' a ' + fmtPct(regra.max, 2) + ' a.m.</span>' +
+       (semSeguro ? ' <span class="vi-chip alerta">seguro não disponível neste convênio</span>'
+        : comSeguro ? ' <span class="vi-chip alerta">troco ainda não desconta o prêmio do seguro</span>' : ''));
   if (document.getElementById('painelRegras').style.display !== 'none') renderRegras();
   recalcTudo();
 }
