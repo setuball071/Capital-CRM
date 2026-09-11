@@ -63,11 +63,19 @@ td{color:#111827!important}
   #tab-sim-content .btn-rem-inline:hover { transform:none; box-shadow:none; background:#fcebeb; }
 
   /* tabela */
-  .vi-tbl    { width:100%; }
-  .vi-tbl th { white-space:nowrap; padding:8px 10px!important; }
-  .vi-tbl td { padding:10px!important; vertical-align:top; border-bottom:1px solid var(--border-soft); }
+  .vi-tbl    { width:100%; table-layout:fixed; }
+  .vi-tbl th { white-space:nowrap; padding:8px 6px!important; font-size:10px!important; }
+  .vi-tbl td { padding:8px 6px!important; vertical-align:top; border-bottom:1px solid var(--border-soft); }
   .vi-tbl tr:last-child td { border-bottom:none; }
   .vi-tbl input, .vi-tbl select { width:100%; }
+  /* ferramentas.css forca "padding:8px 12px!important" e
+     "#tab-sim-content td input { min-width:80px }" — as duas coisas sozinhas ja
+     estouram colunas estreitas, e o min-width chegava a inchar o checkbox. */
+  #tab-sim-content .vi-tbl td input:not([type=checkbox]),
+  #tab-sim-content .vi-tbl td select { min-width:0; padding:8px 6px!important; }
+  #tab-sim-content .vi-tbl td .vi-par input { padding:8px 2px!important; }
+  #tab-sim-content .vi-tbl td input[type=checkbox] {
+               width:16px!important; min-width:0; margin-top:11px; }
   .vi-sub    { font-size:10.5px; color:var(--text-muted); margin-top:4px; padding-left:2px; }
   /* nº do contrato: texto de apoio, nao um campo cheio (ID no seletor para
      vencer o "#tab-sim-content input" de ferramentas.css, que usa !important) */
@@ -83,14 +91,22 @@ td{color:#111827!important}
                font-size:10.5px!important; color:var(--text-muted)!important; }
   [data-theme="dark"] #tab-sim-content .vi-seg button.on {
                background:var(--purple-light); color:#C4B5FD; }
-  .vi-par    { display:flex; align-items:center; gap:6px; }
-  .vi-par input { width:52px!important; text-align:center; }
+  .vi-par    { display:flex; align-items:center; gap:4px; }
+  .vi-par input { flex:1; min-width:0; width:auto!important; text-align:center; padding:8px 2px!important; }
   .vi-par span { color:var(--text-muted); font-size:12px; }
+  /* campo de apoio: mesmo par de valores, meia altura, para nao virar coluna */
+  .vi-apoio  { display:flex; align-items:baseline; gap:5px; margin-top:5px; }
+  .vi-apoio span { font-size:10px; color:var(--text-muted); white-space:nowrap; }
+  #tab-sim-content .vi-apoio input,
+  [data-theme="dark"] #tab-sim-content .vi-apoio input:not([type=checkbox]):not([type=radio]) {
+               flex:1; min-width:0; border:none!important; border-bottom:1px solid var(--border)!important;
+               background:none!important; border-radius:0!important; padding:1px 2px!important;
+               font-size:11px!important; box-shadow:none!important; }
 
   /* bloco de saída: fundo levemente destacado, pra ler como resultado */
   .vi-out    { background:var(--surface-2); }
-  .vi-valor  { font-size:13px; font-weight:600; text-align:right; padding-top:9px; white-space:nowrap; }
-  .vi-taxa   { font-size:14px; font-weight:700; text-align:right; padding-top:8px; white-space:nowrap; }
+  .vi-valor  { font-size:12px; font-weight:600; text-align:right; padding-top:10px; white-space:nowrap; }
+  .vi-taxa   { font-size:13px; font-weight:700; text-align:right; padding-top:9px; white-space:nowrap; }
 
   .vi-linha-nao td { opacity:.62; }
   .vi-linha-nao td:first-child { box-shadow:inset 3px 0 0 var(--red); }
@@ -191,22 +207,20 @@ td{color:#111827!important}
     </div>
     <div id="statusImport" style="font-size:12px;margin-bottom:10px;"></div>
 
-    <div class="vi-scroll">
+    <div class="vi-scroll"><!-- so entra em acao em janela muito estreita -->
       <table class="vi-tbl">
         <thead>
           <tr>
-            <th style="width:36px;"></th>
-            <th style="min-width:130px;">Banco</th>
-            <th style="width:110px;">Parcela (R$)</th>
-            <th style="width:130px;">Prazo / Total</th>
-            <th style="width:125px;">Saldo devedor</th>
-            <th style="width:95px;">Taxa (% a.m.)</th>
-            <th style="width:110px;">Nova parcela</th>
-            <th style="width:145px;">Tabela refin</th>
-            <th style="width:125px;text-align:right;">Troco</th>
-            <th style="width:95px;text-align:right;">Taxa pond.</th>
-            <th style="min-width:165px;">Parecer</th>
-            <th style="width:40px;"></th>
+            <th style="width:3.5%;"></th>
+            <th style="width:12%;">Banco</th>
+            <th style="width:10.5%;">Parcela / nova</th>
+            <th style="width:10.5%;">Prazo / total</th>
+            <th style="width:12%;">Saldo / taxa</th>
+            <th style="width:10%;">Tabela refin</th>
+            <th style="width:10.5%;text-align:right;">Troco</th>
+            <th style="width:9%;text-align:right;">Taxa pond.</th>
+            <th style="width:18.5%;">Parecer</th>
+            <th style="width:3.5%;"></th>
           </tr>
         </thead>
         <tbody id="tbodyContratos"></tbody>
@@ -463,7 +477,7 @@ function recalcTudo() {
 function render() {
   const tb = document.getElementById('tbodyContratos');
   if (!linhas.length) {
-    tb.innerHTML = '<tr><td colspan="12" class="vi-vazio">Arraste o extrato acima ou clique em "Adicionar contrato".</td></tr>';
+    tb.innerHTML = '<tr><td colspan="10" class="vi-vazio">Arraste o extrato acima ou clique em "Adicionar contrato".</td></tr>';
     pintarResumo();
     return;
   }
@@ -474,7 +488,7 @@ function render() {
       ' onchange="setCampo(' + l.id + ',&quot;' + campo + '&quot;,this.value)">';
     const pagas = Math.max(0, (l.prazoTotal || 0) - (l.restantes || 0));
     const opTab = TABELAS_REFIN.map(t =>
-      '<option value="' + t.n + '"' + (t.n === l.tabelaRefin ? ' selected' : '') + '>Tabela ' + t.n + ' · ' +
+      '<option value="' + t.n + '"' + (t.n === l.tabelaRefin ? ' selected' : '') + '>' + t.n + ' · ' +
       fmtPct(comSeguro ? Math.round((t.sem - DESCONTO_SEGURO) * 100) / 100 : t.sem, 2) + '</option>').join('');
     const parecer = l.parecer.ok
       ? '<span class="vi-tag vi-ok">Favorável · ' + esc(l.parecer.tabela) + '</span>'
@@ -485,13 +499,15 @@ function render() {
         ' onchange="setCampo(' + l.id + ',&quot;marcado&quot;,this.checked)"></td>' +
       '<td>' + inp('banco', l.banco) +
         '<div class="vi-sub">' + inp('contrato', l.contrato, ' placeholder="nº do contrato"') + '</div></td>' +
-      '<td>' + inp('parcela', l.parcela ? l.parcela.toFixed(2) : '') + '</td>' +
+      '<td>' + inp('parcela', l.parcela ? l.parcela.toFixed(2) : '') +
+        '<div class="vi-apoio"><span>nova</span>' +
+        inp('novaParcela', l.novaParcela ? l.novaParcela.toFixed(2) : '') + '</div></td>' +
       '<td><div class="vi-par">' + inp('restantes', l.restantes || '') + '<span>/</span>' +
         inp('prazoTotal', l.prazoTotal || '') + '</div>' +
         '<div class="vi-sub">' + (l.prazoTotal ? pagas + ' pagas' : '&nbsp;') + '</div></td>' +
-      '<td>' + inp('saldo', l.saldo ? l.saldo.toFixed(2) : '') + '</td>' +
-      '<td>' + inp('taxaAtual', l.taxaAtual ? l.taxaAtual.toFixed(4) : '') + '</td>' +
-      '<td>' + inp('novaParcela', l.novaParcela ? l.novaParcela.toFixed(2) : '') + '</td>' +
+      '<td>' + inp('saldo', l.saldo ? l.saldo.toFixed(2) : '') +
+        '<div class="vi-apoio"><span>taxa</span>' +
+        inp('taxaAtual', l.taxaAtual ? l.taxaAtual.toFixed(4) : '') + '<span>%</span></div></td>' +
       '<td><select onchange="setCampo(' + l.id + ',&quot;tabelaRefin&quot;,this.value)">' + opTab + '</select></td>' +
       '<td class="vi-out vi-valor">' + (l.calc ? fmtBRL(l.calc.troco) : '—') + '</td>' +
       '<td class="vi-out vi-taxa" style="color:' + (l.parecer.ok ? 'var(--green)' : 'var(--red)') + ';">' +
