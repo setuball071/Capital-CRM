@@ -29,9 +29,11 @@ function IframeBridge() {
 function IframeThemeSync({
   portabilidadeRef,
   contrachequeRef,
+  viabilidadeRef,
 }: {
   portabilidadeRef: React.RefObject<HTMLIFrameElement>;
   contrachequeRef: React.RefObject<HTMLIFrameElement>;
+  viabilidadeRef: React.RefObject<HTMLIFrameElement>;
 }) {
   const { theme } = useTheme();
   const sendTheme = useCallback((frame: HTMLIFrameElement | null, t: string) => {
@@ -40,7 +42,8 @@ function IframeThemeSync({
   useEffect(() => {
     sendTheme(portabilidadeRef.current, theme);
     sendTheme(contrachequeRef.current, theme);
-  }, [theme, sendTheme, portabilidadeRef, contrachequeRef]);
+    sendTheme(viabilidadeRef.current, theme);
+  }, [theme, sendTheme, portabilidadeRef, contrachequeRef, viabilidadeRef]);
   return null;
 }
 
@@ -49,6 +52,7 @@ const TABS = [
   { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt" },
   { id: "amortizacao", label: "Amortização", icon: "trending_down" },
   { id: "amortizacao-anual", label: "Amortização Anual", icon: "event_repeat" },
+  { id: "viabilidade-inter", label: "Viabilidade Inter", icon: "fact_check" },
   { id: "contracheque", label: "Contracheque", icon: "description" },
   { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up" },
   { id: "compra", label: "Simulador de Compra", icon: "shopping_cart" },
@@ -66,6 +70,7 @@ export default function SimuladoresHub() {
   const { user } = useAuth();
   const portabilidadeRef = useRef<HTMLIFrameElement>(null);
   const contrachequeRef = useRef<HTMLIFrameElement>(null);
+  const viabilidadeRef = useRef<HTMLIFrameElement>(null);
 
   const navigateToProposta = useCallback(() => setActiveTab("proposta"), []);
 
@@ -92,12 +97,17 @@ export default function SimuladoresHub() {
   // Reenvia role se o user mudar (login/logout) ou se isMaster recalcular
   useEffect(() => {
     sendRoleToFrame(portabilidadeRef.current);
+    sendRoleToFrame(viabilidadeRef.current);
   }, [sendRoleToFrame]);
 
   return (
     <PropostaProvider onNavigateToProposta={navigateToProposta}>
       <IframeBridge />
-      <IframeThemeSync portabilidadeRef={portabilidadeRef} contrachequeRef={contrachequeRef} />
+      <IframeThemeSync
+        portabilidadeRef={portabilidadeRef}
+        contrachequeRef={contrachequeRef}
+        viabilidadeRef={viabilidadeRef}
+      />
       <div className="flex flex-col h-full w-full overflow-hidden">
         {/* ── SUB-TAB STRIP (Simuladores.dc.html) ── */}
         <div
@@ -168,6 +178,24 @@ export default function SimuladoresHub() {
             onLoad={() => {
               sendThemeToFrame(portabilidadeRef.current);
               sendRoleToFrame(portabilidadeRef.current);
+            }}
+          />
+
+          {/* Viabilidade Inter — iframe (motor de taxa ponderada, leitura do extrato) */}
+          <iframe
+            ref={viabilidadeRef}
+            src="/viabilidade-inter.html?v=20260911"
+            title="Viabilidade Inter"
+            style={{
+              display: activeTab === "viabilidade-inter" ? "block" : "none",
+              width: "100%",
+              height: "100%",
+              border: "none",
+            }}
+            allow="same-origin"
+            onLoad={() => {
+              sendThemeToFrame(viabilidadeRef.current);
+              sendRoleToFrame(viabilidadeRef.current);
             }}
           />
 

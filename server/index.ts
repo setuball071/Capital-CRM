@@ -754,6 +754,15 @@ app.use((req, res, next) => {
             )
           `);
           await simMigDb.execute(simMigSql`CREATE INDEX IF NOT EXISTS idx_cotacoes_sim_cpf ON cotacoes_simulador(tenant_id, cpf)`);
+          // Viabilidade Inter: faixas de taxa ponderada e grade de comissionamento por convênio
+          await simMigDb.execute(simMigSql`
+            CREATE TABLE IF NOT EXISTS viabilidade_conv_rules (
+              tenant_id  INTEGER PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+              regras     JSONB NOT NULL,
+              updated_by INTEGER,
+              updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
           log("Simulador migration OK");
         } catch (migErr) {
           console.error("Simulador migration error (non-fatal):", migErr);

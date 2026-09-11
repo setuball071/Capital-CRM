@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light only">
+<title>Capital Go — Viabilidade Inter</title>
+<style id="force-light">
+html,body,*,*::before,*::after{-webkit-color-scheme:light!important;color-scheme:light!important}
+body{background:#F8F8FC!important;color:#111827!important}
+.box,.card{background:#FFFFFF!important;color:#111827!important;border-color:#E8E8F0!important}
+input,select,textarea{background:#F9FAFB!important;color:#111827!important;border-color:#E5E7EB!important}
+th{background:#F3F4F6!important;color:#6B7280!important}
+td{color:#111827!important}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+<!-- Leitura do extrato (SIAPE) — mesmo parser do simulador de portabilidade -->
+<script src="/extrato-parser.js?v=20260911"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ferramentas.css?v=20260911">
+<style>
+  /* Só o que é específico desta tela — o resto vem de ferramentas.css */
+  .vi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .vi-lbl  { display:block; font-size:11px; font-weight:600; text-transform:uppercase;
+             letter-spacing:.5px; color:var(--text-muted); margin-bottom:4px; }
+  .vi-tbl  { font-size:12px; }
+  .vi-tbl th { white-space:nowrap; padding:8px 6px!important; }
+  .vi-tbl td { padding:6px!important; vertical-align:middle; }
+  .vi-tbl input, .vi-tbl select { padding:6px 8px!important; font-size:12px!important; width:100%; }
+  .vi-num  { text-align:right; }
+  .vi-out  { font-weight:600; white-space:nowrap; }
+  .vi-reprovada { background:rgba(239,68,68,.06); }
+  .vi-reprovada td { border-top:1px solid rgba(239,68,68,.35)!important;
+                     border-bottom:1px solid rgba(239,68,68,.35)!important; }
+  .vi-tag  { display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; }
+  .vi-ok   { background:var(--green-light); color:#047857; }
+  .vi-bad  { color:var(--red); font-size:11px; font-weight:600; }
+  .vi-resumo { display:flex; align-items:center; gap:28px; flex-wrap:wrap; }
+  .vi-resumo .v { font-size:18px; font-weight:700; }
+  .vi-scroll { overflow-x:auto; }
+</style>
+</head>
+<body>
+<div class="content-wrap" style="max-width:1500px;">
+
+  <!-- ── PARÂMETROS DA OPERAÇÃO ───────────────────────────────────────────── -->
+  <div class="box">
+    <h2>Viabilidade Inter — Portabilidade</h2>
+    <p style="font-size:12px;color:var(--text-secondary);margin:.3rem 0 1rem;">
+      Cada contrato é calculado de forma independente: troco, nova parcela e
+      <strong>taxa ponderada</strong> próprios. Só entram no resultado os contratos marcados.
+    </p>
+
+    <div class="vi-grid">
+      <div>
+        <label class="vi-lbl" for="convenio">Convênio</label>
+        <select id="convenio" onchange="onConvenio()"></select>
+      </div>
+      <div>
+        <label class="vi-lbl" for="comSeguro">Seguro prestamista</label>
+        <select id="comSeguro" onchange="onConvenio()">
+          <option value="0">Sem seguro</option>
+          <option value="1">Com seguro</option>
+        </select>
+      </div>
+      <div>
+        <label class="vi-lbl" for="dataContrato">Data do contrato</label>
+        <input type="date" id="dataContrato" onchange="recalcTudo()">
+      </div>
+      <div>
+        <label class="vi-lbl" for="primeiroVenc">1º vencimento</label>
+        <input type="date" id="primeiroVenc" onchange="recalcTudo()">
+      </div>
+      <div>
+        <label class="vi-lbl" for="prazoRefinPadrao">Prazo do refin (meses)</label>
+        <input type="number" id="prazoRefinPadrao" value="120" min="1" max="144" onchange="aplicarPadroes()">
+      </div>
+      <div>
+        <label class="vi-lbl" for="tabelaRefinPadrao">Tabela de refin (padrão)</label>
+        <select id="tabelaRefinPadrao" onchange="aplicarPadroes()"></select>
+      </div>
+    </div>
+
+    <div id="faixaInfo" style="margin-top:12px;font-size:12px;color:var(--text-secondary);"></div>
+    <button class="btn-o" style="margin-top:12px;" onclick="toggleRegras()">Regras dos convênios</button>
+
+    <!-- painel de edição das faixas/grade -->
+    <div id="painelRegras" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px;">
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+        Faixa aceita de taxa ponderada e grade de comissionamento, por convênio.
+        Estes números vêm da política do banco e mudam — mantenha-os atualizados aqui.
+      </div>
+      <div id="regrasEditor"></div>
+      <div id="regrasStatus" style="font-size:12px;margin-top:10px;"></div>
+      <div class="btn-row">
+        <button class="btn-p" id="btnSalvarRegras" onclick="salvarRegras()">Salvar regras</button>
+        <button class="btn-o" onclick="toggleRegras()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CONTRATOS ─────────────────────────────────────────────────────────── -->
+  <div class="box" style="margin-top:1rem;">
+    <h2>Contratos para Portar</h2>
+
+    <input type="file" id="pdfInput" accept=".pdf" style="display:none;" onchange="importarPDF(event)">
+    <div id="dropZone"
+      onclick="document.getElementById('pdfInput').click()"
+      ondragover="event.preventDefault();this.classList.add('dz-hover')"
+      ondragleave="this.classList.remove('dz-hover')"
+      ondrop="event.preventDefault();this.classList.remove('dz-hover');handleDropPDF(event)"
+      style="margin:12px 0 16px;padding:24px 16px;border:2px dashed #7C3AED;border-radius:10px;text-align:center;cursor:pointer;background:var(--surface-2);">
+      <div style="font-size:28px;margin-bottom:8px;line-height:1;">📄</div>
+      <div style="font-size:13px;font-weight:600;color:#7C3AED;margin-bottom:4px;">
+        Arraste o extrato aqui ou clique para selecionar
+      </div>
+      <div style="font-size:11px;color:#9CA3AF;">
+        Banco, número do contrato, parcela e prazo detectados automaticamente
+      </div>
+    </div>
+    <div id="statusImport" style="font-size:12px;margin-bottom:10px;"></div>
+
+    <div class="vi-scroll">
+      <table class="vi-tbl">
+        <thead>
+          <tr>
+            <th style="width:34px;"></th>
+            <th style="min-width:110px;">Banco</th>
+            <th style="min-width:100px;">Contrato</th>
+            <th style="width:70px;">Total</th>
+            <th style="width:60px;">Pagas</th>
+            <th style="width:70px;">Restam</th>
+            <th style="width:95px;">Parcela</th>
+            <th style="width:110px;">Saldo devedor</th>
+            <th style="width:80px;">Taxa atual</th>
+            <th style="width:95px;">Nova parcela</th>
+            <th style="width:70px;">Prazo</th>
+            <th style="width:130px;">Tabela refin</th>
+            <th style="width:100px;">Troco</th>
+            <th style="width:90px;">Taxa pond.</th>
+            <th style="min-width:150px;">Parecer</th>
+            <th style="width:40px;"></th>
+          </tr>
+        </thead>
+        <tbody id="tbodyContratos"></tbody>
+      </table>
+    </div>
+
+    <button class="btn-add purple" onclick="addLinha()">+ Adicionar contrato</button>
+  </div>
+
+  <!-- ── RESUMO ────────────────────────────────────────────────────────────── -->
+  <div class="box" style="margin-top:1rem;">
+    <div class="vi-resumo" id="resumo"></div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  MOTOR — replicado da planilha oficial do Inter e conferido contra ela
+//  (troco 54.318,34 · TIR 21,860% a.a. · taxa ponderada 1,6612% · Tabela 3).
+//  Detalhe que não pode ser trocado: o TROCO desconta em base 360 (DAYS360),
+//  a TAXA PONDERADA usa dias corridos reais em base 365. Misturar as duas
+//  bases move a terceira casa decimal — o suficiente para mudar de tabela.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function days360(d1, d2) {
+  let y1 = d1.getFullYear(), m1 = d1.getMonth() + 1, dd1 = d1.getDate();
+  let y2 = d2.getFullYear(), m2 = d2.getMonth() + 1, dd2 = d2.getDate();
+  if (dd1 === 31) dd1 = 30;
+  if (dd2 === 31 && dd1 >= 30) dd2 = 30;
+  return (y2 - y1) * 360 + (m2 - m1) * 30 + (dd2 - dd1);
+}
+function addMeses(d, n) { const x = new Date(d.getTime()); x.setMonth(x.getMonth() + n); return x; }
+
+function xirr(vals, dias) {
+  let lo = -0.9, hi = 10;
+  const npv = r => vals.reduce((a, v, i) => a + v / Math.pow(1 + r, dias[i] / 365), 0);
+  if (npv(lo) < 0) return NaN;
+  for (let k = 0; k < 300; k++) { const m = (lo + hi) / 2; if (npv(m) > 0) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
+
+// Tabela Price — usada só para completar taxa ⇄ saldo devedor
+function saldoPrice(pmt, i, n) {
+  if (i <= 0) return pmt * n;
+  return pmt * (1 - Math.pow(1 + i, -n)) / i;
+}
+function taxaFromSaldo(pmt, saldo, n) {
+  if (pmt <= 0 || saldo <= 0 || n <= 0 || saldo >= pmt * n) return 0;
+  let lo = 0.0000001, hi = 0.10;
+  if (saldoPrice(pmt, hi, n) > saldo) return 0;
+  for (let k = 0; k < 80; k++) {
+    const mid = (lo + hi) / 2;
+    if (saldoPrice(pmt, mid, n) > saldo) lo = mid; else hi = mid;
+  }
+  return ((lo + hi) / 2) * 100;
+}
+
+/** Calcula UMA operação (um contrato) de forma totalmente independente. */
+function motorInter(p) {
+  const saldoPortado = p.saldoPortado, prazoRem = p.prazoRemanescente;
+  const parcelaAtual = p.parcelaAtual, novaParcela = p.novaParcela;
+  const prazoRefin = p.prazoRefin, taxaRefinMes = p.taxaRefinMes;
+
+  if (!(saldoPortado > 0 && prazoRem > 0 && parcelaAtual > 0 &&
+        novaParcela > 0 && prazoRefin > 0 && taxaRefinMes > 0)) return null;
+
+  // calendário: dias em base 360 (troco) e dias corridos reais (taxa ponderada)
+  const dias360 = [], diasReais = [];
+  for (let m = 0; m < prazoRefin; m++) {
+    const dt = addMeses(p.primeiroVenc, m);
+    dias360.push(days360(p.dataContrato, dt));
+    diasReais.push(Math.round((dt - p.dataContrato) / 86400000));
+  }
+
+  // a portabilidade paga a parcela antiga até acabar o prazo remanescente;
+  // o refin paga a diferença nesse trecho e a parcela cheia depois.
+  const dif = novaParcela - parcelaAtual;
+  const fluxoPort = [], fluxoRefin = [];
+  for (let m = 1; m <= prazoRefin; m++) {
+    fluxoPort.push(m <= prazoRem ? parcelaAtual : 0);
+    fluxoRefin.push(m > prazoRem ? novaParcela : dif);
+  }
+
+  // troco = valor presente do fluxo de refin à taxa ANUAL da tabela, base 360
+  const taxaAno = Math.pow(1 + taxaRefinMes, 12) - 1;
+  const troco = fluxoRefin.reduce((a, v, i) => a + v / Math.pow(1 + taxaAno, dias360[i] / 360), 0);
+
+  const totalFinanciado = saldoPortado + troco;
+  const fluxo = [-totalFinanciado].concat(fluxoPort.map((v, i) => v + fluxoRefin[i]));
+  const tirAno = xirr(fluxo, [0].concat(diasReais));
+  if (!isFinite(tirAno)) return null;
+
+  return { troco: troco, totalFinanciado: totalFinanciado, tirAno: tirAno,
+           taxaPonderada: Math.pow(1 + tirAno, 1 / 12) - 1 };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  REGRAS POR CONVÊNIO
+//  Só o SIAPE vem preenchido: são os números conferidos na planilha do banco.
+//  Os demais ficam em branco de propósito — número chutado geraria parecer
+//  errado. Cadastre no painel "Regras dos convênios".
+// ═══════════════════════════════════════════════════════════════════════════
+const REGRAS_PADRAO = [
+  {
+    convenio: 'SIAPE',
+    semSeguro: { min: 1.63, max: 1.80 },
+    comSeguro: { min: 1.60, max: 1.77 },
+    grade: [
+      { taxa: 1.63, tabela: 'Tabela 1' }, { taxa: 1.65, tabela: 'Tabela 2' },
+      { taxa: 1.66, tabela: 'Tabela 3' }, { taxa: 1.67, tabela: 'Tabela 4' },
+      { taxa: 1.68, tabela: 'Tabela 5' }, { taxa: 1.69, tabela: 'Tabela 6' }
+    ]
+  },
+  { convenio: 'Marinha',     semSeguro: { min: null, max: null }, comSeguro: { min: null, max: null }, grade: [] },
+  { convenio: 'Exército',    semSeguro: { min: null, max: null }, comSeguro: { min: null, max: null }, grade: [] },
+  { convenio: 'Aeronáutica', semSeguro: { min: null, max: null }, comSeguro: { min: null, max: null }, grade: [] }
+];
+
+let REGRAS = JSON.parse(JSON.stringify(REGRAS_PADRAO));
+let isMaster = false;
+
+// Range Refin do banco: Tabela 1 = 1,50% a.m. até Tabela 41 = 4,00%, de 0,05 em 0,05
+const TABELAS_REFIN = [];
+for (let n = 1; n <= 41; n++) TABELAS_REFIN.push({ n: n, taxa: Math.round((1.50 + (n - 1) * 0.05) * 100) / 100 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ESTADO
+// ═══════════════════════════════════════════════════════════════════════════
+let linhas = [];
+let proxId = 1;
+
+const fmtBRL = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtPct = (v, casas) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) + '%';
+const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; };
+const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+function novaLinha(base) {
+  const b = base || {};
+  return {
+    id: proxId++,
+    marcado: true,
+    banco: b.banco || '',
+    contrato: b.numero_contrato || '',
+    prazoTotal: b.prazo_total || 0,
+    restantes: b.prazo || 0,
+    parcela: b.parcela || 0,
+    saldo: 0,
+    taxaAtual: 0,
+    novaParcela: b.parcela || 0,
+    prazoRefin: num(document.getElementById('prazoRefinPadrao').value) || 120,
+    tabelaRefin: parseInt(document.getElementById('tabelaRefinPadrao').value, 10) || 1,
+    calc: null,
+    parecer: { ok: false, msg: '', tabela: '' }
+  };
+}
+
+function addLinha() { linhas.push(novaLinha()); recalcTudo(); }
+function removerLinha(id) { linhas = linhas.filter(l => l.id !== id); recalcTudo(); }
+
+function setCampo(id, campo, valor) {
+  const l = linhas.find(x => x.id === id);
+  if (!l) return;
+  if (campo === 'banco' || campo === 'contrato') { l[campo] = valor; return; }
+  if (campo === 'marcado') { l.marcado = valor; pintarResumo(); return; }
+  if (campo === 'tabelaRefin') { l.tabelaRefin = parseInt(valor, 10) || 1; recalcTudo(); return; }
+
+  l[campo] = num(valor);
+
+  // Taxa ⇄ saldo devedor: quem foi digitado por último manda, o outro é deduzido.
+  if (campo === 'taxaAtual' && l.parcela > 0 && l.restantes > 0 && l.taxaAtual > 0) {
+    l.saldo = saldoPrice(l.parcela, l.taxaAtual / 100, l.restantes);
+  } else if (campo === 'saldo' && l.parcela > 0 && l.restantes > 0 && l.saldo > 0) {
+    l.taxaAtual = taxaFromSaldo(l.parcela, l.saldo, l.restantes);
+  }
+  if (l.prazoTotal && l.restantes > l.prazoTotal) l.restantes = l.prazoTotal;
+  if (campo === 'parcela' && !l.novaParcela) l.novaParcela = l.parcela;
+  recalcTudo();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CÁLCULO
+// ═══════════════════════════════════════════════════════════════════════════
+function regraAtual() {
+  const conv = document.getElementById('convenio').value;
+  const r = REGRAS.find(x => x.convenio === conv);
+  if (!r) return { faixa: null, grade: [] };
+  const comSeg = document.getElementById('comSeguro').value === '1';
+  const f = comSeg ? r.comSeguro : r.semSeguro;
+  return { faixa: (f && f.min != null && f.max != null) ? f : null, grade: r.grade || [] };
+}
+
+function avaliar(taxaPondPct, regra) {
+  if (!regra.faixa) return { ok: false, msg: 'Faixa deste convênio não cadastrada', tabela: '' };
+  const t = Math.round(taxaPondPct * 10000) / 10000;
+  if (t < regra.faixa.min) return { ok: false, msg: 'Taxa ponderada abaixo do mínimo (' + fmtPct(regra.faixa.min, 2) + ')', tabela: '' };
+  if (t > regra.faixa.max) return { ok: false, msg: 'Taxa ponderada acima do máximo (' + fmtPct(regra.faixa.max, 2) + ')', tabela: '' };
+  let tabela = '';
+  for (let i = 0; i < regra.grade.length; i++) if (t >= regra.grade[i].taxa) tabela = regra.grade[i].tabela;
+  return { ok: true, msg: 'Favorável', tabela: tabela };
+}
+
+function recalcTudo() {
+  const dc = document.getElementById('dataContrato').value;
+  const pv = document.getElementById('primeiroVenc').value;
+  const regra = regraAtual();
+  const dataContrato = dc ? new Date(dc + 'T00:00:00') : null;
+  const primeiroVenc = pv ? new Date(pv + 'T00:00:00') : null;
+
+  for (const l of linhas) {
+    l.calc = null;
+    l.parecer = { ok: false, msg: '', tabela: '' };
+    if (!dataContrato || !primeiroVenc) { l.parecer.msg = 'Informe as datas da operação'; continue; }
+    if (l.restantes >= l.prazoRefin) { l.parecer.msg = 'Prazo do refin tem que ser maior que o restante'; continue; }
+    const t = TABELAS_REFIN.find(x => x.n === l.tabelaRefin);
+    const r = motorInter({
+      saldoPortado: l.saldo, prazoRemanescente: l.restantes, parcelaAtual: l.parcela,
+      novaParcela: l.novaParcela, prazoRefin: l.prazoRefin,
+      taxaRefinMes: (t ? t.taxa : 0) / 100,
+      dataContrato: dataContrato, primeiroVenc: primeiroVenc
+    });
+    if (!r) { l.parecer.msg = 'Preencha parcela, prazo e saldo devedor'; continue; }
+    l.calc = r;
+    l.parecer = avaliar(r.taxaPonderada * 100, regra);
+    if (!l.parecer.ok) l.marcado = false;
+  }
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════════════════════
+function render() {
+  const tb = document.getElementById('tbodyContratos');
+  if (!linhas.length) {
+    tb.innerHTML = '<tr><td colspan="16" style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px;">' +
+      'Arraste o extrato acima ou clique em "Adicionar contrato".</td></tr>';
+    pintarResumo();
+    return;
+  }
+
+  tb.innerHTML = linhas.map(function (l) {
+    const reprovada = l.calc && !l.parecer.ok;
+    const inp = (campo, valor) =>
+      '<input class="vi-num" value="' + esc(valor) + '" onchange="setCampo(' + l.id + ',&quot;' + campo + '&quot;,this.value)">';
+    const pagas = Math.max(0, (l.prazoTotal || 0) - (l.restantes || 0));
+    const opTab = TABELAS_REFIN.map(t =>
+      '<option value="' + t.n + '"' + (t.n === l.tabelaRefin ? ' selected' : '') + '>Tabela ' + t.n + ' · ' + fmtPct(t.taxa, 2) + '</option>').join('');
+    const parecer = l.parecer.ok
+      ? '<span class="vi-tag vi-ok">Favorável' + (l.parecer.tabela ? ' · ' + esc(l.parecer.tabela) : '') + '</span>'
+      : '<span class="vi-bad">' + esc(l.parecer.msg) + '</span>';
+
+    return '<tr class="' + (reprovada ? 'vi-reprovada' : '') + '">' +
+      '<td><input type="checkbox" ' + (l.marcado ? 'checked' : '') + (l.parecer.ok ? '' : ' disabled') +
+        ' onchange="setCampo(' + l.id + ',&quot;marcado&quot;,this.checked)"></td>' +
+      '<td><input value="' + esc(l.banco) + '" onchange="setCampo(' + l.id + ',&quot;banco&quot;,this.value)"></td>' +
+      '<td><input value="' + esc(l.contrato) + '" onchange="setCampo(' + l.id + ',&quot;contrato&quot;,this.value)"></td>' +
+      '<td>' + inp('prazoTotal', l.prazoTotal || '') + '</td>' +
+      '<td class="vi-num" style="color:var(--text-secondary);">' + pagas + '</td>' +
+      '<td>' + inp('restantes', l.restantes || '') + '</td>' +
+      '<td>' + inp('parcela', l.parcela ? l.parcela.toFixed(2) : '') + '</td>' +
+      '<td>' + inp('saldo', l.saldo ? l.saldo.toFixed(2) : '') + '</td>' +
+      '<td>' + inp('taxaAtual', l.taxaAtual ? l.taxaAtual.toFixed(4) : '') + '</td>' +
+      '<td>' + inp('novaParcela', l.novaParcela ? l.novaParcela.toFixed(2) : '') + '</td>' +
+      '<td>' + inp('prazoRefin', l.prazoRefin || '') + '</td>' +
+      '<td><select onchange="setCampo(' + l.id + ',&quot;tabelaRefin&quot;,this.value)">' + opTab + '</select></td>' +
+      '<td class="vi-num vi-out">' + (l.calc ? fmtBRL(l.calc.troco) : '—') + '</td>' +
+      '<td class="vi-num vi-out" style="color:' + (l.parecer.ok ? 'var(--green)' : 'var(--red)') + ';">' +
+        (l.calc ? fmtPct(l.calc.taxaPonderada * 100, 4) : '—') + '</td>' +
+      '<td>' + parecer + '</td>' +
+      '<td><button class="btn-rem-inline" title="Remover" onclick="removerLinha(' + l.id + ')">×</button></td>' +
+    '</tr>';
+  }).join('');
+
+  pintarResumo();
+}
+
+function pintarResumo() {
+  const sel = linhas.filter(l => l.marcado && l.calc && l.parecer.ok);
+  const saldo = sel.reduce((a, l) => a + l.saldo, 0);
+  const troco = sel.reduce((a, l) => a + l.calc.troco, 0);
+  const total = sel.reduce((a, l) => a + l.calc.totalFinanciado, 0);
+  const item = (lbl, v, cor) =>
+    '<div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">' + lbl + '</div>' +
+    '<div class="v"' + (cor ? ' style="color:' + cor + '"' : '') + '>' + v + '</div></div>';
+
+  document.getElementById('resumo').innerHTML =
+    '<span class="vi-tag vi-ok" style="font-size:12px;">' + sel.length + ' contrato(s) selecionado(s)</span>' +
+    item('Saldo devedor portado', fmtBRL(saldo)) +
+    item('Valor liberado (troco)', fmtBRL(troco), 'var(--green)') +
+    item('Total financiado', fmtBRL(total)) +
+    (linhas.some(l => l.calc && !l.parecer.ok)
+      ? '<div style="font-size:11px;color:var(--red);max-width:260px;">Os contratos em vermelho ficaram fora da faixa e não entram no resultado.</div>'
+      : '');
+}
+
+function aplicarPadroes() {
+  const pr = num(document.getElementById('prazoRefinPadrao').value);
+  const tb = parseInt(document.getElementById('tabelaRefinPadrao').value, 10);
+  linhas.forEach(l => { if (pr > 0) l.prazoRefin = pr; if (tb) l.tabelaRefin = tb; });
+  recalcTudo();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  IMPORTAÇÃO DO EXTRATO — mesmo parser do simulador de portabilidade
+// ═══════════════════════════════════════════════════════════════════════════
+function handleDropPDF(event) {
+  const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+  if (file) importarPDF({ target: { files: [file] } });
+}
+
+async function importarPDF(event) {
+  const file = event.target.files && event.target.files[0];
+  const status = document.getElementById('statusImport');
+  if (!file) return;
+  status.style.color = 'var(--text-secondary)';
+  status.textContent = 'Lendo o extrato…';
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let texto = '';
+    const items = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const tc = await page.getTextContent();
+      for (const it of tc.items) {
+        texto += it.str + '\n';
+        items.push({ str: it.str, x: it.transform[4], y: it.transform[5] });
+      }
+    }
+    const achados = extrairContratos(texto, items) || [];
+    if (!achados.length) {
+      status.style.color = 'var(--red)';
+      status.textContent = 'Nenhum contrato reconhecido neste extrato.';
+      return;
+    }
+    achados.forEach(c => linhas.push(novaLinha(c)));
+    recalcTudo();
+    status.style.color = 'var(--green)';
+    status.textContent = achados.length + ' contrato(s) importado(s). Informe a taxa ou o saldo devedor de cada um.';
+    setTimeout(function () { status.textContent = ''; }, 6000);
+  } catch (e) {
+    console.error(e);
+    status.style.color = 'var(--red)';
+    status.textContent = 'Erro ao ler o PDF.';
+  }
+  const inputEl = document.getElementById('pdfInput');
+  if (inputEl) inputEl.value = '';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PAINEL DE REGRAS
+// ═══════════════════════════════════════════════════════════════════════════
+function toggleRegras() {
+  const p = document.getElementById('painelRegras');
+  const abrindo = p.style.display === 'none';
+  p.style.display = abrindo ? 'block' : 'none';
+  if (abrindo) renderRegras();
+}
+
+function renderRegras() {
+  const ro = isMaster ? '' : 'disabled';
+  document.getElementById('btnSalvarRegras').style.display = isMaster ? '' : 'none';
+  document.getElementById('regrasEditor').innerHTML = REGRAS.map(function (r, i) {
+    const campo = (lbl, caminho, v) =>
+      '<div><span class="vi-lbl">' + lbl + '</span>' +
+      '<input class="vi-num" ' + ro + ' value="' + (v == null ? '' : v) + '" ' +
+      'onchange="setRegra(' + i + ',&quot;' + caminho + '&quot;,this.value)"></div>';
+    const gradeTxt = (r.grade || []).map(g => fmtPct(g.taxa, 2) + ' → ' + g.tabela).join(' · ') || '—';
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">' +
+      '<div style="font-weight:600;margin-bottom:8px;">' + esc(r.convenio) + '</div>' +
+      '<div class="vi-grid">' +
+        campo('Mín. sem seguro (%)', 'semSeguro.min', r.semSeguro && r.semSeguro.min) +
+        campo('Máx. sem seguro (%)', 'semSeguro.max', r.semSeguro && r.semSeguro.max) +
+        campo('Mín. com seguro (%)', 'comSeguro.min', r.comSeguro && r.comSeguro.min) +
+        campo('Máx. com seguro (%)', 'comSeguro.max', r.comSeguro && r.comSeguro.max) +
+      '</div>' +
+      '<div style="margin-top:10px;"><span class="vi-lbl">Grade de comissionamento</span>' +
+        '<input ' + ro + ' style="width:100%" value="' + esc((r.grade || []).map(g => g.taxa + '=' + g.tabela).join('; ')) + '" ' +
+        'onchange="setGrade(' + i + ',this.value)">' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">' +
+        'Formato <code>1.63=Tabela 1; 1.65=Tabela 2</code> — vale a maior faixa atingida. Hoje: ' + esc(gradeTxt) + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function setRegra(i, caminho, valor) {
+  const partes = caminho.split('.');
+  if (!REGRAS[i][partes[0]]) REGRAS[i][partes[0]] = { min: null, max: null };
+  const v = String(valor).trim();
+  REGRAS[i][partes[0]][partes[1]] = v === '' ? null : num(v);
+  onConvenio();
+}
+
+function setGrade(i, valor) {
+  REGRAS[i].grade = String(valor).split(';').map(function (p) {
+    const partes = p.split('=');
+    if (partes.length < 2 || !partes[1].trim()) return null;
+    return { taxa: num(partes[0]), tabela: partes[1].trim() };
+  }).filter(Boolean).sort((a, b) => a.taxa - b.taxa);
+  renderRegras();
+  recalcTudo();
+}
+
+async function salvarRegras() {
+  const st = document.getElementById('regrasStatus');
+  st.style.color = 'var(--text-secondary)';
+  st.textContent = 'Salvando…';
+  try {
+    const r = await fetch('/api/viabilidade-regras', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(REGRAS)
+    });
+    if (!r.ok) {
+      const erro = await r.json().catch(function () { return {}; });
+      throw new Error(erro.message || 'erro ' + r.status);
+    }
+    st.style.color = 'var(--green)';
+    st.textContent = 'Regras salvas para toda a equipe.';
+  } catch (e) {
+    st.style.color = 'var(--red)';
+    st.textContent = 'Não foi possível salvar: ' + e.message;
+  }
+}
+
+async function carregarRegras() {
+  try {
+    const r = await fetch('/api/viabilidade-regras', { credentials: 'include' });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (Array.isArray(d) && d.length) REGRAS = d;
+  } catch (e) { /* mantém o padrão */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════════════════
+function onConvenio() {
+  const regra = regraAtual();
+  document.getElementById('faixaInfo').innerHTML = regra.faixa
+    ? 'Faixa aceita de taxa ponderada: <strong>' + fmtPct(regra.faixa.min, 2) + '</strong> a <strong>' +
+      fmtPct(regra.faixa.max, 2) + '</strong> a.m. — fora dela o banco não aprova.'
+    : '<span style="color:var(--red)">Faixa deste convênio ainda não cadastrada. Abra "Regras dos convênios".</span>';
+  recalcTudo();
+}
+
+async function init() {
+  document.getElementById('tabelaRefinPadrao').innerHTML = TABELAS_REFIN.map(t =>
+    '<option value="' + t.n + '"' + (t.n === 4 ? ' selected' : '') + '>Tabela ' + t.n + ' · ' + fmtPct(t.taxa, 2) + '</option>').join('');
+
+  const hoje = new Date();
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  document.getElementById('dataContrato').value = iso(hoje);
+  // 1º vencimento: dia 12 do mês seguinte, padrão da folha SIAPE
+  document.getElementById('primeiroVenc').value = iso(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 12));
+
+  await carregarRegras();
+  document.getElementById('convenio').innerHTML =
+    REGRAS.map(r => '<option value="' + esc(r.convenio) + '">' + esc(r.convenio) + '</option>').join('');
+  onConvenio();
+}
+
+// ── tema e papel vindos do CRM pai ──
+window.addEventListener('message', function (event) {
+  const d = event.data || {};
+  if (d.type === 'CAPITAL_CRM_THEME') {
+    const isDark = d.theme === 'dark';
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    const forceStyle = document.getElementById('force-light');
+    if (forceStyle) {
+      forceStyle.textContent = isDark ? '/* dark mode active */' : [
+        'html,body,*,*::before,*::after{-webkit-color-scheme:light!important;color-scheme:light!important}',
+        'body{background:#F8F8FC!important;color:#111827!important}',
+        '.box,.card{background:#FFFFFF!important;color:#111827!important;border-color:#E8E8F0!important}',
+        'input,select,textarea{background:#F9FAFB!important;color:#111827!important;border-color:#E5E7EB!important}',
+        'th{background:#F3F4F6!important;color:#6B7280!important}',
+        'td{color:#111827!important}'
+      ].join('\n');
+    }
+  }
+  if (d.type === 'CAPITAL_CRM_ROLE') {
+    isMaster = Boolean(d.isMaster);
+    if (document.getElementById('painelRegras').style.display !== 'none') renderRegras();
+  }
+});
+
+init();
+</script>
+</body>
+</html>

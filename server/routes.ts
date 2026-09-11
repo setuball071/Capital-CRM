@@ -29820,6 +29820,42 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     }
   });
 
+  // ── VIABILIDADE INTER: regras por convênio ────────────────────────────────
+  // Faixa aceita de taxa ponderada + grade de comissionamento. Uma linha por tenant.
+  app.get("/api/viabilidade-regras", requireAuth, async (req: any, res) => {
+    try {
+      const r = await db.execute(sql`
+        SELECT regras FROM viabilidade_conv_rules WHERE tenant_id = ${req.tenantId!}
+      `);
+      res.json((r.rows[0] as any)?.regras ?? null);
+    } catch (err: any) {
+      console.error("[VIABILIDADE_REGRAS] GET error:", err);
+      res.status(500).json({ message: "Erro ao carregar regras de viabilidade" });
+    }
+  });
+
+  app.put("/api/viabilidade-regras", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      if (!user.isMaster && user.role !== "master") {
+        return res.status(403).json({ message: "Acesso restrito ao administrador master" });
+      }
+      if (!Array.isArray(req.body)) {
+        return res.status(400).json({ message: "Body deve ser um array de convênios" });
+      }
+      await db.execute(sql`
+        INSERT INTO viabilidade_conv_rules (tenant_id, regras, updated_by, updated_at)
+        VALUES (${req.tenantId!}, ${JSON.stringify(req.body)}::jsonb, ${user.id}, NOW())
+        ON CONFLICT (tenant_id) DO UPDATE SET
+          regras = EXCLUDED.regras, updated_by = ${user.id}, updated_at = NOW()
+      `);
+      res.json({ success: true, count: req.body.length });
+    } catch (err: any) {
+      console.error("[VIABILIDADE_REGRAS] PUT error:", err);
+      res.status(500).json({ message: err?.message || "Erro ao salvar regras de viabilidade" });
+    }
+  });
+
   // ── COTAÇÕES SIMULADOR ────────────────────────────────────────────────────
   // Salva/restaura o estado completo do simulador de portabilidade por CPF
 
