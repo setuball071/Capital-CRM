@@ -26,82 +26,147 @@ td{color:#111827!important}
 <link rel="stylesheet" href="/ferramentas.css?v=20260911">
 <style>
   /* Só o que é específico desta tela — o resto vem de ferramentas.css */
-  .vi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
-  .vi-lbl  { display:block; font-size:11px; font-weight:600; text-transform:uppercase;
-             letter-spacing:.5px; color:var(--text-muted); margin-bottom:4px; }
-  .vi-tbl  { font-size:12px; }
-  .vi-tbl th { white-space:nowrap; padding:8px 6px!important; }
-  .vi-tbl td { padding:6px!important; vertical-align:middle; }
-  .vi-tbl input, .vi-tbl select { padding:6px 8px!important; font-size:12px!important; width:100%; }
-  .vi-num  { text-align:right; }
-  .vi-out  { font-weight:600; white-space:nowrap; }
-  .vi-reprovada { background:rgba(239,68,68,.06); }
-  .vi-reprovada td { border-top:1px solid rgba(239,68,68,.35)!important;
-                     border-bottom:1px solid rgba(239,68,68,.35)!important; }
-  .vi-tag  { display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; }
-  .vi-ok   { background:var(--green-light); color:#047857; }
-  .vi-bad  { color:var(--red); font-size:11px; font-weight:600; }
-  .vi-resumo { display:flex; align-items:center; gap:28px; flex-wrap:wrap; }
-  .vi-resumo .v { font-size:18px; font-weight:700; }
-  .vi-scroll { overflow-x:auto; }
+  .vi-head   { display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+  .vi-campo  { display:flex; flex-direction:column; gap:5px; }
+  .vi-lbl    { font-size:11px; font-weight:600; text-transform:uppercase;
+               letter-spacing:.5px; color:var(--text-muted); }
+
+  /* segmented control (sem seguro / com seguro) */
+  .vi-seg    { display:inline-flex; background:var(--surface-2); border-radius:var(--radius);
+               padding:3px; gap:2px; }
+  #tab-sim-content .vi-seg button {
+               font-family:var(--font); font-size:12px; font-weight:600; border:none;
+               background:none; color:var(--text-secondary); padding:6px 14px;
+               border-radius:6px; cursor:pointer; box-shadow:none;
+               transition:background .15s,color .15s; }
+  #tab-sim-content .vi-seg button:hover { transform:none; box-shadow:none; }
+  #tab-sim-content .vi-seg button.on { background:var(--surface); color:var(--purple);
+               box-shadow:var(--shadow-sm); }
+
+  .vi-chip   { display:inline-flex; align-items:center; gap:6px; font-size:12px;
+               background:var(--purple-light); color:var(--purple-dark);
+               padding:6px 12px; border-radius:20px; font-weight:500; }
+  .vi-chip.alerta { background:#FEF3C7; color:#92400E; }
+
+  #tab-sim-content .vi-link {
+               font-size:12px; font-weight:600; color:var(--purple); background:none;
+               border:none; cursor:pointer; padding:0; font-family:var(--font);
+               box-shadow:none; }
+  #tab-sim-content .vi-link:hover { transform:none; box-shadow:none; text-decoration:underline; }
+
+  /* botoes herdados de ferramentas.css que a regra guarda-chuva tambem pegaria */
+  #tab-sim-content .btn-add { background:transparent; color:var(--purple); box-shadow:none;
+               border:1.5px dashed var(--purple); padding:7px 14px; font-size:12px; }
+  #tab-sim-content .btn-add:hover { transform:none; box-shadow:none; background:#f3eeff; }
+  #tab-sim-content .btn-rem-inline { background:transparent; color:#a32d2d; box-shadow:none;
+               border:0.5px solid rgba(163,45,45,.3); padding:0; font-size:15px; }
+  #tab-sim-content .btn-rem-inline:hover { transform:none; box-shadow:none; background:#fcebeb; }
+
+  /* tabela */
+  .vi-tbl    { width:100%; }
+  .vi-tbl th { white-space:nowrap; padding:8px 10px!important; }
+  .vi-tbl td { padding:10px!important; vertical-align:top; border-bottom:1px solid var(--border-soft); }
+  .vi-tbl tr:last-child td { border-bottom:none; }
+  .vi-tbl input, .vi-tbl select { width:100%; }
+  .vi-sub    { font-size:10.5px; color:var(--text-muted); margin-top:4px; padding-left:2px; }
+  /* nº do contrato: texto de apoio, nao um campo cheio (ID no seletor para
+     vencer o "#tab-sim-content input" de ferramentas.css, que usa !important) */
+  #tab-sim-content .vi-sub input {
+               border:none!important; background:none!important; padding:0!important;
+               font-size:10.5px!important; color:var(--text-muted)!important;
+               height:auto; box-shadow:none!important; }
+  #tab-sim-content .vi-sub input:focus { border-bottom:1px solid var(--purple)!important; }
+  /* no dark o seletor de ferramentas.css tem :not() sobrando e ganha em
+     especificidade — repetir o padrao aqui para o campo de apoio continuar discreto */
+  [data-theme="dark"] #tab-sim-content .vi-sub input:not([type=checkbox]):not([type=radio]) {
+               border:none!important; background:none!important; padding:0!important;
+               font-size:10.5px!important; color:var(--text-muted)!important; }
+  [data-theme="dark"] #tab-sim-content .vi-seg button.on {
+               background:var(--purple-light); color:#C4B5FD; }
+  .vi-par    { display:flex; align-items:center; gap:6px; }
+  .vi-par input { width:52px!important; text-align:center; }
+  .vi-par span { color:var(--text-muted); font-size:12px; }
+
+  /* bloco de saída: fundo levemente destacado, pra ler como resultado */
+  .vi-out    { background:var(--surface-2); }
+  .vi-valor  { font-size:13px; font-weight:600; text-align:right; padding-top:9px; white-space:nowrap; }
+  .vi-taxa   { font-size:14px; font-weight:700; text-align:right; padding-top:8px; white-space:nowrap; }
+
+  .vi-linha-nao td { opacity:.62; }
+  .vi-linha-nao td:first-child { box-shadow:inset 3px 0 0 var(--red); }
+
+  .vi-tag    { display:inline-block; font-size:11px; font-weight:600; padding:3px 10px;
+               border-radius:20px; white-space:nowrap; }
+  .vi-ok     { background:var(--green-light); color:#047857; }
+  .vi-nao    { color:var(--red); font-size:11px; font-weight:500; line-height:1.35; display:block; }
+
+  /* faixa de totais, no padrão do simulador de portabilidade */
+  .vi-totais { background:var(--surface-2); border-radius:var(--radius-lg); padding:14px 18px;
+               display:flex; align-items:center; gap:26px; flex-wrap:wrap; font-size:13px; }
+  .vi-totais b { font-size:15px; }
+  .vi-vazio  { text-align:center; padding:28px; color:var(--text-muted); font-size:12.5px; }
+  .vi-scroll { overflow-x:auto; margin:0 -4px; padding:0 4px; }
 </style>
 </head>
 <body>
-<div class="content-wrap" style="max-width:1500px;">
+<!-- #tab-sim-content: mesmo wrapper do simulador de portabilidade, para herdar
+     titulo roxo, cabecalho de tabela e o dark mode ja definidos em ferramentas.css -->
+<div id="tab-sim-content"><div class="container">
 
-  <!-- ── PARÂMETROS DA OPERAÇÃO ───────────────────────────────────────────── -->
+  <!-- ── PARÂMETROS ────────────────────────────────────────────────────────── -->
   <div class="box">
-    <h2>Viabilidade Inter — Portabilidade</h2>
-    <p style="font-size:12px;color:var(--text-secondary);margin:.3rem 0 1rem;">
-      Cada contrato é calculado de forma independente: troco, nova parcela e
-      <strong>taxa ponderada</strong> próprios. Só entram no resultado os contratos marcados.
+    <h2>Viabilidade Inter</h2>
+    <p style="font-size:12.5px;color:var(--text-secondary);margin:.35rem 0 1.1rem;">
+      Cada contrato é uma operação independente, com troco e <strong>taxa ponderada</strong> próprios.
+      Só entram no resultado os contratos marcados.
     </p>
 
-    <div class="vi-grid">
-      <div>
+    <div class="vi-head">
+      <div class="vi-campo" style="min-width:210px;">
         <label class="vi-lbl" for="convenio">Convênio</label>
         <select id="convenio" onchange="onConvenio()"></select>
       </div>
-      <div>
-        <label class="vi-lbl" for="comSeguro">Seguro prestamista</label>
-        <select id="comSeguro" onchange="onConvenio()">
-          <option value="0">Sem seguro</option>
-          <option value="1">Com seguro</option>
-        </select>
+      <div class="vi-campo">
+        <span class="vi-lbl">Seguro prestamista</span>
+        <div class="vi-seg">
+          <button type="button" id="segSem" class="on" onclick="setSeguro(false)">Sem seguro</button>
+          <button type="button" id="segCom" onclick="setSeguro(true)">Com seguro</button>
+        </div>
       </div>
-      <div>
-        <label class="vi-lbl" for="dataContrato">Data do contrato</label>
-        <input type="date" id="dataContrato" onchange="recalcTudo()">
-      </div>
-      <div>
-        <label class="vi-lbl" for="primeiroVenc">1º vencimento</label>
-        <input type="date" id="primeiroVenc" onchange="recalcTudo()">
-      </div>
-      <div>
-        <label class="vi-lbl" for="prazoRefinPadrao">Prazo do refin (meses)</label>
-        <input type="number" id="prazoRefinPadrao" value="120" min="1" max="144" onchange="aplicarPadroes()">
-      </div>
-      <div>
-        <label class="vi-lbl" for="tabelaRefinPadrao">Tabela de refin (padrão)</label>
-        <select id="tabelaRefinPadrao" onchange="aplicarPadroes()"></select>
+      <div class="vi-campo" style="flex:1;min-width:240px;">
+        <span class="vi-lbl">Faixa aceita</span>
+        <div id="faixaInfo"></div>
       </div>
     </div>
 
-    <div id="faixaInfo" style="margin-top:12px;font-size:12px;color:var(--text-secondary);"></div>
-    <button class="btn-o" style="margin-top:12px;" onclick="toggleRegras()">Regras dos convênios</button>
+    <div style="margin-top:14px;display:flex;gap:18px;flex-wrap:wrap;">
+      <button class="vi-link" onclick="toggleAvancado()" id="btnAvancado">▸ Ajustes da operação</button>
+      <button class="vi-link" onclick="toggleRegras()">▸ Regras do convênio</button>
+    </div>
 
-    <!-- painel de edição das faixas/grade -->
-    <div id="painelRegras" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px;">
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
-        Faixa aceita de taxa ponderada e grade de comissionamento, por convênio.
-        Estes números vêm da política do banco e mudam — mantenha-os atualizados aqui.
+    <!-- ajustes que quase nunca mudam -->
+    <div id="painelAvancado" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-soft);">
+      <div class="vi-head">
+        <div class="vi-campo">
+          <label class="vi-lbl" for="dataContrato">Data do contrato</label>
+          <input type="date" id="dataContrato" onchange="recalcTudo()">
+        </div>
+        <div class="vi-campo">
+          <label class="vi-lbl" for="primeiroVenc">1º vencimento</label>
+          <input type="date" id="primeiroVenc" onchange="recalcTudo()">
+        </div>
+        <div class="vi-campo">
+          <label class="vi-lbl" for="prazoRefin">Prazo do refin</label>
+          <input type="number" id="prazoRefin" value="120" min="1" max="144" style="width:100px" onchange="recalcTudo()">
+        </div>
       </div>
+    </div>
+
+    <!-- faixas e grade do convênio selecionado -->
+    <div id="painelRegras" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-soft);">
       <div id="regrasEditor"></div>
       <div id="regrasStatus" style="font-size:12px;margin-top:10px;"></div>
-      <div class="btn-row">
-        <button class="btn-p" id="btnSalvarRegras" onclick="salvarRegras()">Salvar regras</button>
-        <button class="btn-o" onclick="toggleRegras()">Fechar</button>
-      </div>
+      <button class="btn-p" id="btnSalvarRegras" style="margin-top:12px;" onclick="salvarRegras()">Salvar regras</button>
     </div>
   </div>
 
@@ -115,7 +180,7 @@ td{color:#111827!important}
       ondragover="event.preventDefault();this.classList.add('dz-hover')"
       ondragleave="this.classList.remove('dz-hover')"
       ondrop="event.preventDefault();this.classList.remove('dz-hover');handleDropPDF(event)"
-      style="margin:12px 0 16px;padding:24px 16px;border:2px dashed #7C3AED;border-radius:10px;text-align:center;cursor:pointer;background:var(--surface-2);">
+      style="margin:14px 0 16px;padding:24px 16px;border:2px dashed #7C3AED;border-radius:10px;text-align:center;cursor:pointer;background:var(--surface-2);">
       <div style="font-size:28px;margin-bottom:8px;line-height:1;">📄</div>
       <div style="font-size:13px;font-weight:600;color:#7C3AED;margin-bottom:4px;">
         Arraste o extrato aqui ou clique para selecionar
@@ -130,21 +195,17 @@ td{color:#111827!important}
       <table class="vi-tbl">
         <thead>
           <tr>
-            <th style="width:34px;"></th>
-            <th style="min-width:110px;">Banco</th>
-            <th style="min-width:100px;">Contrato</th>
-            <th style="width:70px;">Total</th>
-            <th style="width:60px;">Pagas</th>
-            <th style="width:70px;">Restam</th>
-            <th style="width:95px;">Parcela</th>
-            <th style="width:110px;">Saldo devedor</th>
-            <th style="width:80px;">Taxa atual</th>
-            <th style="width:95px;">Nova parcela</th>
-            <th style="width:70px;">Prazo</th>
-            <th style="width:130px;">Tabela refin</th>
-            <th style="width:100px;">Troco</th>
-            <th style="width:90px;">Taxa pond.</th>
-            <th style="min-width:150px;">Parecer</th>
+            <th style="width:36px;"></th>
+            <th style="min-width:130px;">Banco</th>
+            <th style="width:110px;">Parcela (R$)</th>
+            <th style="width:130px;">Prazo / Total</th>
+            <th style="width:125px;">Saldo devedor</th>
+            <th style="width:95px;">Taxa (% a.m.)</th>
+            <th style="width:110px;">Nova parcela</th>
+            <th style="width:145px;">Tabela refin</th>
+            <th style="width:125px;text-align:right;">Troco</th>
+            <th style="width:95px;text-align:right;">Taxa pond.</th>
+            <th style="min-width:165px;">Parecer</th>
             <th style="width:40px;"></th>
           </tr>
         </thead>
@@ -155,12 +216,12 @@ td{color:#111827!important}
     <button class="btn-add purple" onclick="addLinha()">+ Adicionar contrato</button>
   </div>
 
-  <!-- ── RESUMO ────────────────────────────────────────────────────────────── -->
+  <!-- ── TOTAIS ────────────────────────────────────────────────────────────── -->
   <div class="box" style="margin-top:1rem;">
-    <div class="vi-resumo" id="resumo"></div>
+    <div class="vi-totais" id="resumo"></div>
   </div>
 
-</div>
+</div></div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
@@ -244,33 +305,52 @@ function motorInter(p) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  REGRAS POR CONVÊNIO
-//  Só o SIAPE vem preenchido: são os números conferidos na planilha do banco.
-//  Os demais ficam em branco de propósito — número chutado geraria parecer
-//  errado. Cadastre no painel "Regras dos convênios".
+//  REGRAS POR CONVÊNIO — extraídas das abas "Apoio" e "Tabela de
+//  Comissionamento" da planilha do Inter (29/07/2026).
+//  grade = [taxa sem seguro, taxa com seguro, nº da tabela de comissionamento].
+//  O MÍNIMO aceito é a 1ª linha da grade; o máximo é o campo `max`.
 // ═══════════════════════════════════════════════════════════════════════════
 const REGRAS_PADRAO = [
-  {
-    convenio: 'SIAPE',
-    semSeguro: { min: 1.63, max: 1.80 },
-    comSeguro: { min: 1.60, max: 1.77 },
-    grade: [
-      { taxa: 1.63, tabela: 'Tabela 1' }, { taxa: 1.65, tabela: 'Tabela 2' },
-      { taxa: 1.66, tabela: 'Tabela 3' }, { taxa: 1.67, tabela: 'Tabela 4' },
-      { taxa: 1.68, tabela: 'Tabela 5' }, { taxa: 1.69, tabela: 'Tabela 6' }
-    ]
-  },
-  { convenio: 'Marinha',     semSeguro: { min: null, max: null }, comSeguro: { min: null, max: null }, grade: [] },
-  { convenio: 'Exército',    semSeguro: { min: null, max: null }, comSeguro: { min: null, max: null }, grade: [] },
-  { convenio: 'Aeronáutica', semSeguro: { min: null, max: null }, comSeguro: { min: null, max: null }, grade: [] }
+  { conv: 'Aeronáutica', max: 5.0, grade: [[1.85,1.85,1], [1.86,1.86,2], [1.88,1.88,3], [1.89,1.89,4], [1.91,1.91,5], [1.92,1.92,6]] },
+  { conv: 'Bombeiros MG', max: 5.0, grade: [[2.25,2.25,1], [2.26,2.26,2], [2.28,2.28,3], [2.29,2.29,4], [2.3,2.3,5], [2.32,2.32,6]] },
+  { conv: 'Def. Pública MG', max: 5.0, grade: [[2.25,2.25,1], [2.26,2.26,2], [2.28,2.28,3], [2.29,2.29,4], [2.3,2.3,5], [2.32,2.32,6]] },
+  { conv: 'Estado BA', max: 5.0, grade: [[1.91,1.91,1], [1.92,1.92,2], [1.93,1.93,3], [1.94,1.94,4], [1.95,1.95,5], [1.96,1.96,6]] },
+  { conv: 'Estado MS', max: 5.0, grade: [[1.88,1.88,1], [1.89,1.89,2], [1.91,1.91,3], [1.92,1.92,4], [1.93,1.93,5], [1.94,1.94,6]] },
+  { conv: 'Estado SC', max: 5.0, grade: [[2.0,2.0,1], [2.01,2.01,2], [2.03,2.03,3], [2.04,2.04,4], [2.05,2.05,5], [2.07,2.07,6]] },
+  { conv: 'Exército', max: 2.04, grade: [[1.7,1.7,1], [1.71,1.71,2], [1.73,1.73,3], [1.74,1.74,4], [1.76,1.76,5], [1.77,1.77,6]] },
+  { conv: 'Grupo I Governos', max: 5.0, grade: [[2.19,2.19,1], [2.21,2.21,2], [2.22,2.22,3], [2.23,2.23,4], [2.24,2.24,5], [2.26,2.26,6]] },
+  { conv: 'Grupo II Prefeituras', max: 5.0, grade: [[2.12,2.12,1], [2.14,2.14,2], [2.15,2.15,3], [2.17,2.17,4], [2.19,2.19,5], [2.2,2.2,6]] },
+  { conv: 'INSS', max: 1.85, grade: [[1.78,1.78,1], [1.79,1.79,2], [1.81,1.81,3], [1.82,1.82,4], [1.83,1.83,5], [1.85,1.85,6]] },
+  { conv: 'IPSEMG', max: 5.0, grade: [[2.25,2.25,1], [2.26,2.26,2], [2.28,2.28,3], [2.29,2.29,4], [2.3,2.3,5], [2.32,2.32,6]] },
+  { conv: 'IPSM', max: 5.0, grade: [[2.25,2.25,1], [2.26,2.26,2], [2.28,2.28,3], [2.29,2.29,4], [2.3,2.3,5], [2.32,2.32,6]] },
+  { conv: 'Marinha', max: 2.04, grade: [[1.83,1.83,1], [1.85,1.85,2], [1.87,1.87,3], [1.89,1.89,4], [1.91,1.91,5], [1.93,1.93,6]] },
+  { conv: 'PMMG', max: 5.0, grade: [[2.17,2.17,1], [2.19,2.19,2], [2.2,2.2,3], [2.21,2.21,4], [2.23,2.23,5], [2.24,2.24,6]] },
+  { conv: 'Pref. Contagem', max: 5.0, grade: [[1.97,1.97,1], [1.98,1.98,2], [2.0,2.0,3], [2.01,2.01,4], [2.03,2.03,5], [2.05,2.05,6]] },
+  { conv: 'Pref. Goiânia', max: 5.0, grade: [[2.04,2.04,1], [2.06,2.06,2], [2.08,2.08,3], [2.09,2.09,4], [2.11,2.11,5], [2.13,2.13,6]] },
+  { conv: 'Pref. SP', max: 5.0, grade: [[1.76,1.76,1], [1.77,1.77,2], [1.79,1.79,3], [1.8,1.8,4], [1.82,1.82,5], [1.83,1.83,6]] },
+  { conv: 'SEPLAG MG', max: 5.0, grade: [[2.25,2.25,1], [2.26,2.26,2], [2.28,2.28,3], [2.29,2.29,4], [2.3,2.3,5], [2.32,2.32,6]] },
+  { conv: 'SPPrev', max: 5.0, grade: [[1.74,1.74,1], [1.75,1.75,2], [1.77,1.77,3], [1.78,1.78,4], [1.79,1.79,5], [1.81,1.81,6]] },
+  { conv: 'Siape', max: 1.8, grade: [[1.63,1.6,1], [1.65,1.62,2], [1.66,1.63,3], [1.67,1.64,4], [1.68,1.65,5], [1.69,1.66,6]] },
+  { conv: 'Tribunais Estaduais', max: 5.0, grade: [[1.92,1.92,1], [1.94,1.94,2], [1.95,1.95,3], [1.96,1.96,4], [1.97,1.97,5], [1.99,1.99,6]] },
+  { conv: 'Tribunais Federais', max: 5.0, grade: [[2.01,2.01,1], [2.02,2.02,2], [2.03,2.03,3], [2.04,2.04,4], [2.05,2.05,5], [2.07,2.07,6]] }
 ];
 
 let REGRAS = JSON.parse(JSON.stringify(REGRAS_PADRAO));
 let isMaster = false;
+let comSeguro = false;
 
-// Range Refin do banco: Tabela 1 = 1,50% a.m. até Tabela 41 = 4,00%, de 0,05 em 0,05
+// Range Refin (aba "Range Refin"): 31 tabelas, 1,50% a 3,00% de 0,05 em 0,05.
+// Com seguro prestamista a taxa de cada tabela cai 0,03 ponto.
 const TABELAS_REFIN = [];
-for (let n = 1; n <= 41; n++) TABELAS_REFIN.push({ n: n, taxa: Math.round((1.50 + (n - 1) * 0.05) * 100) / 100 });
+for (let n = 1; n <= 31; n++) {
+  TABELAS_REFIN.push({ n: n, sem: Math.round((1.50 + (n - 1) * 0.05) * 100) / 100 });
+}
+const DESCONTO_SEGURO = 0.03;
+const taxaDaTabela = n => {
+  const t = TABELAS_REFIN.find(x => x.n === n);
+  if (!t) return 0;
+  return comSeguro ? Math.round((t.sem - DESCONTO_SEGURO) * 100) / 100 : t.sem;
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  ESTADO
@@ -296,8 +376,7 @@ function novaLinha(base) {
     saldo: 0,
     taxaAtual: 0,
     novaParcela: b.parcela || 0,
-    prazoRefin: num(document.getElementById('prazoRefinPadrao').value) || 120,
-    tabelaRefin: parseInt(document.getElementById('tabelaRefinPadrao').value, 10) || 1,
+    tabelaRefin: 4,
     calc: null,
     parecer: { ok: false, msg: '', tabela: '' }
   };
@@ -331,18 +410,21 @@ function setCampo(id, campo, valor) {
 // ═══════════════════════════════════════════════════════════════════════════
 function regraAtual() {
   const conv = document.getElementById('convenio').value;
-  const r = REGRAS.find(x => x.convenio === conv);
-  if (!r) return { faixa: null, grade: [] };
-  const comSeg = document.getElementById('comSeguro').value === '1';
-  const f = comSeg ? r.comSeguro : r.semSeguro;
-  return { faixa: (f && f.min != null && f.max != null) ? f : null, grade: r.grade || [] };
+  const r = REGRAS.find(x => x.conv === conv);
+  if (!r || !r.grade.length) return null;
+  const col = comSeguro ? 1 : 0;
+  return {
+    min: r.grade[0][col],
+    max: r.max,
+    grade: r.grade.map(g => ({ taxa: g[col], tabela: 'Tabela ' + g[2] }))
+  };
 }
 
 function avaliar(taxaPondPct, regra) {
-  if (!regra.faixa) return { ok: false, msg: 'Faixa deste convênio não cadastrada', tabela: '' };
+  if (!regra) return { ok: false, msg: 'Convênio sem regra cadastrada', tabela: '' };
   const t = Math.round(taxaPondPct * 10000) / 10000;
-  if (t < regra.faixa.min) return { ok: false, msg: 'Taxa ponderada abaixo do mínimo (' + fmtPct(regra.faixa.min, 2) + ')', tabela: '' };
-  if (t > regra.faixa.max) return { ok: false, msg: 'Taxa ponderada acima do máximo (' + fmtPct(regra.faixa.max, 2) + ')', tabela: '' };
+  if (t < regra.min) return { ok: false, msg: 'Abaixo do mínimo (' + fmtPct(regra.min, 2) + ')', tabela: '' };
+  if (t > regra.max) return { ok: false, msg: 'Acima do máximo (' + fmtPct(regra.max, 2) + ')', tabela: '' };
   let tabela = '';
   for (let i = 0; i < regra.grade.length; i++) if (t >= regra.grade[i].taxa) tabela = regra.grade[i].tabela;
   return { ok: true, msg: 'Favorável', tabela: tabela };
@@ -351,6 +433,7 @@ function avaliar(taxaPondPct, regra) {
 function recalcTudo() {
   const dc = document.getElementById('dataContrato').value;
   const pv = document.getElementById('primeiroVenc').value;
+  const prazoRefin = num(document.getElementById('prazoRefin').value);
   const regra = regraAtual();
   const dataContrato = dc ? new Date(dc + 'T00:00:00') : null;
   const primeiroVenc = pv ? new Date(pv + 'T00:00:00') : null;
@@ -358,16 +441,15 @@ function recalcTudo() {
   for (const l of linhas) {
     l.calc = null;
     l.parecer = { ok: false, msg: '', tabela: '' };
-    if (!dataContrato || !primeiroVenc) { l.parecer.msg = 'Informe as datas da operação'; continue; }
-    if (l.restantes >= l.prazoRefin) { l.parecer.msg = 'Prazo do refin tem que ser maior que o restante'; continue; }
-    const t = TABELAS_REFIN.find(x => x.n === l.tabelaRefin);
+    if (!dataContrato || !primeiroVenc) { l.parecer.msg = 'Informe as datas em "Ajustes da operação"'; continue; }
+    if (l.restantes >= prazoRefin) { l.parecer.msg = 'Prazo do refin tem que ser maior que o restante'; continue; }
     const r = motorInter({
       saldoPortado: l.saldo, prazoRemanescente: l.restantes, parcelaAtual: l.parcela,
-      novaParcela: l.novaParcela, prazoRefin: l.prazoRefin,
-      taxaRefinMes: (t ? t.taxa : 0) / 100,
+      novaParcela: l.novaParcela, prazoRefin: prazoRefin,
+      taxaRefinMes: taxaDaTabela(l.tabelaRefin) / 100,
       dataContrato: dataContrato, primeiroVenc: primeiroVenc
     });
-    if (!r) { l.parecer.msg = 'Preencha parcela, prazo e saldo devedor'; continue; }
+    if (!r) { l.parecer.msg = 'Falta parcela, prazo ou saldo devedor'; continue; }
     l.calc = r;
     l.parecer = avaliar(r.taxaPonderada * 100, regra);
     if (!l.parecer.ok) l.marcado = false;
@@ -381,41 +463,40 @@ function recalcTudo() {
 function render() {
   const tb = document.getElementById('tbodyContratos');
   if (!linhas.length) {
-    tb.innerHTML = '<tr><td colspan="16" style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px;">' +
-      'Arraste o extrato acima ou clique em "Adicionar contrato".</td></tr>';
+    tb.innerHTML = '<tr><td colspan="12" class="vi-vazio">Arraste o extrato acima ou clique em "Adicionar contrato".</td></tr>';
     pintarResumo();
     return;
   }
 
   tb.innerHTML = linhas.map(function (l) {
-    const reprovada = l.calc && !l.parecer.ok;
-    const inp = (campo, valor) =>
-      '<input class="vi-num" value="' + esc(valor) + '" onchange="setCampo(' + l.id + ',&quot;' + campo + '&quot;,this.value)">';
+    const inp = (campo, valor, extra) =>
+      '<input value="' + esc(valor) + '"' + (extra || '') +
+      ' onchange="setCampo(' + l.id + ',&quot;' + campo + '&quot;,this.value)">';
     const pagas = Math.max(0, (l.prazoTotal || 0) - (l.restantes || 0));
     const opTab = TABELAS_REFIN.map(t =>
-      '<option value="' + t.n + '"' + (t.n === l.tabelaRefin ? ' selected' : '') + '>Tabela ' + t.n + ' · ' + fmtPct(t.taxa, 2) + '</option>').join('');
+      '<option value="' + t.n + '"' + (t.n === l.tabelaRefin ? ' selected' : '') + '>Tabela ' + t.n + ' · ' +
+      fmtPct(comSeguro ? Math.round((t.sem - DESCONTO_SEGURO) * 100) / 100 : t.sem, 2) + '</option>').join('');
     const parecer = l.parecer.ok
-      ? '<span class="vi-tag vi-ok">Favorável' + (l.parecer.tabela ? ' · ' + esc(l.parecer.tabela) : '') + '</span>'
-      : '<span class="vi-bad">' + esc(l.parecer.msg) + '</span>';
+      ? '<span class="vi-tag vi-ok">Favorável · ' + esc(l.parecer.tabela) + '</span>'
+      : '<span class="vi-nao">' + esc(l.parecer.msg) + '</span>';
 
-    return '<tr class="' + (reprovada ? 'vi-reprovada' : '') + '">' +
+    return '<tr class="' + (l.calc && !l.parecer.ok ? 'vi-linha-nao' : '') + '">' +
       '<td><input type="checkbox" ' + (l.marcado ? 'checked' : '') + (l.parecer.ok ? '' : ' disabled') +
         ' onchange="setCampo(' + l.id + ',&quot;marcado&quot;,this.checked)"></td>' +
-      '<td><input value="' + esc(l.banco) + '" onchange="setCampo(' + l.id + ',&quot;banco&quot;,this.value)"></td>' +
-      '<td><input value="' + esc(l.contrato) + '" onchange="setCampo(' + l.id + ',&quot;contrato&quot;,this.value)"></td>' +
-      '<td>' + inp('prazoTotal', l.prazoTotal || '') + '</td>' +
-      '<td class="vi-num" style="color:var(--text-secondary);">' + pagas + '</td>' +
-      '<td>' + inp('restantes', l.restantes || '') + '</td>' +
+      '<td>' + inp('banco', l.banco) +
+        '<div class="vi-sub">' + inp('contrato', l.contrato, ' placeholder="nº do contrato"') + '</div></td>' +
       '<td>' + inp('parcela', l.parcela ? l.parcela.toFixed(2) : '') + '</td>' +
+      '<td><div class="vi-par">' + inp('restantes', l.restantes || '') + '<span>/</span>' +
+        inp('prazoTotal', l.prazoTotal || '') + '</div>' +
+        '<div class="vi-sub">' + (l.prazoTotal ? pagas + ' pagas' : '&nbsp;') + '</div></td>' +
       '<td>' + inp('saldo', l.saldo ? l.saldo.toFixed(2) : '') + '</td>' +
       '<td>' + inp('taxaAtual', l.taxaAtual ? l.taxaAtual.toFixed(4) : '') + '</td>' +
       '<td>' + inp('novaParcela', l.novaParcela ? l.novaParcela.toFixed(2) : '') + '</td>' +
-      '<td>' + inp('prazoRefin', l.prazoRefin || '') + '</td>' +
       '<td><select onchange="setCampo(' + l.id + ',&quot;tabelaRefin&quot;,this.value)">' + opTab + '</select></td>' +
-      '<td class="vi-num vi-out">' + (l.calc ? fmtBRL(l.calc.troco) : '—') + '</td>' +
-      '<td class="vi-num vi-out" style="color:' + (l.parecer.ok ? 'var(--green)' : 'var(--red)') + ';">' +
+      '<td class="vi-out vi-valor">' + (l.calc ? fmtBRL(l.calc.troco) : '—') + '</td>' +
+      '<td class="vi-out vi-taxa" style="color:' + (l.parecer.ok ? 'var(--green)' : 'var(--red)') + ';">' +
         (l.calc ? fmtPct(l.calc.taxaPonderada * 100, 4) : '—') + '</td>' +
-      '<td>' + parecer + '</td>' +
+      '<td class="vi-out" style="padding-top:11px!important;">' + parecer + '</td>' +
       '<td><button class="btn-rem-inline" title="Remover" onclick="removerLinha(' + l.id + ')">×</button></td>' +
     '</tr>';
   }).join('');
@@ -428,25 +509,14 @@ function pintarResumo() {
   const saldo = sel.reduce((a, l) => a + l.saldo, 0);
   const troco = sel.reduce((a, l) => a + l.calc.troco, 0);
   const total = sel.reduce((a, l) => a + l.calc.totalFinanciado, 0);
-  const item = (lbl, v, cor) =>
-    '<div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);">' + lbl + '</div>' +
-    '<div class="v"' + (cor ? ' style="color:' + cor + '"' : '') + '>' + v + '</div></div>';
+  const fora = linhas.filter(l => l.calc && !l.parecer.ok).length;
 
   document.getElementById('resumo').innerHTML =
-    '<span class="vi-tag vi-ok" style="font-size:12px;">' + sel.length + ' contrato(s) selecionado(s)</span>' +
-    item('Saldo devedor portado', fmtBRL(saldo)) +
-    item('Valor liberado (troco)', fmtBRL(troco), 'var(--green)') +
-    item('Total financiado', fmtBRL(total)) +
-    (linhas.some(l => l.calc && !l.parecer.ok)
-      ? '<div style="font-size:11px;color:var(--red);max-width:260px;">Os contratos em vermelho ficaram fora da faixa e não entram no resultado.</div>'
-      : '');
-}
-
-function aplicarPadroes() {
-  const pr = num(document.getElementById('prazoRefinPadrao').value);
-  const tb = parseInt(document.getElementById('tabelaRefinPadrao').value, 10);
-  linhas.forEach(l => { if (pr > 0) l.prazoRefin = pr; if (tb) l.tabelaRefin = tb; });
-  recalcTudo();
+    '<span>Contratos selecionados: <b>' + sel.length + '</b></span>' +
+    '<span>Saldo devedor portado: <b>' + fmtBRL(saldo) + '</b></span>' +
+    '<span>Valor liberado: <b style="color:var(--green)">' + fmtBRL(troco) + '</b></span>' +
+    '<span>Total financiado: <b>' + fmtBRL(total) + '</b></span>' +
+    (fora ? '<span style="color:var(--red);font-size:12px;">' + fora + ' fora da faixa, fora do resultado</span>' : '');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -497,8 +567,15 @@ async function importarPDF(event) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  PAINEL DE REGRAS
+//  PAINÉIS
 // ═══════════════════════════════════════════════════════════════════════════
+function toggleAvancado() {
+  const p = document.getElementById('painelAvancado');
+  const abrindo = p.style.display === 'none';
+  p.style.display = abrindo ? 'block' : 'none';
+  document.getElementById('btnAvancado').textContent = (abrindo ? '▾' : '▸') + ' Ajustes da operação';
+}
+
 function toggleRegras() {
   const p = document.getElementById('painelRegras');
   const abrindo = p.style.display === 'none';
@@ -506,50 +583,42 @@ function toggleRegras() {
   if (abrindo) renderRegras();
 }
 
+/** Edita só o convênio selecionado — são 22, um editor com todos viraria um paredão. */
 function renderRegras() {
+  const conv = document.getElementById('convenio').value;
+  const i = REGRAS.findIndex(x => x.conv === conv);
+  if (i < 0) return;
+  const r = REGRAS[i];
   const ro = isMaster ? '' : 'disabled';
   document.getElementById('btnSalvarRegras').style.display = isMaster ? '' : 'none';
-  document.getElementById('regrasEditor').innerHTML = REGRAS.map(function (r, i) {
-    const campo = (lbl, caminho, v) =>
-      '<div><span class="vi-lbl">' + lbl + '</span>' +
-      '<input class="vi-num" ' + ro + ' value="' + (v == null ? '' : v) + '" ' +
-      'onchange="setRegra(' + i + ',&quot;' + caminho + '&quot;,this.value)"></div>';
-    const gradeTxt = (r.grade || []).map(g => fmtPct(g.taxa, 2) + ' → ' + g.tabela).join(' · ') || '—';
-    return '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">' +
-      '<div style="font-weight:600;margin-bottom:8px;">' + esc(r.convenio) + '</div>' +
-      '<div class="vi-grid">' +
-        campo('Mín. sem seguro (%)', 'semSeguro.min', r.semSeguro && r.semSeguro.min) +
-        campo('Máx. sem seguro (%)', 'semSeguro.max', r.semSeguro && r.semSeguro.max) +
-        campo('Mín. com seguro (%)', 'comSeguro.min', r.comSeguro && r.comSeguro.min) +
-        campo('Máx. com seguro (%)', 'comSeguro.max', r.comSeguro && r.comSeguro.max) +
-      '</div>' +
-      '<div style="margin-top:10px;"><span class="vi-lbl">Grade de comissionamento</span>' +
-        '<input ' + ro + ' style="width:100%" value="' + esc((r.grade || []).map(g => g.taxa + '=' + g.tabela).join('; ')) + '" ' +
-        'onchange="setGrade(' + i + ',this.value)">' +
-        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">' +
-        'Formato <code>1.63=Tabela 1; 1.65=Tabela 2</code> — vale a maior faixa atingida. Hoje: ' + esc(gradeTxt) + '</div>' +
-      '</div>' +
-    '</div>';
+
+  const linhasGrade = r.grade.map(function (g, j) {
+    return '<tr>' +
+      '<td style="padding:5px 10px 5px 0!important;font-size:12px;">Tabela ' + g[2] + '</td>' +
+      '<td style="padding:5px 8px 5px 0!important;"><input ' + ro + ' style="width:88px" value="' + g[0] +
+        '" onchange="setGrade(' + i + ',' + j + ',0,this.value)"></td>' +
+      '<td style="padding:5px 0!important;"><input ' + ro + ' style="width:88px" value="' + g[1] +
+        '" onchange="setGrade(' + i + ',' + j + ',1,this.value)"></td>' +
+    '</tr>';
   }).join('');
+
+  document.getElementById('regrasEditor').innerHTML =
+    '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">' +
+      'Faixa aceita e grade de comissionamento de <strong>' + esc(r.conv) + '</strong>. ' +
+      'O mínimo aceito é a taxa da Tabela 1; acima do máximo o banco também recusa. ' +
+      'Estes números vêm da política do banco e mudam — mantenha-os atualizados.</div>' +
+    '<div class="vi-campo" style="margin-bottom:14px;max-width:180px;">' +
+      '<span class="vi-lbl">Taxa máxima (% a.m.)</span>' +
+      '<input ' + ro + ' value="' + r.max + '" onchange="setMax(' + i + ',this.value)"></div>' +
+    '<table style="width:auto;"><thead><tr>' +
+      '<th style="padding:6px 10px 6px 0!important;">Comissão</th>' +
+      '<th style="padding:6px 8px 6px 0!important;">Taxa s/ seguro</th>' +
+      '<th style="padding:6px 0!important;">Taxa c/ seguro</th>' +
+    '</tr></thead><tbody>' + linhasGrade + '</tbody></table>';
 }
 
-function setRegra(i, caminho, valor) {
-  const partes = caminho.split('.');
-  if (!REGRAS[i][partes[0]]) REGRAS[i][partes[0]] = { min: null, max: null };
-  const v = String(valor).trim();
-  REGRAS[i][partes[0]][partes[1]] = v === '' ? null : num(v);
-  onConvenio();
-}
-
-function setGrade(i, valor) {
-  REGRAS[i].grade = String(valor).split(';').map(function (p) {
-    const partes = p.split('=');
-    if (partes.length < 2 || !partes[1].trim()) return null;
-    return { taxa: num(partes[0]), tabela: partes[1].trim() };
-  }).filter(Boolean).sort((a, b) => a.taxa - b.taxa);
-  renderRegras();
-  recalcTudo();
-}
+function setMax(i, valor) { REGRAS[i].max = num(valor); onConvenio(); }
+function setGrade(i, j, col, valor) { REGRAS[i].grade[j][col] = num(valor); onConvenio(); renderRegras(); }
 
 async function salvarRegras() {
   const st = document.getElementById('regrasStatus');
@@ -579,26 +648,30 @@ async function carregarRegras() {
     const r = await fetch('/api/viabilidade-regras', { credentials: 'include' });
     if (!r.ok) return;
     const d = await r.json();
-    if (Array.isArray(d) && d.length) REGRAS = d;
+    if (Array.isArray(d) && d.length && d[0].conv) REGRAS = d;
   } catch (e) { /* mantém o padrão */ }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════════════════════════════════════════
+function setSeguro(v) {
+  comSeguro = v;
+  document.getElementById('segSem').classList.toggle('on', !v);
+  document.getElementById('segCom').classList.toggle('on', v);
+  onConvenio();
+}
+
 function onConvenio() {
   const regra = regraAtual();
-  document.getElementById('faixaInfo').innerHTML = regra.faixa
-    ? 'Faixa aceita de taxa ponderada: <strong>' + fmtPct(regra.faixa.min, 2) + '</strong> a <strong>' +
-      fmtPct(regra.faixa.max, 2) + '</strong> a.m. — fora dela o banco não aprova.'
-    : '<span style="color:var(--red)">Faixa deste convênio ainda não cadastrada. Abra "Regras dos convênios".</span>';
+  document.getElementById('faixaInfo').innerHTML = regra
+    ? '<span class="vi-chip">' + fmtPct(regra.min, 2) + ' a ' + fmtPct(regra.max, 2) + ' a.m.</span>'
+    : '<span class="vi-chip alerta">convênio sem regra cadastrada</span>';
+  if (document.getElementById('painelRegras').style.display !== 'none') renderRegras();
   recalcTudo();
 }
 
 async function init() {
-  document.getElementById('tabelaRefinPadrao').innerHTML = TABELAS_REFIN.map(t =>
-    '<option value="' + t.n + '"' + (t.n === 4 ? ' selected' : '') + '>Tabela ' + t.n + ' · ' + fmtPct(t.taxa, 2) + '</option>').join('');
-
   const hoje = new Date();
   const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   document.getElementById('dataContrato').value = iso(hoje);
@@ -606,8 +679,9 @@ async function init() {
   document.getElementById('primeiroVenc').value = iso(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 12));
 
   await carregarRegras();
-  document.getElementById('convenio').innerHTML =
-    REGRAS.map(r => '<option value="' + esc(r.convenio) + '">' + esc(r.convenio) + '</option>').join('');
+  const sel = document.getElementById('convenio');
+  sel.innerHTML = REGRAS.map(r =>
+    '<option value="' + esc(r.conv) + '"' + (r.conv === 'Siape' ? ' selected' : '') + '>' + esc(r.conv) + '</option>').join('');
   onConvenio();
 }
 
