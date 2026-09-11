@@ -65,30 +65,18 @@ td{color:#111827!important}
   /* tabela */
   .vi-tbl    { width:100%; table-layout:fixed; }
   .vi-tbl th { white-space:nowrap; padding:8px 6px!important; font-size:10px!important; }
-  .vi-tbl td { padding:8px 6px!important; vertical-align:top; border-bottom:1px solid var(--border-soft); }
+  .vi-tbl td { padding:7px 5px!important; vertical-align:top; border-bottom:1px solid var(--border-soft); }
   .vi-tbl tr:last-child td { border-bottom:none; }
   .vi-tbl input, .vi-tbl select { width:100%; }
   /* ferramentas.css forca "padding:8px 12px!important" e
      "#tab-sim-content td input { min-width:80px }" — as duas coisas sozinhas ja
      estouram colunas estreitas, e o min-width chegava a inchar o checkbox. */
   #tab-sim-content .vi-tbl td input:not([type=checkbox]),
-  #tab-sim-content .vi-tbl td select { min-width:0; padding:8px 6px!important; }
-  #tab-sim-content .vi-tbl td .vi-par input { padding:8px 2px!important; }
+  #tab-sim-content .vi-tbl td select { min-width:0; padding:6px 6px!important; font-size:12px!important; }
+  #tab-sim-content .vi-tbl td .vi-par input { padding:6px 2px!important; }
   #tab-sim-content .vi-tbl td input[type=checkbox] {
-               width:16px!important; min-width:0; margin-top:11px; }
-  .vi-sub    { font-size:10.5px; color:var(--text-muted); margin-top:4px; padding-left:2px; }
-  /* nº do contrato: texto de apoio, nao um campo cheio (ID no seletor para
-     vencer o "#tab-sim-content input" de ferramentas.css, que usa !important) */
-  #tab-sim-content .vi-sub input {
-               border:none!important; background:none!important; padding:0!important;
-               font-size:10.5px!important; color:var(--text-muted)!important;
-               height:auto; box-shadow:none!important; }
-  #tab-sim-content .vi-sub input:focus { border-bottom:1px solid var(--purple)!important; }
-  /* no dark o seletor de ferramentas.css tem :not() sobrando e ganha em
-     especificidade — repetir o padrao aqui para o campo de apoio continuar discreto */
-  [data-theme="dark"] #tab-sim-content .vi-sub input:not([type=checkbox]):not([type=radio]) {
-               border:none!important; background:none!important; padding:0!important;
-               font-size:10.5px!important; color:var(--text-muted)!important; }
+               width:16px!important; min-width:0; margin-top:8px; }
+  .vi-sub    { font-size:10px; color:var(--text-muted); margin-top:3px; padding-left:2px; }
   [data-theme="dark"] #tab-sim-content .vi-seg button.on {
                background:var(--purple-light); color:#C4B5FD; }
   .vi-par    { display:flex; align-items:center; gap:4px; }
@@ -212,14 +200,14 @@ td{color:#111827!important}
         <thead>
           <tr>
             <th style="width:3.5%;"></th>
-            <th style="width:12%;">Banco</th>
-            <th style="width:10.5%;">Parcela / nova</th>
-            <th style="width:10.5%;">Prazo / total</th>
-            <th style="width:12%;">Saldo / taxa</th>
-            <th style="width:10%;">Tabela refin</th>
-            <th style="width:10.5%;text-align:right;">Troco</th>
-            <th style="width:9%;text-align:right;">Taxa pond.</th>
-            <th style="width:18.5%;">Parecer</th>
+            <th style="width:11%;">Banco</th>
+            <th style="width:11%;">Parcela / nova</th>
+            <th style="width:11%;">Prazo / total</th>
+            <th style="width:12.5%;">Saldo / taxa</th>
+            <th style="width:10.5%;">Tabela refin</th>
+            <th style="width:11.5%;text-align:right;">Troco</th>
+            <th style="width:8.5%;text-align:right;">Ponderada</th>
+            <th style="width:17%;">Parecer</th>
             <th style="width:3.5%;"></th>
           </tr>
         </thead>
@@ -402,7 +390,7 @@ function removerLinha(id) { linhas = linhas.filter(l => l.id !== id); recalcTudo
 function setCampo(id, campo, valor) {
   const l = linhas.find(x => x.id === id);
   if (!l) return;
-  if (campo === 'banco' || campo === 'contrato') { l[campo] = valor; return; }
+  if (campo === 'banco') { l.banco = valor; return; }
   if (campo === 'marcado') { l.marcado = valor; pintarResumo(); return; }
   if (campo === 'tabelaRefin') { l.tabelaRefin = parseInt(valor, 10) || 1; recalcTudo(); return; }
 
@@ -497,8 +485,7 @@ function render() {
     return '<tr class="' + (l.calc && !l.parecer.ok ? 'vi-linha-nao' : '') + '">' +
       '<td><input type="checkbox" ' + (l.marcado ? 'checked' : '') + (l.parecer.ok ? '' : ' disabled') +
         ' onchange="setCampo(' + l.id + ',&quot;marcado&quot;,this.checked)"></td>' +
-      '<td>' + inp('banco', l.banco) +
-        '<div class="vi-sub">' + inp('contrato', l.contrato, ' placeholder="nº do contrato"') + '</div></td>' +
+      '<td>' + inp('banco', l.banco) + '</td>' +
       '<td>' + inp('parcela', l.parcela ? l.parcela.toFixed(2) : '') +
         '<div class="vi-apoio"><span>nova</span>' +
         inp('novaParcela', l.novaParcela ? l.novaParcela.toFixed(2) : '') + '</div></td>' +
@@ -510,8 +497,9 @@ function render() {
         inp('taxaAtual', l.taxaAtual ? l.taxaAtual.toFixed(4) : '') + '<span>%</span></div></td>' +
       '<td><select onchange="setCampo(' + l.id + ',&quot;tabelaRefin&quot;,this.value)">' + opTab + '</select></td>' +
       '<td class="vi-out vi-valor">' + (l.calc ? fmtBRL(l.calc.troco) : '—') + '</td>' +
-      '<td class="vi-out vi-taxa" style="color:' + (l.parecer.ok ? 'var(--green)' : 'var(--red)') + ';">' +
-        (l.calc ? fmtPct(l.calc.taxaPonderada * 100, 4) : '—') + '</td>' +
+      '<td class="vi-out vi-taxa" style="color:' + (l.parecer.ok ? 'var(--green)' : 'var(--red)') + ';"' +
+        (l.calc ? ' title="' + fmtPct(l.calc.taxaPonderada * 100, 4) + ' — valor cheio, usado no parecer"' : '') + '>' +
+        (l.calc ? fmtPct(l.calc.taxaPonderada * 100, 2) : '—') + '</td>' +
       '<td class="vi-out" style="padding-top:11px!important;">' + parecer + '</td>' +
       '<td><button class="btn-rem-inline" title="Remover" onclick="removerLinha(' + l.id + ')">×</button></td>' +
     '</tr>';
