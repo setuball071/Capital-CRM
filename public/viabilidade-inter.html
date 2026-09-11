@@ -141,6 +141,10 @@ td{color:#111827!important}
         <span class="vi-lbl">Faixa aceita</span>
         <div id="faixaInfo"></div>
       </div>
+      <div class="vi-campo">
+        <span class="vi-lbl">Carência</span>
+        <div id="vencInfo"></div>
+      </div>
     </div>
 
     <div style="margin-top:14px;display:flex;gap:18px;flex-wrap:wrap;">
@@ -153,11 +157,14 @@ td{color:#111827!important}
       <div class="vi-head">
         <div class="vi-campo">
           <label class="vi-lbl" for="dataContrato">Data do contrato</label>
-          <input type="date" id="dataContrato" onchange="recalcTudo()">
+          <input type="date" id="dataContrato" onchange="onDataContrato()">
         </div>
         <div class="vi-campo">
           <label class="vi-lbl" for="primeiroVenc">1º vencimento</label>
-          <input type="date" id="primeiroVenc" onchange="recalcTudo()">
+          <input type="date" id="primeiroVenc" onchange="onVencimento()">
+          <span style="font-size:10.5px;color:var(--text-muted);max-width:230px;">
+            Dia vem do convênio. Se a folha já fechou, empurre um mês.
+          </span>
         </div>
         <div class="vi-campo">
           <label class="vi-lbl" for="prazoRefin">Prazo do refin</label>
@@ -364,6 +371,21 @@ const REGRAS_PADRAO = [
   { conv: 'Tribunais Federais', max: 5.0, grade: [[2.01,2.01,1], [2.02,2.02,2], [2.03,2.03,3], [2.04,2.04,4], [2.05,2.05,5], [2.07,2.07,6]] }
 ];
 
+// Dia do vencimento por convênio — aba "Dia de Vencimento" da planilha do banco.
+// O DIA é regra fixa; o MÊS depende da data de corte da folha e a planilha não a
+// tem (o campo lá é digitado à mão, com aviso do autor). Aqui o dia é preenchido
+// sozinho e o mês é só uma sugestão: se a folha já fechou, o operador empurra um mês.
+// Convênios cujo dia varia por órgão (Tribunais, Grupo I e II) ficam de fora de
+// propósito — a planilha também não tem um dia único para eles.
+const DIA_VENCIMENTO = {
+  'Siape': 12, 'INSS': 7,
+  'Marinha': 5, 'Exército': 10, 'Aeronáutica': 5,
+  'Bombeiros MG': 7, 'Def. Pública MG': 7, 'IPSEMG': 7, 'IPSM': 7,
+  'PMMG': 7, 'SEPLAG MG': 7,
+  'Estado BA': 15, 'Estado MS': 28, 'Estado SC': 25,
+  'Pref. Contagem': 20, 'Pref. Goiânia': 27, 'Pref. SP': 5, 'SPPrev': 8
+};
+
 let REGRAS = JSON.parse(JSON.stringify(REGRAS_PADRAO));
 let isMaster = false;
 let comSeguro = false;
@@ -391,6 +413,7 @@ const fmtBRL = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFrac
 const fmtPct = (v, casas) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) + '%';
 const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; };
 const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const isoData = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 
 function novaLinha(base) {
   const b = base || {};
@@ -701,7 +724,41 @@ function setSeguro(v) {
   onConvenio();
 }
 
+/** Primeiro vencimento sugerido: próxima ocorrência do dia do convênio depois da
+ *  data do contrato. Só sugere — o campo continua livre para o operador. */
+function sugerirVencimento() {
+  const dia = DIA_VENCIMENTO[document.getElementById('convenio').value];
+  const dc = document.getElementById('dataContrato').value;
+  if (!dia || !dc) return;
+  const base = new Date(dc + 'T00:00:00');
+  let ano = base.getFullYear(), mes = base.getMonth();
+  if (base.getDate() >= dia) mes++;                       // o dia deste mês já passou
+  const ultimo = new Date(ano, mes + 1, 0).getDate();     // fevereiro, meses de 30…
+  const d = new Date(ano, mes, Math.min(dia, ultimo));
+  document.getElementById('primeiroVenc').value = isoData(d);
+}
+
+function pintarVencimento() {
+  const dc = document.getElementById('dataContrato').value;
+  const pv = document.getElementById('primeiroVenc').value;
+  const el = document.getElementById('vencInfo');
+  if (!el) return;
+  if (!dc || !pv) { el.innerHTML = ''; return; }
+  const dias = days360(new Date(dc + 'T00:00:00'), new Date(pv + 'T00:00:00'));
+  const [a, m, d] = pv.split('-');
+  // sem dia cadastrado, o que está no campo é palpite do operador, não regra
+  const temRegra = Boolean(DIA_VENCIMENTO[document.getElementById('convenio').value]);
+  el.innerHTML = '<span class="vi-chip' + (temRegra ? '' : ' alerta') + '">1º vencimento ' + d + '/' + m +
+    ' · carência ' + dias + (dias === 1 ? ' dia' : ' dias') +
+    (temRegra ? '' : ' · dia varia por órgão, confira') + '</span>';
+}
+
+function onDataContrato() { sugerirVencimento(); pintarVencimento(); recalcTudo(); }
+function onVencimento()   { pintarVencimento(); recalcTudo(); }
+
 function onConvenio() {
+  sugerirVencimento();
+  pintarVencimento();
   const regra = regraAtual();
   const conv = document.getElementById('convenio').value;
   const semSeguro = comSeguro && SEM_SEGURO_DISPONIVEL.indexOf(conv) >= 0;
@@ -715,11 +772,7 @@ function onConvenio() {
 }
 
 async function init() {
-  const hoje = new Date();
-  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  document.getElementById('dataContrato').value = iso(hoje);
-  // 1º vencimento: dia 12 do mês seguinte, padrão da folha SIAPE
-  document.getElementById('primeiroVenc').value = iso(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 12));
+  document.getElementById('dataContrato').value = isoData(new Date());
 
   await carregarRegras();
   const sel = document.getElementById('convenio');
