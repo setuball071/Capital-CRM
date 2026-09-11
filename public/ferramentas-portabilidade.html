@@ -1696,6 +1696,67 @@ async function importarPDFFile(file) {
 
 // [extrato-parser.js] _linhasPorY, extrairMargemENome e extrairContratos moram em /extrato-parser.js
 
+// Pinta o painel de margem do extrato e, se negativa, alimenta os campos
+// "Margem negativa atual" (Simples e Refim) automaticamente.
+function mostrarMargemExtrato(info) {
+  const box = document.getElementById('margemExtratoBox');
+  if (!box) return;
+  if (info.margem === null) { box.style.display = 'none'; return; }
+
+  // Líquida Compulsória é a LIMITADORA de todas as margens: se for menor que a
+  // margem calculada, o cliente não tem esse espaço — mostra alerta em vez do resultado.
+  if (info.margem >= 0 && info.liquidaComp !== null && info.liquidaComp < info.margem - 0.01) {
+    box.innerHTML = `
+      <div style="border:1px solid #FDE68A;background:#FFFBEB;border-radius:8px;padding:12px 16px;max-width:420px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#92400E;margin-bottom:6px;">⚠️ Compulsória limita a margem</div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#4B5563;padding:2px 0;">
+          <span>Margem calculada (facultativa)</span><span>${fmt(info.margem)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:#B45309;border-top:1px solid #FDE68A;margin-top:6px;padding-top:6px;">
+          <span>Líquida Compulsória</span><span>${fmt(info.liquidaComp)}</span>
+        </div>
+        <div style="font-size:11px;color:#92400E;margin-top:6px;">A Líquida Compulsória é menor que a margem calculada — ela é a limitadora: o espaço real do cliente é ${fmt(info.liquidaComp)}.</div>
+      </div>`;
+    box.style.display = 'block';
+    return;
+  }
+
+  const neg = info.margem < 0;
+  const cor = neg ? '#DC2626' : '#10B981';
+  const linha = (lbl, v, sinal) =>
+    `<div style="display:flex;justify-content:space-between;font-size:12px;color:#4B5563;padding:2px 0;">
+       <span>${sinal} ${lbl}</span><span>${fmt(v)}</span>
+     </div>`;
+
+  box.innerHTML = `
+    <div style="border:1px solid ${neg ? '#FECACA' : '#A7F3D0'};background:${neg ? '#FEF2F2' : '#ECFDF5'};border-radius:8px;padding:12px 16px;max-width:420px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin-bottom:6px;">Margem do cliente (extrato)</div>
+      ${linha('Bruta Facultativa (empréstimo)', info.brutaFacult, '')}
+      ${linha('Utilizada Facultativa', info.utilFacult, '−')}
+      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:${cor};border-top:1px solid ${neg ? '#FECACA' : '#A7F3D0'};margin-top:6px;padding-top:6px;">
+        <span>${neg ? '⚠️ Margem NEGATIVA' : '✅ Margem empréstimo'}</span><span>${fmt(info.margem)}</span>
+      </div>
+      ${(info.margemCartao !== null || info.margemCartaoBenef !== null) ? `
+      <div style="border-top:1px dashed #D1D5DB;margin-top:8px;padding-top:6px;font-size:11px;color:#6B7280;">
+        Margens próprias (não consomem a de empréstimo):
+        ${info.margemCartao !== null ? `<div style="display:flex;justify-content:space-between;padding:1px 0;"><span>Cartão</span><span style="font-weight:600;color:${info.margemCartao < 0 ? '#DC2626' : '#374151'};">${fmt(info.margemCartao)}</span></div>` : ''}
+        ${info.margemCartaoBenef !== null ? `<div style="display:flex;justify-content:space-between;padding:1px 0;"><span>Cartão Benefício</span><span style="font-weight:600;color:${info.margemCartaoBenef < 0 ? '#DC2626' : '#374151'};">${fmt(info.margemCartaoBenef)}</span></div>` : ''}
+      </div>` : ''}
+      ${neg ? `<div style="font-size:11px;color:#92400E;margin-top:6px;">Preenchido automaticamente em "Margem negativa atual" (Simples e Com Troco).</div>` : ''}
+    </div>`;
+  box.style.display = 'block';
+
+  if (neg) {
+    const abs = Math.abs(info.margem);
+    const s = document.getElementById('simpMargemNeg');
+    if (s) s.value = fmt(abs);
+    const r = document.getElementById('refimMargemNeg');
+    if (r) r.value = fmt(abs);
+    if (typeof calcSimples === 'function') calcSimples();
+    if (typeof calcRefim === 'function') calcRefim();
+  }
+}
+
 
 function detectarBanco(trecho, rubrica, mapaRubricas) {
   const t = trecho.toUpperCase();
