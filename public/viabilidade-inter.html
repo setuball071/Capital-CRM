@@ -185,6 +185,22 @@ td{color:#111827!important}
   <div class="box" style="margin-top:1rem;">
     <h2>Contratos para Portar</h2>
 
+    <div class="vi-head" style="margin:12px 0 4px;">
+      <div class="vi-campo">
+        <label class="vi-lbl" for="cpfCliente">CPF do cliente</label>
+        <input id="cpfCliente" placeholder="000.000.000-00" style="width:160px"
+               oninput="this.value=formatarCpf(this.value)" onchange="buscarCotacoes()">
+      </div>
+      <div class="vi-campo" style="flex:1;min-width:200px;">
+        <label class="vi-lbl" for="nomeCliente">Nome</label>
+        <input id="nomeCliente" placeholder="preenchido pelo extrato">
+      </div>
+      <button class="btn-o" onclick="salvarCotacao()">Salvar cotação</button>
+      <button class="vi-link" style="padding-bottom:10px;" onclick="buscarCotacoes()">Ver salvas</button>
+    </div>
+    <div id="cotacoesStatus" style="font-size:12px;margin-bottom:8px;"></div>
+    <div id="cotacoesPanel"></div>
+
     <input type="file" id="pdfInput" accept=".pdf" style="display:none;" onchange="importarPDF(event)">
     <div id="dropZone"
       onclick="document.getElementById('pdfInput').click()"
@@ -465,9 +481,11 @@ function regraAtual() {
   const r = REGRAS.find(x => x.conv === conv);
   if (!r || !r.grade.length) return null;
   const col = comSeguro ? 1 : 0;
+  // Apoio!K4 e K5: com seguro a faixa inteira desce 0,03 ponto — mínimo E máximo
+  const desconto = comSeguro ? 0.03 : 0;
   return {
-    min: r.grade[0][col],
-    max: r.max,
+    min: Math.round((r.grade[0][0] - desconto) * 100) / 100,
+    max: Math.round((r.max - desconto) * 100) / 100,
     grade: r.grade.map(g => ({ taxa: g[col], tabela: 'Tabela ' + g[2] }))
   };
 }
@@ -480,7 +498,10 @@ function avaliar(taxaPondPct, regra) {
   if (comSeguro && SEM_SEGURO_DISPONIVEL.indexOf(document.getElementById('convenio').value) >= 0) {
     return { ok: false, msg: 'Seguro não disponível para este convênio', tabela: '' };
   }
-  const t = Math.round(taxaPondPct * 10000) / 10000;
+  // Apoio!K2 = ROUND(taxa ponderada, 4) — ou seja, 2 casas em ponto percentual.
+  // Sem isso uma operação de 1,6252% era recusada enquanto a planilha aprova
+  // (1,63%). É também o que faz o número exibido bater com o parecer.
+  const t = Math.round(taxaPondPct * 100) / 100;
   if (t < regra.min) return { ok: false, msg: 'Abaixo do mínimo (' + fmtPct(regra.min, 2) + ')', tabela: '' };
   if (t > regra.max) return { ok: false, msg: 'Acima do máximo (' + fmtPct(regra.max, 2) + ')', tabela: '' };
   let tabela = '';
@@ -600,13 +621,28 @@ async function importarPDF(event) {
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     let texto = '';
     const items = [];
+    let rotate = 0;
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p);
+      if (p === 1) rotate = page.rotate || 0;
       const tc = await page.getTextContent();
       for (const it of tc.items) {
         texto += it.str + '\n';
         items.push({ str: it.str, x: it.transform[4], y: it.transform[5] });
       }
+    }
+
+    // nome e CPF saem do mesmo extrato — deixa a cotação pronta para salvar
+    try {
+      const info = extrairMargemENome(texto, items, rotate);
+      if (info && info.nome && !document.getElementById('nomeCliente').value) {
+        document.getElementById('nomeCliente').value = info.nome;
+      }
+    } catch (e) { /* nome é bônus, não pode derrubar a importação */ }
+    const mCpf = texto.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/);
+    if (mCpf && !document.getElementById('cpfCliente').value) {
+      document.getElementById('cpfCliente').value = mCpf[0];
+      buscarCotacoes();
     }
     const achados = extrairContratos(texto, items) || [];
     if (!achados.length) {
@@ -626,6 +662,140 @@ async function importarPDF(event) {
   }
   const inputEl = document.getElementById('pdfInput');
   if (inputEl) inputEl.value = '';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  COTAÇÕES SALVAS — mesma tabela do simulador de portabilidade, marcadas com
+//  tipoSimulador para as duas listas não se misturarem.
+// ═══════════════════════════════════════════════════════════════════════════
+const TIPO_SIM = 'viabilidade-inter';
+
+function formatarCpf(v) {
+  v = (v || '').replace(/\D/g, '').slice(0, 11);
+  v = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2');
+  return v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+}
+const cpfValido = () => document.getElementById('cpfCliente').value.replace(/\D/g, '').length === 11;
+
+function estadoAtual() {
+  return {
+    tipoSimulador: TIPO_SIM,
+    convenio:     document.getElementById('convenio').value,
+    comSeguro:    comSeguro,
+    dataContrato: document.getElementById('dataContrato').value,
+    primeiroVenc: document.getElementById('primeiroVenc').value,
+    prazoRefin:   document.getElementById('prazoRefin').value,
+    nomeCliente:  document.getElementById('nomeCliente').value,
+    linhas: linhas.map(l => ({
+      banco: l.banco, contrato: l.contrato, prazoTotal: l.prazoTotal,
+      restantes: l.restantes, parcela: l.parcela, saldo: l.saldo,
+      taxaAtual: l.taxaAtual, novaParcela: l.novaParcela,
+      tabelaRefin: l.tabelaRefin, marcado: l.marcado
+    }))
+  };
+}
+
+async function salvarCotacao() {
+  const st = document.getElementById('cotacoesStatus');
+  if (!cpfValido()) {
+    st.style.color = 'var(--red)';
+    st.textContent = 'Informe os 11 dígitos do CPF para salvar.';
+    return;
+  }
+  if (!linhas.length) {
+    st.style.color = 'var(--red)';
+    st.textContent = 'Adicione ao menos um contrato.';
+    return;
+  }
+  const sel = linhas.filter(l => l.marcado && l.calc && l.parecer.ok);
+  const padrao = sel.length + ' contrato(s) · ' + fmtBRL(sel.reduce((a, l) => a + l.calc.troco, 0));
+  const descricao = prompt('Descrição da cotação (opcional):') || padrao;
+  st.style.color = 'var(--text-secondary)';
+  st.textContent = 'Salvando…';
+  try {
+    const r = await fetch('/api/cotacoes-simulador', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cpf: document.getElementById('cpfCliente').value.trim(),
+        nomeCliente: document.getElementById('nomeCliente').value.trim() || null,
+        descricao: descricao,
+        dados: estadoAtual()
+      })
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(function () { return {}; });
+      throw new Error(err.message || 'erro ' + r.status);
+    }
+    st.style.color = 'var(--green)';
+    st.textContent = 'Cotação salva.';
+    buscarCotacoes();
+  } catch (e) {
+    st.style.color = 'var(--red)';
+    st.textContent = 'Não foi possível salvar: ' + e.message;
+  }
+}
+
+async function buscarCotacoes() {
+  const painel = document.getElementById('cotacoesPanel');
+  if (!cpfValido()) { painel.innerHTML = ''; return 0; }
+  try {
+    const cpf = document.getElementById('cpfCliente').value.trim();
+    const r = await fetch('/api/cotacoes-simulador?cpf=' + encodeURIComponent(cpf), { credentials: 'include' });
+    if (!r.ok) { painel.innerHTML = ''; return 0; }
+    const todas = await r.json();
+    const lista = (Array.isArray(todas) ? todas : []).filter(c => c.tipoSimulador === TIPO_SIM);
+    if (!lista.length) { painel.innerHTML = ''; return 0; }
+    painel.innerHTML =
+      '<div style="margin-bottom:12px;padding:10px 14px;background:var(--purple-light);border-radius:var(--radius);">' +
+      '<div class="vi-lbl" style="margin-bottom:6px;">Cotações salvas deste cliente</div>' +
+      lista.map(function (c) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;flex-wrap:wrap;">' +
+          '<span style="flex:1;min-width:0;"><b>' + new Date(c.criadoEm).toLocaleDateString('pt-BR') + '</b>' +
+          (c.descricao ? ' — ' + esc(c.descricao) : '') + '</span>' +
+          '<button class="vi-link" onclick="retomarCotacao(' + c.id + ')">Retomar</button>' +
+          '<button class="btn-rem-inline" title="Excluir" onclick="excluirCotacao(' + c.id + ')">×</button>' +
+        '</div>';
+      }).join('') + '</div>';
+    return lista.length;
+  } catch (e) { painel.innerHTML = ''; return 0; }
+}
+
+async function retomarCotacao(id) {
+  if (!confirm('Retomar esta cotação? Os contratos da tela serão substituídos.')) return;
+  const st = document.getElementById('cotacoesStatus');
+  try {
+    const r = await fetch('/api/cotacoes-simulador/' + id, { credentials: 'include' });
+    if (!r.ok) throw new Error('não foi possível carregar');
+    const d = (await r.json()).dados || {};
+    if (d.convenio) document.getElementById('convenio').value = d.convenio;
+    if (d.dataContrato) document.getElementById('dataContrato').value = d.dataContrato;
+    if (d.prazoRefin) document.getElementById('prazoRefin').value = d.prazoRefin;
+    if (d.nomeCliente) document.getElementById('nomeCliente').value = d.nomeCliente;
+    setSeguro(Boolean(d.comSeguro));
+    // o vencimento salvo manda: pode ter sido empurrado pela data de corte
+    if (d.primeiroVenc) document.getElementById('primeiroVenc').value = d.primeiroVenc;
+    linhas = (d.linhas || []).map(function (l) {
+      const nova = novaLinha();
+      Object.keys(l).forEach(function (k) { nova[k] = l[k]; });
+      return nova;
+    });
+    pintarVencimento();
+    recalcTudo();
+    st.style.color = 'var(--green)';
+    st.textContent = 'Cotação retomada.';
+  } catch (e) {
+    st.style.color = 'var(--red)';
+    st.textContent = 'Erro ao retomar: ' + e.message;
+  }
+}
+
+async function excluirCotacao(id) {
+  if (!confirm('Excluir esta cotação salva?')) return;
+  try {
+    await fetch('/api/cotacoes-simulador/' + id, { method: 'DELETE', credentials: 'include' });
+    buscarCotacoes();
+  } catch (e) { /* silencioso */ }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -679,8 +849,8 @@ function renderRegras() {
     '</tr></thead><tbody>' + linhasGrade + '</tbody></table>';
 }
 
-function setMax(i, valor) { REGRAS[i].max = num(valor); onConvenio(); }
-function setGrade(i, j, col, valor) { REGRAS[i].grade[j][col] = num(valor); onConvenio(); renderRegras(); }
+function setMax(i, valor) { REGRAS[i].max = num(valor); pintarFaixa(); }
+function setGrade(i, j, col, valor) { REGRAS[i].grade[j][col] = num(valor); pintarFaixa(); renderRegras(); }
 
 async function salvarRegras() {
   const st = document.getElementById('regrasStatus');
@@ -721,7 +891,7 @@ function setSeguro(v) {
   comSeguro = v;
   document.getElementById('segSem').classList.toggle('on', !v);
   document.getElementById('segCom').classList.toggle('on', v);
-  onConvenio();
+  pintarFaixa();
 }
 
 /** Primeiro vencimento sugerido: próxima ocorrência do dia do convênio depois da
@@ -756,9 +926,7 @@ function pintarVencimento() {
 function onDataContrato() { sugerirVencimento(); pintarVencimento(); recalcTudo(); }
 function onVencimento()   { pintarVencimento(); recalcTudo(); }
 
-function onConvenio() {
-  sugerirVencimento();
-  pintarVencimento();
+function pintarFaixa() {
   const regra = regraAtual();
   const conv = document.getElementById('convenio').value;
   const semSeguro = comSeguro && SEM_SEGURO_DISPONIVEL.indexOf(conv) >= 0;
@@ -769,6 +937,13 @@ function onConvenio() {
         : comSeguro ? ' <span class="vi-chip alerta">troco ainda não desconta o prêmio do seguro</span>' : ''));
   if (document.getElementById('painelRegras').style.display !== 'none') renderRegras();
   recalcTudo();
+}
+
+/** Troca de convênio: o dia do vencimento muda junto, então re-sugere a data. */
+function onConvenio() {
+  sugerirVencimento();
+  pintarVencimento();
+  pintarFaixa();
 }
 
 async function init() {
