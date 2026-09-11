@@ -238,7 +238,11 @@ td{color:#111827!important}
       </table>
     </div>
 
-    <button class="btn-add purple" onclick="addLinha()">+ Adicionar contrato</button>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button class="btn-add purple" onclick="addLinha()">+ Adicionar contrato</button>
+      <button class="btn-add blue" id="btnTabelaTodas" style="display:none;"
+              onclick="aplicarTabelaEmTodas()">Aplicar a tabela que aprova nas reprovadas</button>
+    </div>
   </div>
 
   <!-- ── TOTAIS ────────────────────────────────────────────────────────────── -->
@@ -446,6 +450,7 @@ function novaLinha(base) {
     novaParcela: b.parcela || 0,
     tabelaRefin: 4,
     calc: null,
+    sugestao: null,
     parecer: { ok: false, msg: '', tabela: '' }
   };
 }
@@ -509,6 +514,50 @@ function avaliar(taxaPondPct, regra) {
   return { ok: true, msg: 'Favorável', tabela: tabela };
 }
 
+/** Menor tabela de refin que aprova a linha — o mesmo que o botão laranja da
+ *  planilha do banco faz ("encontrar a taxa do Refin que torna a operação viável").
+ *  A taxa ponderada sobe junto com a taxa da tabela, então dá para buscar por
+ *  bisseção: ~5 cálculos por linha em vez de varrer as 31. E como a menor tabela
+ *  que atinge o mínimo é também a que devolve o maior troco, ela é a melhor
+ *  para o cliente, não só a primeira que passa. */
+function menorTabelaViavel(l, ctx) {
+  if (!ctx.regra || !ctx.dataContrato || !ctx.primeiroVenc) return null;
+  const arred = tp => Math.round(tp * 100 * 100) / 100;
+  const calc = n => motorInter({
+    saldoPortado: l.saldo, prazoRemanescente: l.restantes, parcelaAtual: l.parcela,
+    novaParcela: l.novaParcela, prazoRefin: ctx.prazoRefin,
+    taxaRefinMes: taxaDaTabela(n) / 100,
+    dataContrato: ctx.dataContrato, primeiroVenc: ctx.primeiroVenc
+  });
+
+  const ultima = TABELAS_REFIN.length;
+  const topo = calc(ultima);
+  if (!topo || arred(topo.taxaPonderada) < ctx.regra.min) return null;  // nem a maior alcança
+
+  let lo = 1, hi = ultima;
+  while (lo < hi) {
+    const meio = Math.floor((lo + hi) / 2);
+    const r = calc(meio);
+    if (r && arred(r.taxaPonderada) >= ctx.regra.min) hi = meio; else lo = meio + 1;
+  }
+  const r = calc(lo);
+  if (!r || arred(r.taxaPonderada) > ctx.regra.max) return null;        // passa do teto
+  return { tabela: lo, troco: r.troco, taxaPonderada: r.taxaPonderada };
+}
+
+function aplicarTabela(id, n) {
+  const l = linhas.find(x => x.id === id);
+  if (!l) return;
+  l.tabelaRefin = n;
+  l.marcado = true;
+  recalcTudo();
+}
+
+function aplicarTabelaEmTodas() {
+  linhas.forEach(l => { if (l.sugestao) { l.tabelaRefin = l.sugestao.tabela; l.marcado = true; } });
+  recalcTudo();
+}
+
 function recalcTudo() {
   const dc = document.getElementById('dataContrato').value;
   const pv = document.getElementById('primeiroVenc').value;
@@ -519,6 +568,7 @@ function recalcTudo() {
 
   for (const l of linhas) {
     l.calc = null;
+    l.sugestao = null;
     l.parecer = { ok: false, msg: '', tabela: '' };
     if (!dataContrato || !primeiroVenc) { l.parecer.msg = 'Informe as datas em "Ajustes da operação"'; continue; }
     if (l.restantes >= prazoRefin) { l.parecer.msg = 'Prazo do refin tem que ser maior que o restante'; continue; }
@@ -531,7 +581,14 @@ function recalcTudo() {
     if (!r) { l.parecer.msg = 'Falta parcela, prazo ou saldo devedor'; continue; }
     l.calc = r;
     l.parecer = avaliar(r.taxaPonderada * 100, regra);
-    if (!l.parecer.ok) l.marcado = false;
+    if (!l.parecer.ok) {
+      l.marcado = false;
+      l.sugestao = menorTabelaViavel(l, {
+        regra: regra, prazoRefin: prazoRefin,
+        dataContrato: dataContrato, primeiroVenc: primeiroVenc
+      });
+      if (l.sugestao && l.sugestao.tabela === l.tabelaRefin) l.sugestao = null;
+    }
   }
   render();
 }
@@ -557,7 +614,14 @@ function render() {
       fmtPct(comSeguro ? Math.round((t.sem - DESCONTO_SEGURO) * 100) / 100 : t.sem, 2) + '</option>').join('');
     const parecer = l.parecer.ok
       ? '<span class="vi-tag vi-ok">Favorável · ' + esc(l.parecer.tabela) + '</span>'
-      : '<span class="vi-nao">' + esc(l.parecer.msg) + '</span>';
+      : '<span class="vi-nao">' + esc(l.parecer.msg) + '</span>' +
+        (l.sugestao
+          ? '<button class="vi-link" style="margin-top:3px;font-size:11px;" ' +
+            'title="Troco ' + fmtBRL(l.sugestao.troco) + ' · ponderada ' +
+            fmtPct(l.sugestao.taxaPonderada * 100, 2) + '" ' +
+            'onclick="aplicarTabela(' + l.id + ',' + l.sugestao.tabela + ')">Tabela ' +
+            l.sugestao.tabela + ' aprova →</button>'
+          : '');
 
     return '<tr class="' + (l.calc && !l.parecer.ok ? 'vi-linha-nao' : '') + '">' +
       '<td><input type="checkbox" ' + (l.marcado ? 'checked' : '') + (l.parecer.ok ? '' : ' disabled') +
@@ -584,6 +648,14 @@ function render() {
     '</tr>';
   }).join('');
 
+  const comSugestao = linhas.filter(l => l.sugestao).length;
+  const btn = document.getElementById('btnTabelaTodas');
+  if (btn) {
+    btn.style.display = comSugestao ? '' : 'none';
+    btn.textContent = comSugestao === 1
+      ? 'Aplicar a tabela que aprova (1 contrato)'
+      : 'Aplicar a tabela que aprova (' + comSugestao + ' contratos)';
+  }
   pintarResumo();
 }
 
