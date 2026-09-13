@@ -706,7 +706,7 @@ export default function ContratosListaPage() {
   const isMaster = !!(user?.isMaster || user?.role === "master");
   // Operacional e Administrador (role master) têm a MESMA visão/gestão do master em contratos
   const canManageContracts = !!(user?.isMaster || ["master", "operacional"].includes(user?.role || ""));
-  const isVendedor = user?.role === "vendedor";
+  const isVendedor = user?.role === "vendedor" || user?.role === "sdr"; // SDR abre na visão de corretor
   const isOperacional = !!(user?.isMaster || ["coordenacao", "operacional", "master"].includes(user?.role || ""));
   const [viewMode, setViewMode] = useState<ViewMode>(isVendedor ? "corretor" : "operacional");
   const canCreate = !!(user?.isMaster || ["master", "coordenacao", "operacional", "vendedor"].includes(user?.role || ""));

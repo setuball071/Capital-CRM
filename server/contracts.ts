@@ -278,15 +278,18 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
       const conditions = [eq(proposals.tenantId, tenantId)];
 
+      // Carteira: vendedor vê as próprias; SDR vê as do vendedor a quem está vinculado
       if (user.role === "vendedor") {
         conditions.push(eq(proposals.vendorId, user.id));
+      } else if (user.role === "sdr") {
+        conditions.push(eq(proposals.vendorId, user.managerId ?? -1));
       }
 
       const { status, bank, product, startDate, endDate, vendorId } = req.query;
       if (status) conditions.push(eq(proposals.status, status as string));
       if (bank) conditions.push(eq(proposals.bank, bank as string));
       if (product) conditions.push(eq(proposals.product, product as string));
-      if (vendorId && user.role !== "vendedor") {
+      if (vendorId && user.role !== "vendedor" && user.role !== "sdr") {
         conditions.push(eq(proposals.vendorId, parseInt(vendorId as string)));
       }
 
@@ -386,7 +389,13 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         }
       }
 
-      const vendorId = user.role === "vendedor" ? user.id : (req.body.vendorId || user.id);
+      // SDR digita para o vendedor a quem está vinculado: a venda (e a meta) é do vendedor
+      if (user.role === "sdr" && !user.managerId) {
+        return res.status(400).json({ message: "SDR sem vendedor responsável vinculado. Peça ao administrador para vincular." });
+      }
+      const vendorId = user.role === "vendedor" ? user.id
+        : user.role === "sdr" ? user.managerId
+        : (req.body.vendorId || user.id);
 
       const [proposal] = await db
         .insert(proposals)
@@ -510,7 +519,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       if (!src) return res.status(404).json({ message: "Proposta não encontrada" });
 
       // Permissão: operacional/master vê qualquer; vendedor só as próprias
-      if (user.role === "vendedor" && src.vendorId !== user.id) {
+      if ((user.role === "vendedor" && src.vendorId !== user.id) ||
+          (user.role === "sdr" && src.vendorId !== user.managerId)) {
         return res.status(403).json({ message: "Sem permissão para clonar esta proposta" });
       }
 
@@ -723,6 +733,9 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       const user = req.user!;
       const tenantId = req.tenantId!;
       const { proposals: batch, observacao } = req.body;
+      if (user.role === "sdr" && !user.managerId) {
+        return res.status(400).json({ message: "SDR sem vendedor responsável vinculado. Peça ao administrador para vincular." });
+      }
       const obsBatch = String(observacao || "").trim();
 
       if (!Array.isArray(batch) || batch.length === 0) {
@@ -770,7 +783,9 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           }
         }
 
-        const vendorId = user.role === "vendedor" ? user.id : (item.vendorId || user.id);
+        const vendorId = user.role === "vendedor" ? user.id
+          : user.role === "sdr" ? user.managerId
+          : (item.vendorId || user.id);
 
         const [proposal] = await db
           .insert(proposals)
@@ -890,8 +905,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       const tenantId = req.tenantId!;
 
       const conditions = [eq(proposals.id, id), eq(proposals.tenantId, tenantId)];
+      // Carteira: vendedor vê as próprias; SDR vê as do vendedor a quem está vinculado
       if (user.role === "vendedor") {
         conditions.push(eq(proposals.vendorId, user.id));
+      } else if (user.role === "sdr") {
+        conditions.push(eq(proposals.vendorId, user.managerId ?? -1));
       }
 
       const [proposal] = await db
@@ -1153,7 +1171,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
 
       // Corretor só edita se o status atual permitir (flag allowsVendorEdit) e for dono da proposta
       let canEdit = isOper;
-      if (!canEdit && user.role === "vendedor" && current.vendorId === user.id) {
+      if (!canEdit && (user.role === "vendedor" ? current.vendorId === user.id
+        : user.role === "sdr" && !!user.managerId && current.vendorId === user.managerId)) {
         const [st] = await db
           .select()
           .from(contractStatuses)
@@ -1275,7 +1294,8 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
       // (tem returnStatusKey definido) ou permite edição.
       const isOper = user.isMaster || ["operacional", "coordenacao", "master"].includes(user.role || "");
       let allowed = isOper;
-      if (!allowed && user.role === "vendedor" && current.vendorId === user.id) {
+      if (!allowed && (user.role === "vendedor" ? current.vendorId === user.id
+        : user.role === "sdr" && !!user.managerId && current.vendorId === user.managerId)) {
         allowed = !!st?.returnStatusKey || !!st?.allowsVendorEdit;
       }
       if (!allowed) return res.status(403).json({ message: "Sem permissão para regularizar a pendência" });

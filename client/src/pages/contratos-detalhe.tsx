@@ -115,7 +115,9 @@ export default function ContratosDetalhePage() {
   const [dataPagamento, setDataPagamento] = useState(hojeISO);
 
   const isOperacional = !!(user?.isMaster || ["coordenacao", "operacional", "master"].includes(user?.role || ""));
-  const isVendedor = user?.role === "vendedor";
+  // SDR segue as regras do vendedor, sobre a carteira do vendedor a quem está vinculado
+  const isVendedor = user?.role === "vendedor" || user?.role === "sdr";
+  const carteiraId = user?.role === "sdr" ? user?.managerId : user?.id;
   // Master, Admin (role master) e Operacional podem anexar documentos pela proposta
   const canManageContracts = !!(user?.isMaster || ["master", "operacional"].includes(user?.role || ""));
 
@@ -520,7 +522,7 @@ export default function ContratosDetalhePage() {
       .map((t: any) => t.banco as string)
       .filter(Boolean)
   ));
-  const canClone = canManageContracts || (isVendedor && proposal.vendorId === user?.id);
+  const canClone = canManageContracts || (isVendedor && proposal.vendorId === carteiraId);
 
   // Financeiro da operação: Valor Total = Saldo Devedor + Troco
   const saldoDevedorNum = parseFloat(m.saldoDevedor) || 0;
@@ -528,7 +530,7 @@ export default function ContratosDetalhePage() {
   const valorTotalOperacao = saldoDevedorNum + trocoNum;
 
   // Corretor pode anexar documentos quando a proposta é dele e está em pendência
-  const canCorretorAnexar = isVendedor && proposal.vendorId === user?.id &&
+  const canCorretorAnexar = isVendedor && proposal.vendorId === carteiraId &&
     (!!currentStatusDef?.returnStatusKey || !!currentStatusDef?.allowsVendorEdit);
 
   // permissões de edição de campos

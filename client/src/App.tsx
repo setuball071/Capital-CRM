@@ -357,7 +357,10 @@ function Router() {
                 { key: "tabelas", label: "Tabelas", icon: "table_chart", onClick: () => setTabelasModalAberto(true) },
                 { key: "criativos", label: "Criativos", icon: "palette", onClick: () => handleAtalho("criativos") },
                 { key: "tutoriais", label: "Tutoriais", icon: "school", onClick: () => handleAtalho("tutoriais") },
-              ].map((s) => (
+              ]
+                // SDR não vê tabelas de comissão (esse atalho não passa pela permissão do menu)
+                .filter((s) => !(s.key === "tabelas" && user?.role === "sdr"))
+                .map((s) => (
                 <button
                   key={s.key}
                   onClick={s.onClick}

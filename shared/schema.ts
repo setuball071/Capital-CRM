@@ -232,6 +232,7 @@ export const USER_ROLES = [
   "atendimento",
   "operacional",
   "vendedor",
+  "sdr", // assistente de vendas: digita para um vendedor (users.managerId = vendedor responsável)
 ] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
@@ -242,6 +243,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   atendimento: "Atendimento",
   operacional: "Operacional",
   vendedor: "Vendedor",
+  sdr: "SDR",
 };
 
 // Users table

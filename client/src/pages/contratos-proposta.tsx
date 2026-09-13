@@ -941,9 +941,13 @@ export default function ContratosPropostaPage() {
     if ((form.getValues("contractValue") || "") !== total) form.setValue("contractValue", total);
   }, [isCompra, watchedInstallment, coefCompra]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Grupo do usuário logado — busca por email no array de corretores */
+  /** Grupo de quem é a VENDA — busca por email no array de corretores.
+   *  SDR digita para o vendedor responsável: a comissão gravada tem que ser a do grupo
+   *  do vendedor. Usar o e-mail do SDR gravaria o repasse errado (em geral zero). */
+  const isSdr = user?.role === "sdr";
+  const emailDaVenda: string = (isSdr ? (user as any)?.vendedorResponsavel?.email : user?.email) || "";
   const myCorretor = financeiroCorretores.find(
-    (c: any) => c.email && user?.email && c.email.toLowerCase() === user.email.toLowerCase()
+    (c: any) => c.email && emailDaVenda && c.email.toLowerCase() === emailDaVenda.toLowerCase()
   );
   const myGrupo = myCorretor
     ? financeiroGrupos.find((g: any) => g.id === myCorretor.grupoId)
@@ -3514,7 +3518,7 @@ export default function ContratosPropostaPage() {
                             <SelectItem key={t.id} value={String(t.id)}>
                               {t.nome}
                               {t.prazo ? ` · ${t.prazo}m` : ""}
-                              {t.coef ? ` · coef ${Number(t.coef).toFixed(5).replace(".", ",")}` : ""}
+                              {t.coef && !isSdr ? ` · coef ${Number(t.coef).toFixed(5).replace(".", ",")}` : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -3563,7 +3567,7 @@ export default function ContratosPropostaPage() {
                           : contractType === "PORTABILIDADE_REFIN" ? "Troco / Refinanciamento (R$)"
                           : isCompra ? "Valor Total (R$)"
                           : "Valor Liberado (R$)"}
-                        {selectedTabela?.coef > 0 && (
+                        {selectedTabela?.coef > 0 && !isSdr && (
                           <span className="text-[10px] font-normal text-muted-foreground">
                             coef {Number(selectedTabela.coef).toFixed(5).replace(".", ",")}
                           </span>
@@ -3661,7 +3665,8 @@ export default function ContratosPropostaPage() {
 
             {/* ── Comissão Esperada (expansível) ── */}
             {/* ── Comissão do corretor (apenas % e R$ líquidos — sem expor pctEmpresa) ── */}
-            {selectedTabela && (
+            {/* SDR não vê prêmio: a venda e a comissão são do vendedor responsável */}
+            {selectedTabela && !isSdr && (
               <Card className="border-green-200 dark:border-green-900">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2 text-green-700 dark:text-green-400">
@@ -4431,7 +4436,7 @@ export default function ContratosPropostaPage() {
         )}
 
         {/* Card: Comissão (líquido do corretor) — não exibe para PORTABILIDADE pois não há tabela selecionada */}
-        {selectedTabela && myGrupo && contractType !== "PORTABILIDADE" && (
+        {selectedTabela && myGrupo && !isSdr && contractType !== "PORTABILIDADE" && (
           <Card className="border-green-200 dark:border-green-900">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2 text-green-700 dark:text-green-400">

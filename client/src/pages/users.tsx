@@ -603,7 +603,7 @@ export default function UsersPage() {
       data.password = password;
     }
 
-    if (role === "vendedor" && managerId && managerId !== "none") {
+    if ((role === "vendedor" || role === "sdr") && managerId && managerId !== "none") {
       data.managerId = parseInt(managerId);
     }
 
@@ -958,6 +958,31 @@ export default function UsersPage() {
                     </div>
                   )}
 
+                  {/* SDR: digita para um vendedor; a venda e a meta ficam no vendedor escolhido */}
+                  {canManageAllUsers && role === "sdr" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="vendedor-responsavel">Vendedor responsável *</Label>
+                      <Select value={managerId || "none"} onValueChange={setManagerId}>
+                        <SelectTrigger id="vendedor-responsavel" data-testid="select-sdr-vendedor">
+                          <SelectValue placeholder="Selecione o vendedor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          {users
+                            .filter((u) => u.role === "vendedor" && u.isActive)
+                            .map((v) => (
+                              <SelectItem key={v.id} value={v.id.toString()}>
+                                {v.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        O que o SDR cadastrar entra na venda e na meta deste vendedor.
+                      </p>
+                    </div>
+                  )}
+
                   {canManageAllUsers && allTenants.length > 0 && (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
@@ -1248,7 +1273,9 @@ export default function UsersPage() {
             </TableHeader>
             <TableBody>
               {filteredUsers.map((user) => {
-                const manager = coordenadores.find((c) => c.id === user.managerId);
+                // SDR: a coluna mostra o vendedor responsável (managerId aponta para um vendedor)
+                const manager = coordenadores.find((c) => c.id === user.managerId)
+                  || (user.role === "sdr" ? users.find((u) => u.id === user.managerId) : undefined);
                 return (
                   <TableRow key={user.id} data-testid={`user-row-${user.id}`}>
                     <TableCell className="w-10">

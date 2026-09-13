@@ -2528,8 +2528,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
     }
 
+    // SDR: o cadastro de proposta precisa do e-mail do vendedor responsável para
+    // calcular a comissão pelo grupo DELE (a venda é do vendedor, não do SDR)
+    let vendedorResponsavel: { id: number; name: string; email: string } | null = null;
+    if (req.user!.role === "sdr" && req.user!.managerId) {
+      const v = await storage.getUser(req.user!.managerId);
+      if (v) vendedorResponsavel = { id: v.id, name: v.name, email: v.email };
+    }
+
     return res.json({
-      user: userWithoutPassword,
+      user: { ...userWithoutPassword, vendedorResponsavel },
       permissions: permissionsMap,
     });
   });
@@ -26348,7 +26356,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const role = user.role;
 
       let result;
-      if (role === "vendedor") {
+      // SDR entra no galho restrito: o "else" abaixo é visão de gestor (todas as equipes)
+      if (role === "vendedor" || role === "sdr") {
         result = await db.execute(sql`
           SELECT ct.id, ct.nome_equipe, ct.coordenador_id, ct.ativa,
                  u.name as coordenador_nome
@@ -26612,7 +26621,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const mesReferencia = req.params.mesReferencia;
 
         let result;
-        if (user.role === "vendedor") {
+        // SDR entra no galho restrito: o "else" lista as metas de toda a equipe
+        if (user.role === "vendedor" || user.role === "sdr") {
           result = await db.execute(sql`
           SELECT mi.*, u.name as usuario_nome, u.email as usuario_email
           FROM metas_individuais mi
@@ -30028,7 +30038,9 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const tenantId = req.tenantId!;
       const { vendorId, status: statusFilter, product } = req.query as Record<string, string>;
 
-      if (user.role === "vendedor") {
+      // SDR entra no galho restrito, sobre a carteira do vendedor responsável;
+      // o "else" final desta rota devolve a carteira de TODOS os vendedores
+      if (user.role === "vendedor" || user.role === "sdr") {
         const result = await db.execute(sql`
           WITH latest_per_cpf AS (
             SELECT DISTINCT ON (cp.cpf)
@@ -30038,7 +30050,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
             FROM client_portfolio cp
             JOIN users u ON u.id = cp.vendor_id
             WHERE cp.tenant_id = ${tenantId}
-              AND cp.vendor_id = ${user.id}
+              AND cp.vendor_id = ${user.role === "sdr" ? (user.managerId ?? -1) : user.id}
             ORDER BY cp.cpf, cp.expires_at DESC
           ),
           last_deal AS (
