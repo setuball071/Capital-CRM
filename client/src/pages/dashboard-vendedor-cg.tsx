@@ -67,6 +67,7 @@ interface VendData {
   deltaPercentual: number;
   emAndamento: number;
   emAndamentoContratos: number;
+  totalContratos: number;
   metaMensal: number;
   metaCartao: number;
   metaUnificada: number;
@@ -196,6 +197,9 @@ function VendedorDashboard() {
             <div style={kpiLabel}><CheckCircle2 size={14} /> EFETIVADO NO MÊS</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
               <div style={{ ...kpiValue, fontSize: 38, letterSpacing: "-0.02em", ...num }}>{fmtCent(efetivado)}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: t.textMuted, ...num }}>
+                {data.totalContratos || 0} {data.totalContratos === 1 ? "contrato" : "contratos"}
+              </div>
               {data.deltaPercentual !== 0 && (
                 <div style={{ fontSize: 14, fontWeight: 700, color: up ? GREEN : DANGER }}>
                   {up ? "↗" : "↘"} {Math.abs(data.deltaPercentual).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%

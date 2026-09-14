@@ -95,7 +95,7 @@ function periodoLabel(mesAno: string): string {
 }
 
 // ── Meta da equipe ────────────────────────────────────────────────────────────
-function MetaCard({ e, periodo, t }: { e: GestorDashboardData["equipe"]; periodo: string; t: Palette }) {
+function MetaCard({ e, contratos, periodo, t }: { e: GestorDashboardData["equipe"]; contratos: number; periodo: string; t: Palette }) {
   const pctMeta = e.meta > 0 ? Math.round((e.efetivado / e.meta) * 100) : 0;
   const faltam = Math.max(0, e.meta - e.efetivado);
   const somaProd = e.novo + e.portabilidade + e.cartao;
@@ -129,6 +129,9 @@ function MetaCard({ e, periodo, t }: { e: GestorDashboardData["equipe"]; periodo
           <div style={kpiLabel}><CheckCircle2 size={14} /> EFETIVADO NO MÊS</div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <div style={{ ...kpiValue, fontSize: 38, letterSpacing: "-0.02em", ...num }}>{fmtCent(e.efetivado)}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: t.textMuted, ...num }}>
+              {contratos} {contratos === 1 ? "contrato" : "contratos"}
+            </div>
             {e.deltaPercentual !== 0 && (
               <div style={{ fontSize: 14, fontWeight: 700, color: up ? GREEN : DANGER }}>
                 {up ? "↗" : "↘"} {Math.abs(e.deltaPercentual).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
@@ -273,7 +276,7 @@ function GestorDashboard() {
   return (
     <div style={{ padding: "28px 32px 60px", background: t.page, minHeight: "100%", display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT, color: t.textStrong }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');`}</style>
-      <MetaCard e={data.equipe} periodo={periodo} t={t} />
+      <MetaCard contratos={(data?.ranking || []).reduce((s, v) => s + (v.contratos || 0), 0)} e={data.equipe} periodo={periodo} t={t} />
       <RankingCard data={data} t={t} />
     </div>
   );
