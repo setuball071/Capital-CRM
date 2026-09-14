@@ -69,7 +69,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,Bl
 .btn-danger-fill{background:var(--red);color:#fff}.btn-danger-fill:hover{opacity:.9}
 .btn-sm{padding:5px 10px;font-size:12px}
 .kpi-grid{display:grid;gap:14px;margin-bottom:28px}
-.kpi-grid-4{grid-template-columns:repeat(4,1fr)}.kpi-grid-6{grid-template-columns:repeat(6,1fr)}
+.kpi-grid-2{grid-template-columns:repeat(2,1fr)}.kpi-grid-4{grid-template-columns:repeat(4,1fr)}.kpi-grid-6{grid-template-columns:repeat(6,1fr)}
 .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px}
 .kpi-card.destaque{border-color:rgba(var(--accent-rgb),.4);background:rgba(var(--accent-rgb),.04)}
 .kpi-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:6px}
@@ -317,12 +317,12 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       </div>
       <span class="count-chip" id="cc-count">—</span>
     </div>
-    <div class="kpi-grid kpi-grid-4" id="cc-kpis"></div>
+    <div class="kpi-grid kpi-grid-2" id="cc-kpis"></div>
     <div class="table-wrap">
       <table>
         <thead><tr>
           <th>ADE</th><th>Data</th><th>Cliente</th><th>Banco / Tabela</th><th>Conv.</th><th>Tipo</th>
-          <th class="r">Val. Contrato</th><th class="r">Prêmio %</th><th class="r">Prêmio R$</th><th>Status Banco</th><th>Status Prêmio</th>
+          <th class="r">Val. Contrato</th><th class="r">Comissão %</th><th class="r">Comissão R$</th><th>Status Banco</th><th>Status Comissão</th>
         </tr></thead>
         <tbody id="cc-tbody"></tbody>
         <tfoot id="cc-tfoot"></tfoot>
@@ -388,7 +388,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
   </div>
   <!-- Consultor Produção -->
   <div id="prod-consultor" style="display:none">
-    <div class="banner banner-consultor">👤 <strong>Visão Consultor:</strong> você vê apenas seus contratos e seus prêmios.</div>
+    <div class="banner banner-consultor">👤 <strong>Visão Consultor:</strong> você vê apenas seus contratos e suas comissões.</div>
     <div class="filter-bar">
       <input class="search" id="c-busca" placeholder="🔍 Buscar..." oninput="carregarProducaoConsultor()"/>
       <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 12px">
@@ -402,24 +402,24 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
         <button onclick="document.getElementById('c-mes').value='';carregarProducaoConsultor()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
       </div>
       <select class="filter-select" id="c-stbanco" onchange="carregarProducaoConsultor()"><option value="">Status banco (todos)</option><option>Aguardando</option><option>Importado</option><option>Recebido</option></select>
-      <select class="filter-select" id="c-stflat" onchange="carregarProducaoConsultor()"><option value="">Status prêmio (todos)</option><option value="Aguardando">Aguardando</option><option value="A Pagar">A receber</option><option value="Pago">Recebida</option></select>
+      <select class="filter-select" id="c-stflat" onchange="carregarProducaoConsultor()"><option value="">Status comissão (todos)</option><option value="Aguardando">Aguardando</option><option value="A Pagar">A receber</option><option value="Pago">Recebida</option></select>
       <span class="count-chip" id="c-count">—</span>
     </div>
-    <div class="kpi-grid kpi-grid-4" id="c-kpis"></div>
+    <div class="kpi-grid kpi-grid-2" id="c-kpis"></div>
     <div class="table-wrap">
       <div class="legenda">
         <span><span class="legenda-dot" style="background:var(--muted)"></span>Aguardando</span>
         <span><span class="legenda-dot" style="background:var(--accent)"></span>No relatório</span>
         <span><span class="legenda-dot" style="background:var(--green)"></span>Confirmado</span>
-        <span><span class="legenda-dot" style="background:var(--yellow)"></span>Prêmio a receber</span>
-        <span><span class="legenda-dot" style="background:var(--blue)"></span>Prêmio recebido</span>
+        <span><span class="legenda-dot" style="background:var(--yellow)"></span>Comissão a receber</span>
+        <span><span class="legenda-dot" style="background:var(--blue)"></span>Comissão recebida</span>
       </div>
       <table>
         <thead><tr>
           <th>ADE</th><th>Data</th><th>Cliente</th>
           <th>Banco / Tabela</th><th>Conv.</th><th>Tipo</th>
-          <th class="r">Val. Contrato</th><th class="r">Prêmio</th>
-          <th>Status Banco</th><th>Status Prêmio</th><th>Data Status Prêmio</th>
+          <th class="r">Val. Contrato</th><th class="r">Comissão</th>
+          <th>Status Banco</th><th>Status Comissão</th><th>Data Status Comissão</th>
         </tr></thead>
         <tbody id="c-tbody"></tbody>
         <tfoot id="c-tfoot"></tfoot>
@@ -602,14 +602,14 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
       <div class="form-group"><label>Valor do Contrato (R$)</label><input type="number" id="cont-valor" placeholder="0,00" oninput="calcContrato()"/></div>
       <div class="calc-box" id="cont-calc">
         <div class="calc-row"><span class="calc-label">Val. Empresa</span><span class="calc-value" id="cc-emp">—</span></div>
-        <div class="calc-row"><span class="calc-label">Prêmio % → Valor</span><span class="calc-value" id="cc-flat">—</span></div>
+        <div class="calc-row"><span class="calc-label">Comissão % → Valor</span><span class="calc-value" id="cc-flat">—</span></div>
         <div class="calc-row"><span class="calc-label">Parcela aprox.</span><span class="calc-value" id="cc-parcela">—</span></div>
       </div>
       <div class="form-grid-2">
         <div class="form-group"><label>Status Banco</label>
           <select id="cont-stb"><option>Aguardando</option><option>Importado</option><option>Recebido</option><option>Cancelado</option></select>
         </div>
-        <div class="form-group"><label>Status Prêmio</label>
+        <div class="form-group"><label>Status Comissão</label>
           <select id="cont-stc"><option>Aguardando</option><option>A Pagar</option><option>Pago</option><option>Cancelado</option></select>
         </div>
       </div>
@@ -1738,7 +1738,7 @@ async function renderConsultorContratos(){
     if(st)list=list.filter(c=>(c.statusBanco||'Aguardando')===st);
 
     document.getElementById('cc-count').textContent=list.length+' contrato'+(list.length!==1?'s':'');
-    let totVal=0,totFlat=0,totPago=0,totReceber=0;
+    let totVal=0,totFlat=0;
     const rows=list.map(c=>{
       const val=parseFloat(c.valorBruto||0);
       const empValor=parseFloat(c.comissaoEmpresaValor||0)||parseFloat(c.comissaoRepasseValor||0);
@@ -1748,8 +1748,6 @@ async function renderConsultorContratos(){
       // Flat % efetivo sobre o valor do contrato (não o % do grupo)
       const fp=val>0?(vf/val*100):0;
       totVal+=val;totFlat+=vf;
-      if(c.statusComissao==='Pago')totPago+=vf;
-      if(c.statusComissao==='A Pagar')totReceber+=vf;
       const stBanco=c.statusBanco||'Aguardando';
       const stFlat=c.statusComissao||'Aguardando';
       const bBanco=`<span class="badge ${stBanco==='Recebido'?'b-recebido':stBanco==='Importado'?'b-importado':'b-aguardando'} no-click">${stBanco}</span>`;
@@ -1770,9 +1768,7 @@ async function renderConsultorContratos(){
     document.getElementById('cc-tfoot').innerHTML=`<tr><td colspan="6" style="padding:10px 14px">Totais</td><td class="r">${msk(fmtBRL(totVal))}</td><td></td><td class="r">${msk(fmtBRL(totFlat))}</td><td colspan="2"></td></tr>`;
     document.getElementById('cc-kpis').innerHTML=`
       <div class="kpi-card"><div class="kpi-label">Meus Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Minha Produção</div><div class="kpi-value kpi-green">${msk(fmtBRL(totVal))}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Prêmio a Receber</div><div class="kpi-value kpi-yellow">${msk(fmtBRL(totReceber))}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Prêmio Recebido</div><div class="kpi-value kpi-blue">${msk(fmtBRL(totPago))}</div></div>`;
+      <div class="kpi-card"><div class="kpi-label">Minha Produção</div><div class="kpi-value kpi-green">${msk(fmtBRL(totVal))}</div></div>`;
   }catch(e){
     if(tbody)tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">❌ Erro ao carregar dados</td></tr>';
   }
@@ -1888,7 +1884,7 @@ function verDetalheContrato(id){
     <div class="calc-box">
       <div class="calc-row"><span class="calc-label">Valor do Contrato</span><span class="calc-value">${fmtBRL(c.valor)}</span></div>
       <div class="calc-row"><span class="calc-label">Val. Empresa</span><span class="calc-value v-green">${fmtBRL(ve)}</span></div>
-      <div class="calc-row"><span class="calc-label">Prêmio % / Valor</span><span class="calc-value v-yellow">${fmtPct(fp)} / ${fmtBRL(vf)}</span></div>
+      <div class="calc-row"><span class="calc-label">Comissão % / Valor</span><span class="calc-value v-yellow">${fmtPct(fp)} / ${fmtBRL(vf)}</span></div>
     </div>
     <div class="info-box">
       <div class="info-row"><span class="info-row-label">Status Banco</span><span class="info-row-val">${c.statusBanco}</span></div>
@@ -2070,7 +2066,7 @@ async function carregarProducaoConsultor() {
 
     document.getElementById('c-count').textContent = list.length + ' contrato' + (list.length !== 1 ? 's' : '');
 
-    let totVal = 0, totFlat = 0, totPago = 0, totReceber = 0;
+    let totVal = 0, totFlat = 0;
     const rows = list.map(c => {
       const val = parseFloat(c.valorBruto || 0);
       const empValor = parseFloat(c.comissaoEmpresaValor || 0) || parseFloat(c.comissaoRepasseValor || 0);
@@ -2078,8 +2074,6 @@ async function carregarProducaoConsultor() {
       const pctGrupo = calcRepasseConsultorProd(c);
       const vf = Math.round(empValor * pctGrupo / 100 * 100) / 100;
       totVal += val; totFlat += vf;
-      if (c.statusComissao === 'Pago')    totPago    += vf;
-      if (c.statusComissao === 'A Pagar') totReceber += vf;
       const stBanco = c.statusBanco || 'Aguardando';
       const stFlat  = c.statusComissao || 'Aguardando';
       const bBanco = `<span class="badge ${stBanco==='Recebido'?'b-recebido':stBanco==='Importado'?'b-importado':'b-aguardando'} no-click">${stBanco}</span>`;
@@ -2103,9 +2097,7 @@ async function carregarProducaoConsultor() {
     document.getElementById('c-tfoot').innerHTML = `<tr><td colspan="6">Totais</td><td class="r">${msk(fmtBRL(totVal))}</td><td class="r">${msk(fmtBRL(totFlat))}</td><td colspan="3"></td></tr>`;
     document.getElementById('c-kpis').innerHTML = `
       <div class="kpi-card"><div class="kpi-label">Meus Contratos</div><div class="kpi-value kpi-accent">${list.length}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Minha Produção</div><div class="kpi-value kpi-green">${msk(fmtBRL(totVal))}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Prêmio a Receber</div><div class="kpi-value kpi-yellow">${msk(fmtBRL(totReceber))}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Prêmio Recebido</div><div class="kpi-value kpi-blue">${msk(fmtBRL(totPago))}</div></div>`;
+      <div class="kpi-card"><div class="kpi-label">Minha Produção</div><div class="kpi-value kpi-green">${msk(fmtBRL(totVal))}</div></div>`;
   } catch(e) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--muted)">❌ Erro ao carregar dados</td></tr>';
   }
@@ -2375,7 +2367,7 @@ function atualizarBarraProducao(){
 // Recebimento com valor real: o parceiro às vezes abate estorno ou parcela de
 // acordo, então o que entra na conta é menor que o previsto. O valor informado é
 // o total do lote e é rateado no backend, proporcional à comissão de cada
-// contrato. O prêmio do consultor não muda — compensar é decisão do gestor.
+// contrato. A comissão do consultor não muda — compensar é decisão do gestor.
 let _recIds=[];
 function abrirModalRecebimento(ids){
   _recIds=ids;
@@ -2404,7 +2396,7 @@ function atualizarPreviewRecebimento(){
     el.innerHTML=`<span style="color:var(--green)">✔ Recebimento integral — nada abatido.</span>`;
   } else if(dif>0){
     el.innerHTML=`<div style="display:flex;justify-content:space-between"><span>Abatido pelo parceiro:</span><b style="color:var(--red)">${fmtBRL(dif)}</b></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Fica registrado no contrato. O prêmio do consultor não muda — para descontar dele, use Proventos e Descontos.</div>`;
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Fica registrado no contrato. A comissão do consultor não muda — para descontar dele, use Proventos e Descontos.</div>`;
   } else {
     el.innerHTML=`<div style="display:flex;justify-content:space-between"><span>Recebido a mais:</span><b>${fmtBRL(-dif)}</b></div>`;
   }
@@ -2858,7 +2850,7 @@ function renderTabelas(){
       ${sTh('Flat %','flat',s,'toggleSortSim','r')}
       ${sTh('Val. Contrato','contrato',s,'toggleSortSim','r')}
       ${sTh('Parcela','parcela',s,'toggleSortSim','r')}
-      ${sTh('Prêmio','ganho',s,'toggleSortSim','r')}
+      ${sTh('Comissão','ganho',s,'toggleSortSim','r')}
     </tr>`;
     if(!resultados.length){tbody.innerHTML=`<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">Nenhuma tabela</td></tr>`;return;}
     tbody.innerHTML=resultados.map(({t,flatPct,valorContrato,parcela,ganho,rep},i)=>{
@@ -4332,7 +4324,7 @@ async function verReciboPagamento(id){
           <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Cliente</th>
           <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Banco</th>
           <th class="r" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Val. Contrato</th>
-          <th class="r" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding-right:6px">Prêmio</th>
+          <th class="r" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding-right:6px">Comissão</th>
         </tr></thead><tbody>
         ${itens.map(i=>`<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:6px">${escHtml(i.contratoId||'—')}</td>
@@ -4359,7 +4351,7 @@ async function verReciboPagamento(id){
       </div>
       <div style="margin-top:26px;font-size:12px;color:var(--text);text-align:center">
         Recebi de <b>${escHtml(nomeEmpresa)}</b> a importância de <b>${fmtBRL(parseFloat(p.valorTotal||0))}</b>,
-        referente ao prêmio dos contratos listados neste recibo.
+        referente à comissão dos contratos listados neste recibo.
       </div>
       <div style="margin-top:48px;text-align:center">
         <div style="border-top:1px solid var(--muted);width:320px;margin:0 auto;padding-top:6px;font-size:12px">
