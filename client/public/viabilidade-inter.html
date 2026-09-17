@@ -196,6 +196,7 @@ td{color:#111827!important}
         <input id="nomeCliente" placeholder="preenchido pelo extrato">
       </div>
       <button class="btn-o" onclick="salvarCotacao()">Salvar cotação</button>
+      <button class="btn-o" onclick="salvarParaDigitacao()">Salvar p/ digitação</button>
       <button class="vi-link" style="padding-bottom:10px;" onclick="buscarCotacoes()">Ver salvas</button>
       <button class="vi-link" style="padding-bottom:10px;color:var(--red);"
               onclick="limparTudo()">Limpar</button>
@@ -435,6 +436,7 @@ const fmtBRL = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFrac
 const fmtPct = (v, casas) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) + '%';
 const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; };
 const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const round2 = v => Math.round((Number(v) || 0) * 100) / 100;
 const isoData = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 
 function novaLinha(base) {
@@ -453,6 +455,7 @@ function novaLinha(base) {
     tabelaRefin: 4,
     calc: null,
     sugestao: null,
+    desmarcadoManual: false,   // so o operador tirando a linha do resultado
     parecer: { ok: false, msg: '', tabela: '' }
   };
 }
@@ -464,7 +467,12 @@ function setCampo(id, campo, valor) {
   const l = linhas.find(x => x.id === id);
   if (!l) return;
   if (campo === 'banco') { l.banco = valor; return; }
-  if (campo === 'marcado') { l.marcado = valor; pintarResumo(); return; }
+  if (campo === 'marcado') {
+    l.marcado = valor;
+    l.desmarcadoManual = !valor;   // tirou na mao: nao volta sozinha
+    pintarResumo();
+    return;
+  }
   if (campo === 'tabelaRefin') { l.tabelaRefin = parseInt(valor, 10) || 1; recalcTudo(); return; }
 
   l[campo] = num(valor);
@@ -551,12 +559,14 @@ function aplicarTabela(id, n) {
   const l = linhas.find(x => x.id === id);
   if (!l) return;
   l.tabelaRefin = n;
-  l.marcado = true;
+  l.desmarcadoManual = false;   // pediu para aprovar: quer a linha no resultado
   recalcTudo();
 }
 
 function aplicarTabelaEmTodas() {
-  linhas.forEach(l => { if (l.sugestao) { l.tabelaRefin = l.sugestao.tabela; l.marcado = true; } });
+  linhas.forEach(l => {
+    if (l.sugestao) { l.tabelaRefin = l.sugestao.tabela; l.desmarcadoManual = false; }
+  });
   recalcTudo();
 }
 
@@ -583,8 +593,9 @@ function recalcTudo() {
     if (!r) { l.parecer.msg = 'Falta parcela, prazo ou saldo devedor'; continue; }
     l.calc = r;
     l.parecer = avaliar(r.taxaPonderada * 100, regra);
+    // aprovado entra no resultado por padrao; reprovado sai sempre
+    l.marcado = l.parecer.ok && !l.desmarcadoManual;
     if (!l.parecer.ok) {
-      l.marcado = false;
       l.sugestao = menorTabelaViavel(l, {
         regra: regra, prazoRefin: prazoRefin,
         dataContrato: dataContrato, primeiroVenc: primeiroVenc
@@ -764,7 +775,8 @@ function estadoAtual() {
       banco: l.banco, contrato: l.contrato, prazoTotal: l.prazoTotal,
       restantes: l.restantes, parcela: l.parcela, saldo: l.saldo,
       taxaAtual: l.taxaAtual, novaParcela: l.novaParcela,
-      tabelaRefin: l.tabelaRefin, marcado: l.marcado
+      tabelaRefin: l.tabelaRefin, marcado: l.marcado,
+      desmarcadoManual: l.desmarcadoManual
     }))
   };
 }
@@ -808,6 +820,69 @@ async function salvarCotacao() {
     st.style.color = 'var(--red)';
     st.textContent = 'Não foi possível salvar: ' + e.message;
   }
+}
+
+/** Gera o .json que o Criador de Proposta importa (mesmo formato novo do
+ *  simulador de portabilidade: `contratos[]` com banco_destino por linha).
+ *  So entram os contratos marcados — sao os que viraram proposta. */
+function salvarParaDigitacao() {
+  const st = document.getElementById('cotacoesStatus');
+  const sel = linhas.filter(l => l.marcado && l.calc && l.parecer.ok);
+  if (!sel.length) {
+    st.style.color = 'var(--red)';
+    st.textContent = 'Nenhum contrato aprovado e marcado para exportar.';
+    return;
+  }
+  const prazoRefin = num(document.getElementById('prazoRefin').value);
+  const nome = document.getElementById('nomeCliente').value.trim() || 'cliente';
+
+  const dados = {
+    versao: '1.0',
+    tipo: 'viabilidade-inter',
+    exportado_em: new Date().toISOString(),
+    nomeCliente: nome,
+    cpf: document.getElementById('cpfCliente').value.trim(),
+    convenio: document.getElementById('convenio').value,
+    com_seguro: comSeguro,
+    banco_destino: 'Inter',
+    data_contrato: document.getElementById('dataContrato').value,
+    primeiro_vencimento: document.getElementById('primeiroVenc').value,
+    contratos: sel.map(l => ({
+      banco:           l.banco || '',
+      banco_destino:   'Inter',
+      numero_contrato: l.contrato || '',
+      parcela_atual:   round2(l.parcela),
+      prazo_restante:  l.restantes,
+      prazo_total:     l.prazoTotal,
+      taxa_atual:      Math.round(l.taxaAtual * 10000) / 10000,
+      saldo_devedor:   round2(l.saldo),
+      taxa_nova:       taxaDaTabela(l.tabelaRefin),
+      prazo_novo:      prazoRefin,
+      nova_parcela:    round2(l.novaParcela),
+      troco:           round2(l.calc.troco),
+      // informativo para conferencia: nao e lido pelo Criador de Proposta
+      tabela_refin:      l.tabelaRefin,
+      troco_bruto:       round2(l.calc.trocoBruto),
+      iof:               round2(l.calc.iof),
+      taxa_ponderada:    Math.round(l.calc.taxaPonderada * 1000000) / 10000,
+      tabela_comissao:   l.parecer.tabela
+    })),
+    totais: {
+      saldo_devedor:    round2(sel.reduce((a, l) => a + l.saldo, 0)),
+      troco:            round2(sel.reduce((a, l) => a + l.calc.troco, 0)),
+      total_financiado: round2(sel.reduce((a, l) => a + l.calc.totalFinanciado, 0))
+    }
+  };
+
+  const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'viabilidade-inter-' + nome.replace(/\s+/g, '-') + '-' + isoData(new Date()) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  st.style.color = 'var(--green)';
+  st.textContent = sel.length + ' contrato(s) exportado(s) para digitacao.';
 }
 
 async function buscarCotacoes() {
@@ -856,10 +931,6 @@ async function retomarCotacao(id) {
     });
     pintarVencimento();
     recalcTudo();
-    // quem volta aprovado entra no resultado: senão a cotação retomada aparece
-    // com as linhas Favoráveis mas os totais zerados
-    linhas.forEach(l => { if (l.parecer.ok) l.marcado = true; });
-    render();
     st.style.color = 'var(--green)';
     st.textContent = 'Cotação retomada.';
   } catch (e) {
