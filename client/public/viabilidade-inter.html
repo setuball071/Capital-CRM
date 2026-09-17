@@ -170,6 +170,14 @@ td{color:#111827!important}
           <label class="vi-lbl" for="prazoRefin">Prazo do refin</label>
           <input type="number" id="prazoRefin" value="120" min="1" max="144" style="width:100px" onchange="recalcTudo()">
         </div>
+        <div class="vi-campo" style="min-width:230px;">
+          <label class="vi-lbl" for="tabelaPos">Tabela do refin pós-port</label>
+          <select id="tabelaPos" onchange="recalcTudo()"></select>
+          <span style="font-size:10.5px;color:var(--text-muted);max-width:240px;">
+            Renegociação depois da port fechada. Mesma parcela, tabela menor —
+            libera troco extra. Não passa por viabilidade de novo.
+          </span>
+        </div>
       </div>
     </div>
 
@@ -301,6 +309,27 @@ function taxaFromSaldo(pmt, saldo, n) {
   return ((lo + hi) / 2) * 100;
 }
 
+/** IOF da operação. Incide só sobre o dinheiro novo — o saldo que já era do
+ *  cliente não paga. A base não é o troco direto: a planilha do banco refaz o
+ *  valor financiado a partir da parcela, descontada à taxa da operação e
+ *  ajustada pela carência. Depois cobra 0,0082% ao dia (limitado a 365 dias)
+ *  mais 0,38% fixo sobre CADA amortização do cronograma. */
+function calcIof(saldoAnterior, parcela, taxaMes, prazo, carencia, diasReais) {
+  const fator  = taxaMes / (1 - Math.pow(1 + taxaMes, -prazo));
+  const ajuste = Math.pow(1 + taxaMes, (carencia - 30) / 30);
+  const base   = (parcela / fator) / ajuste - saldoAnterior;
+  const pmtBase = fator * (base * ajuste);
+
+  let saldo = base, iof = 0;
+  for (let m = 1; m <= prazo; m++) {
+    const novo = saldo * Math.pow(1 + taxaMes, (m === 1 ? carencia : 30) / 30) - pmtBase;
+    const amortizado = saldo - novo;
+    iof += Math.min(diasReais[m - 1], 365) * amortizado * IOF_DIA + amortizado * IOF_ADICIONAL;
+    saldo = novo;
+  }
+  return iof >= 0 ? iof : 0;
+}
+
 /** Calcula UMA operação (um contrato) de forma totalmente independente. */
 function motorInter(p) {
   const saldoPortado = p.saldoPortado, prazoRem = p.prazoRemanescente;
@@ -338,29 +367,38 @@ function motorInter(p) {
   const taxaPonderada = Math.pow(1 + tirAno, 1 / 12) - 1;
 
   // ── IOF ──────────────────────────────────────────────────────────────────
-  // O troco que o cliente recebe é LÍQUIDO de IOF — é o número que a planilha
-  // do banco mostra em "Troco". O IOF incide só sobre o dinheiro novo (o saldo
-  // portado não paga), e a base não é o troco direto: a planilha refaz o valor
-  // financiado a partir da parcela do refin, descontada à TAXA PONDERADA.
   const carencia = days360(p.dataContrato, p.primeiroVenc);
-  const fator  = taxaPonderada / (1 - Math.pow(1 + taxaPonderada, -prazoRefin));
-  const ajuste = Math.pow(1 + taxaPonderada, (carencia - 30) / 30);
-  const baseIof = (novaParcela / fator) / ajuste - saldoPortado;
-  const pmtBase = fator * (baseIof * ajuste);
-
-  let saldo = baseIof, iof = 0;
-  for (let m = 1; m <= prazoRefin; m++) {
-    const novo = saldo * Math.pow(1 + taxaPonderada, (m === 1 ? carencia : 30) / 30) - pmtBase;
-    const amortizado = saldo - novo;
-    // 0,0082% ao dia limitado a 365 dias + 0,38% fixo, sobre cada amortização
-    iof += Math.min(diasReais[m - 1], 365) * amortizado * IOF_DIA + amortizado * IOF_ADICIONAL;
-    saldo = novo;
-  }
-  if (!(iof >= 0)) iof = 0;
+  const iof = calcIof(saldoPortado, novaParcela, taxaPonderada, prazoRefin, carencia, diasReais);
 
   return { trocoBruto: troco, iof: iof, troco: troco - iof,
            totalFinanciado: totalFinanciado, tirAno: tirAno,
-           taxaPonderada: taxaPonderada };
+           taxaPonderada: taxaPonderada,
+           dias360: dias360, diasReais: diasReais, carencia: carencia };
+}
+
+/** PASSO 2 — refin depois da portabilidade já finalizada.
+ *
+ *  O contrato portado (parcela P por `prazo` meses, devendo `financiado`) é
+ *  reprecificado inteiro numa tabela MENOR, negociada à parte. O valor presente
+ *  das mesmas parcelas na taxa nova fica maior que a dívida, e a diferença sai
+ *  como troco. Parcela e prazo não mudam — só a taxa.
+ *
+ *  ⚠️ Esta etapa NÃO está na planilha do Inter (que só modela a "Refin da Port"),
+ *  então é uma estimativa a calibrar com um caso real fechado no banco.
+ *  A viabilidade não é reavaliada aqui: aprovou no passo 1, passa no passo 2. */
+function refinPosPort(p) {
+  const { parcela, prazo, financiado, taxaMes, dias360, diasReais, carencia } = p;
+  if (!(parcela > 0 && prazo > 0 && financiado > 0 && taxaMes > 0)) return null;
+
+  const taxaAno = Math.pow(1 + taxaMes, 12) - 1;
+  let vp = 0;
+  for (let m = 1; m <= prazo; m++) vp += parcela / Math.pow(1 + taxaAno, dias360[m - 1] / 360);
+
+  const bruto = vp - financiado;
+  if (bruto <= 0) return { bruto: 0, iof: 0, troco: 0, semEspaco: true };
+
+  const iof = calcIof(financiado, parcela, taxaMes, prazo, carencia, diasReais);
+  return { bruto: bruto, iof: iof, troco: bruto - iof, semEspaco: false };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -454,6 +492,7 @@ function novaLinha(base) {
     novaParcela: b.parcela || 0,
     tabelaRefin: 4,
     calc: null,
+    passo2: null,
     sugestao: null,
     desmarcadoManual: false,   // so o operador tirando a linha do resultado
     parecer: { ok: false, msg: '', tabela: '' }
@@ -574,6 +613,7 @@ function recalcTudo() {
   const dc = document.getElementById('dataContrato').value;
   const pv = document.getElementById('primeiroVenc').value;
   const prazoRefin = num(document.getElementById('prazoRefin').value);
+  const tabelaPos = parseInt(document.getElementById('tabelaPos').value, 10) || 0;
   const regra = regraAtual();
   const dataContrato = dc ? new Date(dc + 'T00:00:00') : null;
   const primeiroVenc = pv ? new Date(pv + 'T00:00:00') : null;
@@ -581,6 +621,7 @@ function recalcTudo() {
   for (const l of linhas) {
     l.calc = null;
     l.sugestao = null;
+    l.passo2 = null;
     l.parecer = { ok: false, msg: '', tabela: '' };
     if (!dataContrato || !primeiroVenc) { l.parecer.msg = 'Informe as datas em "Ajustes da operação"'; continue; }
     if (l.restantes >= prazoRefin) { l.parecer.msg = 'Prazo do refin tem que ser maior que o restante'; continue; }
@@ -593,6 +634,14 @@ function recalcTudo() {
     if (!r) { l.parecer.msg = 'Falta parcela, prazo ou saldo devedor'; continue; }
     l.calc = r;
     l.parecer = avaliar(r.taxaPonderada * 100, regra);
+    // passo 2 so faz sentido sobre operacao que passou no passo 1
+    l.passo2 = (tabelaPos && l.parecer.ok)
+      ? refinPosPort({
+          parcela: l.novaParcela, prazo: prazoRefin, financiado: r.totalFinanciado,
+          taxaMes: taxaDaTabela(tabelaPos) / 100,
+          dias360: r.dias360, diasReais: r.diasReais, carencia: r.carencia
+        })
+      : null;
     // aprovado entra no resultado por padrao; reprovado sai sempre
     l.marcado = l.parecer.ok && !l.desmarcadoManual;
     if (!l.parecer.ok) {
@@ -650,9 +699,15 @@ function render() {
         '<div class="vi-apoio"><span>taxa</span>' +
         inp('taxaAtual', l.taxaAtual ? l.taxaAtual.toFixed(4) : '') + '<span>%</span></div></td>' +
       '<td><select onchange="setCampo(' + l.id + ',&quot;tabelaRefin&quot;,this.value)">' + opTab + '</select></td>' +
-      '<td class="vi-out vi-valor"' + (l.calc ? ' title="Bruto ' + fmtBRL(l.calc.trocoBruto) +
-        ' − IOF ' + fmtBRL(l.calc.iof) + '"' : '') + '>' +
-        (l.calc ? fmtBRL(l.calc.troco) : '—') + '</td>' +
+      '<td class="vi-out vi-valor"' + (l.calc ? ' title="' + esc(tituloTroco(l)) + '"' : '') + '>' +
+        (l.calc ? fmtBRL(trocoTotal(l)) : '—') +
+        (l.passo2 && !l.passo2.semEspaco
+          ? '<div class="vi-sub" style="text-align:right;">port ' + fmtBRL(l.calc.troco) +
+            ' + refin ' + fmtBRL(l.passo2.troco) + '</div>'
+          : (l.passo2 && l.passo2.semEspaco
+              ? '<div class="vi-sub" style="text-align:right;">refin sem espaço nesta tabela</div>'
+              : '')) +
+      '</td>' +
       '<td class="vi-out vi-taxa" style="color:' + (l.parecer.ok ? 'var(--green)' : 'var(--red)') + ';"' +
         (l.calc ? ' title="' + fmtPct(l.calc.taxaPonderada * 100, 4) + ' — valor cheio, usado no parecer"' : '') + '>' +
         (l.calc ? fmtPct(l.calc.taxaPonderada * 100, 2) : '—') + '</td>' +
@@ -672,17 +727,36 @@ function render() {
   pintarResumo();
 }
 
+/** Troco que o cliente recebe: passo 1 + refin pos-port, quando houver. */
+const trocoTotal = l => (l.calc ? l.calc.troco : 0) + (l.passo2 ? l.passo2.troco : 0);
+
+function tituloTroco(l) {
+  let t = 'Port: bruto ' + fmtBRL(l.calc.trocoBruto) + ' − IOF ' + fmtBRL(l.calc.iof) +
+          ' = ' + fmtBRL(l.calc.troco);
+  if (l.passo2 && !l.passo2.semEspaco) {
+    t += '\nRefin pós-port: bruto ' + fmtBRL(l.passo2.bruto) + ' − IOF ' +
+         fmtBRL(l.passo2.iof) + ' = ' + fmtBRL(l.passo2.troco) + ' (estimativa)';
+  }
+  return t;
+}
+
 function pintarResumo() {
   const sel = linhas.filter(l => l.marcado && l.calc && l.parecer.ok);
   const saldo = sel.reduce((a, l) => a + l.saldo, 0);
-  const troco = sel.reduce((a, l) => a + l.calc.troco, 0);
+  const trocoPort = sel.reduce((a, l) => a + l.calc.troco, 0);
+  const trocoRefin = sel.reduce((a, l) => a + (l.passo2 ? l.passo2.troco : 0), 0);
   const total = sel.reduce((a, l) => a + l.calc.totalFinanciado, 0);
   const fora = linhas.filter(l => l.calc && !l.parecer.ok).length;
 
   document.getElementById('resumo').innerHTML =
     '<span>Contratos selecionados: <b>' + sel.length + '</b></span>' +
     '<span>Saldo devedor portado: <b>' + fmtBRL(saldo) + '</b></span>' +
-    '<span>Valor liberado: <b style="color:var(--green)">' + fmtBRL(troco) + '</b></span>' +
+    (trocoRefin > 0
+      ? '<span>Liberado na port: <b>' + fmtBRL(trocoPort) + '</b></span>' +
+        '<span>Liberado no refin: <b>' + fmtBRL(trocoRefin) + '</b></span>'
+      : '') +
+    '<span>Valor liberado' + (trocoRefin > 0 ? ' total' : '') +
+      ': <b style="color:var(--green)">' + fmtBRL(trocoPort + trocoRefin) + '</b></span>' +
     '<span>Total financiado: <b>' + fmtBRL(total) + '</b></span>' +
     (fora ? '<span style="color:var(--red);font-size:12px;">' + fora + ' fora da faixa, fora do resultado</span>' : '');
 }
@@ -770,6 +844,7 @@ function estadoAtual() {
     dataContrato: document.getElementById('dataContrato').value,
     primeiroVenc: document.getElementById('primeiroVenc').value,
     prazoRefin:   document.getElementById('prazoRefin').value,
+    tabelaPos:    document.getElementById('tabelaPos').value,
     nomeCliente:  document.getElementById('nomeCliente').value,
     linhas: linhas.map(l => ({
       banco: l.banco, contrato: l.contrato, prazoTotal: l.prazoTotal,
@@ -859,7 +934,9 @@ function salvarParaDigitacao() {
       taxa_nova:       taxaDaTabela(l.tabelaRefin),
       prazo_novo:      prazoRefin,
       nova_parcela:    round2(l.novaParcela),
-      troco:           round2(l.calc.troco),
+      troco:           round2(trocoTotal(l)),
+      troco_port:      round2(l.calc.troco),
+      troco_refin_pos: round2(l.passo2 ? l.passo2.troco : 0),
       // informativo para conferencia: nao e lido pelo Criador de Proposta
       tabela_refin:      l.tabelaRefin,
       troco_bruto:       round2(l.calc.trocoBruto),
@@ -867,9 +944,12 @@ function salvarParaDigitacao() {
       taxa_ponderada:    Math.round(l.calc.taxaPonderada * 1000000) / 10000,
       tabela_comissao:   l.parecer.tabela
     })),
+    tabela_refin_pos_port: parseInt(document.getElementById('tabelaPos').value, 10) || null,
     totais: {
       saldo_devedor:    round2(sel.reduce((a, l) => a + l.saldo, 0)),
-      troco:            round2(sel.reduce((a, l) => a + l.calc.troco, 0)),
+      troco_port:       round2(sel.reduce((a, l) => a + l.calc.troco, 0)),
+      troco_refin_pos:  round2(sel.reduce((a, l) => a + (l.passo2 ? l.passo2.troco : 0), 0)),
+      troco:            round2(sel.reduce((a, l) => a + trocoTotal(l), 0)),
       total_financiado: round2(sel.reduce((a, l) => a + l.calc.totalFinanciado, 0))
     }
   };
@@ -920,6 +1000,7 @@ async function retomarCotacao(id) {
     if (d.convenio) document.getElementById('convenio').value = d.convenio;
     if (d.dataContrato) document.getElementById('dataContrato').value = d.dataContrato;
     if (d.prazoRefin) document.getElementById('prazoRefin').value = d.prazoRefin;
+    document.getElementById('tabelaPos').value = d.tabelaPos || '0';
     if (d.nomeCliente) document.getElementById('nomeCliente').value = d.nomeCliente;
     setSeguro(Boolean(d.comSeguro));
     // o vencimento salvo manda: pode ter sido empurrado pela data de corte
@@ -962,6 +1043,7 @@ function limparTudo() {
   document.getElementById('regrasStatus').textContent = '';
 
   // datas voltam para hoje, com o vencimento re-sugerido pelo convênio
+  document.getElementById('tabelaPos').value = '0';
   document.getElementById('dataContrato').value = isoData(new Date());
   sugerirVencimento();
   pintarVencimento();
@@ -1125,6 +1207,10 @@ function onConvenio() {
 }
 
 async function init() {
+  document.getElementById('tabelaPos').innerHTML =
+    '<option value="0">— não usar —</option>' + TABELAS_REFIN.map(t =>
+      '<option value="' + t.n + '">Tabela ' + t.n + ' · ' + fmtPct(t.sem, 2) + '</option>').join('');
+
   document.getElementById('dataContrato').value = isoData(new Date());
 
   await carregarRegras();
