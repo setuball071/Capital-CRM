@@ -111,6 +111,19 @@ export interface ResultadoRegra {
   motivo: string;
   fonte: "infografico" | "excecao" | "sistema";
   excecaoId?: number;
+  /** Quando PENDENTE_INFO: o dado exato que falta. A tela pede só esse campo. */
+  campo?: CampoPendente;
+}
+
+export type CampoPendente =
+  | "situacaoFuncional" | "dataNascimento" | "pensaoTipo" | "pensaoFim"   // do cliente
+  | "origemConfirmada" | "prazoTotal" | "prazoRestante" | "taxa" | "saldo"; // do contrato
+
+export interface CampoPendenteDetalhe {
+  campo: CampoPendente;
+  escopo: "cliente" | "contrato";
+  contratoId?: string;
+  motivo: string;
 }
 
 export interface ResultadoContrato {
@@ -135,6 +148,8 @@ export interface ResultadoBanco {
   cliente: ResultadoRegra[];
   contratos: ResultadoContrato[];
   pendencias: string[];
+  /** Mesmas pendências, estruturadas: qual campo, de quem. */
+  camposPendentes: CampoPendenteDetalhe[];
   avisos: string[];
   contagem: Record<Status, number>;
 }
@@ -242,7 +257,7 @@ function avaliarOrigem(c: ContratoEntrada, chave: string | null, regras: RegrasB
     const comoFin = resolverOrigem("BRB_FINANCEIRA", regras, excecoes);
     const chaveDe = (x: any) => JSON.stringify(x.regra ? [x.regra.porta, x.regra.pagasMin ?? null] : x);
     if (chaveDe(comoBanco) !== chaveDe(comoFin)) {
-      return regra({ ...base, valorAnalisado: c.bancoOrigem, esperado: null, status: "PENDENTE_INFO", fonte: "sistema",
+      return regra({ ...base, campo: "origemConfirmada", valorAnalisado: c.bancoOrigem, esperado: null, status: "PENDENTE_INFO", fonte: "sistema",
         motivo: `Confirme se o contrato é do BRB Banco ou da BRB Financeira — o ${banco} trata os dois de forma diferente.` });
     }
   }
@@ -266,7 +281,7 @@ function avaliarOrigem(c: ContratoEntrada, chave: string | null, regras: RegrasB
   }
   const min = temNum(r.regra.pagasMin) ? r.regra.pagasMin : 0;
   if (!temNum(c.prazoTotal) || !temNum(c.prazoRestante) || c.prazoTotal <= 0) {
-    return regra({ ...base, valorAnalisado: rotuloOrigem, esperado: `${min} pagas`, status: "PENDENTE_INFO", fonte, excecaoId,
+    return regra({ ...base, campo: "prazoTotal", valorAnalisado: rotuloOrigem, esperado: `${min} pagas`, status: "PENDENTE_INFO", fonte, excecaoId,
       motivo: "Falta o prazo total do contrato para contar as parcelas pagas." });
   }
   const pagas = Math.max(0, c.prazoTotal - c.prazoRestante);
@@ -282,7 +297,7 @@ function avaliarTaxa(c: ContratoEntrada, regras: RegrasBanco, banco: string): Re
   if (!temNum(regras.taxaEntradaMin)) return null;
   const base = { chave: "taxa_entrada_min", label: "Taxa mínima do contrato", esperado: `≥ ${pct(regras.taxaEntradaMin)}` };
   if (!temNum(c.taxa) || c.taxa <= 0) {
-    return regra({ ...base, valorAnalisado: null, status: "PENDENTE_INFO", motivo: "Falta a taxa do contrato (ou o saldo devedor, para deduzi-la)." });
+    return regra({ ...base, campo: "taxa", valorAnalisado: null, status: "PENDENTE_INFO", motivo: "Falta a taxa do contrato (ou o saldo devedor, para deduzi-la)." });
   }
   // compara com 2 casas: a taxa costuma vir deduzida do saldo e sair 1,1999
   const t = r2(c.taxa);
@@ -298,7 +313,7 @@ function avaliarSaldo(c: ContratoEntrada, regras: RegrasBanco, banco: string): R
   const esperado = [temMin ? `≥ ${brl(regras.saldoMin!)}` : "", temMax ? `≤ ${brl(regras.saldoMax!)}` : ""].filter(Boolean).join(" e ");
   const base = { chave: "saldo", label: "Saldo devedor", esperado };
   if (!temNum(c.saldo) || c.saldo <= 0) {
-    out.push(regra({ ...base, valorAnalisado: null, status: "PENDENTE_INFO", motivo: "Falta o saldo devedor do contrato." }));
+    out.push(regra({ ...base, campo: "saldo", valorAnalisado: null, status: "PENDENTE_INFO", motivo: "Falta o saldo devedor do contrato." }));
     return out;
   }
   const abaixo = temMin && c.saldo < regras.saldoMin!;
@@ -337,7 +352,7 @@ function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string,
   if (aceitos && aceitos.length) {
     const base = { chave: "situacao_funcional", label: "Situação funcional", esperado: `uma das ${aceitos.length} aceitas` };
     if (!cli.situacaoFuncional) {
-      out.push(regra({ ...base, valorAnalisado: null, status: "PENDENTE_INFO", motivo: "Falta a situação funcional do cliente." }));
+      out.push(regra({ ...base, campo: "situacaoFuncional", valorAnalisado: null, status: "PENDENTE_INFO", motivo: "Falta a situação funcional do cliente." }));
     } else {
       const achou = resolverSituacao(cli.situacaoFuncional, aceitos);
       if (achou) {
@@ -346,7 +361,7 @@ function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string,
           motivo: `Situação ${achou.codigo} é aceita pelo ${banco}.` }));
       } else {
         // pode ser só que o CRM guarda "ATIVO" e a regra fala em "ATIVO PERMANENTE"
-        out.push(regra({ ...base, valorAnalisado: cli.situacaoFuncional, status: "PENDENTE_INFO",
+        out.push(regra({ ...base, campo: "situacaoFuncional", valorAnalisado: cli.situacaoFuncional, status: "PENDENTE_INFO",
           motivo: `"${cli.situacaoFuncional}" não bate com nenhum código da lista do ${banco}. Informe o código SIAPE da situação funcional.` }));
       }
     }
@@ -358,7 +373,7 @@ function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string,
     const base = { chave: "pensao", label: "Tipo de pensão" };
     const tipo = cli.pensao?.tipo;
     if (!tipo) {
-      out.push(regra({ ...base, valorAnalisado: null, esperado: "vitalícia ou temporária", status: "PENDENTE_INFO",
+      out.push(regra({ ...base, campo: "pensaoTipo", valorAnalisado: null, esperado: "vitalícia ou temporária", status: "PENDENTE_INFO",
         motivo: "Cliente é pensionista: informe se a pensão é vitalícia ou temporária." }));
     } else if (tipo === "vitalicia") {
       out.push(regra({ ...base, valorAnalisado: "vitalícia", esperado: null, status: "ELEGIVEL", motivo: "Pensão vitalícia é aceita." }));
@@ -368,12 +383,12 @@ function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string,
         out.push(regra({ ...base, valorAnalisado: "temporária sem data de término", esperado: null, status: "REGRA_NAO_CADASTRADA", fonte: "sistema",
           motivo: `Sem regra do ${banco} para pensão temporária sem data de término.` }));
       } else if (!cli.dataNascimento) {
-        out.push(regra({ ...base, valorAnalisado: "temporária sem data de término", esperado: `${min} anos completos`, status: "PENDENTE_INFO",
+        out.push(regra({ ...base, campo: "dataNascimento", valorAnalisado: "temporária sem data de término", esperado: `${min} anos completos`, status: "PENDENTE_INFO",
           motivo: `Pensão temporária sem data de término exige ${min} anos: falta a data de nascimento.` }));
       } else {
         const idade = idadeEm(cli.dataNascimento, hoje);
         const ok = idade !== null && idade >= min;
-        out.push(regra({ ...base, valorAnalisado: idade === null ? cli.dataNascimento : `${idade} anos`, esperado: `≥ ${min} anos`,
+        out.push(regra({ ...base, campo: idade === null ? "dataNascimento" : undefined, valorAnalisado: idade === null ? cli.dataNascimento : `${idade} anos`, esperado: `≥ ${min} anos`,
           status: idade === null ? "PENDENTE_INFO" : ok ? "ELEGIVEL" : "NAO_ELEGIVEL",
           motivo: idade === null ? "Data de nascimento inválida."
             : ok ? `Pensão temporária sem término: ${idade} anos atende o mínimo de ${min}.`
@@ -385,7 +400,9 @@ function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string,
 
   const al = cli.alertas || {};
   const marcados = [al.analfabeto && "analfabeto", al.naoAssina && "impossibilitado de assinar", al.leiEstadualIdoso && "lei estadual de idoso"].filter(Boolean) as string[];
-  if (marcados.length) {
+  // Só vale para banco que TEM regra de formalização cadastrada: sem ela, marcar
+  // "analfabeto" não pode mandar o banco para análise manual por conta própria.
+  if (marcados.length && (regras.alertasFormalizacao || []).length) {
     out.push(regra({ chave: "formalizacao", label: "Formalização", valorAnalisado: marcados.join(", "), esperado: null,
       status: "ANALISE_MANUAL", motivo: `Cliente ${marcados.join(", ")}: seguir o Manual de Formalização do ${banco}. Não reprova, mas exige conferência.` }));
   }
@@ -400,10 +417,10 @@ function avaliarPensaoContrato(c: ContratoEntrada, cli: ClienteEntrada, regras: 
   const base = { chave: "pensao_fim", label: "Término do contrato x término da pensão" };
   const fimPensao = new Date(cli.pensao.dataFim + "T00:00:00");
   if (isNaN(fimPensao.getTime())) {
-    return regra({ ...base, valorAnalisado: cli.pensao.dataFim, esperado: null, status: "PENDENTE_INFO", motivo: "Data de término da pensão inválida." });
+    return regra({ ...base, campo: "pensaoFim", valorAnalisado: cli.pensao.dataFim, esperado: null, status: "PENDENTE_INFO", motivo: "Data de término da pensão inválida." });
   }
   if (!temNum(c.prazoRestante)) {
-    return regra({ ...base, valorAnalisado: null, esperado: null, status: "PENDENTE_INFO", motivo: "Falta o prazo restante do contrato." });
+    return regra({ ...base, campo: "prazoRestante", valorAnalisado: null, esperado: null, status: "PENDENTE_INFO", motivo: "Falta o prazo restante do contrato." });
   }
   const limite = new Date(fimPensao); limite.setMonth(limite.getMonth() - folga);
   const fimContrato = new Date(hoje.getFullYear(), hoje.getMonth() + c.prazoRestante, 1);
@@ -450,7 +467,7 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
     bankId: banco.bankId, banco: banco.nome, status: "REGRA_NAO_CADASTRADA",
     resumo: `Sem regras vigentes do ${banco.nome} para o convênio ${cliente.convenio}.`,
     ruleSetId: null, ruleSetHash: null, vigenciaInicio: null, excecoesAplicadas: [],
-    cliente: [], contratos: [], pendencias: [], avisos: [], contagem,
+    cliente: [], contratos: [], pendencias: [], camposPendentes: [], avisos: [], contagem,
   };
   if (!banco.ruleSet) return vazio;
 
@@ -481,8 +498,26 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
   else if (contagem.REGRA_NAO_CADASTRADA) status = "REGRA_NAO_CADASTRADA";
   else status = "NAO_ELEGIVEL";
 
+  const camposPendentes: CampoPendenteDetalhe[] = [];
+  const vistos = new Set<string>();
+  const anota = (r: ResultadoRegra, escopo: "cliente" | "contrato", contratoId?: string) => {
+    if (r.status !== "PENDENTE_INFO" || !r.campo) return;
+    const k = escopo + ":" + r.campo + ":" + (contratoId || "");
+    if (vistos.has(k)) return;
+    vistos.add(k);
+    camposPendentes.push({ campo: r.campo, escopo, contratoId, motivo: r.motivo });
+  };
+  // Só pede o dado que ainda muda o resultado: contrato já recusado por outra
+  // regra não precisa de saldo/taxa; e dado do cliente só importa se sobrou
+  // algum contrato pendente.
+  const aindaPendentes = resultadoContratos.filter(c => c.status === "PENDENTE_INFO");
+  if (aindaPendentes.length) cli.regras.forEach(r => anota(r, "cliente"));
+  aindaPendentes.forEach(c => c.regras.forEach(r => anota(r, "contrato", c.contratoId)));
+
+  // mesmo critério dos camposPendentes: só o que ainda muda o resultado
   const pendencias = Array.from(new Set(
-    [...cli.regras, ...resultadoContratos.flatMap(c => c.regras)].filter(r => r.status === "PENDENTE_INFO").map(r => r.motivo)
+    [...(aindaPendentes.length ? cli.regras : []), ...aindaPendentes.flatMap(c => c.regras)]
+      .filter(r => r.status === "PENDENTE_INFO").map(r => r.motivo)
   ));
 
   const total = contratos.length;
@@ -497,8 +532,24 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
     bankId: banco.bankId, banco: banco.nome, status, resumo,
     ruleSetId: banco.ruleSet.id, ruleSetHash: banco.ruleSet.hash, vigenciaInicio: banco.ruleSet.vigenciaInicio,
     excecoesAplicadas: Array.from(excecoesAplicadas),
-    cliente: cli.regras, contratos: resultadoContratos, pendencias,
+    cliente: cli.regras, contratos: resultadoContratos, pendencias, camposPendentes,
     avisos: regras.avisos || [], contagem,
+  };
+}
+
+/** Resposta da análise ao vivo do simulador: resultado + o que a tela precisa
+ *  para pedir dados (códigos de situação funcional e alertas de formalização
+ *  que as regras ATIVAS conhecem). Puro — a rota e os testes usam o mesmo. */
+export function respostaSimulacao(bancos: BancoParaAnalise[], cliente: ClienteEntrada, contratos: ContratoEntrada[], hoje = new Date()) {
+  const codigos = new Map<string, string>();
+  bancos.forEach(b => (b.ruleSet?.regras.situacaoFuncional?.aceitos || [])
+    .forEach(a => { if (!codigos.has(a.codigo)) codigos.set(a.codigo, a.descricao); }));
+  return {
+    resultado: analisar(bancos, cliente, contratos, hoje),
+    codigosSituacao: Array.from(codigos, ([codigo, descricao]) => ({ codigo, descricao })),
+    alertasFormalizacao: bancos
+      .filter(b => (b.ruleSet?.regras.alertasFormalizacao || []).length)
+      .map(b => ({ banco: b.nome, itens: b.ruleSet!.regras.alertasFormalizacao! })),
   };
 }
 

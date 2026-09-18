@@ -115,6 +115,11 @@ caso("Situação não-pensionista ignora dados de pensão", () =>
 
 console.log("\nFormalização, operação e agregação");
 caso("Analfabeto: análise manual, não reprova", () => status({ ...CLI, alertas: { analfabeto: true } }, ct({}), "ANALISE_MANUAL", "Manual de Formalização"));
+caso("Analfabeto não afeta banco sem regra de formalização", () => {
+  // regressão: marcar analfabeto jogava para análise manual até banco sem essa regra
+  const semRegra = { ...PAN.regras, alertasFormalizacao: [] };
+  status({ ...CLI, alertas: { analfabeto: true } }, ct({}), "ELEGIVEL", undefined, banco(EXC, semRegra));
+});
 caso("Troco e comissão não decidem elegibilidade", () => {
   const r = analisarBanco(banco(), CLI, [ct({})], HOJE).contratos[0];
   assert.equal(r.status, "ELEGIVEL");
@@ -135,6 +140,33 @@ caso("Exceção usada fica registrada para auditoria", () => {
   const r = analisarBanco(banco(), CLI, [ct({ bancoOrigem: "Caixa" })], HOJE);
   assert.deepEqual(r.excecoesAplicadas, [100]);
   assert.equal(r.ruleSetId, 1);
+});
+
+console.log("\nCampos pendentes (o que a tela pede)");
+caso("Contrato já recusado não pede saldo nem taxa", () => {
+  const r = analisarBanco(banco(), CLI, [ct({ bancoOrigem: "Agibank", saldo: null, taxa: null })], HOJE);
+  assert.equal(r.contratos[0].status, "NAO_ELEGIVEL");
+  assert.deepEqual(r.camposPendentes, []);
+});
+caso("Contrato pendente pede exatamente o que falta", () => {
+  const r = analisarBanco(banco(), CLI, [ct({ id: "x1", saldo: null, taxa: null })], HOJE);
+  assert.deepEqual(r.camposPendentes.map(c => c.campo + "@" + c.contratoId), ["taxa@x1", "saldo@x1"]);
+});
+caso("Dado do cliente só é pedido se sobrou contrato pendente", () => {
+  const todosRecusados = analisarBanco(banco(), { convenio: "SIAPE" }, [ct({ bancoOrigem: "Agibank" })], HOJE);
+  assert.deepEqual(todosRecusados.camposPendentes, []);
+  const comPendente = analisarBanco(banco(), { convenio: "SIAPE" }, [ct({})], HOJE);
+  assert.deepEqual(comPendente.camposPendentes.map(c => c.escopo + ":" + c.campo), ["cliente:situacaoFuncional"]);
+});
+caso("Contador do resumo usa o mesmo critério da lista de pendências", () => {
+  // Itaú sem saldo já está recusado por pagas: não conta como pendência
+  const r = analisarBanco(banco(), CLI, [ct({ bancoOrigem: "Itaú", prazoRestante: 86, saldo: null }), ct({ saldo: null })], HOJE);
+  assert.equal(r.pendencias.length, r.camposPendentes.length);
+  assert.match(r.resumo, /\(1\)/);
+});
+caso("BRB ambíguo pede a confirmação no próprio contrato", () => {
+  const r = analisarBanco(banco(), CLI, [ct({ id: "b1", bancoOrigem: "BRB" })], HOJE);
+  assert.deepEqual(r.camposPendentes.map(c => c.campo + "@" + c.contratoId), ["origemConfirmada@b1"]);
 });
 
 console.log(`\n${ok} ok, ${falhas} falha(s)\n`);

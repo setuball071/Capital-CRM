@@ -16,7 +16,7 @@ import { createHash } from "crypto";
 import { sql } from "drizzle-orm";
 import { db } from "./storage";
 import {
-  analisar, normalizarOrigem, nomeOrigem,
+  analisar, respostaSimulacao, normalizarOrigem, nomeOrigem,
   type BancoParaAnalise, type ClienteEntrada, type ContratoEntrada, type Excecao, type RegrasBanco,
 } from "../shared/portability/engine";
 import { MODELOS } from "../shared/portability/modelos";
@@ -313,6 +313,23 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
   });
 
   // ── Análise (qualquer usuário) ────────────────────────────────────────────
+
+  /** Análise ao vivo do simulador: roda o motor e NÃO grava nada. A cotação não
+   *  precisa estar salva. Chamada a cada mudança do snapshot (com debounce). */
+  app.post("/api/port/simular", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = tenantDe(req, res); if (!tenantId) return;
+      const cliente = req.body?.cliente as ClienteEntrada;
+      const contratos = (req.body?.contratos || []) as ContratoEntrada[];
+      if (!cliente?.convenio) return res.status(400).json({ message: "Informe o convênio do cliente" });
+
+      const { paraMotor } = await carregarParaAnalise(tenantId, cliente.convenio);
+      res.json(respostaSimulacao(paraMotor, cliente, contratos));
+    } catch (err: any) {
+      console.error("[PORT] POST simular:", err);
+      res.status(500).json({ message: "Erro ao analisar" });
+    }
+  });
 
   /** Roda o motor com as regras vigentes AGORA e registra tudo que foi usado. */
   app.post("/api/port/analises", requireAuth, async (req: any, res) => {

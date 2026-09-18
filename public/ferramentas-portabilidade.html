@@ -393,6 +393,65 @@ td { color: #111827 !important; }
     <button onclick="addContrato()" style="margin-top:10px;background:#7C3AED;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Adicionar Contrato</button>
   </div>
 
+  <!-- ANÁLISE POR BANCO (multibanco) ─────────────────────────────────────────
+       Painel SÓ de resultado. Lê o estado que o simulador já tem (array
+       `contratos` + cliente do extrato); não tem ficha própria nem contratos
+       próprios. Pede um dado só quando o motor diz que falta. -->
+  <style>
+    #mbPainel .mb-topo { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    #mbPainel .mb-estado { font-size:11px; color:var(--text-muted); margin-left:auto; }
+    #mbPainel .mb-estado.analisando::before { content:""; display:inline-block; width:7px; height:7px; border-radius:50%;
+      background:#7C3AED; margin-right:6px; animation: mbPulso 1s infinite; vertical-align:middle; }
+    @keyframes mbPulso { 0%,100% { opacity:.25 } 50% { opacity:1 } }
+    #mbPainel .mb-chip { display:inline-block; white-space:nowrap; border-radius:999px; padding:2px 9px; font-size:11px; font-weight:600; }
+    #mbPainel .mb-ELEGIVEL { background:#D1FAE5; color:#065F46 }
+    #mbPainel .mb-NAO_ELEGIVEL { background:#FEE2E2; color:#991B1B }
+    #mbPainel .mb-PENDENTE_INFO { background:#FEF3C7; color:#92400E }
+    #mbPainel .mb-REGRA_NAO_CADASTRADA { background:#E5E7EB; color:#374151 }
+    #mbPainel .mb-ANALISE_MANUAL { background:#E0F2FE; color:#075985 }
+    #mbPainel .mb-ponto { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+    #mbPainel .mb-abas { display:flex; gap:2px; flex-wrap:wrap; border-bottom:1px solid var(--border); margin:14px 0 12px; }
+    #mbPainel .mb-aba { background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px; padding:8px 12px;
+      font:600 12.5px var(--font); color:var(--text-secondary); cursor:pointer; box-shadow:none; }
+    #mbPainel .mb-aba.on { color:#6C2BD9; border-bottom-color:#6C2BD9; }
+    #mbPainel .mb-aba:hover { transform:none; box-shadow:none; color:#6C2BD9; }
+    #mbPainel table.mb-t { width:100%; border-collapse:collapse; font-size:12px; }
+    #mbPainel table.mb-t th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.4px; padding:6px 8px; }
+    #mbPainel table.mb-t td { padding:7px 8px; border-top:1px solid var(--border-soft); vertical-align:top; }
+    #mbPainel .mb-cartao { border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; background:var(--surface); }
+    #mbPainel .mb-pend { border:1px solid #FCD34D; background:#FFFBEB; border-radius:10px; padding:12px 14px; margin-top:12px; }
+    #mbPainel .mb-pend-linha { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:6px 0; border-top:1px dashed #FDE68A; font-size:12.5px; }
+    #mbPainel .mb-pend-linha:first-of-type { border-top:none; }
+    #mbPainel .mb-pend-linha select, #mbPainel .mb-pend-linha input { width:auto; min-width:200px; padding:6px 8px !important; font-size:12px !important; }
+    #mbPainel .mb-quem { font-size:11px; color:#92400E; }
+    #mbPainel .mb-banner { border-radius:10px; padding:10px 14px; margin-top:12px; font-size:12.5px; }
+    #mbPainel .mb-banner.ok { background:#ECFDF5; border:1px solid #A7F3D0; color:#065F46; }
+    #mbPainel .mb-banner.aviso { background:#FFFBEB; border:1px solid #FCD34D; color:#92400E; }
+    #mbPainel .mb-banner.manual { background:#F0F9FF; border:1px solid #BAE6FD; color:#075985; }
+    #mbPainel .mb-banner.erro { background:#FEF2F2; border:1px solid #FECACA; color:#991B1B; }
+    #mbPainel .mb-btn { font:600 12px var(--font); border-radius:6px; padding:6px 12px; cursor:pointer; border:none;
+      background:#7C3AED; color:#fff; box-shadow:none; }
+    #mbPainel .mb-btn.sec { background:#fff; color:#7C3AED; border:1px solid #C4B5FD; }
+    #mbPainel .mb-btn:hover { transform:none; box-shadow:none; opacity:.92; }
+    #mbPainel .mb-link { background:none; border:none; color:#7C3AED; font:600 12px var(--font); cursor:pointer; padding:0; box-shadow:none; text-decoration:underline; }
+    #mbPainel .mb-link:hover { transform:none; box-shadow:none; }
+    #mbPainel .mb-sub { font-size:11px; color:var(--text-muted); }
+    #mbPainel .mb-exc { display:inline-block; font-size:10px; font-weight:700; color:#6D28D9; background:#EDE9FE; border-radius:4px; padding:1px 5px; }
+    #mbPainel .mb-grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+    #mbPainel .mb-kpi-t { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); }
+    #mbPainel .mb-vazio { text-align:center; color:var(--text-muted); font-size:12.5px; padding:22px 10px; }
+    [data-theme="dark"] #mbPainel .mb-pend { background:#2A2210; border-color:#78591A; }
+    [data-theme="dark"] #mbPainel .mb-cartao { background:var(--surface-2); }
+  </style>
+  <div class="box" id="mbPainel">
+    <div class="mb-topo">
+      <h2 style="margin:0">Análise por banco</h2>
+      <span class="mb-sub">Todos os bancos ativos analisam os contratos acima, com as próprias regras.</span>
+      <span class="mb-estado" id="mbEstado"></span>
+    </div>
+    <div id="mbCorpo"><div class="mb-vazio">Arraste o extrato ou adicione contratos acima: a análise aparece aqui sozinha.</div></div>
+  </div>
+
   <!-- CONTRATOS NOVOS (MARGENS) -->
   <div class="box">
     <h2>Contratação Nova (Margem)</h2>
@@ -5994,6 +6053,8 @@ async function salvarCotacao() {
     simpPrazo:        document.getElementById('simpPrazo')?.value        || '',
     tipoPort,
     _refimResult,
+    // analise por banco: snapshot, dados complementares, banco escolhido e resultado
+    multibanco: (typeof mbDadosParaSalvar === 'function') ? mbDadosParaSalvar() : null,
   };
   try {
     const resp = await fetch('/api/cotacoes-simulador', {
@@ -6155,6 +6216,7 @@ async function carregarCotacao(id, cpf) {
     document.getElementById('modalCpfCliente').value = cot.cpf         || '';
     document.getElementById('modalNomeCliente').value = cot.nomeCliente || '';
     _mostrarClienteDetectado(cot.nomeCliente || '', cot.cpf || '');
+    if (typeof mbRestaurarDaCotacao === 'function') mbRestaurarDaCotacao(d.multibanco, cot.cpf);
     _refimResult = d._refimResult || null;
     if (d.tipoPort) setTipoPort(d.tipoPort);
     renderContratos();
@@ -6683,6 +6745,514 @@ window.addEventListener('load', function() {
     if (tabsBar) tabsBar.style.display = 'none';
   }
 });
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  ANÁLISE POR BANCO (multibanco) — integrada ao simulador
+//
+//  Não tem estado próprio de cliente nem de contratos: tudo sai de
+//  montarSnapshotSimulacao(), que lê o array `contratos` e os campos que o
+//  extrato preenche. O único estado novo é `MB.dados` (dadosComplementares):
+//  só o que o extrato não traz e algum banco pediu.
+//
+//  Recálculo: um observador compara o snapshot a cada 0,5 s e chama o motor
+//  (com debounce) só quando algo que as regras usam mudou. Assim nenhuma
+//  função antiga do simulador precisou ser reescrita.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const MB_CAMPO_LABEL = {
+  situacaoFuncional: 'Situação funcional',
+  dataNascimento: 'Data de nascimento',
+  pensaoTipo: 'Tipo de pensão',
+  pensaoFim: 'Término da pensão',
+  origemConfirmada: 'Banco de origem (BRB Banco ou BRB Financeira)',
+  prazoTotal: 'Prazo total',
+  prazoRestante: 'Prazo restante',
+  taxa: 'Taxa',
+  saldo: 'Saldo devedor',
+};
+const MB_STATUS_LABEL = {
+  ELEGIVEL: 'Elegível', NAO_ELEGIVEL: 'Não elegível', PENDENTE_INFO: 'Pendente de informação',
+  REGRA_NAO_CADASTRADA: 'Regra não cadastrada', ANALISE_MANUAL: 'Análise manual',
+};
+const MB_STATUS_COR = { ELEGIVEL: '#10B981', NAO_ELEGIVEL: '#EF4444', PENDENTE_INFO: '#F59E0B', REGRA_NAO_CADASTRADA: '#9CA3AF', ANALISE_MANUAL: '#0EA5E9' };
+const MB_AVISO_NAO_INTEGRADO = 'Banco selecionado. A elegibilidade foi confirmada, mas o cálculo completo de troco, parcela e condições comerciais ainda não está integrado para este banco.';
+
+const mbDadosVazios = () => ({ situacaoFuncional: '', dataNascimento: '', pensaoTipo: '', pensaoFim: '',
+  alertas: { analfabeto: false, naoAssina: false, leiEstadualIdoso: false } });
+
+const MB = {
+  dados: mbDadosVazios(),   // dadosComplementares — persistidos com a cotação
+  escolha: null,            // banco escolhido após comparar
+  cpfDono: null,            // de qual CPF são os dados complementares
+  sugestaoCrm: null,        // o que o cadastro do CRM diz (dica, não dado confirmado)
+  resultado: null, codigosSituacao: [], alertasFormalizacao: [],
+  analiseSalva: null,       // análise que veio junto com a cotação reaberta
+  ultimaChave: null, chaveAgendada: null, timer: null, seq: 0, ctrl: null,
+  estado: 'ocioso', aba: 'comparativo', intervalo: null,
+};
+
+// ── utilidades ─────────────────────────────────────────────────────────────
+const mbEsc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const mbBRL = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const mbNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+/** número dos contratos: aceita 1,65 / 1.65 / "R$ 43.419,93"; 0 e vazio = não informado */
+function mbNum(v, casas) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : (typeof parseBR === 'function' ? parseBR(v) : parseFloat(String(v).replace(',', '.')));
+  if (!isFinite(n) || n <= 0) return null;
+  const f = Math.pow(10, casas);
+  return Math.round(n * f) / f;   // arredonda: formatação diferente não dispara recálculo
+}
+const mbInt = v => { const n = parseInt(v, 10); return isFinite(n) && n > 0 ? n : null; };
+const mbVal = id => { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SNAPSHOT — fonte única do que o motor vê, do que se salva e do que se restaura
+// ═══════════════════════════════════════════════════════════════════════════
+function montarSnapshotSimulacao() {
+  const lista = (typeof contratos !== 'undefined' && Array.isArray(contratos)) ? contratos : [];
+  return {
+    cliente: { cpf: mbVal('cpfCliente'), nome: mbVal('nomeCliente') },
+    beneficio: { convenio: (mbVal('convenio') || 'SIAPE').toUpperCase() },
+    contratos: lista.map(c => ({
+      id: String(c.id),
+      bancoOrigem: c.banco || '',
+      origemConfirmada: c.origemConfirmada || null,
+      numeroContrato: c.numero_contrato || null,
+      parcela: mbNum(c.parcela, 2),
+      prazoRestante: mbInt(c.prazo),
+      prazoTotal: mbInt(c.prazo_total),
+      taxa: mbNum(c.taxa, 4),
+      saldo: mbNum(c.saldo, 2),
+    })),
+    dadosComplementares: JSON.parse(JSON.stringify(MB.dados)),
+    bancoEscolhido: MB.escolha ? JSON.parse(JSON.stringify(MB.escolha)) : null,
+  };
+}
+
+/** Só o que as regras usam. Nome, banco escolhido e o próprio resultado ficam de
+ *  fora — senão escolher um banco ou pintar a tela dispararia outra análise. */
+function mbEntradaMotor(s) {
+  const d = s.dadosComplementares;
+  return {
+    cliente: {
+      convenio: s.beneficio.convenio,
+      situacaoFuncional: d.situacaoFuncional || null,
+      dataNascimento: d.dataNascimento || null,
+      pensao: d.pensaoTipo ? { tipo: d.pensaoTipo, dataFim: d.pensaoTipo === 'temporaria' ? (d.pensaoFim || null) : null } : null,
+      alertas: d.alertas,
+    },
+    contratos: s.contratos,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  OBSERVADOR + CHAMADA AO MOTOR
+// ═══════════════════════════════════════════════════════════════════════════
+function mbObservar() {
+  try {
+    mbTrocaDeCliente(mbVal('cpfCliente'));
+    const entrada = mbEntradaMotor(montarSnapshotSimulacao());
+    const chave = JSON.stringify(entrada);
+    if (chave === MB.ultimaChave || chave === MB.chaveAgendada) return;   // nada mudou: nenhuma chamada
+
+    if (!entrada.contratos.length) {             // sem contratos não há o que analisar
+      MB.ultimaChave = chave; MB.chaveAgendada = null;
+      if (MB.ctrl) MB.ctrl.abort();
+      MB.seq++; MB.resultado = null; MB.estado = 'ocioso';
+      mbRender();
+      return;
+    }
+    MB.chaveAgendada = chave;
+    clearTimeout(MB.timer);
+    MB.timer = setTimeout(() => mbAnalisar(entrada, chave), 400);
+  } catch (e) {
+    console.warn('[multibanco] observador:', e);   // nunca derruba o simulador
+  }
+}
+
+async function mbAnalisar(entrada, chave) {
+  const minhaVez = ++MB.seq;                 // só a requisição mais recente pinta a tela
+  if (MB.ctrl) MB.ctrl.abort();
+  const ctrl = MB.ctrl = new AbortController();
+  MB.estado = 'analisando'; mbPintarEstado();
+  try {
+    const r = await fetch('/api/port/simular', {
+      method: 'POST', credentials: 'include', signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entrada),
+    });
+    if (minhaVez !== MB.seq) return;         // chegou atrasada: descarta
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (minhaVez !== MB.seq) return;
+    MB.resultado = j.resultado || null;
+    MB.codigosSituacao = j.codigosSituacao || [];
+    MB.alertasFormalizacao = j.alertasFormalizacao || [];
+    MB.ultimaChave = chave; MB.chaveAgendada = null;
+    MB.estado = 'ok';
+    mbAutoSituacaoPeloCrm();
+    mbRender();
+  } catch (e) {
+    if (e.name === 'AbortError' || minhaVez !== MB.seq) return;
+    // falhou: marca a chave como tentada para não martelar a API a cada 0,5 s;
+    // qualquer mudança nos dados (ou o botão) tenta de novo
+    MB.ultimaChave = chave; MB.chaveAgendada = null;
+    MB.estado = 'erro';
+    mbRender();
+  }
+}
+
+function mbTentarDeNovo() { MB.ultimaChave = null; MB.chaveAgendada = null; mbObservar(); }
+
+/** Troca de cliente (extrato novo, Limpar, outra cotação): os dados complementares
+ *  eram do cliente anterior e não podem vazar para o próximo. */
+function mbTrocaDeCliente(cpf) {
+  const dig = String(cpf || '').replace(/\D/g, '');
+  if (dig === MB.cpfDono) return;
+  MB.cpfDono = dig;
+  MB.dados = mbDadosVazios();
+  MB.escolha = null; MB.sugestaoCrm = null; MB.analiseSalva = null;
+  if (dig.length === 11) mbBuscarCrm(dig);
+}
+
+/** Nascimento e situação funcional do cadastro do CRM, quando existirem. */
+async function mbBuscarCrm(dig) {
+  try {
+    const r = await fetch('/api/port/cliente/' + dig, { credentials: 'include' });
+    if (!r.ok || dig !== MB.cpfDono) return;
+    const cli = await r.json();
+    if (!cli || dig !== MB.cpfDono) return;
+    if (cli.dataNascimento && !MB.dados.dataNascimento) MB.dados.dataNascimento = cli.dataNascimento;
+    const sf = (cli.vinculos || []).map(v => v.sitFunc).find(Boolean);
+    if (sf) { MB.sugestaoCrm = { situacaoFuncional: sf }; mbAutoSituacaoPeloCrm(); }
+  } catch (e) { /* conveniência: sem CRM, o motor pede o dado */ }
+}
+
+/** Só aproveita o texto do CRM se ele casar EXATAMENTE com uma situação das
+ *  regras ("APOSENTADO" = 2). "ATIVO" não vira "ATIVO PERMANENTE" por palpite. */
+function mbAutoSituacaoPeloCrm() {
+  const sf = MB.sugestaoCrm && MB.sugestaoCrm.situacaoFuncional;
+  if (!sf || MB.dados.situacaoFuncional || !MB.codigosSituacao.length) return;
+  const achou = MB.codigosSituacao.find(c => mbNorm(c.codigo) === mbNorm(sf) || mbNorm(c.descricao).replace(/\s*\*$/, '') === mbNorm(sf));
+  if (achou) MB.dados.situacaoFuncional = achou.codigo;
+}
+
+// ── dados complementares e confirmação de origem ───────────────────────────
+function mbSetDado(campo, valor) {
+  if (campo === 'pensaoTipo' && valor !== 'temporaria') MB.dados.pensaoFim = '';
+  MB.dados[campo] = valor;
+  mbObservar();                 // não espera o próximo tique do observador
+}
+function mbSetAlerta(chave, marcado) { MB.dados.alertas[chave] = !!marcado; mbObservar(); }
+function mbConfirmarOrigem(contratoId, chave) {
+  const c = (contratos || []).find(x => String(x.id) === String(contratoId));
+  if (c) { c.origemConfirmada = chave || null; mbObservar(); }   // fica no contrato: vai junto com a cotação
+}
+function mbIrParaContrato(contratoId) {
+  const lista = contratos || [];
+  const idx = lista.findIndex(x => String(x.id) === String(contratoId));
+  const tb = document.getElementById('tbContratos');
+  const linha = tb && tb.rows && idx >= 0 ? tb.rows[idx] : null;
+  (linha || tb || document.getElementById('pdfInput')).scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (linha) { linha.style.transition = 'background .3s'; linha.style.background = '#FEF3C7'; setTimeout(() => { linha.style.background = ''; }, 1600); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ESCOLHA DO BANCO
+// ═══════════════════════════════════════════════════════════════════════════
+function mbRotuloContrato(id) {
+  const c = (contratos || []).find(x => String(x.id) === String(id));
+  if (!c) return 'contrato ' + id;
+  return (c.banco || 'contrato') + (c.numero_contrato ? ' nº ' + c.numero_contrato : '');
+}
+/** Banco equivalente no cadastro antigo (o que o refimBanco conhece), se existir. */
+function mbBancoNoCadastroAntigo(nome) {
+  const lista = (typeof regrasBancos !== 'undefined' && Array.isArray(regrasBancos)) ? regrasBancos : [];
+  return lista.find(r => mbNorm(r.banco) === mbNorm(nome)) || null;
+}
+
+function mbEscolher(bankId, modo) {
+  const b = MB.resultado && MB.resultado.bancos.find(x => x.bankId === bankId);
+  if (!b) return;
+  if (modo === 'escolhido' && b.status !== 'ELEGIVEL') return;
+  if (modo === 'analise_manual' && b.status !== 'ANALISE_MANUAL') return;
+
+  const incluidos = b.contratos.filter(c => c.status === (modo === 'escolhido' ? 'ELEGIVEL' : 'ANALISE_MANUAL'));
+  const fora = b.contratos.filter(c => !incluidos.includes(c));
+  const antigo = modo === 'escolhido' ? mbBancoNoCadastroAntigo(b.banco) : null;
+
+  MB.escolha = {
+    bankId: b.bankId, banco: b.banco, modo, statusNaEscolha: b.status,
+    ruleSetId: b.ruleSetId, ruleSetHash: b.ruleSetHash,
+    contratos: incluidos.map(c => ({ id: c.contratoId, rotulo: mbRotuloContrato(c.contratoId) })),
+    naoIncluidos: fora.map(c => ({ id: c.contratoId, rotulo: mbRotuloContrato(c.contratoId), status: c.status })),
+    integradoAoCalculoAntigo: !!antigo,
+    bancoNoCalculoAntigo: antigo ? antigo.banco : null,
+    escolhidoEm: new Date().toISOString(),
+  };
+
+  if (antigo) {
+    // Banco que o simulador antigo já calcula: sincroniza e deixa a matemática antiga rodar
+    // só com os contratos que ESTE banco aceitou.
+    const ids = new Set(incluidos.map(c => String(c.contratoId)));
+    (contratos || []).forEach(c => { c.portar = ids.has(String(c.id)); });
+    const sel = document.getElementById('refimBanco');
+    if (sel) {
+      if (![...sel.options].some(o => o.value === antigo.banco) && typeof popularSelectBancos === 'function') popularSelectBancos();
+      sel.value = antigo.banco;
+    }
+    const tb = document.getElementById('tbContratos');
+    if (tb) tb.innerHTML = '';                  // força re-render completo (mesmo recurso do carregarCotacao)
+    try { if (typeof renderContratos === 'function') renderContratos(); } catch (e) { console.warn(e); }
+    try { if (typeof onBancoChange === 'function') onBancoChange(); } catch (e) { console.warn(e); }
+    try { if (typeof calcRefim === 'function') calcRefim(); } catch (e) { console.warn(e); }
+  }
+  // Banco fora do cadastro antigo (ex.: PAN): registra a escolha e NADA mais —
+  // não troca o refimBanco nem roda conta de outro banco em nome dele.
+  mbRender();
+}
+function mbDesfazerEscolha() { MB.escolha = null; mbRender(); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PERSISTÊNCIA COM A COTAÇÃO
+// ═══════════════════════════════════════════════════════════════════════════
+function mbDadosParaSalvar() {
+  return {
+    versao: 1,
+    snapshot: montarSnapshotSimulacao(),
+    dadosComplementares: JSON.parse(JSON.stringify(MB.dados)),
+    bancoEscolhido: MB.escolha,
+    resultado: MB.resultado,
+    analisadoEm: MB.resultado ? MB.resultado.analisadoEm : null,
+  };
+}
+function mbRestaurarDaCotacao(mb, cpf) {
+  MB.cpfDono = String(cpf || '').replace(/\D/g, '');   // os dados abaixo são DESTE cliente
+  MB.dados = Object.assign(mbDadosVazios(), (mb && mb.dadosComplementares) || {});
+  MB.dados.alertas = Object.assign(mbDadosVazios().alertas, (mb && mb.dadosComplementares && mb.dadosComplementares.alertas) || {});
+  MB.escolha = (mb && mb.bancoEscolhido) || null;
+  MB.analiseSalva = mb && mb.resultado ? { resultado: mb.resultado, em: mb.analisadoEm } : null;
+  MB.resultado = MB.analiseSalva ? MB.analiseSalva.resultado : null;   // mostra a salva até a reanálise chegar
+  MB.ultimaChave = null; MB.chaveAgendada = null;
+  mbRender();
+  mbObservar();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  TELA
+// ═══════════════════════════════════════════════════════════════════════════
+const mbChip = s => `<span class="mb-chip mb-${s}">${MB_STATUS_LABEL[s] || s}</span>`;
+
+function mbPintarEstado() {
+  const el = document.getElementById('mbEstado');
+  if (!el) return;
+  el.className = 'mb-estado' + (MB.estado === 'analisando' ? ' analisando' : '');
+  el.textContent = MB.estado === 'analisando' ? 'Analisando…'
+    : MB.estado === 'ok' && MB.resultado ? 'Atualizado ' + new Date(MB.resultado.analisadoEm).toLocaleTimeString('pt-BR') : '';
+}
+
+/** Pendências de todos os bancos, agrupadas: o mesmo dado aparece UMA vez. */
+function mbPendenciasAgrupadas() {
+  const mapa = new Map();
+  ((MB.resultado && MB.resultado.bancos) || []).forEach(b => (b.camposPendentes || []).forEach(p => {
+    const k = p.escopo + ':' + p.campo + ':' + (p.contratoId || '');
+    if (!mapa.has(k)) mapa.set(k, Object.assign({}, p, { bancos: [] }));
+    const g = mapa.get(k);
+    if (!g.bancos.includes(b.banco)) g.bancos.push(b.banco);
+  }));
+  // do cliente primeiro; depois por contrato
+  return [...mapa.values()].sort((a, b) => (a.escopo === b.escopo ? 0 : a.escopo === 'cliente' ? -1 : 1));
+}
+
+function mbCampoPendenteHTML(p) {
+  const quem = `<span class="mb-quem">pedido por: ${mbEsc(p.bancos.join(', '))}</span>`;
+  const rot = p.escopo === 'contrato'
+    ? `${MB_CAMPO_LABEL[p.campo] || p.campo} do contrato <b>${mbEsc(mbRotuloContrato(p.contratoId))}</b>`
+    : `<b>${MB_CAMPO_LABEL[p.campo] || p.campo}</b>`;
+
+  if (p.campo === 'situacaoFuncional') {
+    const dica = MB.sugestaoCrm && MB.sugestaoCrm.situacaoFuncional ? ` <span class="mb-sub">(no cadastro do CRM: "${mbEsc(MB.sugestaoCrm.situacaoFuncional)}" — confirme o código)</span>` : '';
+    const opts = MB.codigosSituacao.map(c => `<option value="${mbEsc(c.codigo)}" ${c.codigo === MB.dados.situacaoFuncional ? 'selected' : ''}>${mbEsc(c.codigo)} — ${mbEsc(c.descricao)}</option>`).join('');
+    return `<div class="mb-pend-linha"><span>${rot}${dica}</span>
+      <select onchange="mbSetDado('situacaoFuncional', this.value)"><option value="">escolha o código</option>${opts}</select>${quem}</div>`;
+  }
+  if (p.campo === 'dataNascimento') {
+    return `<div class="mb-pend-linha"><span>${rot}</span>
+      <input type="date" value="${mbEsc(MB.dados.dataNascimento)}" onchange="mbSetDado('dataNascimento', this.value)">${quem}</div>`;
+  }
+  if (p.campo === 'pensaoTipo' || p.campo === 'pensaoFim') {
+    const fim = MB.dados.pensaoTipo === 'temporaria'
+      ? ` <span class="mb-sub">término (vazio se não houver):</span> <input type="date" style="min-width:150px" value="${mbEsc(MB.dados.pensaoFim)}" onchange="mbSetDado('pensaoFim', this.value)">` : '';
+    return `<div class="mb-pend-linha"><span>${p.campo === 'pensaoFim' ? '<b>Término da pensão</b>' : rot}</span>
+      <select onchange="mbSetDado('pensaoTipo', this.value)">
+        <option value="">escolha</option>
+        <option value="vitalicia" ${MB.dados.pensaoTipo === 'vitalicia' ? 'selected' : ''}>vitalícia</option>
+        <option value="temporaria" ${MB.dados.pensaoTipo === 'temporaria' ? 'selected' : ''}>temporária</option>
+      </select>${fim}${quem}</div>`;
+  }
+  if (p.campo === 'origemConfirmada') {
+    return `<div class="mb-pend-linha"><span>${rot}</span>
+      <select onchange="mbConfirmarOrigem('${mbEsc(p.contratoId)}', this.value)">
+        <option value="">escolha</option><option value="BRB">BRB Banco</option><option value="BRB_FINANCEIRA">BRB Financeira</option>
+      </select>${quem}</div>`;
+  }
+  // taxa, saldo e prazos já têm campo na tabela de Contratos Atuais: não duplica
+  return `<div class="mb-pend-linha"><span>${rot}</span>
+    <button class="mb-link" onclick="mbIrParaContrato('${mbEsc(p.contratoId)}')">preencher na tabela de contratos ↑</button>${quem}</div>`;
+}
+
+function mbRegrasHTML(regras) {
+  if (!regras || !regras.length) return '';
+  return `<table class="mb-t"><thead><tr><th>Regra</th><th>Analisado</th><th>Exigido</th><th>Resultado</th><th>Motivo</th></tr></thead><tbody>` +
+    regras.map(r => `<tr><td style="white-space:nowrap;font-weight:600">${mbEsc(r.label)}</td>
+      <td style="white-space:nowrap">${r.valorAnalisado == null ? '—' : mbEsc(r.valorAnalisado)}</td>
+      <td style="white-space:nowrap;color:var(--text-muted)">${mbEsc(r.esperado || '—')}</td>
+      <td>${mbChip(r.status)}</td>
+      <td>${mbEsc(r.motivo)} ${r.fonte === 'excecao' ? '<span class="mb-exc">exceção</span>' : ''}</td></tr>`).join('') +
+    `</tbody></table>`;
+}
+
+function mbAcaoBanco(b) {
+  const escolhido = MB.escolha && MB.escolha.bankId === b.bankId;
+  if (escolhido) return `<span class="mb-sub" style="font-weight:700;color:#6C2BD9">✓ ${MB.escolha.modo === 'analise_manual' ? 'encaminhado' : 'escolhido'}</span>`;
+  if (b.status === 'ELEGIVEL') return `<button class="mb-btn" onclick="mbEscolher(${b.bankId}, 'escolhido')">Escolher este banco</button>`;
+  if (b.status === 'ANALISE_MANUAL') return `<button class="mb-btn sec" onclick="mbEscolher(${b.bankId}, 'analise_manual')">Encaminhar para análise</button>`;
+  const porque = { PENDENTE_INFO: 'complete os dados pendentes', REGRA_NAO_CADASTRADA: 'sem regra cadastrada — análise manual', NAO_ELEGIVEL: 'não atende as regras' };
+  return `<span class="mb-sub">${porque[b.status] || ''}</span>`;
+}
+
+function mbBannerEscolha() {
+  const e = MB.escolha;
+  if (!e) return '';
+  const atual = MB.resultado && MB.resultado.bancos.find(x => x.bankId === e.bankId);
+  const lista = arr => arr.map(c => mbEsc(c.rotulo)).join(', ') || 'nenhum';
+  const mudou = atual && atual.status !== e.statusNaEscolha
+    ? `<div style="margin-top:6px;font-weight:700">⚠ O resultado mudou desde a escolha: agora ${mbEsc(MB_STATUS_LABEL[atual.status])}. Revise antes de salvar.</div>` : '';
+  const desfazer = ` <button class="mb-link" onclick="mbDesfazerEscolha()">desfazer</button>`;
+
+  if (e.modo === 'analise_manual') {
+    return `<div class="mb-banner manual"><b>${mbEsc(e.banco)}: encaminhado para análise manual</b> — isso não é aprovação.${desfazer}
+      <div>Contratos: ${lista(e.contratos)}</div>${mudou}</div>`;
+  }
+  if (!e.integradoAoCalculoAntigo) {
+    return `<div class="mb-banner aviso"><b>${mbEsc(e.banco)}</b> — ${mbEsc(MB_AVISO_NAO_INTEGRADO)}${desfazer}
+      <div style="margin-top:4px">Contratos aceitos: ${lista(e.contratos)}. Fora da escolha: ${lista(e.naoIncluidos)}.</div>
+      <div class="mb-sub" style="margin-top:4px">O cálculo do simulador acima continua no banco que estava selecionado lá; os valores dele não são do ${mbEsc(e.banco)}.</div>${mudou}</div>`;
+  }
+  return `<div class="mb-banner ok"><b>${mbEsc(e.banco)} escolhido.</b> O simulador acima passou a calcular troco e parcela com as regras do ${mbEsc(e.bancoNoCalculoAntigo)}.${desfazer}
+    <div style="margin-top:4px">Marcados para portar: ${lista(e.contratos)}. Fora da escolha: ${lista(e.naoIncluidos)}.</div>${mudou}</div>`;
+}
+
+function mbComparativoHTML(bancos) {
+  const ordem = ['ELEGIVEL', 'ANALISE_MANUAL', 'PENDENTE_INFO', 'REGRA_NAO_CADASTRADA', 'NAO_ELEGIVEL'];
+  const ord = [...bancos].sort((a, b) => ordem.indexOf(a.status) - ordem.indexOf(b.status) || b.contagem.ELEGIVEL - a.contagem.ELEGIVEL);
+  const aceitam = ord.filter(b => b.status === 'ELEGIVEL');
+  const recusa = b => [...new Set(b.contratos.flatMap(c => c.regras.filter(r => r.status === 'NAO_ELEGIVEL').map(r => r.motivo)))];
+  const comissao = b => {
+    const com = b.contratos.flatMap(c => c.operacao || []).find(r => r.chave === 'comissao');
+    return com ? (com.status === 'REGRA_NAO_CADASTRADA' ? 'não cadastrada' : mbEsc(com.valorAnalisado || MB_STATUS_LABEL[com.status])) : '—';
+  };
+  return `<div class="mb-grid3">
+      <div class="mb-cartao"><div class="mb-kpi-t">Aceitam a operação</div>
+        <div style="font-size:22px;font-weight:700;margin-top:2px">${aceitam.length} <span class="mb-sub">de ${bancos.length}</span></div>
+        <div class="mb-sub">${mbEsc(aceitam.map(b => b.banco).join(', ') || 'nenhum ainda')}</div></div>
+      <div class="mb-cartao"><div class="mb-kpi-t">Melhor condição para o cliente</div>
+        <div style="font-weight:700;margin-top:4px">Ainda não calculável</div>
+        <div class="mb-sub">Depende da taxa de refin de cada banco, ainda não cadastrada. Ranking próprio — nunca misturado com comissão.</div></div>
+      <div class="mb-cartao"><div class="mb-kpi-t">Maior comissão</div>
+        <div style="font-weight:700;margin-top:4px">Ainda não calculável</div>
+        <div class="mb-sub">Nenhum banco tem regra de comissão cadastrada. Ranking próprio — nunca misturado com a condição do cliente.</div></div>
+    </div>
+    <div class="mb-sub" style="margin:6px 0">Ordem: situação da análise; empate, quantos contratos o banco aceita.</div>
+    <table class="mb-t"><thead><tr><th>Banco</th><th>Situação</th><th>Contratos aceitos</th><th>Por que recusa</th><th>Comissão</th><th></th></tr></thead><tbody>` +
+    ord.map(b => {
+      const r = recusa(b);
+      return `<tr><td style="font-weight:700"><button class="mb-link" style="text-decoration:none" onclick="MB.aba=${b.bankId};mbRender()">${mbEsc(b.banco)}</button></td>
+        <td>${mbChip(b.status)}</td>
+        <td>${b.contratos.length ? `${b.contagem.ELEGIVEL} de ${b.contratos.length}` : '—'}</td>
+        <td style="max-width:320px">${r.length ? mbEsc(r.slice(0, 2).join(' · ')) + (r.length > 2 ? ` (+${r.length - 2})` : '') : '—'}</td>
+        <td class="mb-sub">${comissao(b)}</td>
+        <td style="text-align:right">${mbAcaoBanco(b)}</td></tr>`;
+    }).join('') + `</tbody></table>`;
+}
+
+function mbBancoHTML(b) {
+  const aceitos = b.contratos.filter(c => c.status === 'ELEGIVEL');
+  const outros = b.contratos.filter(c => c.status !== 'ELEGIVEL');
+  const cartao = c => `<div class="mb-cartao">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px">
+        <b>${mbEsc(mbRotuloContrato(c.contratoId))}</b>${mbChip(c.status)}</div>
+      ${mbRegrasHTML(c.regras)}
+      <div class="mb-kpi-t" style="margin:10px 0 2px">Operação — informativo, não decide a elegibilidade</div>
+      ${mbRegrasHTML(c.operacao)}</div>`;
+  return `<div class="mb-cartao" style="border-left:4px solid ${MB_STATUS_COR[b.status]}">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <b style="font-size:15px">${mbEsc(b.banco)}</b>${mbChip(b.status)}<span>${mbEsc(b.resumo)}</span>
+        <span style="margin-left:auto">${mbAcaoBanco(b)}</span></div>
+      <div class="mb-sub" style="margin-top:4px">${b.ruleSetId
+        ? `Regras vigentes desde ${new Date(b.vigenciaInicio).toLocaleString('pt-BR')} · versão #${b.ruleSetId}${b.excecoesAplicadas.length ? ` · ${b.excecoesAplicadas.length} exceção(ões) usada(s)` : ''}`
+        : 'Sem regras cadastradas para este convênio.'}${b.avisos.length ? ' · ' + mbEsc(b.avisos.join(' · ')) : ''}</div>
+    </div>
+    ${b.cliente.length ? `<div class="mb-cartao"><div class="mb-kpi-t" style="margin-bottom:4px">Regras do cliente — valem para todos os contratos</div>${mbRegrasHTML(b.cliente)}</div>` : ''}
+    ${aceitos.length ? `<div style="font-weight:700;color:#047857;margin:8px 0 6px">Aceitos (${aceitos.length})</div>${aceitos.map(cartao).join('')}` : ''}
+    ${outros.length ? `<div style="font-weight:700;color:var(--text-secondary);margin:8px 0 6px">Não aceitos ou pendentes (${outros.length})</div>${outros.map(cartao).join('')}` : ''}`;
+}
+
+function mbFormalizacaoHTML() {
+  if (!MB.alertasFormalizacao.length) return '';
+  const marcados = Object.values(MB.dados.alertas).some(Boolean);
+  const bancos = MB.alertasFormalizacao.map(a => a.banco).join(', ');
+  const cx = (k, rot) => `<label style="display:inline-flex;gap:5px;align-items:center;margin-right:14px;cursor:pointer">
+      <input type="checkbox" ${MB.dados.alertas[k] ? 'checked' : ''} onchange="mbSetAlerta('${k}', this.checked)">${rot}</label>`;
+  return `<details style="margin-top:10px" ${marcados ? 'open' : ''}><summary class="mb-sub" style="cursor:pointer">Situação de formalização do cliente (${mbEsc(bancos)} tem regra para isso)</summary>
+    <div style="margin-top:6px;font-size:12.5px">${cx('analfabeto', 'Analfabeto')}${cx('naoAssina', 'Impossibilitado de assinar')}${cx('leiEstadualIdoso', 'Lei estadual de idoso')}</div></details>`;
+}
+
+function mbRender() {
+  mbPintarEstado();
+  const corpo = document.getElementById('mbCorpo');
+  if (!corpo) return;
+  const temContratos = (contratos || []).length > 0;
+
+  if (!temContratos) {
+    corpo.innerHTML = '<div class="mb-vazio">Arraste o extrato ou adicione contratos acima: a análise aparece aqui sozinha.</div>';
+    return;
+  }
+  if (MB.estado === 'erro' && !MB.resultado) {
+    corpo.innerHTML = `<div class="mb-banner erro">A análise por banco está indisponível agora. O simulador continua funcionando normalmente.
+      <button class="mb-link" onclick="mbTentarDeNovo()">tentar de novo</button></div>`;
+    return;
+  }
+  if (!MB.resultado) { corpo.innerHTML = '<div class="mb-vazio">Analisando os bancos…</div>'; return; }
+
+  const bancos = MB.resultado.bancos || [];
+  if (!bancos.length) {
+    corpo.innerHTML = `<div class="mb-banner aviso">Nenhum banco ativo com regras cadastradas. O simulador acima continua funcionando;
+      um usuário master pode cadastrar os bancos em <b>Simuladores → Bancos e Regras</b>.</div>`;
+    return;
+  }
+  if (MB.aba !== 'comparativo' && !bancos.some(b => b.bankId === MB.aba)) MB.aba = 'comparativo';
+
+  const pend = mbPendenciasAgrupadas();
+  const erroNovo = MB.estado === 'erro'
+    ? `<div class="mb-banner erro">Não foi possível atualizar a análise; mostrando o último resultado. <button class="mb-link" onclick="mbTentarDeNovo()">tentar de novo</button></div>` : '';
+  const salva = MB.analiseSalva
+    ? `<div class="mb-sub" style="margin-top:8px">Análise salva com a cotação em ${new Date(MB.analiseSalva.em).toLocaleString('pt-BR')}. O que aparece abaixo é recalculado com as regras vigentes.</div>` : '';
+
+  corpo.innerHTML = erroNovo + salva + mbBannerEscolha() +
+    (pend.length ? `<div class="mb-pend"><div style="font-weight:700;color:#92400E;margin-bottom:4px">Para concluir a análise — nada foi reprovado por falta destes dados</div>${pend.map(mbCampoPendenteHTML).join('')}</div>` : '') +
+    mbFormalizacaoHTML() +
+    `<div class="mb-abas"><button class="mb-aba ${MB.aba === 'comparativo' ? 'on' : ''}" onclick="MB.aba='comparativo';mbRender()">Comparativo</button>` +
+    bancos.map(b => `<button class="mb-aba ${MB.aba === b.bankId ? 'on' : ''}" onclick="MB.aba=${b.bankId};mbRender()"><span class="mb-ponto" style="background:${MB_STATUS_COR[b.status]}"></span>${mbEsc(b.banco)}</button>`).join('') +
+    `</div>` +
+    (MB.aba === 'comparativo' ? mbComparativoHTML(bancos) : mbBancoHTML(bancos.find(b => b.bankId === MB.aba)));
+}
+
+// ── liga o observador; encerra quando a página sai ─────────────────────────
+MB.intervalo = setInterval(mbObservar, 500);
+window.addEventListener('pagehide', () => { clearInterval(MB.intervalo); if (MB.ctrl) MB.ctrl.abort(); });
 </script>
 
 </body>

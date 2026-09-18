@@ -4,7 +4,7 @@ import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
 import SimAmortizacaoAnual from "@/pages/sim-amortizacao-anual";
-import SimAnaliseMultibanco from "@/pages/sim-analise-multibanco";
+import PortBancosRegras from "@/pages/port-bancos-regras";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
@@ -51,8 +51,9 @@ function IframeThemeSync({
 // Ícones Material Symbols do design (Simuladores.dc.html → TAB_DEFS)
 const TABS = [
   { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt" },
-  // Modulo novo, em paralelo ao simulador antigo ate ser validado (decisao do Fabio)
-  { id: "multibanco", label: "Análise Multibanco", icon: "account_balance" },
+  // Cadastro do motor multibanco. A analise aparece DENTRO do simulador de
+  // portabilidade; esta aba so administra bancos/regras e e exclusiva do master.
+  { id: "bancos-regras", label: "Bancos e Regras", icon: "account_balance", soMaster: true },
   { id: "amortizacao", label: "Amortização", icon: "trending_down" },
   { id: "amortizacao-anual", label: "Amortização Anual", icon: "event_repeat" },
   { id: "viabilidade-inter", label: "Viabilidade Inter", icon: "fact_check" },
@@ -122,7 +123,7 @@ export default function SimuladoresHub() {
             gap: 4,
           }}
         >
-          {TABS.map((tab) => {
+          {TABS.filter((tab) => !("soMaster" in tab && tab.soMaster) || isMaster).map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
@@ -212,10 +213,12 @@ export default function SimuladoresHub() {
             <SimuladorPortabilidadePage />
           </div>
 
-          {/* Análise Multibanco — native React, motor em @shared/portability */}
-          <div style={{ display: activeTab === "multibanco" ? "block" : "none", height: "100%", overflow: "auto" }}>
-            <SimAnaliseMultibanco />
-          </div>
+          {/* Bancos e Regras — administração do motor multibanco (só master) */}
+          {isMaster && (
+            <div style={{ display: activeTab === "bancos-regras" ? "block" : "none", height: "100%", overflow: "auto" }}>
+              <PortBancosRegras />
+            </div>
+          )}
 
           {/* Amortização Anual — native React */}
           <div style={{ display: activeTab === "amortizacao-anual" ? "block" : "none", height: "100%", overflow: "auto" }}>
