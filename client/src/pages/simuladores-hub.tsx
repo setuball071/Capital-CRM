@@ -4,6 +4,7 @@ import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
 import SimAmortizacaoAnual from "@/pages/sim-amortizacao-anual";
+import SimAnaliseMultibanco from "@/pages/sim-analise-multibanco";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
@@ -50,6 +51,8 @@ function IframeThemeSync({
 // Ícones Material Symbols do design (Simuladores.dc.html → TAB_DEFS)
 const TABS = [
   { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt" },
+  // Modulo novo, em paralelo ao simulador antigo ate ser validado (decisao do Fabio)
+  { id: "multibanco", label: "Análise Multibanco", icon: "account_balance" },
   { id: "amortizacao", label: "Amortização", icon: "trending_down" },
   { id: "amortizacao-anual", label: "Amortização Anual", icon: "event_repeat" },
   { id: "viabilidade-inter", label: "Viabilidade Inter", icon: "fact_check" },
@@ -207,6 +210,11 @@ export default function SimuladoresHub() {
           {/* Amortização — native React */}
           <div style={{ display: activeTab === "amortizacao" ? "block" : "none", height: "100%", overflow: "hidden" }}>
             <SimuladorPortabilidadePage />
+          </div>
+
+          {/* Análise Multibanco — native React, motor em @shared/portability */}
+          <div style={{ display: activeTab === "multibanco" ? "block" : "none", height: "100%", overflow: "auto" }}>
+            <SimAnaliseMultibanco />
           </div>
 
           {/* Amortização Anual — native React */}

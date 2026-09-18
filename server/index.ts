@@ -754,6 +754,69 @@ app.use((req, res, next) => {
             )
           `);
           await simMigDb.execute(simMigSql`CREATE INDEX IF NOT EXISTS idx_cotacoes_sim_cpf ON cotacoes_simulador(tenant_id, cpf)`);
+          // Portabilidade multibanco (módulo novo, separado do simulador antigo).
+          // Regras só-inserção e exceções nunca editadas: o histórico não muda.
+          await simMigDb.execute(simMigSql`
+            CREATE TABLE IF NOT EXISTS port_banks (
+              id        SERIAL PRIMARY KEY,
+              tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              nome      VARCHAR(100) NOT NULL,
+              codigo    VARCHAR(20),
+              ativo     BOOLEAN NOT NULL DEFAULT TRUE,
+              ordem     INTEGER NOT NULL DEFAULT 0,
+              criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await simMigDb.execute(simMigSql`CREATE UNIQUE INDEX IF NOT EXISTS port_banks_tenant_nome ON port_banks(tenant_id, lower(nome))`);
+          await simMigDb.execute(simMigSql`
+            CREATE TABLE IF NOT EXISTS port_rule_sets (
+              id              SERIAL PRIMARY KEY,
+              tenant_id       INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              bank_id         INTEGER NOT NULL REFERENCES port_banks(id) ON DELETE CASCADE,
+              convenio        VARCHAR(50) NOT NULL,
+              regras          JSONB NOT NULL,
+              hash            VARCHAR(64) NOT NULL,
+              fonte_descricao TEXT,
+              modelo_id       VARCHAR(80),
+              vigencia_inicio TIMESTAMP NOT NULL DEFAULT NOW(),
+              vigencia_fim    TIMESTAMP,
+              criado_por      INTEGER,
+              criado_em       TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await simMigDb.execute(simMigSql`CREATE INDEX IF NOT EXISTS idx_port_rule_sets_vigente ON port_rule_sets(tenant_id, bank_id, convenio) WHERE vigencia_fim IS NULL`);
+          await simMigDb.execute(simMigSql`
+            CREATE TABLE IF NOT EXISTS port_rule_exceptions (
+              id             SERIAL PRIMARY KEY,
+              tenant_id      INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              bank_id        INTEGER NOT NULL REFERENCES port_banks(id) ON DELETE CASCADE,
+              convenio       VARCHAR(50) NOT NULL,
+              tipo           VARCHAR(40) NOT NULL,
+              parametros     JSONB NOT NULL,
+              motivo         TEXT,
+              ativo          BOOLEAN NOT NULL DEFAULT TRUE,
+              criado_por     INTEGER,
+              criado_em      TIMESTAMP NOT NULL DEFAULT NOW(),
+              desativado_por INTEGER,
+              desativado_em  TIMESTAMP
+            )
+          `);
+          await simMigDb.execute(simMigSql`
+            CREATE TABLE IF NOT EXISTS port_analyses (
+              id             SERIAL PRIMARY KEY,
+              tenant_id      INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              cpf            VARCHAR(20),
+              cotacao_id     INTEGER,
+              engine_version VARCHAR(20) NOT NULL,
+              entrada        JSONB NOT NULL,
+              regras_usadas  JSONB NOT NULL,
+              resultado      JSONB NOT NULL,
+              criado_por     INTEGER,
+              criado_em      TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await simMigDb.execute(simMigSql`CREATE INDEX IF NOT EXISTS idx_port_analyses_cpf ON port_analyses(tenant_id, cpf)`);
+
           // Viabilidade Inter: faixas de taxa ponderada e grade de comissionamento por convênio
           await simMigDb.execute(simMigSql`
             CREATE TABLE IF NOT EXISTS viabilidade_conv_rules (

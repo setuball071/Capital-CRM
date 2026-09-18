@@ -1,0 +1,141 @@
+// Testes do motor de regras de portabilidade (PAN SIAPE como modelo).
+// Rodar:  npx tsx scripts/testar-motor-portabilidade.ts
+// Sai com código 1 se qualquer caso falhar.
+import assert from "node:assert/strict";
+import {
+  analisarBanco, normalizarOrigem,
+  type BancoParaAnalise, type ClienteEntrada, type ContratoEntrada, type Excecao, type Status,
+} from "../shared/portability/engine";
+import { MODELOS } from "../shared/portability/modelos";
+
+const HOJE = new Date(2026, 8, 18); // 18/09/2026 — datas fixas para o teste não envelhecer
+const PAN = MODELOS.find(m => m.id === "pan-siape-2026-09")!;
+const EXC: Excecao[] = PAN.excecoesSugeridas!.map((e, i) => ({ id: 100 + i, tipo: "origem_pagas", parametros: e.parametros, motivo: e.motivo }));
+
+const banco = (excecoes = EXC, regras = PAN.regras): BancoParaAnalise =>
+  ({ bankId: 1, nome: "PAN", ruleSet: { id: 1, hash: "h", vigenciaInicio: "2026-09-18", regras }, excecoes });
+
+const CLI: ClienteEntrada = { convenio: "SIAPE", situacaoFuncional: "1" };
+let seq = 0;
+const ct = (p: Partial<ContratoEntrada>): ContratoEntrada =>
+  ({ id: "c" + (++seq), bancoOrigem: "Bradesco", prazoTotal: 96, prazoRestante: 60, taxa: 1.5, saldo: 20000, ...p });
+
+let ok = 0, falhas = 0;
+function caso(nome: string, fn: () => void) {
+  try { fn(); ok++; console.log("  ok   " + nome); }
+  catch (e: any) { falhas++; console.log("  FALHA " + nome + "\n        " + e.message.split("\n")[0]); }
+}
+/** status do 1o contrato e, opcionalmente, trecho do motivo da regra que decidiu */
+function status(cli: ClienteEntrada, c: ContratoEntrada, esperado: Status, trecho?: string, b = banco()) {
+  const r = analisarBanco(b, cli, [c], HOJE).contratos[0];
+  assert.equal(r.status, esperado, `status ${r.status}, esperava ${esperado}\n${JSON.stringify(r.regras.map(x => [x.chave, x.status, x.motivo]))}`);
+  if (trecho) {
+    const todos = [...r.regras, ...analisarBanco(b, cli, [c], HOJE).cliente].map(x => x.motivo).join(" | ");
+    assert.ok(todos.includes(trecho), `motivo sem "${trecho}": ${todos}`);
+  }
+}
+
+console.log("\nNormalização do banco de origem");
+caso("CEF -> Caixa", () => assert.equal(normalizarOrigem("EMPREST BCO OFICIAL - CEF"), "CAIXA"));
+caso("DAYBCO -> Daycoval", () => assert.equal(normalizarOrigem("DAYBCO"), "DAYCOVAL"));
+caso("BRB CFI -> BRB Financeira", () => assert.equal(normalizarOrigem("EMPREST BRB CFI"), "BRB_FINANCEIRA"));
+caso("BRB sozinho -> BRB (ambíguo)", () => assert.equal(normalizarOrigem("BRB"), "BRB"));
+// regressao: a excecao "BRB Financeira" caia no BRB Banco e liberava o banco errado
+caso("\"BRB Financeira\" por extenso -> BRB Financeira", () => assert.equal(normalizarOrigem("BRB Financeira"), "BRB_FINANCEIRA"));
+caso("\"Nubank Financeira\" -> Nubank", () => assert.equal(normalizarOrigem("NU FINANCEIRA"), "NUBANK"));
+// toda excecao/linha do modelo PAN precisa resolver para um banco conhecido
+caso("Todos os nomes do modelo PAN são reconhecidos", () => {
+  const nomes = [...PAN.regras.origens!.lista.map(o => o.origem), ...PAN.excecoesSugeridas!.map(e => e.parametros.origem)];
+  const soltos = nomes.filter(n => !normalizarOrigem(n));
+  assert.deepEqual(soltos, []);
+});
+caso("Nenhuma exceção do PAN colide com outra regra por engano", () => {
+  const chaves = PAN.excecoesSugeridas!.map(e => normalizarOrigem(e.parametros.origem));
+  assert.deepEqual(chaves, ["CAIXA", "BRB_FINANCEIRA"]);
+});
+caso("BCO BRAS -> Banco do Brasil", () => assert.equal(normalizarOrigem("BCO BRAS"), "BB"));
+caso("Itaú com acento", () => assert.equal(normalizarOrigem("Itaú Consignado"), "ITAU"));
+caso("C6 BANK -> C6", () => assert.equal(normalizarOrigem("C6 BANK"), "C6"));
+caso("INTERNACIONAL não vira Inter", () => assert.equal(normalizarOrigem("BANCO INTERNACIONAL"), null));
+caso("nome vazio -> null", () => assert.equal(normalizarOrigem(""), null));
+
+console.log("\nBanco de origem e parcelas pagas");
+caso("Caixa com 0 pagas: exceção libera", () => status(CLI, ct({ bancoOrigem: "Caixa", prazoRestante: 96 }), "ELEGIVEL", "(exceção)"));
+caso("Caixa sem a exceção cairia em demais (12)", () => status(CLI, ct({ bancoOrigem: "Caixa", prazoRestante: 96 }), "NAO_ELEGIVEL", "exige 12", banco([])));
+caso("BRB Financeira confirmada, 2 pagas: exceção libera", () => status(CLI, ct({ bancoOrigem: "BRB", origemConfirmada: "BRB_FINANCEIRA", prazoRestante: 94 }), "ELEGIVEL"));
+caso("BRB sem confirmar: pergunta, não reprova", () => status(CLI, ct({ bancoOrigem: "BRB" }), "PENDENTE_INFO", "BRB Banco ou da BRB Financeira"));
+caso("BRB Banco confirmado: não porta", () => status(CLI, ct({ bancoOrigem: "BRB", origemConfirmada: "BRB" }), "NAO_ELEGIVEL", "não porta contratos do BRB Banco"));
+// So pergunta quando BRB Banco e BRB Financeira dariam resultados diferentes.
+// Sem a excecao, a financeira cai em "demais" (12) e o banco nao porta: ainda difere.
+caso("Sem a exceção da financeira: ainda pergunta (banco não porta, financeira = demais)", () =>
+  status(CLI, ct({ bancoOrigem: "BRB" }), "PENDENTE_INFO", "BRB Banco ou da BRB Financeira",
+    banco(EXC.filter(e => e.parametros.origem !== "BRB Financeira"))));
+caso("BRB fora da arte e sem exceção: os dois caem em demais, não pergunta", () =>
+  status(CLI, ct({ bancoOrigem: "BRB" }), "ELEGIVEL", "demais bancos",
+    banco([], { ...PAN.regras, origens: { ...PAN.regras.origens!, lista: PAN.regras.origens!.lista.filter(o => o.origem !== "BRB") } })));
+caso("Agibank: não porta", () => status(CLI, ct({ bancoOrigem: "Agibank" }), "NAO_ELEGIVEL", "não porta"));
+caso("Itaú 10 pagas: exige 15", () => status(CLI, ct({ bancoOrigem: "Itaú", prazoRestante: 86 }), "NAO_ELEGIVEL", "exige 15"));
+caso("Itaú 15 pagas: ok", () => status(CLI, ct({ bancoOrigem: "Itaú", prazoRestante: 81 }), "ELEGIVEL"));
+caso("C6 35 pagas: exige 36", () => status(CLI, ct({ bancoOrigem: "C6", prazoRestante: 61 }), "NAO_ELEGIVEL", "exige 36"));
+caso("Bradesco (demais) 11 pagas: exige 12", () => status(CLI, ct({ bancoOrigem: "Bradesco", prazoRestante: 85 }), "NAO_ELEGIVEL", "demais bancos"));
+caso("Bradesco (demais) 12 pagas: ok", () => status(CLI, ct({ bancoOrigem: "Bradesco", prazoRestante: 84 }), "ELEGIVEL"));
+caso("Sem prazo total: pendente, não reprova", () => status(CLI, ct({ prazoTotal: null }), "PENDENTE_INFO", "prazo total"));
+caso("Duas exceções para Caixa: conflito vai para análise manual", () => status(CLI, ct({ bancoOrigem: "Caixa" }), "ANALISE_MANUAL", "2 exceções",
+  banco([...EXC, { id: 999, tipo: "origem_pagas", parametros: { origem: "CEF", porta: true, pagasMin: 6 } }])));
+
+console.log("\nTaxa e saldo");
+caso("Taxa 1,15: abaixo de 1,20", () => status(CLI, ct({ taxa: 1.15 }), "NAO_ELEGIVEL", "abaixo do mínimo"));
+caso("Taxa 1,1999 arredonda para 1,20: ok", () => status(CLI, ct({ taxa: 1.1999 }), "ELEGIVEL"));
+caso("Sem taxa: pendente", () => status(CLI, ct({ taxa: null }), "PENDENTE_INFO", "taxa do contrato"));
+caso("Saldo 5.999: abaixo de 6.000", () => status(CLI, ct({ saldo: 5999 }), "NAO_ELEGIVEL", "abaixo do mínimo"));
+caso("Saldo 6.000: ok", () => status(CLI, ct({ saldo: 6000 }), "ELEGIVEL"));
+caso("Sem saldo: pendente", () => status(CLI, ct({ saldo: null }), "PENDENTE_INFO", "saldo devedor"));
+caso("Reprovação vence pendência", () => status(CLI, ct({ taxa: 1.0, saldo: null }), "NAO_ELEGIVEL"));
+
+console.log("\nSituação funcional");
+caso("Sem situação: pendente", () => status({ convenio: "SIAPE" }, ct({}), "PENDENTE_INFO", "situação funcional"));
+caso("\"ATIVO\" do CRM não é adivinhado como ATIVO PERMANENTE", () => status({ convenio: "SIAPE", situacaoFuncional: "ATIVO" }, ct({}), "PENDENTE_INFO", "código SIAPE"));
+caso("\"APOSENTADO\" casa pela descrição (código 2)", () => status({ convenio: "SIAPE", situacaoFuncional: "APOSENTADO" }, ct({}), "ELEGIVEL"));
+caso("\"NES 94\" casa pelo código", () => status({ convenio: "SIAPE", situacaoFuncional: "nes 94" }, ct({}), "ELEGIVEL"));
+caso("Código 99 fora da lista: pendente pedindo código", () => status({ convenio: "SIAPE", situacaoFuncional: "99" }, ct({}), "PENDENTE_INFO"));
+
+console.log("\nPensionistas");
+const pens = (p: Partial<ClienteEntrada>): ClienteEntrada => ({ convenio: "SIAPE", situacaoFuncional: "84", ...p });
+caso("Pensionista sem tipo: pendente", () => status(pens({}), ct({}), "PENDENTE_INFO", "vitalícia ou temporária"));
+caso("Vitalícia: ok", () => status(pens({ pensao: { tipo: "vitalicia" } }), ct({}), "ELEGIVEL"));
+caso("Temporária sem fim, 24 anos: reprova", () => status(pens({ pensao: { tipo: "temporaria" }, dataNascimento: "2002-01-01" }), ct({}), "NAO_ELEGIVEL", "25 anos"));
+caso("Temporária sem fim, 26 anos: ok", () => status(pens({ pensao: { tipo: "temporaria" }, dataNascimento: "2000-01-01" }), ct({}), "ELEGIVEL"));
+caso("Temporária sem fim, sem nascimento: pendente", () => status(pens({ pensao: { tipo: "temporaria" } }), ct({}), "PENDENTE_INFO", "data de nascimento"));
+caso("Temporária com fim 01/2030, contrato de 60 meses: passa do limite", () =>
+  status(pens({ pensao: { tipo: "temporaria", dataFim: "2030-01-01" } }), ct({ prazoRestante: 60 }), "NAO_ELEGIVEL", "3 meses antes"));
+caso("Temporária com fim 01/2030, contrato de 24 meses: ok", () =>
+  status(pens({ pensao: { tipo: "temporaria", dataFim: "2030-01-01" } }), ct({ prazoRestante: 24 }), "ELEGIVEL"));
+caso("Situação não-pensionista ignora dados de pensão", () =>
+  status({ convenio: "SIAPE", situacaoFuncional: "1", pensao: { tipo: "temporaria" } }, ct({}), "ELEGIVEL"));
+
+console.log("\nFormalização, operação e agregação");
+caso("Analfabeto: análise manual, não reprova", () => status({ ...CLI, alertas: { analfabeto: true } }, ct({}), "ANALISE_MANUAL", "Manual de Formalização"));
+caso("Troco e comissão não decidem elegibilidade", () => {
+  const r = analisarBanco(banco(), CLI, [ct({})], HOJE).contratos[0];
+  assert.equal(r.status, "ELEGIVEL");
+  assert.deepEqual(r.operacao.map(o => o.status), ["REGRA_NAO_CADASTRADA", "REGRA_NAO_CADASTRADA"]);
+});
+caso("Sem regra vigente: banco inteiro 'regra não cadastrada'", () => {
+  const r = analisarBanco({ bankId: 2, nome: "Safra", ruleSet: null, excecoes: [] }, CLI, [ct({})], HOJE);
+  assert.equal(r.status, "REGRA_NAO_CADASTRADA");
+});
+caso("Banco com 2 de 3 elegíveis: status elegível e contagem certa", () => {
+  const r = analisarBanco(banco(), CLI, [ct({}), ct({ bancoOrigem: "Agibank" }), ct({ bancoOrigem: "Caixa" })], HOJE);
+  assert.equal(r.status, "ELEGIVEL");
+  assert.equal(r.contagem.ELEGIVEL, 2);
+  assert.equal(r.contagem.NAO_ELEGIVEL, 1);
+  assert.match(r.resumo, /2 de 3/);
+});
+caso("Exceção usada fica registrada para auditoria", () => {
+  const r = analisarBanco(banco(), CLI, [ct({ bancoOrigem: "Caixa" })], HOJE);
+  assert.deepEqual(r.excecoesAplicadas, [100]);
+  assert.equal(r.ruleSetId, 1);
+});
+
+console.log(`\n${ok} ok, ${falhas} falha(s)\n`);
+process.exit(falhas ? 1 : 0);
