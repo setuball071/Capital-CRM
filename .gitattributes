@@ -1,0 +1,4 @@
+# PDF de teste gerado pelo jsPDF sai sem bytes nulos, e o git o tomava por texto:
+# com core.autocrlf=true o checkout trocaria LF por CRLF e quebraria os offsets
+# internos do PDF. Binario nunca passa por conversao de fim de linha.
+*.pdf binary
