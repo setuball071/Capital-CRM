@@ -16,7 +16,7 @@ import { createHash } from "crypto";
 import { sql } from "drizzle-orm";
 import { db } from "./storage";
 import {
-  analisar, respostaSimulacao, normalizarOrigem, nomeOrigem,
+  analisar, respostaSimulacao, semComissao, normalizarOrigem, nomeOrigem,
   type BancoParaAnalise, type ClienteEntrada, type ContratoEntrada, type Excecao, type RegrasBanco,
 } from "../shared/portability/engine";
 import { MODELOS } from "../shared/portability/modelos";
@@ -43,7 +43,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
   };
   const exigeMaster = (req: any, res: any) => {
     if (isMaster(req)) return true;
-    res.status(403).json({ message: "Só o master altera bancos e regras" });
+    res.status(403).json({ message: "Só o master acessa o cadastro de bancos e regras" });
     return false;
   };
 
@@ -83,10 +83,11 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
     return { bancos, regras, excecoes, paraMotor };
   }
 
-  // ── Leitura (qualquer usuário: a análise precisa) ────────────────────────
+  // ── Leitura do cadastro (só master: as regras trazem a comissão da empresa) ──
 
   app.get("/api/port/bancos", requireAuth, async (req: any, res) => {
     try {
+      if (!exigeMaster(req, res)) return;
       const tenantId = tenantDe(req, res); if (!tenantId) return;
       const convenio = String(req.query.convenio || "SIAPE");
       const { bancos, regras = [], excecoes = [] } = await carregarParaAnalise(tenantId, convenio, false);
@@ -111,6 +112,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
 
   app.get("/api/port/bancos/:id/regras", requireAuth, async (req: any, res) => {
     try {
+      if (!exigeMaster(req, res)) return;
       const tenantId = tenantDe(req, res); if (!tenantId) return;
       const r = await db.execute(sql`
         SELECT rs.id, rs.convenio, rs.hash, rs.fonte_descricao, rs.vigencia_inicio, rs.vigencia_fim,
@@ -324,7 +326,10 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       if (!cliente?.convenio) return res.status(400).json({ message: "Informe o convênio do cliente" });
 
       const { paraMotor } = await carregarParaAnalise(tenantId, cliente.convenio);
-      res.json(respostaSimulacao(paraMotor, cliente, contratos));
+      const resp = respostaSimulacao(paraMotor, cliente, contratos);
+      // corretor NUNCA vê a comissão da empresa: sai daqui, não só da tela
+      res.json(isMaster(req) ? { ...resp, comissaoVisivel: true }
+        : { ...resp, resultado: semComissao(resp.resultado), comissaoVisivel: false });
     } catch (err: any) {
       console.error("[PORT] POST simular:", err);
       res.status(500).json({ message: "Erro ao analisar" });
@@ -355,7 +360,8 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
                 ${JSON.stringify(resultado)}::jsonb, ${req.user?.id ?? null})
         RETURNING id, criado_em
       `);
-      res.json({ id: (r.rows[0] as any).id, criadoEm: (r.rows[0] as any).criado_em, resultado });
+      res.json({ id: (r.rows[0] as any).id, criadoEm: (r.rows[0] as any).criado_em,
+        resultado: isMaster(req) ? resultado : semComissao(resultado) });
     } catch (err: any) {
       console.error("[PORT] POST analise:", err);
       res.status(500).json({ message: "Erro ao registrar a análise" });
@@ -384,6 +390,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
 
   app.get("/api/port/analises/:id", requireAuth, async (req: any, res) => {
     try {
+      if (!exigeMaster(req, res)) return;   // o registro guarda regras e comissão
       const tenantId = tenantDe(req, res); if (!tenantId) return;
       const r = await db.execute(sql`
         SELECT * FROM port_analyses WHERE id = ${Number(req.params.id)} AND tenant_id = ${tenantId}

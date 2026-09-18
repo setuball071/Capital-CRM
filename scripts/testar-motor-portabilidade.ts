@@ -3,7 +3,7 @@
 // Sai com código 1 se qualquer caso falhar.
 import assert from "node:assert/strict";
 import {
-  analisarBanco, normalizarOrigem,
+  analisar, analisarBanco, normalizarOrigem, semComissao,
   type BancoParaAnalise, type ClienteEntrada, type ContratoEntrada, type Excecao, type Status,
 } from "../shared/portability/engine";
 import { MODELOS } from "../shared/portability/modelos";
@@ -123,7 +123,39 @@ caso("Analfabeto não afeta banco sem regra de formalização", () => {
 caso("Troco e comissão não decidem elegibilidade", () => {
   const r = analisarBanco(banco(), CLI, [ct({})], HOJE).contratos[0];
   assert.equal(r.status, "ELEGIVEL");
-  assert.deepEqual(r.operacao.map(o => o.status), ["REGRA_NAO_CADASTRADA", "REGRA_NAO_CADASTRADA"]);
+  const troco = r.operacao.find(o => o.chave === "troco_min")!;
+  // taxa de refin cadastrada, mas sem prazo e sem pricing: não é "pendente" (não é dado do operador)
+  assert.equal(troco.status, "REGRA_NAO_CADASTRADA");
+  assert.match(troco.motivo, /1,70% a\.m\..*prazo do refin/);
+});
+
+console.log("\nComissão (0,75% sobre o saldo)");
+caso("Contrato elegível: 0,75% do saldo", () => {
+  const com = analisarBanco(banco(), CLI, [ct({ saldo: 20000 })], HOJE).contratos[0].operacao.find(o => o.chave === "comissao")!;
+  assert.equal(com.status, "ELEGIVEL");
+  assert.equal(com.valorAnalisado, "R$ 150,00");
+});
+caso("Contrato recusado não gera comissão", () => {
+  const com = analisarBanco(banco(), CLI, [ct({ bancoOrigem: "Agibank" })], HOJE).contratos[0].operacao.find(o => o.chave === "comissao")!;
+  assert.equal(com.status, "NAO_ELEGIVEL");
+  assert.equal(com.valorAnalisado, null);
+});
+caso("Total do banco soma só elegíveis; análise manual fica à parte", () => {
+  const r = analisarBanco(banco(), CLI, [ct({ saldo: 20000 }), ct({ saldo: 10000 }), ct({ bancoOrigem: "Agibank", saldo: 50000 })], HOJE);
+  assert.deepEqual(r.comissao, { percentual: 0.75, base: "saldo", total: 225, contratos: 2, estimadaEmAnalise: 0 });
+  const manual = analisarBanco(banco(), { ...CLI, alertas: { analfabeto: true } }, [ct({ saldo: 20000 })], HOJE);
+  assert.equal(manual.comissao!.total, 0);
+  assert.equal(manual.comissao!.estimadaEmAnalise, 150);
+});
+caso("Banco sem regra de comissão: resumo nulo", () => {
+  const r = analisarBanco(banco(EXC, { ...PAN.regras, comissao: null }), CLI, [ct({})], HOJE);
+  assert.equal(r.comissao, null);
+});
+caso("semComissao apaga tudo que revela a comissão (corretor)", () => {
+  const r = semComissao(analisar([banco()], CLI, [ct({ saldo: 20000 })], HOJE));
+  assert.equal(r.bancos[0].comissao, null);
+  assert.ok(r.bancos[0].contratos.every(c => c.operacao.every(o => o.chave !== "comissao")));
+  assert.ok(!JSON.stringify(r).includes("0,75%"));
 });
 caso("Sem regra vigente: banco inteiro 'regra não cadastrada'", () => {
   const r = analisarBanco({ bankId: 2, nome: "Safra", ruleSet: null, excecoes: [] }, CLI, [ct({})], HOJE);

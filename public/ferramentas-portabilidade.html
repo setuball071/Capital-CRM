@@ -6791,6 +6791,7 @@ const MB = {
   analiseSalva: null,       // análise que veio junto com a cotação reaberta
   ultimaChave: null, chaveAgendada: null, timer: null, seq: 0, ctrl: null,
   estado: 'ocioso', aba: 'comparativo', intervalo: null,
+  comissaoVisivel: false,   // só o servidor liga (master); corretor NUNCA vê a comissão da empresa
 };
 
 // ── utilidades ─────────────────────────────────────────────────────────────
@@ -6890,6 +6891,7 @@ async function mbAnalisar(entrada, chave) {
     MB.resultado = j.resultado || null;
     MB.codigosSituacao = j.codigosSituacao || [];
     MB.alertasFormalizacao = j.alertasFormalizacao || [];
+    MB.comissaoVisivel = j.comissaoVisivel === true;
     MB.ultimaChave = chave; MB.chaveAgendada = null;
     MB.estado = 'ok';
     mbAutoSituacaoPeloCrm();
@@ -7018,13 +7020,21 @@ function mbDesfazerEscolha() { MB.escolha = null; mbRender(); }
 // ═══════════════════════════════════════════════════════════════════════════
 //  PERSISTÊNCIA COM A COTAÇÃO
 // ═══════════════════════════════════════════════════════════════════════════
+/** A cotação é aberta por corretores: a comissão da empresa nunca vai gravada nela. */
+function mbSemComissao(r) {
+  if (!r || !Array.isArray(r.bancos)) return r || null;
+  return Object.assign({}, r, { bancos: r.bancos.map(b => Object.assign({}, b, {
+    comissao: null,
+    contratos: (b.contratos || []).map(c => Object.assign({}, c, { operacao: (c.operacao || []).filter(o => o.chave !== 'comissao') })),
+  })) });
+}
 function mbDadosParaSalvar() {
   return {
     versao: 1,
     snapshot: montarSnapshotSimulacao(),
     dadosComplementares: JSON.parse(JSON.stringify(MB.dados)),
     bancoEscolhido: MB.escolha,
-    resultado: MB.resultado,
+    resultado: mbSemComissao(MB.resultado),
     analisadoEm: MB.resultado ? MB.resultado.analisadoEm : null,
   };
 }
@@ -7034,7 +7044,8 @@ function mbRestaurarDaCotacao(mb, cpf) {
   MB.dados.alertas = Object.assign(mbDadosVazios().alertas, (mb && mb.dadosComplementares && mb.dadosComplementares.alertas) || {});
   MB.escolha = (mb && mb.bancoEscolhido) || null;
   MB.analiseSalva = mb && mb.resultado ? { resultado: mb.resultado, em: mb.analisadoEm } : null;
-  MB.resultado = MB.analiseSalva ? MB.analiseSalva.resultado : null;   // mostra a salva até a reanálise chegar
+  MB.resultado = MB.analiseSalva ? mbSemComissao(MB.analiseSalva.resultado) : null;   // mostra a salva até a reanálise chegar
+  MB.comissaoVisivel = false;
   MB.ultimaChave = null; MB.chaveAgendada = null;
   mbRender();
   mbObservar();
@@ -7150,30 +7161,36 @@ function mbComparativoHTML(bancos) {
   const ord = [...bancos].sort((a, b) => ordem.indexOf(a.status) - ordem.indexOf(b.status) || b.contagem.ELEGIVEL - a.contagem.ELEGIVEL);
   const aceitam = ord.filter(b => b.status === 'ELEGIVEL');
   const recusa = b => [...new Set(b.contratos.flatMap(c => c.regras.filter(r => r.status === 'NAO_ELEGIVEL').map(r => r.motivo)))];
-  const comissao = b => {
-    const com = b.contratos.flatMap(c => c.operacao || []).find(r => r.chave === 'comissao');
-    return com ? (com.status === 'REGRA_NAO_CADASTRADA' ? 'não cadastrada' : mbEsc(com.valorAnalisado || MB_STATUS_LABEL[com.status])) : '—';
-  };
+  const verCom = MB.comissaoVisivel;
+  // comissão = % sobre o SALDO DEVEDOR dos contratos aceitos; troco nunca entra
+  const comissao = b => !b.comissao ? 'não cadastrada'
+    : `<b>${mbBRL(b.comissao.total)}</b><div>${String(b.comissao.percentual).replace('.', ',')}% do saldo · ${b.comissao.contratos} contrato(s)</div>` +
+      (b.comissao.estimadaEmAnalise ? `<div>+ ${mbBRL(b.comissao.estimadaEmAnalise)} se a análise manual aprovar</div>` : '');
+  const rankCom = verCom ? ord.filter(b => b.comissao && b.comissao.total > 0).sort((a, b) => b.comissao.total - a.comissao.total) : [];
+  const cartaoCom = !verCom ? '' : `<div class="mb-cartao"><div class="mb-kpi-t">Maior comissão <span class="mb-sub">(só master)</span></div>` +
+    (rankCom.length
+      ? `<div style="font-weight:700;margin-top:4px">${mbEsc(rankCom[0].banco)} — ${mbBRL(rankCom[0].comissao.total)}</div>` +
+        (rankCom.length > 1 ? `<div class="mb-sub">${rankCom.slice(1).map(b => mbEsc(b.banco) + ' ' + mbBRL(b.comissao.total)).join(' · ')}</div>` : '') +
+        `<div class="mb-sub">Sobre o saldo devedor dos contratos aceitos — troco não entra. Ranking próprio, nunca misturado com a condição do cliente.</div>`
+      : `<div style="font-weight:700;margin-top:4px">Nenhuma ainda</div><div class="mb-sub">Nenhum banco com regra de comissão aceita contratos deste cliente.</div>`) + `</div>`;
   return `<div class="mb-grid3">
       <div class="mb-cartao"><div class="mb-kpi-t">Aceitam a operação</div>
         <div style="font-size:22px;font-weight:700;margin-top:2px">${aceitam.length} <span class="mb-sub">de ${bancos.length}</span></div>
         <div class="mb-sub">${mbEsc(aceitam.map(b => b.banco).join(', ') || 'nenhum ainda')}</div></div>
       <div class="mb-cartao"><div class="mb-kpi-t">Melhor condição para o cliente</div>
         <div style="font-weight:700;margin-top:4px">Ainda não calculável</div>
-        <div class="mb-sub">Depende da taxa de refin de cada banco, ainda não cadastrada. Ranking próprio — nunca misturado com comissão.</div></div>
-      <div class="mb-cartao"><div class="mb-kpi-t">Maior comissão</div>
-        <div style="font-weight:700;margin-top:4px">Ainda não calculável</div>
-        <div class="mb-sub">Nenhum banco tem regra de comissão cadastrada. Ranking próprio — nunca misturado com a condição do cliente.</div></div>
+        <div class="mb-sub">Depende do cálculo de troco e parcela de cada banco, que ainda não está no motor.${verCom ? ' Ranking próprio — nunca misturado com comissão.' : ''}</div></div>
+      ${cartaoCom}
     </div>
     <div class="mb-sub" style="margin:6px 0">Ordem: situação da análise; empate, quantos contratos o banco aceita.</div>
-    <table class="mb-t"><thead><tr><th>Banco</th><th>Situação</th><th>Contratos aceitos</th><th>Por que recusa</th><th>Comissão</th><th></th></tr></thead><tbody>` +
+    <table class="mb-t"><thead><tr><th>Banco</th><th>Situação</th><th>Contratos aceitos</th><th>Por que recusa</th>${verCom ? '<th>Comissão</th>' : ''}<th></th></tr></thead><tbody>` +
     ord.map(b => {
       const r = recusa(b);
       return `<tr><td style="font-weight:700"><button class="mb-link" style="text-decoration:none" onclick="MB.aba=${b.bankId};mbRender()">${mbEsc(b.banco)}</button></td>
         <td>${mbChip(b.status)}</td>
         <td>${b.contratos.length ? `${b.contagem.ELEGIVEL} de ${b.contratos.length}` : '—'}</td>
         <td style="max-width:320px">${r.length ? mbEsc(r.slice(0, 2).join(' · ')) + (r.length > 2 ? ` (+${r.length - 2})` : '') : '—'}</td>
-        <td class="mb-sub">${comissao(b)}</td>
+        ${verCom ? `<td class="mb-sub">${comissao(b)}</td>` : ''}
         <td style="text-align:right">${mbAcaoBanco(b)}</td></tr>`;
     }).join('') + `</tbody></table>`;
 }
@@ -7190,6 +7207,7 @@ function mbBancoHTML(b) {
   return `<div class="mb-cartao" style="border-left:4px solid ${MB_STATUS_COR[b.status]}">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <b style="font-size:15px">${mbEsc(b.banco)}</b>${mbChip(b.status)}<span>${mbEsc(b.resumo)}</span>
+        ${MB.comissaoVisivel && b.comissao ? `<span class="mb-sub">Comissão: <b>${mbBRL(b.comissao.total)}</b> (${String(b.comissao.percentual).replace('.', ',')}% do saldo)</span>` : ''}
         <span style="margin-left:auto">${mbAcaoBanco(b)}</span></div>
       <div class="mb-sub" style="margin-top:4px">${b.ruleSetId
         ? `Regras vigentes desde ${new Date(b.vigenciaInicio).toLocaleString('pt-BR')} · versão #${b.ruleSetId}${b.excecoesAplicadas.length ? ` · ${b.excecoesAplicadas.length} exceção(ões) usada(s)` : ''}`

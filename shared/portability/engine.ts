@@ -80,9 +80,11 @@ export interface RegrasBanco {
   } | null;
   alertasFormalizacao?: string[];
   avisos?: string[];
-  /** Ainda não informado para o PAN. Sem ele, troco e comissão não são calculáveis. */
+  /** % a.m. do refin. Sozinha não calcula troco: falta o prazo do refin e o pricing (etapa 3). */
   taxaRefin?: number | null;
-  comissao?: { percentual?: number | null } | null;
+  /** Comissão que o banco paga à empresa. Hoje só base "saldo" (PAN: 0,75% do saldo devedor).
+   *  Dado confidencial: o servidor tira da resposta para quem não é master. */
+  comissao?: { percentual?: number | null; base?: "saldo" | null } | null;
 }
 
 export interface Excecao {
@@ -152,6 +154,18 @@ export interface ResultadoBanco {
   camposPendentes: CampoPendenteDetalhe[];
   avisos: string[];
   contagem: Record<Status, number>;
+  /** null = sem regra de comissão (ou oculta para quem não é master). */
+  comissao: ResumoComissao | null;
+}
+
+export interface ResumoComissao {
+  percentual: number;
+  base: "saldo";
+  /** Soma só dos contratos ELEGÍVEIS: é o que o banco efetivamente paga. */
+  total: number;
+  contratos: number;
+  /** Contratos em análise manual: estimativa à parte, não somada ao total. */
+  estimadaEmAnalise: number;
 }
 
 export interface ResultadoAnalise {
@@ -434,20 +448,53 @@ function avaliarPensaoContrato(c: ContratoEntrada, cli: ClienteEntrada, regras: 
       + " Considera o prazo atual — se o refin alongar o prazo, reavalie." });
 }
 
+const pctSimples = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%";
+
+/** Percentual de comissão sobre o saldo, se a regra existir e for suportada. */
+function percentualComissao(regras: RegrasBanco): number | null {
+  const c = regras.comissao;
+  if (!c || !temNum(c.percentual) || c.percentual <= 0) return null;
+  if (c.base && c.base !== "saldo") return null;   // só "saldo" por enquanto
+  return c.percentual;
+}
+
 /** Bloco da operação: troco e comissão. Informa, não decide elegibilidade. */
-function avaliarOperacao(regras: RegrasBanco, banco: string): ResultadoRegra[] {
+function avaliarOperacao(c: ContratoEntrada, statusContrato: Status, regras: RegrasBanco, banco: string): ResultadoRegra[] {
   const out: ResultadoRegra[] = [];
   if (temNum(regras.trocoMinPorContrato)) {
+    // "regra não cadastrada", não "pendente": não é um dado que o operador tenha de informar
     out.push(regra({ chave: "troco_min", label: "Troco mínimo por contrato", valorAnalisado: null,
-      esperado: `≥ ${brl(regras.trocoMinPorContrato)}`,
-      status: temNum(regras.taxaRefin) ? "PENDENTE_INFO" : "REGRA_NAO_CADASTRADA", fonte: "sistema",
+      esperado: `≥ ${brl(regras.trocoMinPorContrato)}`, status: "REGRA_NAO_CADASTRADA", fonte: "sistema",
       motivo: temNum(regras.taxaRefin)
-        ? "Troco depende do cálculo da operação (próxima etapa do motor)."
+        ? `Troco não calculado: a taxa de refin de ${pct(regras.taxaRefin)} está cadastrada, mas falta o prazo do refin do ${banco} e o cálculo de troco ainda não está no motor.`
         : `Troco não calculável: a taxa de refin do ${banco} não está cadastrada.` }));
   }
-  out.push(regra({ chave: "comissao", label: "Comissão", valorAnalisado: null, esperado: null,
-    status: regras.comissao ? "PENDENTE_INFO" : "REGRA_NAO_CADASTRADA", fonte: "sistema",
-    motivo: regras.comissao ? "Comissão depende do cálculo da operação." : `Regra de comissão do ${banco} não cadastrada.` }));
+
+  const p = percentualComissao(regras);
+  const base = { chave: "comissao", label: "Comissão" };
+  if (p === null) {
+    out.push(regra({ ...base, valorAnalisado: null, esperado: null, status: "REGRA_NAO_CADASTRADA", fonte: "sistema",
+      motivo: `Regra de comissão do ${banco} não cadastrada.` }));
+    return out;
+  }
+  const esperado = `${pctSimples(p)} do saldo devedor`;
+  if (statusContrato === "NAO_ELEGIVEL") {
+    out.push(regra({ ...base, valorAnalisado: null, esperado, status: "NAO_ELEGIVEL",
+      motivo: `Sem comissão: o ${banco} não aceita este contrato.` }));
+  } else if (!temNum(c.saldo) || c.saldo <= 0) {
+    out.push(regra({ ...base, valorAnalisado: null, esperado, status: "PENDENTE_INFO",
+      motivo: "A comissão depende do saldo devedor do contrato." }));
+  } else {
+    const valor = r2(c.saldo * p / 100);
+    const sufixo: Partial<Record<Status, string>> = {
+      ELEGIVEL: `${pctSimples(p)} sobre o saldo devedor de ${brl(c.saldo)}.`,
+      ANALISE_MANUAL: "Estimada — o contrato depende de análise manual.",
+      PENDENTE_INFO: "Estimada — o contrato ainda tem informação pendente.",
+      REGRA_NAO_CADASTRADA: "Estimada — parte da análise não tem regra cadastrada.",
+    };
+    out.push(regra({ ...base, valorAnalisado: brl(valor), esperado, status: statusContrato,
+      motivo: sufixo[statusContrato] || "" }));
+  }
   return out;
 }
 
@@ -467,7 +514,7 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
     bankId: banco.bankId, banco: banco.nome, status: "REGRA_NAO_CADASTRADA",
     resumo: `Sem regras vigentes do ${banco.nome} para o convênio ${cliente.convenio}.`,
     ruleSetId: null, ruleSetHash: null, vigenciaInicio: null, excecoesAplicadas: [],
-    cliente: [], contratos: [], pendencias: [], camposPendentes: [], avisos: [], contagem,
+    cliente: [], contratos: [], pendencias: [], camposPendentes: [], avisos: [], contagem, comissao: null,
   };
   if (!banco.ruleSet) return vazio;
 
@@ -486,7 +533,7 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
 
     const status = pior([...lista, ...cli.regras].map(r => r.status));
     contagem[status]++;
-    return { contratoId: c.id, bancoOrigem: c.bancoOrigem, origemCanonica: chave, status, regras: lista, operacao: avaliarOperacao(regras, banco.nome) };
+    return { contratoId: c.id, bancoOrigem: c.bancoOrigem, origemCanonica: chave, status, regras: lista, operacao: avaliarOperacao(c, status, regras, banco.nome) };
   });
 
   // status do banco: se ao menos um contrato passa, o banco atende
@@ -528,7 +575,22 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
     : status === "ANALISE_MANUAL" ? "Precisa de conferência manual."
     : "Regra não cadastrada para parte da análise.";
 
+  // comissão do banco = só contratos ELEGÍVEIS (é o que ele paga); análise manual fica à parte
+  const pc = percentualComissao(regras);
+  let comissao: ResumoComissao | null = null;
+  if (pc !== null) {
+    let total = 0, n = 0, manual = 0;
+    resultadoContratos.forEach((rc, i) => {
+      const saldo = contratos[i].saldo;
+      if (!temNum(saldo) || saldo <= 0) return;
+      if (rc.status === "ELEGIVEL") { total += saldo * pc / 100; n++; }
+      else if (rc.status === "ANALISE_MANUAL") manual += saldo * pc / 100;
+    });
+    comissao = { percentual: pc, base: "saldo", total: r2(total), contratos: n, estimadaEmAnalise: r2(manual) };
+  }
+
   return {
+    comissao,
     bankId: banco.bankId, banco: banco.nome, status, resumo,
     ruleSetId: banco.ruleSet.id, ruleSetHash: banco.ruleSet.hash, vigenciaInicio: banco.ruleSet.vigenciaInicio,
     excecoesAplicadas: Array.from(excecoesAplicadas),
@@ -550,6 +612,19 @@ export function respostaSimulacao(bancos: BancoParaAnalise[], cliente: ClienteEn
     alertasFormalizacao: bancos
       .filter(b => (b.ruleSet?.regras.alertasFormalizacao || []).length)
       .map(b => ({ banco: b.nome, itens: b.ruleSet!.regras.alertasFormalizacao! })),
+  };
+}
+
+/** Remove tudo que revela a comissão da empresa. Corretor NUNCA vê a
+ *  remuneração do banco — regra da casa. O servidor aplica antes de responder. */
+export function semComissao(r: ResultadoAnalise): ResultadoAnalise {
+  return {
+    ...r,
+    bancos: r.bancos.map(b => ({
+      ...b,
+      comissao: null,
+      contratos: b.contratos.map(c => ({ ...c, operacao: c.operacao.filter(o => o.chave !== "comissao") })),
+    })),
   };
 }
 

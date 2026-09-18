@@ -79,8 +79,8 @@ export const MODELOS: ModeloRegra[] = [
         "Leis estaduais específicas para idosos (Manual de Formalização — Empréstimo)",
       ],
       avisos: ["Averbação online."],
-      taxaRefin: null,   // não informado ainda
-      comissao: null,    // não informado ainda
+      taxaRefin: 1.70,                                   // informado pelo Fábio em 18/09/2026
+      comissao: { percentual: 0.75, base: "saldo" },     // só sobre o saldo devedor (Fábio, 18/09/2026)
     },
     excecoesSugeridas: [
       { parametros: { origem: "Caixa", porta: true, pagasMin: 0 },
