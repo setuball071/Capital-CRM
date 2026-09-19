@@ -995,13 +995,43 @@ export default function ContratosDetalhePage() {
           <CardTitle className="text-base flex items-center gap-2"><CreditCard className="h-4 w-4" /> Operação</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-          {renderField({
+          {proposal.product === "CARTAO" ? (
+            /* Cartão: modalidade editável (RMC consignado / RCC benefício), grava em
+               clientMeta.modalidadeCartao — antes não havia como corrigir depois de cadastrada */
+            <div className="group min-w-0">
+              <p className="text-xs text-muted-foreground">Produto</p>
+              {editField === "modalidadeCartao" ? (
+                <div className="flex items-center gap-1 mt-0.5">
+                  <Select
+                    value={m.modalidadeCartao || ""}
+                    onValueChange={(v) => { editMutation.mutate({ clientMetaPatch: { modalidadeCartao: v } }); setEditField(null); }}
+                  >
+                    <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Selecione a modalidade..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="RMC">Cartão Consignado (RMC)</SelectItem>
+                      <SelectItem value="RCC">Cartão Benefício (RCC)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <button className="rounded p-1 text-muted-foreground hover:bg-muted" onClick={() => setEditField(null)}><X className="h-3.5 w-3.5" /></button>
+                </div>
+              ) : (
+                <div className="flex items-start gap-1.5 mt-0.5">
+                  <span className="font-medium text-sm break-words">
+                    {m.modalidadeCartao === "RCC" ? "CARTÃO BENEFÍCIO (RCC)"
+                      : m.modalidadeCartao === "RMC" ? "CARTÃO CONSIGNADO (RMC)"
+                      : "CARTAO"}
+                  </span>
+                  {canEditFields && (
+                    <Pencil className="h-3 w-3 mt-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-pointer hover:text-primary" onClick={() => setEditField("modalidadeCartao")} />
+                  )}
+                </div>
+              )}
+            </div>
+          ) : renderField({
             fieldKey: "produto",
             label: "Produto",
             value: proposal.product === "REFIN_PORTABILIDADE" ? "REFIN DE PORTABILIDADE"
               : proposal.product === "COMPRA_DIVIDA" ? "COMPRA DE DÍVIDA"
-              // Cartão: mostra a modalidade gravada no cadastro (RMC consignado / RCC benefício)
-              : proposal.product === "CARTAO" && m.modalidadeCartao ? (m.modalidadeCartao === "RCC" ? "CARTÃO BENEFÍCIO (RCC)" : "CARTÃO CONSIGNADO (RMC)")
               : proposal.product,
             copyable: false,
           })}
