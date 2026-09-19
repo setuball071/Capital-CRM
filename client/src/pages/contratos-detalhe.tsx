@@ -506,11 +506,20 @@ export default function ContratosDetalhePage() {
   // Tabela inativa = vigência fechada no Financeiro: sai das opções de escolha,
   // mas continua resolvendo pelo id nos contratos que já a usam.
   const tabelaAtiva = (t: any) => !t?.vigenciaFim;
+  // Cartão: as tabelas são cadastradas por modalidade ("Cartão Consignado (RMC)" /
+  // "Cartão Benefício (RCC)"); "Cartão" puro é o tipo legado de antes da divisão.
+  // Comparar só com "Cartão" deixava tabela e banco vazios na ficha. Mesma regra do cadastro.
+  const modalidadeFicha = (proposal.clientMeta as any)?.modalidadeCartao;
+  const tiposCartao = modalidadeFicha === "RCC" ? ["Cartão Benefício (RCC)", "Cartão"]
+    : modalidadeFicha === "RMC" ? ["Cartão Consignado (RMC)", "Cartão"]
+    : ["Cartão Consignado (RMC)", "Cartão Benefício (RCC)", "Cartão"];
   // Tabelas do TIPO de operação + convênio (base para banco e tabela editáveis)
   const tabelasDoTipo = financeiroTabelas.filter((t: any) =>
     tabelaAtiva(t) &&
     (!t.convenio || t.convenio.toUpperCase() === (proposal.clientConvenio || "").toUpperCase()) &&
-    (!tipoAlvoTabela || (t.tipo || "") === tipoAlvoTabela)
+    (proposal.product === "CARTAO"
+      ? tiposCartao.includes(t.tipo || "")
+      : (!tipoAlvoTabela || (t.tipo || "") === tipoAlvoTabela))
   );
   // Bancos disponíveis para esse tipo de operação
   const banksDoTipo = Array.from(new Set(tabelasDoTipo.map((t: any) => t.banco as string).filter(Boolean))).sort();
