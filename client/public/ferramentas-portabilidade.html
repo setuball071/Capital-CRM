@@ -6792,7 +6792,9 @@ const MB_AVISO_NAO_INTEGRADO = 'Banco selecionado. Troco e parcela deste banco e
 const mbDadosVazios = () => ({ situacaoFuncional: '', dataNascimento: '', pensaoTipo: '', pensaoFim: '',
   alertas: { analfabeto: false, naoAssina: false, leiEstadualIdoso: false },
   // refin: a TAXA é a de cada banco; prazo e modo quem escolhe é o operador
-  operacao: { modo: 'maximo', prazo: '120', valor: '' } });
+  operacao: { modo: 'maximo', prazo: '120', valor: '' },
+  // contratos que o operador tirou do cálculo (não exclui: só não entra em troco/bruto/comissão)
+  foraDoCalculo: [] });
 
 const MB = {
   dados: mbDadosVazios(),   // dadosComplementares — persistidos com a cotação
@@ -6839,6 +6841,7 @@ function montarSnapshotSimulacao() {
       prazoTotal: mbInt(c.prazo_total),
       taxa: mbNum(c.taxa, 4),
       saldo: mbNum(c.saldo, 2),
+      foraDoCalculo: (MB.dados.foraDoCalculo || []).includes(String(c.id)),
     })),
     dadosComplementares: JSON.parse(JSON.stringify(MB.dados)),
     bancoEscolhido: MB.escolha ? JSON.parse(JSON.stringify(MB.escolha)) : null,
@@ -6978,6 +6981,13 @@ function mbSetOperacao(campo, valor) {
   mbRender();                   // mostra/esconde o campo do valor na hora
   mbObservar();
 }
+function mbNoCalculo(contratoId, entra) {
+  const id = String(contratoId);
+  const fora = new Set(MB.dados.foraDoCalculo || []);
+  if (entra) fora.delete(id); else fora.add(id);
+  MB.dados.foraDoCalculo = Array.from(fora);
+  mbObservar();
+}
 function mbSetAlerta(chave, marcado) { MB.dados.alertas[chave] = !!marcado; mbObservar(); }
 function mbConfirmarOrigem(contratoId, chave) {
   const c = (contratos || []).find(x => String(x.id) === String(contratoId));
@@ -7074,6 +7084,7 @@ function mbRestaurarDaCotacao(mb, cpf) {
   MB.dados = Object.assign(mbDadosVazios(), (mb && mb.dadosComplementares) || {});
   MB.dados.alertas = Object.assign(mbDadosVazios().alertas, (mb && mb.dadosComplementares && mb.dadosComplementares.alertas) || {});
   MB.dados.operacao = Object.assign(mbDadosVazios().operacao, (mb && mb.dadosComplementares && mb.dadosComplementares.operacao) || {});
+  MB.dados.foraDoCalculo = Array.isArray(mb && mb.dadosComplementares && mb.dadosComplementares.foraDoCalculo) ? mb.dadosComplementares.foraDoCalculo : [];
   MB.escolha = (mb && mb.bancoEscolhido) || null;
   MB.analiseSalva = mb && mb.resultado ? { resultado: mb.resultado, em: mb.analisadoEm } : null;
   MB.resultado = MB.analiseSalva ? mbSemComissao(MB.analiseSalva.resultado) : null;   // mostra a salva até a reanálise chegar
@@ -7240,13 +7251,14 @@ function mbComparativoHTML(bancos) {
       ${cartaoCom}
     </div>
     <div class="mb-sub" style="margin:6px 0">Ordem: situação da análise; empate, quantos contratos o banco aceita.</div>
-    <table class="mb-t"><thead><tr><th>Banco</th><th>Situação</th><th>Contratos aceitos</th><th>Por que recusa</th><th>Troco líquido</th>${verCom ? '<th>Comissão</th>' : ''}<th></th></tr></thead><tbody>` +
+    <table class="mb-t"><thead><tr><th>Banco</th><th>Situação</th><th>Contratos aceitos</th><th>Por que recusa</th><th>Bruto da operação</th><th>Troco líquido</th>${verCom ? '<th>Comissão</th>' : ''}<th></th></tr></thead><tbody>` +
     ord.map(b => {
       const r = recusa(b);
       return `<tr><td style="font-weight:700"><button class="mb-link" style="text-decoration:none" onclick="MB.aba=${b.bankId};mbRender()">${mbEsc(b.banco)}</button></td>
         <td>${mbChip(b.status)}</td>
         <td>${b.contratos.length ? `${b.contagem.ELEGIVEL} de ${b.contratos.length}` : '—'}</td>
         <td style="max-width:320px">${r.length ? mbEsc(r.slice(0, 2).join(' · ')) + (r.length > 2 ? ` (+${r.length - 2})` : '') : '—'}</td>
+        <td>${b.refin && b.refin.contratos ? `<b>${mbBRL(b.refin.valorContrato)}</b><div class="mb-sub">${b.refin.contratos} contrato(s)</div>` : '—'}</td>
         <td>${b.refin && b.refin.contratos ? `<b>${mbBRL(b.refin.trocoLiquido)}</b><div class="mb-sub">${b.refin.prazo}x a ${b.refin.taxa.toFixed(2).replace('.', ',')}%</div>` : '—'}</td>
         ${verCom ? `<td class="mb-sub">${comissao(b)}</td>` : ''}
         <td style="text-align:right">${mbAcaoBanco(b)}</td></tr>`;
@@ -7261,20 +7273,24 @@ function mbBancoHTML(b) {
   const saldoDe = id => { const c = (contratos || []).find(x => String(x.id) === String(id)); return c ? mbNum(c.saldo, 2) : null; };
   const semTaxa = b.contratos.some(c => (c.operacao || []).some(o => o.chave === 'troco' && /taxa de refin .* não está cadastrada/.test(o.motivo || '')));
   const clienteProblema = b.cliente.filter(r => r.status !== 'ELEGIVEL');
-  const col = verCom ? 6 : 5;
+  const col = verCom ? 7 : 6;
+  const fora = lista.filter(c => c.foraDoCalculo).length;
   const linha = c => {
     const pr = c.preco;
     const troco = (c.operacao || []).find(o => o.chave === 'troco');
     const com = (c.operacao || []).find(o => o.chave === 'comissao');
     const saldo = saldoDe(c.contratoId);
     const motivo = mbMotivoContrato(c, b) || (pr && !pr.viavel ? pr.motivo : (troco && troco.status === 'PENDENTE_INFO' ? troco.motivo : ''));
-    const celTroco = pr ? (pr.viavel ? `<b>${mbBRL(pr.trocoLiquido)}</b>` : '<span style="color:#B91C1C">não fecha</span>') : '—';
-    return `<tr><td style="font-weight:600">${mbEsc(mbRotuloContrato(c.contratoId))}</td>
+    const celTroco = c.foraDoCalculo ? '<span class="mb-sub">fora do cálculo</span>'
+      : pr ? (pr.viavel ? `<b>${mbBRL(pr.trocoLiquido)}</b>` : '<span style="color:#B91C1C">não fecha</span>') : '—';
+    const caixa = c.status === 'ELEGIVEL'
+      ? `<input type="checkbox" title="Entra no cálculo" ${c.foraDoCalculo ? '' : 'checked'} onchange="mbNoCalculo('${mbEsc(c.contratoId)}', this.checked)">` : '';
+    return `<tr${c.foraDoCalculo ? ' style="opacity:.5"' : ''}><td style="width:28px;text-align:center">${caixa}</td><td style="font-weight:600">${mbEsc(mbRotuloContrato(c.contratoId))}</td>
         <td>${mbChip(c.status)}</td>
         <td style="text-align:right">${saldo ? mbBRL(saldo) : '—'}</td>
         <td style="text-align:right;white-space:nowrap">${pr ? (pr.viavel ? `${mbBRL(pr.parcelaAtual)} → <b>${mbBRL(pr.parcelaNova)}</b>` : mbBRL(pr.parcelaAtual)) : '—'}</td>
         <td style="text-align:right">${celTroco}</td>
-        ${verCom ? `<td style="text-align:right">${c.status === 'ELEGIVEL' && com && com.valorAnalisado ? mbEsc(com.valorAnalisado) : '—'}</td>` : ''}</tr>` +
+        ${verCom ? `<td style="text-align:right">${c.status === 'ELEGIVEL' && !c.foraDoCalculo && com && com.valorAnalisado ? mbEsc(com.valorAnalisado) : '—'}</td>` : ''}</tr>` +
       (motivo ? `<tr class="mb-motivo"><td colspan="${col}">${mbEsc(motivo)}</td></tr>` : '');
   };
   return `<div class="mb-cartao" style="border-left:4px solid ${MB_STATUS_COR[b.status]}">
@@ -7291,7 +7307,8 @@ function mbBancoHTML(b) {
           : (verCom && b.comissao ? `<div class="mb-sub" style="margin-top:6px">Comissão: <b>${mbBRL(b.comissao.total)}</b> (${String(b.comissao.percentual).replace('.', ',')}% do saldo)</div>` : ''))}
     </div>
     ${clienteProblema.length ? `<div class="mb-banner aviso">${clienteProblema.map(r => mbEsc(r.motivo)).join(' · ')}</div>` : ''}
-    <table class="mb-t"><thead><tr><th>Contrato</th><th>Situação</th><th style="text-align:right">Saldo devedor</th><th style="text-align:right">Parcela</th><th style="text-align:right">Troco líquido</th>${verCom ? '<th style="text-align:right">Comissão</th>' : ''}</tr></thead>
+    ${fora ? `<div class="mb-sub" style="margin:4px 0">${fora} contrato(s) fora do cálculo — marque a caixinha para voltar.</div>` : ''}
+    <table class="mb-t"><thead><tr><th title="Entra no cálculo">✓</th><th>Contrato</th><th>Situação</th><th style="text-align:right">Saldo devedor</th><th style="text-align:right">Parcela</th><th style="text-align:right">Troco líquido</th>${verCom ? '<th style="text-align:right">Comissão</th>' : ''}</tr></thead>
       <tbody>${lista.map(linha).join('')}</tbody></table>`;
 }
 

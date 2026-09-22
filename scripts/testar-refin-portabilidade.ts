@@ -146,6 +146,20 @@ caso("banco sem taxa de refin cadastrada: não calcula com taxa de outro", () =>
   assert.equal(r.refin, null);
   assert.match(r.contratos[0].operacao.find(o => o.chave === "troco")!.motivo, /taxa de refin do PAN não está cadastrada/);
 });
+caso("contrato tirado do cálculo: segue elegível, mas fica fora de troco, bruto e comissão", () => {
+  const todos = analisarBanco(B, CLI, [ct({ id: "a" }), ct({ id: "b", saldo: 10000, parcela: 300 })], HOJE, { modo: "maximo", prazo: 120 });
+  const semB = analisarBanco(B, CLI, [ct({ id: "a" }), ct({ id: "b", saldo: 10000, parcela: 300, foraDoCalculo: true })], HOJE, { modo: "maximo", prazo: 120 });
+  const b = semB.contratos[1];
+  assert.equal(b.status, "ELEGIVEL"); assert.equal(b.foraDoCalculo, true); assert.equal(b.preco, undefined);
+  assert.equal(semB.refin!.contratos, 1);
+  igual(semB.refin!.valorContrato, todos.contratos[0].preco!.valorContrato, "bruto só do contrato a");
+  igual(semB.comissao!.total, 20000 * 0.0075, "comissão só do contrato a");
+  assert.equal(semB.comissao!.contratos, 1);
+});
+caso("troco desejado se divide só entre os contratos que ficaram no cálculo", () => {
+  const r = analisarBanco(B, CLI, [ct({ id: "a" }), ct({ id: "b", foraDoCalculo: true })], HOJE, { modo: "troco", prazo: 120, valor: 1000 });
+  igual(r.contratos[0].preco!.trocoLiquido, 1000, "todo o troco no contrato a");
+});
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

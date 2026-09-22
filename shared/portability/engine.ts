@@ -60,6 +60,9 @@ export interface ContratoEntrada {
   /** % ao mês */
   taxa?: number | null;
   saldo?: number | null;
+  /** O operador tirou do cálculo (sem excluir): segue analisado, mas não entra
+   *  em troco, parcela, bruto nem comissão. */
+  foraDoCalculo?: boolean | null;
 }
 
 export interface OrigemRegra {
@@ -141,6 +144,8 @@ export interface ResultadoContrato {
   operacao: ResultadoRegra[];
   /** Troco e parcela do refin (só contrato ELEGÍVEL, com taxa de refin e prazo informado). */
   preco?: PrecoContrato | null;
+  /** true = o operador tirou este contrato do cálculo */
+  foraDoCalculo?: boolean;
 }
 
 export interface ResultadoBanco {
@@ -554,12 +559,13 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
 
     const status = pior([...lista, ...cli.regras].map(r => r.status));
     contagem[status]++;
-    return { contratoId: c.id, bancoOrigem: c.bancoOrigem, origemCanonica: chave, status, regras: lista, operacao: avaliarOperacao(c, status, regras, banco.nome) };
+    return { contratoId: c.id, bancoOrigem: c.bancoOrigem, origemCanonica: chave, status, regras: lista,
+      operacao: avaliarOperacao(c, status, regras, banco.nome), ...(c.foraDoCalculo ? { foraDoCalculo: true } : {}) };
   });
 
   // troco e parcela: só dos contratos que o banco aceitou, na taxa DELE e no prazo escolhido
   let refin: ResumoRefin | null = null;
-  const aceitos = resultadoContratos.map((rc, i) => ({ rc, c: contratos[i] })).filter(x => x.rc.status === "ELEGIVEL");
+  const aceitos = resultadoContratos.map((rc, i) => ({ rc, c: contratos[i] })).filter(x => x.rc.status === "ELEGIVEL" && !x.c.foraDoCalculo);
   if (temNum(regras.taxaRefin) && regras.taxaRefin > 0 && operacao && aceitos.length) {
     const precificaveis = aceitos.filter(x => temNum(x.c.saldo) && x.c.saldo > 0 && temNum(x.c.parcela) && x.c.parcela > 0);
     if (precificaveis.length) {
@@ -619,7 +625,7 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
     let total = 0, n = 0, manual = 0;
     resultadoContratos.forEach((rc, i) => {
       const saldo = contratos[i].saldo;
-      if (!temNum(saldo) || saldo <= 0) return;
+      if (!temNum(saldo) || saldo <= 0 || contratos[i].foraDoCalculo) return;
       if (rc.status === "ELEGIVEL") { total += saldo * pc / 100; n++; }
       else if (rc.status === "ANALISE_MANUAL") manual += saldo * pc / 100;
     });
