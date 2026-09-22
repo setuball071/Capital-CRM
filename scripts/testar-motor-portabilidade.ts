@@ -203,6 +203,12 @@ caso("BRB ambíguo pede a confirmação no próprio contrato", () => {
 
 console.log("\nFora da CIP, próprio banco e origem desconhecida");
 caso("Contrato do próprio PAN: não porta (é refin)", () => status(CLI, ct({ bancoOrigem: "Pan" }), "NAO_ELEGIVEL", "Contrato já é do PAN"));
+caso("Contrato do Pan em OUTRO banco: porta normalmente (só o PAN não porta ele mesmo)", () => {
+  const outro: BancoParaAnalise = { bankId: 2, nome: "Digio", ruleSet: { id: 2, hash: "d", vigenciaInicio: "2026-09-18",
+    regras: { taxaEntradaMin: 1.2, saldoMin: 6000, origens: { padraoPagasMin: 12, lista: [] } } }, excecoes: [] };
+  const r = analisarBanco(outro, CLI, [ct({ bancoOrigem: "Pan" })], HOJE).contratos[0];
+  assert.equal(r.status, "ELEGIVEL", JSON.stringify(r.regras.map(x => x.motivo)));
+});
 caso("Futuro no PAN (fora da CIP): não porta", () => status(CLI, ct({ bancoOrigem: "FUTURO" }), "NAO_ELEGIVEL", "fora da CIP: o PAN não porta"));
 for (const nome of ["SABEMI", "J17", "ATLANTA", "HOJE PREVIDENCIA", "CAPITAL CONSIG", "SENFF", "LARCA"]) {
   caso(`${nome} é reconhecida como fora da CIP`, () => status(CLI, ct({ bancoOrigem: nome }), "NAO_ELEGIVEL", "fora da CIP"));
