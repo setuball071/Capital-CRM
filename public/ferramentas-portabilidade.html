@@ -6861,15 +6861,16 @@ function mbEntradaMotor(s) {
     operacao: mbOperacaoParaMotor(d.operacao),
   };
 }
-/** null = operação incompleta (ex.: "reduzir parcela" sem a parcela desejada): o motor não precifica. */
+/** null = operação incompleta ("troco desejado" sem o valor): o motor não precifica.
+ *  "Reduzir a parcela" não pede valor: cada contrato libera só o troco mínimo do banco. */
 function mbOperacaoParaMotor(o) {
   if (!o) return null;
   const prazo = parseInt(o.prazo, 10);
   if (!(prazo >= 1 && prazo <= 240)) return null;
   const modo = o.modo === 'parcela' || o.modo === 'troco' ? o.modo : 'maximo';
   const valor = mbNum(o.valor, 2);
-  if (modo !== 'maximo' && !(valor > 0)) return null;
-  return { modo, prazo, valor: modo === 'maximo' ? null : valor };
+  if (modo === 'troco' && !(valor > 0)) return null;
+  return { modo, prazo, valor: modo === 'troco' ? valor : null };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -7149,15 +7150,15 @@ function mbCampoPendenteHTML(p) {
 function mbOperacaoHTML() {
   const o = Object.assign(mbDadosVazios().operacao, MB.dados.operacao || {});
   const modos = [['maximo', 'Liberar o máximo'], ['parcela', 'Reduzir a parcela'], ['troco', 'Troco desejado']];
-  const rotValor = o.modo === 'parcela' ? 'Parcela total desejada (R$)' : 'Troco líquido desejado (R$)';
-  const falta = o.modo !== 'maximo' && !(mbNum(o.valor, 2) > 0);
+  const falta = o.modo === 'troco' && !(mbNum(o.valor, 2) > 0);
   return `<div class="mb-op">
       <b>Refin</b>
       <label>Prazo <input type="number" min="1" max="240" value="${mbEsc(o.prazo)}" onchange="mbSetOperacao('prazo', this.value)" style="width:64px"> meses</label>
       <span class="mb-op-modos">${modos.map(([k, rot]) =>
         `<button class="${o.modo === k ? 'on' : ''}" onclick="mbSetOperacao('modo','${k}')">${rot}</button>`).join('')}</span>
       ${o.modo === 'maximo' ? '<span class="mb-sub">mantém a parcela de cada contrato</span>'
-        : `<label>${rotValor} <input inputmode="decimal" value="${mbEsc(o.valor)}" placeholder="0,00" onchange="mbSetOperacao('valor', this.value)" style="width:110px"></label>
+        : o.modo === 'parcela' ? '<span class="mb-sub">cada contrato libera só o troco mínimo do banco</span>'
+        : `<label>Troco líquido desejado (R$) <input inputmode="decimal" value="${mbEsc(o.valor)}" placeholder="0,00" onchange="mbSetOperacao('valor', this.value)" style="width:110px"></label>
            ${falta ? '<span class="mb-sub" style="color:#B45309">informe o valor para calcular</span>' : ''}`}
       <span class="mb-sub" style="margin-left:auto">taxa: a de cada banco</span>
     </div>`;
@@ -7258,8 +7259,7 @@ function mbBancoHTML(b) {
   const ordem = ['ELEGIVEL', 'ANALISE_MANUAL', 'PENDENTE_INFO', 'REGRA_NAO_CADASTRADA', 'NAO_ELEGIVEL'];
   const lista = [...b.contratos].sort((x, y) => ordem.indexOf(x.status) - ordem.indexOf(y.status));
   const saldoDe = id => { const c = (contratos || []).find(x => String(x.id) === String(id)); return c ? mbNum(c.saldo, 2) : null; };
-  const semTaxa = !b.contratos.some(c => (c.operacao || []).some(o => o.chave === 'troco' && o.status !== 'REGRA_NAO_CADASTRADA'))
-    && b.contratos.some(c => (c.operacao || []).some(o => o.chave === 'troco'));
+  const semTaxa = b.contratos.some(c => (c.operacao || []).some(o => o.chave === 'troco' && /taxa de refin .* não está cadastrada/.test(o.motivo || '')));
   const clienteProblema = b.cliente.filter(r => r.status !== 'ELEGIVEL');
   const col = verCom ? 6 : 5;
   const linha = c => {

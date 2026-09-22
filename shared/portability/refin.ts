@@ -18,11 +18,12 @@ export type ModoRefin = "maximo" | "parcela" | "troco";
 
 export interface OperacaoEntrada {
   /** maximo = mantém a parcela de cada contrato e libera o maior troco;
-   *  parcela = parcela total desejada (menor = reduz a parcela);
+   *  parcela = reduz a parcela o máximo possível: cada contrato libera só o
+   *  TROCO MÍNIMO do banco (regra do Fábio);
    *  troco = troco líquido total desejado. */
   modo: ModoRefin;
   prazo: number;
-  /** parcela total (modo parcela) ou troco líquido total (modo troco) */
+  /** troco líquido total (só no modo troco) */
   valor?: number | null;
 }
 
@@ -61,8 +62,8 @@ export function fatorPrice(taxaMes: number, prazo: number): number {
 
 const brl = (v: number) => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** Precifica os contratos aceitos por UM banco. Nos modos parcela/troco o valor
- *  total é distribuído pelo saldo de cada contrato, como no simulador antigo. */
+/** Precifica os contratos aceitos por UM banco. No modo troco o valor total é
+ *  distribuído pelo saldo de cada contrato, como no simulador antigo. */
 export function precificarRefin(
   contratos: { id: string; saldo: number; parcela: number }[],
   taxaPct: number, trocoMin: number, op: OperacaoEntrada,
@@ -76,16 +77,18 @@ export function precificarRefin(
   const linhas = contratos.map((c): PrecoContrato => {
     const peso = totalSaldo > 0 ? c.saldo / totalSaldo : 0;
     let trocoBruto: number, parcelaNova: number;
-    if (op.modo === "troco") {
-      const liquido = valor * peso;
+    if (op.modo === "maximo") {
+      parcelaNova = c.parcela;
+      trocoBruto = pv(parcelaNova) - c.saldo;
+    } else {
+      const liquido = op.modo === "parcela" ? trocoMin : valor * peso;
       trocoBruto = liquido * (1 + IOF_RATE);
       parcelaNova = pmt(c.saldo + trocoBruto);
-    } else {
-      parcelaNova = op.modo === "parcela" ? valor * peso : c.parcela;
-      trocoBruto = pv(parcelaNova) - c.saldo;
     }
     const base = { contratoId: c.id, saldo: c.saldo, parcelaAtual: c.parcela };
-    if (!(trocoBruto > 0)) {
+    // banco sem troco mínimo, no modo reduzir: portabilidade pura (troco zero) é válida
+    const semTrocoOk = op.modo === "parcela" && trocoMin <= 0;
+    if (!(trocoBruto > 0) && !semTrocoOk) {
       return { ...base, parcelaNova: pmt(c.saldo), trocoBruto: 0, iof: 0, trocoLiquido: 0, valorContrato: c.saldo,
         viavel: false, motivo: `Sem troco em ${op.prazo} meses: a parcela mínima é ${brl(pmt(c.saldo))}.` };
     }
@@ -117,6 +120,6 @@ export function normalizarOperacao(v: any): OperacaoEntrada | null {
   const prazo = Math.round(Number(v.prazo));
   if (!Number.isFinite(prazo) || prazo < 1 || prazo > 240) return null;
   const valor = Number(v.valor);
-  if (modo !== "maximo" && !(valor > 0)) return null;   // sem o valor desejado não há o que calcular
-  return { modo, prazo, valor: modo === "maximo" ? null : valor };
+  if (modo === "troco" && !(valor > 0)) return null;   // sem o troco desejado não há o que calcular
+  return { modo, prazo, valor: modo === "troco" ? valor : null };
 }

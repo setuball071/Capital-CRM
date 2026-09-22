@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { precificarRefin, normalizarOperacao } from "../shared/portability/refin";
+import { precificarRefin, normalizarOperacao, fatorPrice } from "../shared/portability/refin";
 import { analisarBanco, type BancoParaAnalise, type ContratoEntrada, type Excecao } from "../shared/portability/engine";
 import { MODELOS } from "../shared/portability/modelos";
 
@@ -48,13 +48,13 @@ const CS = [{ id: "a", saldo: 13333.14, parcela: 320.5 }, { id: "b", saldo: 9358
 
 console.log("\nIdêntico ao simulador antigo");
 for (const prazo of [120, 96, 84]) {
-  caso(`parcela total desejada, ${prazo} meses`, () => {
-    const alvo = 1000;
-    const velho = antigoSeparado(CS, 1.70, prazo, "parcela", alvo);
-    const novo = precificarRefin(CS, 1.70, 0, { modo: "parcela", prazo, valor: alvo }).linhas;
+  caso(`reduzir a parcela = troco mínimo (R$ 50) em cada contrato, ${prazo} meses`, () => {
+    const velho = antigoSeparado(CS, 1.70, prazo, "troco", CS.map(() => 50));
+    const novo = precificarRefin(CS, 1.70, 50, { modo: "parcela", prazo }).linhas;
     novo.forEach((l, i) => {
       igual(l.trocoBruto, velho[i].trocoBruto, "troco bruto"); igual(l.iof, velho[i].iof, "IOF");
       igual(l.trocoLiquido, velho[i].trocoLiquido, "troco líquido"); igual(l.parcelaNova, velho[i].parcela, "parcela");
+      assert.ok(l.viavel, l.motivo);
     });
   });
   caso(`troco desejado, ${prazo} meses`, () => {
@@ -95,11 +95,21 @@ caso("totais somam só os viáveis", () => {
   igual(r.resumo.trocoLiquido, ok.reduce((a, l) => a + l.trocoLiquido, 0), "troco total");
   assert.equal(r.resumo.contratos, ok.length);
 });
-caso("operação da tela: modo inválido vira máximo; prazo fora de 1..240 ou sem valor = nada", () => {
+caso("operação da tela: modo inválido vira máximo; prazo fora de 1..240 ou troco sem valor = nada", () => {
   assert.deepEqual(normalizarOperacao({ modo: "x", prazo: "96" }), { modo: "maximo", prazo: 96, valor: null });
   assert.equal(normalizarOperacao({ modo: "maximo", prazo: 0 }), null);
-  assert.equal(normalizarOperacao({ modo: "parcela", prazo: 96 }), null);
+  assert.deepEqual(normalizarOperacao({ modo: "parcela", prazo: 96 }), { modo: "parcela", prazo: 96, valor: null });
+  assert.equal(normalizarOperacao({ modo: "troco", prazo: 96 }), null);
   assert.equal(normalizarOperacao(null), null);
+});
+
+caso("reduzir a parcela: parcela cai e o troco é exatamente o mínimo", () => {
+  const l = precificarRefin([CS[0]], 1.70, 50, { modo: "parcela", prazo: 120 }).linhas[0];
+  assert.ok(l.parcelaNova < l.parcelaAtual); igual(Math.round(l.trocoLiquido * 1e6) / 1e6, 50, "troco = mínimo"); assert.ok(l.viavel);
+});
+caso("reduzir a parcela em banco sem troco mínimo: portabilidade pura, troco zero", () => {
+  const l = precificarRefin([CS[0]], 1.70, 0, { modo: "parcela", prazo: 120 }).linhas[0];
+  assert.equal(l.trocoLiquido, 0); assert.ok(l.viavel); igual(l.parcelaNova, CS[0].saldo * fatorPrice(0.017, 120), "parcela = Price do saldo");
 });
 
 console.log("\nNo motor (PAN)");
