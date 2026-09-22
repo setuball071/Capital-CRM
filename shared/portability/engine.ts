@@ -86,8 +86,6 @@ export interface RegrasBanco {
   } | null;
   alertasFormalizacao?: string[];
   avisos?: string[];
-  /** true = este banco não porta entidades fora da CIP (previdências, associações — ver ORIGENS.foraCip). */
-  naoPortaForaCip?: boolean | null;
   /** % a.m. do refin: a taxa que o banco aplica. O prazo quem escolhe é o operador. */
   taxaRefin?: number | null;
   /** Comissão que o banco paga à empresa. Hoje só base "saldo" (PAN: 0,75% do saldo devedor).
@@ -227,8 +225,8 @@ export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?
   { chave: "PICPAY", nome: "PicPay", padroes: ["PICPAY"] },
   { chave: "PARANA", nome: "Paraná Banco", padroes: ["PARANA"] },
   { chave: "OLE", nome: "Olé", padroes: ["OLE"] },
-  // Entidades FORA DA CIP (previdências, associações). Quem não porta é regra de
-  // cada banco (RegrasBanco.naoPortaForaCip) — informado pelo Fábio em 22/09/2026.
+  // Entidades FORA DA CIP (previdências, associações): NENHUM banco porta — a
+  // portabilidade passa pela CIP (Fábio, 22/09/2026). Só uma exceção cadastrada libera.
   { chave: "FUTURO", nome: "Futuro Previdência", padroes: ["FUTURO"], foraCip: true },
   { chave: "SABEMI", nome: "Sabemi", padroes: ["SABEMI"], foraCip: true },
   { chave: "J17", nome: "J17", padroes: ["J17", "J 17"], foraCip: true },
@@ -318,10 +316,10 @@ function avaliarOrigem(c: ContratoEntrada, chave: string | null, regras: RegrasB
     return regra({ ...base, valorAnalisado: nomeO, esperado: null, status: "REGRA_NAO_CADASTRADA", fonte: "sistema",
       motivo: `${nomeO} não está nas regras do ${banco} e não há regra para "demais bancos".` });
   }
-  // entidade fora da CIP: só barra no banco que tem a regra (uma exceção cadastrada ainda vence)
-  if (ehForaDaCip(chave) && regras.naoPortaForaCip && r.fonte !== "excecao") {
-    return regra({ ...base, valorAnalisado: nomeO, esperado: "entidade na CIP", status: "NAO_ELEGIVEL", fonte: "infografico",
-      motivo: `${nomeO} é entidade fora da CIP: o ${banco} não porta.` });
+  // entidade fora da CIP: nenhum banco porta (uma exceção cadastrada ainda vence)
+  if (ehForaDaCip(chave) && r.fonte !== "excecao") {
+    return regra({ ...base, valorAnalisado: nomeO, esperado: "entidade na CIP", status: "NAO_ELEGIVEL", fonte: "sistema",
+      motivo: `${nomeO} é entidade fora da CIP: não pode ser portada.` });
   }
   const fonte = r.fonte as ResultadoRegra["fonte"];
   const excecaoId = r.excecao?.id;
