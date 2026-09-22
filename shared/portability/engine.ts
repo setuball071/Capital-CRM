@@ -18,7 +18,7 @@
 import { precificarRefin, type OperacaoEntrada, type PrecoContrato, type ResumoRefin } from "./refin";
 export type { OperacaoEntrada, PrecoContrato, ResumoRefin } from "./refin";
 
-export const ENGINE_VERSION = "1.1.0";   // 1.1: troco e parcela do refin por contrato
+export const ENGINE_VERSION = "1.2.0";   // 1.1: troco/parcela do refin · 1.2: fora da CIP, próprio banco, origem desconhecida
 
 export type Status =
   | "ELEGIVEL"
@@ -86,6 +86,8 @@ export interface RegrasBanco {
   } | null;
   alertasFormalizacao?: string[];
   avisos?: string[];
+  /** true = este banco não porta entidades fora da CIP (previdências, associações — ver ORIGENS.foraCip). */
+  naoPortaForaCip?: boolean | null;
   /** % a.m. do refin: a taxa que o banco aplica. O prazo quem escolhe é o operador. */
   taxaRefin?: number | null;
   /** Comissão que o banco paga à empresa. Hoje só base "saldo" (PAN: 0,75% do saldo devedor).
@@ -146,6 +148,8 @@ export interface ResultadoContrato {
   preco?: PrecoContrato | null;
   /** true = o operador tirou este contrato do cálculo */
   foraDoCalculo?: boolean;
+  /** true = o sistema não reconheceu o banco de origem (foi tratado como "demais bancos") */
+  origemDesconhecida?: boolean;
 }
 
 export interface ResultadoBanco {
@@ -193,7 +197,7 @@ export interface ResultadoAnalise {
 //  texto. Ordem importa: o mais específico vem antes (BRB Financeira antes de BRB).
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const ORIGENS: { chave: string; nome: string; padroes: string[] }[] = [
+export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?: boolean }[] = [
   // Padrões são PALAVRAS INTEIRAS — escreva a forma completa, nunca um prefixo.
   // ("BRB FINANC" não casa "BRB FINANCEIRA", e o nome cai no BRB Banco.)
   { chave: "BRB_FINANCEIRA", nome: "BRB Financeira", padroes: ["BRB FINANCEIRA", "BRB CFI", "BRB - CFI", "BRB CREDITO", "BRB CRED"] },
@@ -223,7 +227,18 @@ export const ORIGENS: { chave: string; nome: string; padroes: string[] }[] = [
   { chave: "PICPAY", nome: "PicPay", padroes: ["PICPAY"] },
   { chave: "PARANA", nome: "Paraná Banco", padroes: ["PARANA"] },
   { chave: "OLE", nome: "Olé", padroes: ["OLE"] },
+  // Entidades FORA DA CIP (previdências, associações). Quem não porta é regra de
+  // cada banco (RegrasBanco.naoPortaForaCip) — informado pelo Fábio em 22/09/2026.
+  { chave: "FUTURO", nome: "Futuro Previdência", padroes: ["FUTURO"], foraCip: true },
+  { chave: "SABEMI", nome: "Sabemi", padroes: ["SABEMI"], foraCip: true },
+  { chave: "J17", nome: "J17", padroes: ["J17", "J 17"], foraCip: true },
+  { chave: "ATLANTA", nome: "Atlanta", padroes: ["ATLANTA"], foraCip: true },
+  { chave: "HOJE", nome: "Hoje Previdência", padroes: ["HOJE"], foraCip: true },
+  { chave: "CAPITAL_CONSIG", nome: "Capital Consig", padroes: ["CAPITAL CONSIG", "CAPITALCONSIG"], foraCip: true },
+  { chave: "SENFF", nome: "Senff", padroes: ["SENFF"], foraCip: true },
+  { chave: "LARCA", nome: "Larca", padroes: ["LARCA"], foraCip: true },
 ];
+export const ehForaDaCip = (chave: string | null) => !!(chave && ORIGENS.find(o => o.chave === chave)?.foraCip);
 
 const semAcento = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
@@ -274,7 +289,13 @@ function resolverOrigem(chave: string | null, regras: RegrasBanco, excecoes: Exc
 
 function avaliarOrigem(c: ContratoEntrada, chave: string | null, regras: RegrasBanco, excecoes: Excecao[], banco: string): ResultadoRegra {
   const base = { chave: "origem_pagas", label: "Banco de origem e parcelas pagas" };
-  const nomeO = nomeOrigem(chave);
+  const nomeO = chave ? nomeOrigem(chave) : (c.bancoOrigem || "desconhecido");
+
+  // contrato do próprio banco não é portabilidade — é refin (vale para todo banco)
+  if (chave && chave === normalizarOrigem(banco)) {
+    return regra({ ...base, valorAnalisado: nomeO, esperado: "outro banco", status: "NAO_ELEGIVEL", fonte: "sistema",
+      motivo: `Contrato já é do ${banco}: isso é refin, não portabilidade.` });
+  }
 
   // BRB Banco x BRB Financeira: o extrato escreve só "BRB" para os dois. Só
   // pergunta quando a diferença muda o resultado neste banco.
@@ -296,6 +317,11 @@ function avaliarOrigem(c: ContratoEntrada, chave: string | null, regras: RegrasB
   if (r.naoCadastrada) {
     return regra({ ...base, valorAnalisado: nomeO, esperado: null, status: "REGRA_NAO_CADASTRADA", fonte: "sistema",
       motivo: `${nomeO} não está nas regras do ${banco} e não há regra para "demais bancos".` });
+  }
+  // entidade fora da CIP: só barra no banco que tem a regra (uma exceção cadastrada ainda vence)
+  if (ehForaDaCip(chave) && regras.naoPortaForaCip && r.fonte !== "excecao") {
+    return regra({ ...base, valorAnalisado: nomeO, esperado: "entidade na CIP", status: "NAO_ELEGIVEL", fonte: "infografico",
+      motivo: `${nomeO} é entidade fora da CIP: o ${banco} não porta.` });
   }
   const fonte = r.fonte as ResultadoRegra["fonte"];
   const excecaoId = r.excecao?.id;
@@ -560,7 +586,8 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
     const status = pior([...lista, ...cli.regras].map(r => r.status));
     contagem[status]++;
     return { contratoId: c.id, bancoOrigem: c.bancoOrigem, origemCanonica: chave, status, regras: lista,
-      operacao: avaliarOperacao(c, status, regras, banco.nome), ...(c.foraDoCalculo ? { foraDoCalculo: true } : {}) };
+      operacao: avaliarOperacao(c, status, regras, banco.nome), ...(c.foraDoCalculo ? { foraDoCalculo: true } : {}),
+      ...(chave ? {} : { origemDesconhecida: true }) };
   });
 
   // troco e parcela: só dos contratos que o banco aceitou, na taxa DELE e no prazo escolhido

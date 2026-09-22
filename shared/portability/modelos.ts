@@ -81,6 +81,7 @@ export const MODELOS: ModeloRegra[] = [
       avisos: ["Averbação online."],
       taxaRefin: 1.70,                                   // informado pelo Fábio em 18/09/2026
       comissao: { percentual: 0.75, base: "saldo" },     // só sobre o saldo devedor (Fábio, 18/09/2026)
+      naoPortaForaCip: true,                             // Futuro, Sabemi, J17… (Fábio, 22/09/2026)
     },
     excecoesSugeridas: [
       { parametros: { origem: "Caixa", porta: true, pagasMin: 0 },

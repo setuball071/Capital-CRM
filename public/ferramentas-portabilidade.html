@@ -7191,6 +7191,15 @@ function mbOperacaoHTML() {
     </div>`;
 }
 
+/** Banco de origem que o sistema não reconhece cai em "demais bancos" — avisa em vez de passar calado. */
+function mbOrigemDesconhecidaHTML(bancos) {
+  const nomes = new Set();
+  bancos.forEach(b => b.contratos.forEach(c => { if (c.origemDesconhecida) nomes.add((c.bancoOrigem || '').trim() || 'sem nome'); }));
+  if (!nomes.size) return '';
+  return `<div class="mb-banner aviso" style="margin-top:10px"><b>Banco de origem que o sistema não conhece:</b> ${mbEsc(Array.from(nomes).join(', '))}.
+    Foi tratado como "demais bancos". Confira se algum banco tem regra própria para ele (ex.: entidade fora da CIP).</div>`;
+}
+
 /** Motivo curto de um contrato que não foi aceito (as regras que decidiram). */
 function mbMotivoContrato(c, b) {
   if (c.status === 'ELEGIVEL') return '';
@@ -7371,7 +7380,7 @@ function mbRender() {
 
   corpo.innerHTML = erroNovo + salva + mbBannerEscolha() +
     (pend.length ? `<div class="mb-pend"><div style="font-weight:700;color:#92400E;margin-bottom:4px">Para concluir a análise — nada foi reprovado por falta destes dados</div>${pend.map(mbCampoPendenteHTML).join('')}</div>` : '') +
-    mbFormalizacaoHTML() + mbOperacaoHTML() +
+    mbOrigemDesconhecidaHTML(bancos) + mbFormalizacaoHTML() + mbOperacaoHTML() +
     `<div class="mb-abas"><button class="mb-aba ${MB.aba === 'comparativo' ? 'on' : ''}" onclick="MB.aba='comparativo';mbRender()">Comparativo</button>` +
     bancos.map(b => `<button class="mb-aba ${MB.aba === b.bankId ? 'on' : ''}" onclick="MB.aba=${b.bankId};mbRender()"><span class="mb-ponto" style="background:${MB_STATUS_COR[b.status]}"></span>${mbEsc(b.banco)}</button>`).join('') +
     `</div>` +

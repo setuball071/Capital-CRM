@@ -201,5 +201,23 @@ caso("BRB ambíguo pede a confirmação no próprio contrato", () => {
   assert.deepEqual(r.camposPendentes.map(c => c.campo + "@" + c.contratoId), ["origemConfirmada@b1"]);
 });
 
+console.log("\nFora da CIP, próprio banco e origem desconhecida");
+caso("Contrato do próprio PAN: não porta (é refin)", () => status(CLI, ct({ bancoOrigem: "Pan" }), "NAO_ELEGIVEL", "Contrato já é do PAN"));
+caso("Futuro no PAN (fora da CIP): não porta", () => status(CLI, ct({ bancoOrigem: "FUTURO" }), "NAO_ELEGIVEL", "fora da CIP: o PAN não porta"));
+for (const nome of ["SABEMI", "J17", "ATLANTA", "HOJE PREVIDENCIA", "CAPITAL CONSIG", "SENFF", "LARCA"]) {
+  caso(`${nome} é reconhecida como fora da CIP`, () => status(CLI, ct({ bancoOrigem: nome }), "NAO_ELEGIVEL", "fora da CIP"));
+}
+caso("Banco sem a regra de CIP: Futuro cai em demais bancos", () =>
+  status(CLI, ct({ bancoOrigem: "FUTURO" }), "ELEGIVEL", "demais bancos", banco(EXC, { ...PAN.regras, naoPortaForaCip: false })));
+caso("Exceção cadastrada vence a regra de CIP", () =>
+  status(CLI, ct({ bancoOrigem: "SENFF" }), "ELEGIVEL", "(exceção)",
+    banco([...EXC, { id: 300, tipo: "origem_pagas", parametros: { origem: "Senff", porta: true, pagasMin: 0 } }])));
+caso("\"Capital Go\" não vira Capital Consig", () => assert.equal(normalizarOrigem("CAPITAL GO"), null));
+caso("Banco que o sistema não conhece: tratado como demais, mas marcado", () => {
+  const r = analisarBanco(banco(), CLI, [ct({ bancoOrigem: "BANCO XYZ" })], HOJE).contratos[0];
+  assert.equal(r.status, "ELEGIVEL"); assert.equal(r.origemDesconhecida, true);
+  assert.equal(analisarBanco(banco(), CLI, [ct({})], HOJE).contratos[0].origemDesconhecida, undefined);
+});
+
 console.log(`\n${ok} ok, ${falhas} falha(s)\n`);
 process.exit(falhas ? 1 : 0);
