@@ -38,7 +38,10 @@ export default function SimuladorCompra() {
   const { user } = useAuth();
   const master = Boolean(user?.isMaster || user?.role === "master");
   const [tabelas, setTabelas] = useState<TabelaApi[]>([]);
-  const [verCom, setVerCom] = useState(false);
+  const [podeVerCom, setVerCom] = useState(false);
+  // master tirando print para o operacional: esconde percentual e comissão (só a tela)
+  const [ocultarCom, setOcultarCom] = useState(false);
+  const verCom = podeVerCom && !ocultarCom;
   const [erro, setErro] = useState("");
   const [parcela, setParcela] = useState("");
   const [fator, setFator] = useState("23");
@@ -116,7 +119,10 @@ export default function SimuladorCompra() {
               : <span className="ml-1 rounded bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[11px] font-semibold">saldo do banco</span>)}
           </span>
           <span>Margem usada: <b>{brl(res.margemUsada)}</b>{res.margemEhParcela && res.margemUsada > 0 && <span className="text-muted-foreground"> (a parcela)</span>}</span>
-          <button onClick={limpar} className="ml-auto text-xs text-muted-foreground hover:text-foreground underline">Limpar</button>
+          {podeVerCom && <button onClick={() => { setOcultarCom(!ocultarCom); if (ordem === "comissao") setOrdem("padrao"); }}
+            className={`ml-auto rounded-md border px-2.5 py-1 text-xs font-semibold ${ocultarCom ? "border-violet-600 bg-violet-600 text-white" : "border-border hover:bg-muted"}`}>
+            {ocultarCom ? "Mostrar comissão" : "Esconder comissão"}</button>}
+          <button onClick={limpar} className={`${podeVerCom ? "" : "ml-auto "}text-xs text-muted-foreground hover:text-foreground underline`}>Limpar</button>
         </div>
       </div>
 
@@ -170,7 +176,7 @@ export default function SimuladorCompra() {
       </div>
       {linhas.length > 0 && <p className="text-xs text-muted-foreground">Bruto = margem ÷ coeficiente · Liberado = bruto − saldo{verCom ? " · Comissão = bruto × percentual (só master vê)" : ""}. Clique no título da coluna para ordenar e na linha para destacar.</p>}
 
-      {master && <PainelTabelas aoMudar={carregar} />}
+      {master && !ocultarCom && <PainelTabelas aoMudar={carregar} />}
     </div>
   );
 }
