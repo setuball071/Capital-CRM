@@ -668,6 +668,7 @@ export default function ContratosListaPage() {
   // Ordenação por coluna (clicar no cabeçalho) — persiste na sessão
   const [sortBy, setSortBy] = useState<string | null>(() => sessionStorage.getItem("contratos_sortBy") || null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">(() => (sessionStorage.getItem("contratos_sortDir") as "asc" | "desc") || "desc");
+  const [atualizandoLista, setAtualizandoLista] = useState(false);
   useEffect(() => {
     if (sortBy) {
       sessionStorage.setItem("contratos_sortBy", sortBy);
@@ -713,13 +714,19 @@ export default function ContratosListaPage() {
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
-  const { data: proposals = [], isLoading } = useQuery<any[]>({
+  // Tempo real: o padrão global do app é staleTime Infinity, sem rebusca. A operação
+  // trabalha com esta tela aberta o dia todo, então a lista se atualiza sozinha a cada
+  // 30s (só com a aba visível) e ao voltar para a aba.
+  const { data: proposals = [], isLoading, refetch: refetchProposals } = useQuery<any[]>({
     queryKey: ["/api/contracts/proposals"],
     queryFn: async () => {
       const res = await fetch("/api/contracts/proposals", { credentials: "include" });
-      if (!res.ok) throw new Error("Erro ao carregar propostas");
+      // status no erro: sem ele, uma falha (401/429/500) deixava a lista velha na tela sem pista
+      if (!res.ok) throw new Error(`Erro ao carregar propostas (HTTP ${res.status})`);
       return res.json();
     },
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   // Tabelas de comissão (Financeiro → Tabelas) — usadas para excluir da produção
@@ -1255,13 +1262,23 @@ export default function ContratosListaPage() {
             size="sm"
             className="gap-1.5"
             title="Atualizar lista"
-            onClick={() => {
-              queryClient.invalidateQueries({ queryKey: ["/api/contracts/proposals"] });
+            disabled={atualizandoLista}
+            onClick={async () => {
+              // Rebusca e CONFIRMA: antes o botão só invalidava; se o servidor falhasse,
+              // a tela seguia com a lista velha sem nenhum aviso
+              setAtualizandoLista(true);
               queryClient.invalidateQueries({ queryKey: ["/api/contracts/statuses"] });
               queryClient.invalidateQueries({ queryKey: ["/api/contracts/phases"] });
+              const r = await refetchProposals();
+              setAtualizandoLista(false);
+              if (r.isError) {
+                toast({ title: "Não foi possível atualizar a lista", description: (r.error as Error)?.message, variant: "destructive" });
+              } else {
+                toast({ title: "Lista atualizada", description: `${r.data?.length ?? 0} propostas carregadas` });
+              }
             }}
           >
-            <RefreshCw className="h-4 w-4" />Atualizar
+            <RefreshCw className={`h-4 w-4 ${atualizandoLista ? "animate-spin" : ""}`} />Atualizar
           </Button>
           {canManageContracts && (
             <div className="flex rounded-md border border-border overflow-hidden text-xs">
