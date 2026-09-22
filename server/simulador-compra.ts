@@ -22,18 +22,20 @@ function numero(v: unknown): number | null {
 
 function validar(b: any): { ok: true; t: any } | { ok: false; msg: string } {
   const banco = String(b?.banco ?? "").trim();
+  const convenio = String(b?.convenio ?? "").trim().toUpperCase().replace(/\s+/g, " ");
   const coeficiente = numero(b?.coeficiente);
   const percentual = numero(b?.percentual);
   const prazo = numero(b?.prazo);
   if (!banco) return { ok: false, msg: "Informe o banco" };
+  if (!convenio) return { ok: false, msg: "Informe o convênio" };
   if (coeficiente === null || coeficiente <= 0 || coeficiente >= 1) return { ok: false, msg: "Coeficiente inválido (ex.: 0,042824888)" };
   if (percentual !== null && (percentual < 0 || percentual > 100)) return { ok: false, msg: "Percentual entre 0 e 100" };
   if (prazo !== null && (prazo <= 0 || prazo > 240 || !Number.isInteger(prazo))) return { ok: false, msg: "Prazo inválido" };
-  return { ok: true, t: { banco, nome: String(b?.nome ?? "").trim() || null, coeficiente, percentual, prazo } };
+  return { ok: true, t: { banco, convenio, nome: String(b?.nome ?? "").trim() || null, coeficiente, percentual, prazo } };
 }
 
 const paraTela = (r: any, master: boolean) => ({
-  id: r.id, banco: r.banco, nome: r.nome, coeficiente: Number(r.coeficiente),
+  id: r.id, banco: r.banco, convenio: r.convenio, nome: r.nome, coeficiente: Number(r.coeficiente),
   prazo: r.prazo, ativo: r.ativo,
   ...(master ? { percentual: r.percentual === null ? null : Number(r.percentual) } : {}),
 });
@@ -59,7 +61,7 @@ export function registerSimuladorCompraRoutes(app: Express, requireAuth: any) {
       const r = await db.execute(sql`
         SELECT * FROM compra_tabelas
         WHERE tenant_id = ${tenantId} ${todas ? sql`` : sql`AND ativo = TRUE`}
-        ORDER BY lower(banco), id
+        ORDER BY convenio, lower(banco), id
       `);
       res.json({ tabelas: (r.rows as any[]).map(x => paraTela(x, master)), comissaoVisivel: master });
     } catch (err: any) {
@@ -72,10 +74,10 @@ export function registerSimuladorCompraRoutes(app: Express, requireAuth: any) {
     try {
       const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
       const v = validar(req.body); if (!v.ok) return res.status(400).json({ message: v.msg });
-      const { banco, nome, coeficiente, percentual, prazo } = v.t;
+      const { banco, convenio, nome, coeficiente, percentual, prazo } = v.t;
       const r = await db.execute(sql`
-        INSERT INTO compra_tabelas (tenant_id, banco, nome, coeficiente, percentual, prazo, criado_por)
-        VALUES (${tenantId}, ${banco}, ${nome}, ${coeficiente}, ${percentual}, ${prazo}, ${req.user?.id ?? null})
+        INSERT INTO compra_tabelas (tenant_id, banco, convenio, nome, coeficiente, percentual, prazo, criado_por)
+        VALUES (${tenantId}, ${banco}, ${convenio}, ${nome}, ${coeficiente}, ${percentual}, ${prazo}, ${req.user?.id ?? null})
         RETURNING *
       `);
       res.json(paraTela(r.rows[0], true));
@@ -99,9 +101,9 @@ export function registerSimuladorCompraRoutes(app: Express, requireAuth: any) {
         return res.json(paraTela(r.rows[0], true));
       }
       const v = validar(req.body); if (!v.ok) return res.status(400).json({ message: v.msg });
-      const { banco, nome, coeficiente, percentual, prazo } = v.t;
+      const { banco, convenio, nome, coeficiente, percentual, prazo } = v.t;
       const r = await db.execute(sql`
-        UPDATE compra_tabelas SET banco = ${banco}, nome = ${nome}, coeficiente = ${coeficiente},
+        UPDATE compra_tabelas SET banco = ${banco}, convenio = ${convenio}, nome = ${nome}, coeficiente = ${coeficiente},
           percentual = ${percentual}, prazo = ${prazo}, atualizado_em = NOW()
         WHERE id = ${id} AND tenant_id = ${tenantId} RETURNING *
       `);
@@ -118,15 +120,16 @@ export function registerSimuladorCompraRoutes(app: Express, requireAuth: any) {
     try {
       const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
       const existentes = (await db.execute(sql`
-        SELECT lower(banco) AS banco, coeficiente FROM compra_tabelas WHERE tenant_id = ${tenantId}
+        SELECT convenio, lower(banco) AS banco, coeficiente FROM compra_tabelas WHERE tenant_id = ${tenantId}
       `)).rows as any[];
-      const tem = new Set(existentes.map(e => e.banco + "|" + Number(e.coeficiente).toFixed(10)));
+      const chave = (conv: string, banco: string, coef: number) => conv + "|" + banco.toLowerCase() + "|" + Number(coef).toFixed(10);
+      const tem = new Set(existentes.map(e => chave(e.convenio, e.banco, e.coeficiente)));
       let criadas = 0;
       for (const t of TABELAS_PLANILHA) {
-        if (tem.has(t.banco.toLowerCase() + "|" + t.coeficiente.toFixed(10))) continue;
+        if (tem.has(chave(t.convenio || "SIAPE", t.banco, t.coeficiente))) continue;
         await db.execute(sql`
-          INSERT INTO compra_tabelas (tenant_id, banco, nome, coeficiente, percentual, prazo, criado_por)
-          VALUES (${tenantId}, ${t.banco}, ${t.nome ?? null}, ${t.coeficiente}, ${t.percentual ?? null}, ${t.prazo ?? null}, ${req.user?.id ?? null})
+          INSERT INTO compra_tabelas (tenant_id, banco, convenio, nome, coeficiente, percentual, prazo, criado_por)
+          VALUES (${tenantId}, ${t.banco}, ${t.convenio || "SIAPE"}, ${t.nome ?? null}, ${t.coeficiente}, ${t.percentual ?? null}, ${t.prazo ?? null}, ${req.user?.id ?? null})
         `);
         criadas++;
       }

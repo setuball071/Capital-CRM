@@ -47,6 +47,7 @@ export default function SimuladorCompra() {
   const [ordem, setOrdem] = useState<Ordem>("padrao");
   const [marcadas, setMarcadas] = useState<Set<number>>(new Set());
   const [bancoFiltro, setBancoFiltro] = useState<string>("");   // "" = todos
+  const [convenio, setConvenio] = useState<string>("");
 
   const carregar = useCallback(async () => {
     try {
@@ -56,20 +57,25 @@ export default function SimuladorCompra() {
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
+  // cada tabela vale para um convênio: o simulador só mostra as do convênio escolhido
+  const convenios = useMemo(() => Array.from(new Set(tabelas.filter(t => t.ativo !== false).map(t => t.convenio || "SIAPE"))).sort(), [tabelas]);
+  const convAtual = convenios.includes(convenio) ? convenio : (convenios.includes("SIAPE") ? "SIAPE" : convenios[0] || "");
+  const doConvenio = useMemo(() => tabelas.filter(t => t.ativo !== false && (t.convenio || "SIAPE") === convAtual), [tabelas, convAtual]);
+
   const res = useMemo(() => calcularCompra(
     { parcela: num(parcela), fator: num(fator), saldoReal: num(saldo), margem: num(margem) },
-    tabelas.filter(t => t.ativo !== false),
-  ), [parcela, fator, saldo, margem, tabelas]);
+    doConvenio,
+  ), [parcela, fator, saldo, margem, doConvenio]);
 
-  const bancos = useMemo(() => Array.from(new Set(tabelas.filter(t => t.ativo !== false).map(t => t.banco))).sort((a, b) => a.localeCompare(b, "pt-BR")), [tabelas]);
+  const bancos = useMemo(() => Array.from(new Set(doConvenio.map(t => t.banco))).sort((a, b) => a.localeCompare(b, "pt-BR")), [doConvenio]);
   const linhas = useMemo(() => {
-    const l = res.linhas.filter(x => !bancoFiltro || x.tabela.banco === bancoFiltro);
+    const l = res.linhas.filter(x => !bancoFiltro || !bancos.includes(bancoFiltro) || x.tabela.banco === bancoFiltro);
     if (ordem === "banco") l.sort((a, b) => a.tabela.banco.localeCompare(b.tabela.banco, "pt-BR"));
     if (ordem === "bruto") l.sort((a, b) => b.bruto - a.bruto);
     if (ordem === "liberado") l.sort((a, b) => b.liberado - a.liberado);
     if (ordem === "comissao") l.sort((a, b) => (b.comissao ?? 0) - (a.comissao ?? 0));
     return l;
-  }, [res, ordem, bancoFiltro]);
+  }, [res, ordem, bancoFiltro, bancos]);
 
   const marcar = (id: number) => setMarcadas(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const limpar = () => { setParcela(""); setSaldo(""); setMargem(""); setFator("23"); setMarcadas(new Set()); };
@@ -89,7 +95,11 @@ export default function SimuladorCompra() {
       </div>
 
       <div className={cardCls}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div><label className={labelCls}>Convênio</label>
+            <select className={inputCls} value={convAtual} onChange={e => { setConvenio(e.target.value); setMarcadas(new Set()); }} disabled={!convenios.length}>
+              {convenios.length ? convenios.map(c => <option key={c} value={c}>{c}</option>) : <option value="">—</option>}
+            </select></div>
           <div><label className={labelCls}>Parcela na folha</label>
             <input className={inputCls} inputMode="decimal" placeholder="154,36" value={parcela} onChange={e => setParcela(e.target.value)} /></div>
           <div><label className={labelCls}>Saldo do banco (se tiver)</label>
@@ -129,7 +139,7 @@ export default function SimuladorCompra() {
             Nenhuma tabela cadastrada. {master ? "Cadastre abaixo, em Tabelas." : "Peça ao master para cadastrar as tabelas."}
           </div>
         ) : !linhas.length ? (
-          <div className="p-6 text-sm text-muted-foreground">Informe a parcela ou a margem para ver as {tabelas.filter(t => t.ativo !== false).length} tabelas.</div>
+          <div className="p-6 text-sm text-muted-foreground">Informe a parcela ou a margem para ver as {doConvenio.length} tabelas {convAtual}.</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-muted/50"><tr>
@@ -166,7 +176,7 @@ export default function SimuladorCompra() {
 }
 
 // ── cadastro de tabelas (só master) ─────────────────────────────────────────
-const VAZIA = { banco: "", nome: "", coeficiente: "", percentual: "", prazo: "" };
+const VAZIA = { convenio: "SIAPE", banco: "", nome: "", coeficiente: "", percentual: "", prazo: "" };
 
 function PainelTabelas({ aoMudar }: { aoMudar: () => void }) {
   const [aberto, setAberto] = useState(false);
@@ -192,7 +202,7 @@ function PainelTabelas({ aoMudar }: { aoMudar: () => void }) {
   };
   const editar = (t: TabelaApi) => {
     setEditando(t.id);
-    setForm({ banco: t.banco, nome: t.nome || "", coeficiente: String(t.coeficiente).replace(".", ","),
+    setForm({ convenio: t.convenio || "SIAPE", banco: t.banco, nome: t.nome || "", coeficiente: String(t.coeficiente).replace(".", ","),
       percentual: t.percentual == null ? "" : String(t.percentual).replace(".", ","), prazo: t.prazo ? String(t.prazo) : "" });
   };
   const alternar = async (t: TabelaApi) => {
@@ -204,17 +214,19 @@ function PainelTabelas({ aoMudar }: { aoMudar: () => void }) {
     catch (e: any) { setMsg(e.message); }
   };
 
-  const campo = (k: keyof typeof VAZIA, rot: string, ph: string) => (
+  const campo = (k: keyof typeof VAZIA, rot: string, ph: string, lista?: string) => (
     <div><label className={labelCls}>{rot}</label>
-      <input className={inputCls} placeholder={ph} value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })} /></div>
+      <input className={inputCls} placeholder={ph} list={lista} value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })} /></div>
   );
+  const conveniosCadastrados = Array.from(new Set(["SIAPE", ...todas.map(t => t.convenio || "SIAPE")]));
 
   return (
     <div className={cardCls}>
       <button onClick={() => setAberto(!aberto)} className="text-sm font-semibold">{aberto ? "▾" : "▸"} Tabelas <span className="text-xs font-normal text-muted-foreground">(só master)</span></button>
       {aberto && <div className="mt-3 space-y-3">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
-          {campo("banco", "Banco", "Neo")}{campo("nome", "Nome (opcional)", "")}
+        <datalist id="compra-convenios">{conveniosCadastrados.map(c => <option key={c} value={c} />)}</datalist>
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
+          {campo("convenio", "Convênio", "SIAPE", "compra-convenios")}{campo("banco", "Banco", "Neo")}{campo("nome", "Nome (opcional)", "")}
           {campo("coeficiente", "Coeficiente", "0,042824888")}{campo("percentual", "Percentual %", "28")}
           {campo("prazo", "Prazo (opcional)", "96")}
           <div className="flex gap-2">
@@ -228,10 +240,10 @@ function PainelTabelas({ aoMudar }: { aoMudar: () => void }) {
         </div>
         {todas.length > 0 && <table className="w-full text-sm">
           <thead><tr className="text-[11px] uppercase text-muted-foreground text-left">
-            <th className="py-1">Banco</th><th>Nome</th><th className="text-right">Coeficiente</th><th className="text-right">%</th><th className="text-right">Prazo</th><th></th></tr></thead>
+            <th className="py-1">Convênio</th><th>Banco</th><th>Nome</th><th className="text-right">Coeficiente</th><th className="text-right">%</th><th className="text-right">Prazo</th><th></th></tr></thead>
           <tbody>{todas.map(t => (
             <tr key={t.id} className={`border-t border-border ${t.ativo ? "" : "opacity-50"}`}>
-              <td className="py-1.5">{t.banco}</td><td className="text-xs text-muted-foreground">{t.nome}</td>
+              <td className="py-1.5 text-xs font-semibold">{t.convenio || "SIAPE"}</td><td>{t.banco}</td><td className="text-xs text-muted-foreground">{t.nome}</td>
               <td className="text-right font-mono text-xs">{coefTxt(t.coeficiente)}</td>
               <td className="text-right">{t.percentual == null ? "—" : pct(t.percentual)}</td>
               <td className="text-right">{t.prazo || "—"}</td>

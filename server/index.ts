@@ -834,6 +834,7 @@ app.use((req, res, next) => {
             )
           `);
           await simMigDb.execute(simMigSql`CREATE INDEX IF NOT EXISTS idx_compra_tabelas_tenant ON compra_tabelas(tenant_id, ativo)`);
+          await simMigDb.execute(simMigSql`ALTER TABLE compra_tabelas ADD COLUMN IF NOT EXISTS convenio VARCHAR(50) NOT NULL DEFAULT 'SIAPE'`);
 
           // Viabilidade Inter: faixas de taxa ponderada e grade de comissionamento por convênio
           await simMigDb.execute(simMigSql`
