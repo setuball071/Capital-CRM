@@ -7040,7 +7040,20 @@ function mbEscolher(bankId, modo) {
     // Banco que o simulador antigo já calcula: sincroniza e deixa a matemática antiga rodar
     // só com os contratos que ESTE banco aceitou.
     const ids = new Set(incluidos.map(c => String(c.contratoId)));
-    (contratos || []).forEach(c => { c.portar = ids.has(String(c.id)); });
+    // Respeita a seleção de quem simula: o banco escolhido só TIRA os contratos que ele
+    // não aceita, nunca remarca os que foram desmarcados. Antes, escolher o banco marcava
+    // todos os aceitos — simulava-se 1 contrato e o arquivo salvo saía com 11.
+    // Sem nada marcado, vale o comportamento antigo (marca todos os aceitos).
+    const marcadosAntes = (contratos || []).filter(c => c.portar);
+    if (marcadosAntes.length) {
+      const recusados = marcadosAntes.filter(c => !ids.has(String(c.id)));
+      marcadosAntes.forEach(c => { c.portar = ids.has(String(c.id)); });
+      if (recusados.length) {
+        alert(`${recusados.length} contrato(s) marcado(s) não são aceitos por ${b.banco} e saíram da simulação.`);
+      }
+    } else {
+      (contratos || []).forEach(c => { c.portar = ids.has(String(c.id)); });
+    }
     const sel = document.getElementById('refimBanco');
     if (sel) {
       if (![...sel.options].some(o => o.value === antigo.banco) && typeof popularSelectBancos === 'function') popularSelectBancos();
