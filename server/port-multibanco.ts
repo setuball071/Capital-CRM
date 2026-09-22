@@ -20,6 +20,7 @@ import {
   type BancoParaAnalise, type ClienteEntrada, type ContratoEntrada, type Excecao, type RegrasBanco,
 } from "../shared/portability/engine";
 import { MODELOS } from "../shared/portability/modelos";
+import { normalizarOperacao } from "../shared/portability/refin";
 
 /** JSON com chaves ordenadas: o mesmo conteúdo sempre dá o mesmo hash. */
 function jsonEstavel(v: unknown): string {
@@ -326,7 +327,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       if (!cliente?.convenio) return res.status(400).json({ message: "Informe o convênio do cliente" });
 
       const { paraMotor } = await carregarParaAnalise(tenantId, cliente.convenio);
-      const resp = respostaSimulacao(paraMotor, cliente, contratos);
+      const resp = respostaSimulacao(paraMotor, cliente, contratos, new Date(), normalizarOperacao(req.body?.operacao));
       // corretor NUNCA vê a comissão da empresa: sai daqui, não só da tela
       res.json(isMaster(req) ? { ...resp, comissaoVisivel: true }
         : { ...resp, resultado: semComissao(resp.resultado), comissaoVisivel: false });
@@ -345,7 +346,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       if (!cliente?.convenio) return res.status(400).json({ message: "Informe o convênio do cliente" });
 
       const { paraMotor } = await carregarParaAnalise(tenantId, cliente.convenio);
-      const resultado = analisar(paraMotor, cliente, contratos);
+      const resultado = analisar(paraMotor, cliente, contratos, new Date(), normalizarOperacao(req.body?.operacao));
       const regrasUsadas = paraMotor.map(b => ({
         bankId: b.bankId, banco: b.nome,
         ruleSetId: b.ruleSet?.id ?? null, hash: b.ruleSet?.hash ?? null, regras: b.ruleSet?.regras ?? null,

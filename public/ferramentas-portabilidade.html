@@ -418,6 +418,16 @@ td { color: #111827 !important; }
     #mbPainel table.mb-t { width:100%; border-collapse:collapse; font-size:12px; }
     #mbPainel table.mb-t th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.4px; padding:6px 8px; }
     #mbPainel table.mb-t td { padding:7px 8px; border-top:1px solid var(--border-soft); vertical-align:top; }
+    #mbPainel table.mb-t tr.mb-motivo td { border-top:0; padding:0 8px 8px; font-size:11.5px; color:var(--text-muted); }
+    #mbPainel .mb-op { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:12px 0 4px; padding:10px 12px; border:1px solid var(--border-soft); border-radius:10px; font-size:12.5px; }
+    #mbPainel .mb-op input { padding:4px 6px; border:1px solid var(--border-soft); border-radius:6px; font-size:12.5px; }
+    #mbPainel .mb-op-modos button { border:1px solid var(--border-soft); background:transparent; color:inherit; padding:4px 10px; font-size:12px; cursor:pointer; margin-right:-1px; }
+    #mbPainel .mb-op-modos button:first-child { border-radius:6px 0 0 6px; }
+    #mbPainel .mb-op-modos button:last-child { border-radius:0 6px 6px 0; }
+    #mbPainel .mb-op-modos button.on { background:#6C2BD9; border-color:#6C2BD9; color:#fff; font-weight:600; }
+    #mbPainel .mb-kpis { display:flex; flex-wrap:wrap; gap:8px 22px; margin-top:10px; }
+    #mbPainel .mb-kpis span { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-muted); }
+    #mbPainel .mb-kpis b { font-size:15px; }
     #mbPainel .mb-cartao { border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; background:var(--surface); }
     #mbPainel .mb-pend { border:1px solid #FCD34D; background:#FFFBEB; border-radius:10px; padding:12px 14px; margin-top:12px; }
     #mbPainel .mb-pend-linha { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:6px 0; border-top:1px dashed #FDE68A; font-size:12.5px; }
@@ -6777,10 +6787,12 @@ const MB_STATUS_LABEL = {
   REGRA_NAO_CADASTRADA: 'Regra não cadastrada', ANALISE_MANUAL: 'Análise manual',
 };
 const MB_STATUS_COR = { ELEGIVEL: '#10B981', NAO_ELEGIVEL: '#EF4444', PENDENTE_INFO: '#F59E0B', REGRA_NAO_CADASTRADA: '#9CA3AF', ANALISE_MANUAL: '#0EA5E9' };
-const MB_AVISO_NAO_INTEGRADO = 'Banco selecionado. A elegibilidade foi confirmada, mas o cálculo completo de troco, parcela e condições comerciais ainda não está integrado para este banco.';
+const MB_AVISO_NAO_INTEGRADO = 'Banco selecionado. Troco e parcela deste banco estão calculados aqui no painel, com a taxa dele; o simulador antigo abaixo ainda não calcula este banco.';
 
 const mbDadosVazios = () => ({ situacaoFuncional: '', dataNascimento: '', pensaoTipo: '', pensaoFim: '',
-  alertas: { analfabeto: false, naoAssina: false, leiEstadualIdoso: false } });
+  alertas: { analfabeto: false, naoAssina: false, leiEstadualIdoso: false },
+  // refin: a TAXA é a de cada banco; prazo e modo quem escolhe é o operador
+  operacao: { modo: 'maximo', prazo: '120', valor: '' } });
 
 const MB = {
   dados: mbDadosVazios(),   // dadosComplementares — persistidos com a cotação
@@ -6846,7 +6858,18 @@ function mbEntradaMotor(s) {
       alertas: d.alertas,
     },
     contratos: s.contratos,
+    operacao: mbOperacaoParaMotor(d.operacao),
   };
+}
+/** null = operação incompleta (ex.: "reduzir parcela" sem a parcela desejada): o motor não precifica. */
+function mbOperacaoParaMotor(o) {
+  if (!o) return null;
+  const prazo = parseInt(o.prazo, 10);
+  if (!(prazo >= 1 && prazo <= 240)) return null;
+  const modo = o.modo === 'parcela' || o.modo === 'troco' ? o.modo : 'maximo';
+  const valor = mbNum(o.valor, 2);
+  if (modo !== 'maximo' && !(valor > 0)) return null;
+  return { modo, prazo, valor: modo === 'maximo' ? null : valor };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -6947,6 +6970,13 @@ function mbSetDado(campo, valor) {
   MB.dados[campo] = valor;
   mbObservar();                 // não espera o próximo tique do observador
 }
+function mbSetOperacao(campo, valor) {
+  MB.dados.operacao = Object.assign(mbDadosVazios().operacao, MB.dados.operacao || {});
+  MB.dados.operacao[campo] = valor;
+  if (campo === 'modo') MB.dados.operacao.valor = '';
+  mbRender();                   // mostra/esconde o campo do valor na hora
+  mbObservar();
+}
 function mbSetAlerta(chave, marcado) { MB.dados.alertas[chave] = !!marcado; mbObservar(); }
 function mbConfirmarOrigem(contratoId, chave) {
   const c = (contratos || []).find(x => String(x.id) === String(contratoId));
@@ -7042,6 +7072,7 @@ function mbRestaurarDaCotacao(mb, cpf) {
   MB.cpfDono = String(cpf || '').replace(/\D/g, '');   // os dados abaixo são DESTE cliente
   MB.dados = Object.assign(mbDadosVazios(), (mb && mb.dadosComplementares) || {});
   MB.dados.alertas = Object.assign(mbDadosVazios().alertas, (mb && mb.dadosComplementares && mb.dadosComplementares.alertas) || {});
+  MB.dados.operacao = Object.assign(mbDadosVazios().operacao, (mb && mb.dadosComplementares && mb.dadosComplementares.operacao) || {});
   MB.escolha = (mb && mb.bancoEscolhido) || null;
   MB.analiseSalva = mb && mb.resultado ? { resultado: mb.resultado, em: mb.analisadoEm } : null;
   MB.resultado = MB.analiseSalva ? mbSemComissao(MB.analiseSalva.resultado) : null;   // mostra a salva até a reanálise chegar
@@ -7114,15 +7145,29 @@ function mbCampoPendenteHTML(p) {
     <button class="mb-link" onclick="mbIrParaContrato('${mbEsc(p.contratoId)}')">preencher na tabela de contratos ↑</button>${quem}</div>`;
 }
 
-function mbRegrasHTML(regras) {
-  if (!regras || !regras.length) return '';
-  return `<table class="mb-t"><thead><tr><th>Regra</th><th>Analisado</th><th>Exigido</th><th>Resultado</th><th>Motivo</th></tr></thead><tbody>` +
-    regras.map(r => `<tr><td style="white-space:nowrap;font-weight:600">${mbEsc(r.label)}</td>
-      <td style="white-space:nowrap">${r.valorAnalisado == null ? '—' : mbEsc(r.valorAnalisado)}</td>
-      <td style="white-space:nowrap;color:var(--text-muted)">${mbEsc(r.esperado || '—')}</td>
-      <td>${mbChip(r.status)}</td>
-      <td>${mbEsc(r.motivo)} ${r.fonte === 'excecao' ? '<span class="mb-exc">exceção</span>' : ''}</td></tr>`).join('') +
-    `</tbody></table>`;
+/** Controles do refin: prazo e modo. A taxa é sempre a do banco. */
+function mbOperacaoHTML() {
+  const o = Object.assign(mbDadosVazios().operacao, MB.dados.operacao || {});
+  const modos = [['maximo', 'Liberar o máximo'], ['parcela', 'Reduzir a parcela'], ['troco', 'Troco desejado']];
+  const rotValor = o.modo === 'parcela' ? 'Parcela total desejada (R$)' : 'Troco líquido desejado (R$)';
+  const falta = o.modo !== 'maximo' && !(mbNum(o.valor, 2) > 0);
+  return `<div class="mb-op">
+      <b>Refin</b>
+      <label>Prazo <input type="number" min="1" max="240" value="${mbEsc(o.prazo)}" onchange="mbSetOperacao('prazo', this.value)" style="width:64px"> meses</label>
+      <span class="mb-op-modos">${modos.map(([k, rot]) =>
+        `<button class="${o.modo === k ? 'on' : ''}" onclick="mbSetOperacao('modo','${k}')">${rot}</button>`).join('')}</span>
+      ${o.modo === 'maximo' ? '<span class="mb-sub">mantém a parcela de cada contrato</span>'
+        : `<label>${rotValor} <input inputmode="decimal" value="${mbEsc(o.valor)}" placeholder="0,00" onchange="mbSetOperacao('valor', this.value)" style="width:110px"></label>
+           ${falta ? '<span class="mb-sub" style="color:#B45309">informe o valor para calcular</span>' : ''}`}
+      <span class="mb-sub" style="margin-left:auto">taxa: a de cada banco</span>
+    </div>`;
+}
+
+/** Motivo curto de um contrato que não foi aceito (as regras que decidiram). */
+function mbMotivoContrato(c, b) {
+  if (c.status === 'ELEGIVEL') return '';
+  const decisivas = [...c.regras, ...b.cliente].filter(r => r.status === c.status).map(r => r.motivo);
+  return [...new Set(decisivas)].join(' · ');
 }
 
 function mbAcaoBanco(b) {
@@ -7150,7 +7195,7 @@ function mbBannerEscolha() {
   if (!e.integradoAoCalculoAntigo) {
     return `<div class="mb-banner aviso"><b>${mbEsc(e.banco)}</b> — ${mbEsc(MB_AVISO_NAO_INTEGRADO)}${desfazer}
       <div style="margin-top:4px">Contratos aceitos: ${lista(e.contratos)}. Fora da escolha: ${lista(e.naoIncluidos)}.</div>
-      <div class="mb-sub" style="margin-top:4px">O cálculo do simulador acima continua no banco que estava selecionado lá; os valores dele não são do ${mbEsc(e.banco)}.</div>${mudou}</div>`;
+      <div class="mb-sub" style="margin-top:4px">O cálculo do simulador abaixo continua no banco que estava selecionado lá; os valores dele não são do ${mbEsc(e.banco)}.</div>${mudou}</div>`;
   }
   return `<div class="mb-banner ok"><b>${mbEsc(e.banco)} escolhido.</b> O simulador acima passou a calcular troco e parcela com as regras do ${mbEsc(e.bancoNoCalculoAntigo)}.${desfazer}
     <div style="margin-top:4px">Marcados para portar: ${lista(e.contratos)}. Fora da escolha: ${lista(e.naoIncluidos)}.</div>${mudou}</div>`;
@@ -7173,49 +7218,81 @@ function mbComparativoHTML(bancos) {
         (rankCom.length > 1 ? `<div class="mb-sub">${rankCom.slice(1).map(b => mbEsc(b.banco) + ' ' + mbBRL(b.comissao.total)).join(' · ')}</div>` : '') +
         `<div class="mb-sub">Sobre o saldo devedor dos contratos aceitos — troco não entra. Ranking próprio, nunca misturado com a condição do cliente.</div>`
       : `<div style="font-weight:700;margin-top:4px">Nenhuma ainda</div><div class="mb-sub">Nenhum banco com regra de comissão aceita contratos deste cliente.</div>`) + `</div>`;
+  // melhor condição para o cliente: maior troco líquido (ou menor parcela quando o troco é fixo)
+  const modoOp = (MB.dados.operacao && MB.dados.operacao.modo) || 'maximo';
+  const comRefin = ord.filter(b => b.status === 'ELEGIVEL' && b.refin && b.refin.contratos > 0);
+  const rankCli = modoOp === 'troco'
+    ? [...comRefin].sort((a, b) => a.refin.parcelaNova - b.refin.parcelaNova)
+    : [...comRefin].sort((a, b) => b.refin.trocoLiquido - a.refin.trocoLiquido);
+  const valCli = b => modoOp === 'troco' ? mbBRL(b.refin.parcelaNova) + '/mês' : mbBRL(b.refin.trocoLiquido);
+  const cartaoCli = `<div class="mb-cartao"><div class="mb-kpi-t">Melhor condição para o cliente</div>` + (rankCli.length
+    ? `<div style="font-weight:700;margin-top:4px">${mbEsc(rankCli[0].banco)} — ${valCli(rankCli[0])}</div>` +
+      (rankCli.length > 1 ? `<div class="mb-sub">${rankCli.slice(1).map(b => mbEsc(b.banco) + ' ' + valCli(b)).join(' · ')}</div>` : '') +
+      `<div class="mb-sub">${modoOp === 'troco' ? 'Menor parcela para o troco pedido' : 'Maior troco líquido'} em ${rankCli[0].refin.prazo} meses, na taxa de cada banco.${verCom ? ' Ranking próprio — nunca misturado com comissão.' : ''}</div>`
+    : `<div style="font-weight:700;margin-top:4px">Ainda não calculável</div>
+       <div class="mb-sub">Precisa de banco que aceite os contratos, com taxa de refin cadastrada, e do prazo do refin.</div>`) + `</div>`;
   return `<div class="mb-grid3">
       <div class="mb-cartao"><div class="mb-kpi-t">Aceitam a operação</div>
         <div style="font-size:22px;font-weight:700;margin-top:2px">${aceitam.length} <span class="mb-sub">de ${bancos.length}</span></div>
         <div class="mb-sub">${mbEsc(aceitam.map(b => b.banco).join(', ') || 'nenhum ainda')}</div></div>
-      <div class="mb-cartao"><div class="mb-kpi-t">Melhor condição para o cliente</div>
-        <div style="font-weight:700;margin-top:4px">Ainda não calculável</div>
-        <div class="mb-sub">Depende do cálculo de troco e parcela de cada banco, que ainda não está no motor.${verCom ? ' Ranking próprio — nunca misturado com comissão.' : ''}</div></div>
+      ${cartaoCli}
       ${cartaoCom}
     </div>
     <div class="mb-sub" style="margin:6px 0">Ordem: situação da análise; empate, quantos contratos o banco aceita.</div>
-    <table class="mb-t"><thead><tr><th>Banco</th><th>Situação</th><th>Contratos aceitos</th><th>Por que recusa</th>${verCom ? '<th>Comissão</th>' : ''}<th></th></tr></thead><tbody>` +
+    <table class="mb-t"><thead><tr><th>Banco</th><th>Situação</th><th>Contratos aceitos</th><th>Por que recusa</th><th>Troco líquido</th>${verCom ? '<th>Comissão</th>' : ''}<th></th></tr></thead><tbody>` +
     ord.map(b => {
       const r = recusa(b);
       return `<tr><td style="font-weight:700"><button class="mb-link" style="text-decoration:none" onclick="MB.aba=${b.bankId};mbRender()">${mbEsc(b.banco)}</button></td>
         <td>${mbChip(b.status)}</td>
         <td>${b.contratos.length ? `${b.contagem.ELEGIVEL} de ${b.contratos.length}` : '—'}</td>
         <td style="max-width:320px">${r.length ? mbEsc(r.slice(0, 2).join(' · ')) + (r.length > 2 ? ` (+${r.length - 2})` : '') : '—'}</td>
+        <td>${b.refin && b.refin.contratos ? `<b>${mbBRL(b.refin.trocoLiquido)}</b><div class="mb-sub">${b.refin.prazo}x a ${b.refin.taxa.toFixed(2).replace('.', ',')}%</div>` : '—'}</td>
         ${verCom ? `<td class="mb-sub">${comissao(b)}</td>` : ''}
         <td style="text-align:right">${mbAcaoBanco(b)}</td></tr>`;
     }).join('') + `</tbody></table>`;
 }
 
 function mbBancoHTML(b) {
-  const aceitos = b.contratos.filter(c => c.status === 'ELEGIVEL');
-  const outros = b.contratos.filter(c => c.status !== 'ELEGIVEL');
-  const cartao = c => `<div class="mb-cartao">
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px">
-        <b>${mbEsc(mbRotuloContrato(c.contratoId))}</b>${mbChip(c.status)}</div>
-      ${mbRegrasHTML(c.regras)}
-      <div class="mb-kpi-t" style="margin:10px 0 2px">Operação — informativo, não decide a elegibilidade</div>
-      ${mbRegrasHTML(c.operacao)}</div>`;
+  const verCom = MB.comissaoVisivel;
+  const f = b.refin;
+  const ordem = ['ELEGIVEL', 'ANALISE_MANUAL', 'PENDENTE_INFO', 'REGRA_NAO_CADASTRADA', 'NAO_ELEGIVEL'];
+  const lista = [...b.contratos].sort((x, y) => ordem.indexOf(x.status) - ordem.indexOf(y.status));
+  const saldoDe = id => { const c = (contratos || []).find(x => String(x.id) === String(id)); return c ? mbNum(c.saldo, 2) : null; };
+  const semTaxa = !b.contratos.some(c => (c.operacao || []).some(o => o.chave === 'troco' && o.status !== 'REGRA_NAO_CADASTRADA'))
+    && b.contratos.some(c => (c.operacao || []).some(o => o.chave === 'troco'));
+  const clienteProblema = b.cliente.filter(r => r.status !== 'ELEGIVEL');
+  const col = verCom ? 6 : 5;
+  const linha = c => {
+    const pr = c.preco;
+    const troco = (c.operacao || []).find(o => o.chave === 'troco');
+    const com = (c.operacao || []).find(o => o.chave === 'comissao');
+    const saldo = saldoDe(c.contratoId);
+    const motivo = mbMotivoContrato(c, b) || (pr && !pr.viavel ? pr.motivo : (troco && troco.status === 'PENDENTE_INFO' ? troco.motivo : ''));
+    const celTroco = pr ? (pr.viavel ? `<b>${mbBRL(pr.trocoLiquido)}</b>` : '<span style="color:#B91C1C">não fecha</span>') : '—';
+    return `<tr><td style="font-weight:600">${mbEsc(mbRotuloContrato(c.contratoId))}</td>
+        <td>${mbChip(c.status)}</td>
+        <td style="text-align:right">${saldo ? mbBRL(saldo) : '—'}</td>
+        <td style="text-align:right;white-space:nowrap">${pr ? (pr.viavel ? `${mbBRL(pr.parcelaAtual)} → <b>${mbBRL(pr.parcelaNova)}</b>` : mbBRL(pr.parcelaAtual)) : '—'}</td>
+        <td style="text-align:right">${celTroco}</td>
+        ${verCom ? `<td style="text-align:right">${c.status === 'ELEGIVEL' && com && com.valorAnalisado ? mbEsc(com.valorAnalisado) : '—'}</td>` : ''}</tr>` +
+      (motivo ? `<tr class="mb-motivo"><td colspan="${col}">${mbEsc(motivo)}</td></tr>` : '');
+  };
   return `<div class="mb-cartao" style="border-left:4px solid ${MB_STATUS_COR[b.status]}">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <b style="font-size:15px">${mbEsc(b.banco)}</b>${mbChip(b.status)}<span>${mbEsc(b.resumo)}</span>
-        ${MB.comissaoVisivel && b.comissao ? `<span class="mb-sub">Comissão: <b>${mbBRL(b.comissao.total)}</b> (${String(b.comissao.percentual).replace('.', ',')}% do saldo)</span>` : ''}
         <span style="margin-left:auto">${mbAcaoBanco(b)}</span></div>
-      <div class="mb-sub" style="margin-top:4px">${b.ruleSetId
-        ? `Regras vigentes desde ${new Date(b.vigenciaInicio).toLocaleString('pt-BR')} · versão #${b.ruleSetId}${b.excecoesAplicadas.length ? ` · ${b.excecoesAplicadas.length} exceção(ões) usada(s)` : ''}`
-        : 'Sem regras cadastradas para este convênio.'}${b.avisos.length ? ' · ' + mbEsc(b.avisos.join(' · ')) : ''}</div>
+      ${f && f.contratos ? `<div class="mb-kpis">
+          <div><span>Valor bruto do contrato</span><b>${mbBRL(f.valorContrato)}</b></div>
+          <div><span>Líquido do cliente</span><b style="color:#047857">${mbBRL(f.trocoLiquido)}</b></div>
+          <div><span>Parcela</span><b>${mbBRL(f.parcelaAtual)} → ${mbBRL(f.parcelaNova)}</b></div>
+          <div><span>Refin</span><b>${f.prazo}x a ${f.taxa.toFixed(2).replace('.', ',')}% a.m.</b></div>
+          ${verCom && b.comissao ? `<div><span>Comissão (só master)</span><b>${mbBRL(b.comissao.total)}</b></div>` : ''}
+        </div>` : (semTaxa ? `<div class="mb-sub" style="margin-top:6px">Troco não calculado: a taxa de refin do ${mbEsc(b.banco)} não está cadastrada em Bancos e Regras.</div>`
+          : (verCom && b.comissao ? `<div class="mb-sub" style="margin-top:6px">Comissão: <b>${mbBRL(b.comissao.total)}</b> (${String(b.comissao.percentual).replace('.', ',')}% do saldo)</div>` : ''))}
     </div>
-    ${b.cliente.length ? `<div class="mb-cartao"><div class="mb-kpi-t" style="margin-bottom:4px">Regras do cliente — valem para todos os contratos</div>${mbRegrasHTML(b.cliente)}</div>` : ''}
-    ${aceitos.length ? `<div style="font-weight:700;color:#047857;margin:8px 0 6px">Aceitos (${aceitos.length})</div>${aceitos.map(cartao).join('')}` : ''}
-    ${outros.length ? `<div style="font-weight:700;color:var(--text-secondary);margin:8px 0 6px">Não aceitos ou pendentes (${outros.length})</div>${outros.map(cartao).join('')}` : ''}`;
+    ${clienteProblema.length ? `<div class="mb-banner aviso">${clienteProblema.map(r => mbEsc(r.motivo)).join(' · ')}</div>` : ''}
+    <table class="mb-t"><thead><tr><th>Contrato</th><th>Situação</th><th style="text-align:right">Saldo devedor</th><th style="text-align:right">Parcela</th><th style="text-align:right">Troco líquido</th>${verCom ? '<th style="text-align:right">Comissão</th>' : ''}</tr></thead>
+      <tbody>${lista.map(linha).join('')}</tbody></table>`;
 }
 
 function mbFormalizacaoHTML() {
@@ -7261,7 +7338,7 @@ function mbRender() {
 
   corpo.innerHTML = erroNovo + salva + mbBannerEscolha() +
     (pend.length ? `<div class="mb-pend"><div style="font-weight:700;color:#92400E;margin-bottom:4px">Para concluir a análise — nada foi reprovado por falta destes dados</div>${pend.map(mbCampoPendenteHTML).join('')}</div>` : '') +
-    mbFormalizacaoHTML() +
+    mbFormalizacaoHTML() + mbOperacaoHTML() +
     `<div class="mb-abas"><button class="mb-aba ${MB.aba === 'comparativo' ? 'on' : ''}" onclick="MB.aba='comparativo';mbRender()">Comparativo</button>` +
     bancos.map(b => `<button class="mb-aba ${MB.aba === b.bankId ? 'on' : ''}" onclick="MB.aba=${b.bankId};mbRender()"><span class="mb-ponto" style="background:${MB_STATUS_COR[b.status]}"></span>${mbEsc(b.banco)}</button>`).join('') +
     `</div>` +

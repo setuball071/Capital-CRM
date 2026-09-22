@@ -123,7 +123,7 @@ caso("Analfabeto não afeta banco sem regra de formalização", () => {
 caso("Troco e comissão não decidem elegibilidade", () => {
   const r = analisarBanco(banco(), CLI, [ct({})], HOJE).contratos[0];
   assert.equal(r.status, "ELEGIVEL");
-  const troco = r.operacao.find(o => o.chave === "troco_min")!;
+  const troco = r.operacao.find(o => o.chave === "troco")!;
   // taxa de refin cadastrada, mas sem prazo e sem pricing: não é "pendente" (não é dado do operador)
   assert.equal(troco.status, "REGRA_NAO_CADASTRADA");
   assert.match(troco.motivo, /1,70% a\.m\..*prazo do refin/);

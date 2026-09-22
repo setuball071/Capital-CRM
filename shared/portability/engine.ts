@@ -15,7 +15,10 @@
 // Invariante: faltar um dado NUNCA reprova. Vira PENDENTE_INFO dizendo qual é.
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const ENGINE_VERSION = "1.0.0";
+import { precificarRefin, type OperacaoEntrada, type PrecoContrato, type ResumoRefin } from "./refin";
+export type { OperacaoEntrada, PrecoContrato, ResumoRefin } from "./refin";
+
+export const ENGINE_VERSION = "1.1.0";   // 1.1: troco e parcela do refin por contrato
 
 export type Status =
   | "ELEGIVEL"
@@ -80,7 +83,7 @@ export interface RegrasBanco {
   } | null;
   alertasFormalizacao?: string[];
   avisos?: string[];
-  /** % a.m. do refin. Sozinha não calcula troco: falta o prazo do refin e o pricing (etapa 3). */
+  /** % a.m. do refin: a taxa que o banco aplica. O prazo quem escolhe é o operador. */
   taxaRefin?: number | null;
   /** Comissão que o banco paga à empresa. Hoje só base "saldo" (PAN: 0,75% do saldo devedor).
    *  Dado confidencial: o servidor tira da resposta para quem não é master. */
@@ -136,6 +139,8 @@ export interface ResultadoContrato {
   regras: ResultadoRegra[];
   /** Bloco da operação (troco, comissão). Não decide elegibilidade. */
   operacao: ResultadoRegra[];
+  /** Troco e parcela do refin (só contrato ELEGÍVEL, com taxa de refin e prazo informado). */
+  preco?: PrecoContrato | null;
 }
 
 export interface ResultadoBanco {
@@ -156,6 +161,8 @@ export interface ResultadoBanco {
   contagem: Record<Status, number>;
   /** null = sem regra de comissão (ou oculta para quem não é master). */
   comissao: ResumoComissao | null;
+  /** Totais do refin dos contratos aceitos e viáveis. null = não precificado. */
+  refin: ResumoRefin | null;
 }
 
 export interface ResumoComissao {
@@ -461,15 +468,6 @@ function percentualComissao(regras: RegrasBanco): number | null {
 /** Bloco da operação: troco e comissão. Informa, não decide elegibilidade. */
 function avaliarOperacao(c: ContratoEntrada, statusContrato: Status, regras: RegrasBanco, banco: string): ResultadoRegra[] {
   const out: ResultadoRegra[] = [];
-  if (temNum(regras.trocoMinPorContrato)) {
-    // "regra não cadastrada", não "pendente": não é um dado que o operador tenha de informar
-    out.push(regra({ chave: "troco_min", label: "Troco mínimo por contrato", valorAnalisado: null,
-      esperado: `≥ ${brl(regras.trocoMinPorContrato)}`, status: "REGRA_NAO_CADASTRADA", fonte: "sistema",
-      motivo: temNum(regras.taxaRefin)
-        ? `Troco não calculado: a taxa de refin de ${pct(regras.taxaRefin)} está cadastrada, mas falta o prazo do refin do ${banco} e o cálculo de troco ainda não está no motor.`
-        : `Troco não calculável: a taxa de refin do ${banco} não está cadastrada.` }));
-  }
-
   const p = percentualComissao(regras);
   const base = { chave: "comissao", label: "Comissão" };
   if (p === null) {
@@ -498,6 +496,28 @@ function avaliarOperacao(c: ContratoEntrada, statusContrato: Status, regras: Reg
   return out;
 }
 
+/** Linha "Troco" do bloco operação de um contrato aceito. Informa, não decide elegibilidade. */
+function linhaTroco(preco: PrecoContrato | null | undefined, regras: RegrasBanco, banco: string, op: OperacaoEntrada | null | undefined): ResultadoRegra {
+  const min = temNum(regras.trocoMinPorContrato) ? regras.trocoMinPorContrato : 0;
+  const base = { chave: "troco", label: "Troco", esperado: min ? `≥ ${brl(min)}` : null, fonte: "sistema" as const };
+  if (!temNum(regras.taxaRefin) || regras.taxaRefin <= 0) {
+    return regra({ ...base, valorAnalisado: null, status: "REGRA_NAO_CADASTRADA",
+      motivo: `Troco não calculável: a taxa de refin do ${banco} não está cadastrada.` });
+  }
+  if (!op) {
+    return regra({ ...base, valorAnalisado: null, status: "REGRA_NAO_CADASTRADA",
+      motivo: `Troco não calculado: taxa de refin de ${pct(regras.taxaRefin)} cadastrada; informe o prazo do refin.` });
+  }
+  if (!preco) {
+    return regra({ ...base, valorAnalisado: null, status: "PENDENTE_INFO",
+      motivo: "Falta a parcela atual ou o saldo devedor para calcular o troco." });
+  }
+  return regra({ ...base, valorAnalisado: brl(preco.trocoLiquido), status: preco.viavel ? "ELEGIVEL" : "NAO_ELEGIVEL",
+    motivo: preco.viavel
+      ? `Parcela ${brl(preco.parcelaAtual)} → ${brl(preco.parcelaNova)} em ${op.prazo} meses a ${pct(regras.taxaRefin)}.`
+      : preco.motivo });
+}
+
 /** Pior status vence: reprovação > falta dado > regra ausente > manual > ok. */
 const PESO: Record<Status, number> = { NAO_ELEGIVEL: 5, PENDENTE_INFO: 4, REGRA_NAO_CADASTRADA: 3, ANALISE_MANUAL: 2, ELEGIVEL: 1 };
 function pior(lista: Status[]): Status {
@@ -508,13 +528,14 @@ function pior(lista: Status[]): Status {
 //  EXECUÇÃO
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, contratos: ContratoEntrada[], hoje = new Date()): ResultadoBanco {
+export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, contratos: ContratoEntrada[], hoje = new Date(),
+  operacao: OperacaoEntrada | null = null): ResultadoBanco {
   const contagem = { ELEGIVEL: 0, NAO_ELEGIVEL: 0, PENDENTE_INFO: 0, REGRA_NAO_CADASTRADA: 0, ANALISE_MANUAL: 0 } as Record<Status, number>;
   const vazio: ResultadoBanco = {
     bankId: banco.bankId, banco: banco.nome, status: "REGRA_NAO_CADASTRADA",
     resumo: `Sem regras vigentes do ${banco.nome} para o convênio ${cliente.convenio}.`,
     ruleSetId: null, ruleSetHash: null, vigenciaInicio: null, excecoesAplicadas: [],
-    cliente: [], contratos: [], pendencias: [], camposPendentes: [], avisos: [], contagem, comissao: null,
+    cliente: [], contratos: [], pendencias: [], camposPendentes: [], avisos: [], contagem, comissao: null, refin: null,
   };
   if (!banco.ruleSet) return vazio;
 
@@ -535,6 +556,22 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
     contagem[status]++;
     return { contratoId: c.id, bancoOrigem: c.bancoOrigem, origemCanonica: chave, status, regras: lista, operacao: avaliarOperacao(c, status, regras, banco.nome) };
   });
+
+  // troco e parcela: só dos contratos que o banco aceitou, na taxa DELE e no prazo escolhido
+  let refin: ResumoRefin | null = null;
+  const aceitos = resultadoContratos.map((rc, i) => ({ rc, c: contratos[i] })).filter(x => x.rc.status === "ELEGIVEL");
+  if (temNum(regras.taxaRefin) && regras.taxaRefin > 0 && operacao && aceitos.length) {
+    const precificaveis = aceitos.filter(x => temNum(x.c.saldo) && x.c.saldo > 0 && temNum(x.c.parcela) && x.c.parcela > 0);
+    if (precificaveis.length) {
+      const trocoMin = temNum(regras.trocoMinPorContrato) ? regras.trocoMinPorContrato : 0;
+      const p = precificarRefin(precificaveis.map(x => ({ id: x.c.id, saldo: x.c.saldo!, parcela: x.c.parcela! })),
+        regras.taxaRefin, trocoMin, operacao);
+      refin = p.resumo;
+      const porId = new Map(p.linhas.map(l => [l.contratoId, l]));
+      aceitos.forEach(x => { x.rc.preco = porId.get(x.c.id) || null; });
+    }
+  }
+  aceitos.forEach(x => x.rc.operacao.unshift(linhaTroco(x.rc.preco, regras, banco.nome, operacao)));
 
   // status do banco: se ao menos um contrato passa, o banco atende
   let status: Status;
@@ -590,7 +627,7 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
   }
 
   return {
-    comissao,
+    comissao, refin,
     bankId: banco.bankId, banco: banco.nome, status, resumo,
     ruleSetId: banco.ruleSet.id, ruleSetHash: banco.ruleSet.hash, vigenciaInicio: banco.ruleSet.vigenciaInicio,
     excecoesAplicadas: Array.from(excecoesAplicadas),
@@ -602,12 +639,13 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
 /** Resposta da análise ao vivo do simulador: resultado + o que a tela precisa
  *  para pedir dados (códigos de situação funcional e alertas de formalização
  *  que as regras ATIVAS conhecem). Puro — a rota e os testes usam o mesmo. */
-export function respostaSimulacao(bancos: BancoParaAnalise[], cliente: ClienteEntrada, contratos: ContratoEntrada[], hoje = new Date()) {
+export function respostaSimulacao(bancos: BancoParaAnalise[], cliente: ClienteEntrada, contratos: ContratoEntrada[], hoje = new Date(),
+  operacao: OperacaoEntrada | null = null) {
   const codigos = new Map<string, string>();
   bancos.forEach(b => (b.ruleSet?.regras.situacaoFuncional?.aceitos || [])
     .forEach(a => { if (!codigos.has(a.codigo)) codigos.set(a.codigo, a.descricao); }));
   return {
-    resultado: analisar(bancos, cliente, contratos, hoje),
+    resultado: analisar(bancos, cliente, contratos, hoje, operacao),
     codigosSituacao: Array.from(codigos, ([codigo, descricao]) => ({ codigo, descricao })),
     alertasFormalizacao: bancos
       .filter(b => (b.ruleSet?.regras.alertasFormalizacao || []).length)
@@ -628,10 +666,11 @@ export function semComissao(r: ResultadoAnalise): ResultadoAnalise {
   };
 }
 
-export function analisar(bancos: BancoParaAnalise[], cliente: ClienteEntrada, contratos: ContratoEntrada[], hoje = new Date()): ResultadoAnalise {
+export function analisar(bancos: BancoParaAnalise[], cliente: ClienteEntrada, contratos: ContratoEntrada[], hoje = new Date(),
+  operacao: OperacaoEntrada | null = null): ResultadoAnalise {
   return {
     engineVersion: ENGINE_VERSION,
     analisadoEm: hoje.toISOString(),
-    bancos: bancos.map(b => analisarBanco(b, cliente, contratos, hoje)),
+    bancos: bancos.map(b => analisarBanco(b, cliente, contratos, hoje, operacao)),
   };
 }
