@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import CalculatorPage from "@/pages/calculator";
+import SimuladorCompra from "@/pages/simulador-compra";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
@@ -205,7 +205,7 @@ export default function SimuladoresHub() {
 
           {/* Simulador de Compra — native React */}
           <div style={{ display: activeTab === "compra" ? "block" : "none", height: "100%", overflow: "auto" }}>
-            <CalculatorPage />
+            <SimuladorCompra />
           </div>
 
           {/* Amortização — native React */}

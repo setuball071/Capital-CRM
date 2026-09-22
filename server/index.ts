@@ -817,6 +817,24 @@ app.use((req, res, next) => {
           `);
           await simMigDb.execute(simMigSql`CREATE INDEX IF NOT EXISTS idx_port_analyses_cpf ON port_analyses(tenant_id, cpf)`);
 
+          // Simulador de Compra: tabelas próprias (separadas do Financeiro). Só o master cadastra.
+          await simMigDb.execute(simMigSql`
+            CREATE TABLE IF NOT EXISTS compra_tabelas (
+              id          SERIAL PRIMARY KEY,
+              tenant_id   INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              banco       VARCHAR(100) NOT NULL,
+              nome        VARCHAR(150),
+              coeficiente NUMERIC(14,10) NOT NULL,
+              percentual  NUMERIC(6,3),
+              prazo       INTEGER,
+              ativo       BOOLEAN NOT NULL DEFAULT TRUE,
+              criado_por  INTEGER,
+              criado_em   TIMESTAMP NOT NULL DEFAULT NOW(),
+              atualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await simMigDb.execute(simMigSql`CREATE INDEX IF NOT EXISTS idx_compra_tabelas_tenant ON compra_tabelas(tenant_id, ativo)`);
+
           // Viabilidade Inter: faixas de taxa ponderada e grade de comissionamento por convênio
           await simMigDb.execute(simMigSql`
             CREATE TABLE IF NOT EXISTS viabilidade_conv_rules (

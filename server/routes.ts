@@ -543,6 +543,7 @@ import { createNotification } from "./notification-service";
 import { registerContractRoutes } from "./contracts";
 import { registerFinEmpresaRoutes } from "./fin-empresa";
 import { registerPortMultibancoRoutes } from "./port-multibanco";
+import { registerSimuladorCompraRoutes } from "./simulador-compra";
 import { registerOcrRoutes } from "./ocr";
 import { registerAssistenteRoutes } from "./assistente";
 import { registerAssistenteAvisosRoutes } from "./assistente-avisos";
@@ -30742,6 +30743,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   // ===== FINANCEIRO EMPRESARIAL (caixa, contas a pagar, planejamento) =====
   registerFinEmpresaRoutes(app, requireAuth);
   registerPortMultibancoRoutes(app, requireAuth);
+  registerSimuladorCompraRoutes(app, requireAuth);
 
   // ===== OCR DE DOCUMENTOS =====
   registerOcrRoutes(app, requireAuth);
