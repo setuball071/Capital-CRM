@@ -5396,7 +5396,10 @@ function salvarParaDigitacao() {
           ? (Number(taxasLivres[regra.banco]) || 0)
           : regra.taxaRefim)
       : null,
-    contratos_originais: contratos.map(c => ({
+    // Só os contratos marcados: o arquivo é da OPERAÇÃO simulada. Antes ia o extrato
+    // inteiro (13 contratos para 1 simulado) e parecia que o arquivo levava todos.
+    // Nenhum leitor usa o extrato completo (o cadastro lê contratos_selecionados).
+    contratos_originais: marcados.map(c => ({
       banco: c.banco, parcela: c.parcela, prazo: c.prazo,
       taxa: c.taxa, saldo: c.saldo, acao: c.acao, portar: c.portar,
       numeroContrato: c.numero_contrato || ''
