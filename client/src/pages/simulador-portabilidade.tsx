@@ -262,6 +262,16 @@ export default function SimuladorPortabilidadePage() {
   const [rightCards, setRightCards] = useState<PrazoCard[]>([]);
   const [cronograma, setCronograma] = useState<CronogramaState | null>(null);
   const [selectedCard, setSelectedCard] = useState<{ side: string; meses: number } | null>(null);
+  // O que o cliente vê no print: faixa de prazos + prazos escondidos um a um (só tela, não muda conta)
+  const [faixaDe, setFaixaDe] = useState("");
+  const [faixaAte, setFaixaAte] = useState("");
+  const [prazosOcultos, setPrazosOcultos] = useState<Set<number>>(new Set());
+  const prazoVisivel = (m: number) => {
+    const de = parseInt(faixaDe, 10), ate = parseInt(faixaAte, 10);
+    return !prazosOcultos.has(m) && (!de || m >= de) && (!ate || m <= ate);
+  };
+  const ocultarPrazo = (m: number) => setPrazosOcultos(s => new Set(s).add(m));
+  const mostrarTodosPrazos = () => { setFaixaDe(""); setFaixaAte(""); setPrazosOcultos(new Set()); };
   const [calcMode, setCalcMode] = useState<"parcela" | "contrato">("parcela");
   const switchCalcMode = useCallback((mode: "parcela" | "contrato") => {
     setCalcMode(mode);
@@ -694,6 +704,11 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .pc-parc { font-size: 12px; font-weight: 600; color: #6C2BD9; margin-top: 5px; }
         .sim-wrap .pc.ar .pc-parc { color: #1E88E5; }
         .sim-wrap .pc-taxa { font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 2px; }
+        .sim-wrap .pc-x { position: absolute; top: 4px; left: 6px; font-size: 12px; line-height: 1; color: hsl(var(--muted-foreground)); background: none; border: 0; cursor: pointer; opacity: 0; transition: opacity .15s; }
+        .sim-wrap .pc:hover .pc-x { opacity: 1; }
+        .sim-wrap .faixa-prazos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; margin: -4px 0 12px; color: hsl(var(--muted-foreground)); }
+        .sim-wrap .faixa-prazos input { width: 56px; padding: 3px 6px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--background)); color: hsl(var(--foreground)); font-size: 12px; }
+        .sim-wrap .faixa-prazos button { background: none; border: 0; color: #6C2BD9; text-decoration: underline; cursor: pointer; font-size: 12px; }
         .sim-wrap .pc-tag { position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 700; letter-spacing: .05em; padding: 2px 7px; border-radius: 20px; text-transform: uppercase; display: none; }
         .sim-wrap .pc.al .pc-tag { display: block; background: #6C2BD9; color: #fff; }
         .sim-wrap .pc.ar .pc-tag { display: block; background: #1E88E5; color: #fff; }
@@ -862,6 +877,20 @@ export default function SimuladorPortabilidadePage() {
 
         <div className="sim-section">
           <div className="section-title">Estratégia de Amortização — escolha um prazo para ver o cronograma</div>
+          {(leftCards.length > 0 || rightCards.length > 0) && (() => {
+            const todos = Array.from(new Set([...leftCards, ...rightCards].map(c => c.meses)));
+            const escondidos = todos.filter(m => !prazoVisivel(m)).length;
+            return (
+              <div className="faixa-prazos" data-testid="faixa-prazos">
+                Mostrar ao cliente: de
+                <input inputMode="numeric" placeholder="10" value={faixaDe} onChange={e => setFaixaDe(e.target.value.replace(/\D/g, ""))} data-testid="input-faixa-de" />
+                a
+                <input inputMode="numeric" placeholder="120" value={faixaAte} onChange={e => setFaixaAte(e.target.value.replace(/\D/g, ""))} data-testid="input-faixa-ate" />
+                meses
+                {escondidos > 0 && <>· {escondidos} escondido(s) <button onClick={mostrarTodosPrazos} data-testid="button-mostrar-todos-prazos">mostrar todos</button></>}
+              </div>
+            );
+          })()}
           <div className="prazos-wrap">
             <div>
               <div className="prazos-col-label col-left-label">Taxa Média</div>
@@ -871,13 +900,14 @@ export default function SimuladorPortabilidadePage() {
                     Calcule o contrato novo primeiro.
                   </div>
                 ) : (
-                  leftCards.map((card) => (
+                  leftCards.filter((card) => prazoVisivel(card.meses)).map((card) => (
                     <div
                       key={card.meses}
                       className={`pc${selectedCard?.side === "left" && selectedCard?.meses === card.meses ? " al" : ""}`}
                       onClick={() => selectPrazo("left", card)}
                       data-testid={`card-left-${card.meses}`}
                     >
+                      <button className="pc-x" title="Esconder este prazo do cliente" onClick={(e) => { e.stopPropagation(); ocultarPrazo(card.meses); }}>✕</button>
                       <div className="pc-meses">{card.meses}<small>meses</small></div>
                       <div className="pc-parc">{fmtR(card.parcMedia)}/mês</div>
                       <div className="pc-taxa">{fmtN(card.taxaImpl, 2)}% a.m.</div>
@@ -895,13 +925,14 @@ export default function SimuladorPortabilidadePage() {
                     Calcule o contrato final primeiro.
                   </div>
                 ) : (
-                  rightCards.map((card) => (
+                  rightCards.filter((card) => prazoVisivel(card.meses)).map((card) => (
                     <div
                       key={card.meses}
                       className={`pc${selectedCard?.side === "right" && selectedCard?.meses === card.meses ? " ar" : ""}`}
                       onClick={() => selectPrazo("right", card)}
                       data-testid={`card-right-${card.meses}`}
                     >
+                      <button className="pc-x" title="Esconder este prazo do cliente" onClick={(e) => { e.stopPropagation(); ocultarPrazo(card.meses); }}>✕</button>
                       <div className="pc-meses">{card.meses}<small>meses</small></div>
                       <div className="pc-parc">{fmtR(card.parcMedia)}/mês</div>
                       <div className="pc-taxa">{fmtN(card.taxaImpl, 2)}% a.m.</div>
