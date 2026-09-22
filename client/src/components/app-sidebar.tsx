@@ -333,6 +333,7 @@ export function AppSidebar() {
         { title: "Usuários", url: "/users", icon: Users, module: "modulo_config_usuarios", subItem: "usuarios" },
         { title: "Central de Atualizações", url: "/admin/atualizacoes", icon: Bell, masterOnly: true },
         { title: "Regras de Carteira", url: "/admin/carteira-regras", icon: ShieldCheck, masterOnly: true },
+        { title: "Bancos e Regras", url: "/admin/bancos-regras", icon: Landmark, masterOnly: true },
         { title: "API Keys Externas", url: "/admin/api-keys", icon: KeyRound, tenantModule: "compra_leads" },
       ],
     },

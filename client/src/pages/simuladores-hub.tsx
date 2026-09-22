@@ -4,7 +4,6 @@ import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
 import SimAmortizacaoAnual from "@/pages/sim-amortizacao-anual";
-import PortBancosRegras from "@/pages/port-bancos-regras";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
@@ -51,15 +50,12 @@ function IframeThemeSync({
 // Ícones Material Symbols do design (Simuladores.dc.html → TAB_DEFS)
 const TABS = [
   { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt" },
-  // Cadastro do motor multibanco. A analise aparece DENTRO do simulador de
-  // portabilidade; esta aba so administra bancos/regras e e exclusiva do master.
-  { id: "bancos-regras", label: "Bancos e Regras", icon: "account_balance", soMaster: true },
+  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart" },
   { id: "amortizacao", label: "Amortização", icon: "trending_down" },
   { id: "amortizacao-anual", label: "Amortização Anual", icon: "event_repeat" },
   { id: "viabilidade-inter", label: "Viabilidade Inter", icon: "fact_check" },
   { id: "contracheque", label: "Contracheque", icon: "description" },
   { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up" },
-  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart" },
   { id: "proposta", label: "Criador de Proposta", icon: "description" },
 ];
 
@@ -123,7 +119,7 @@ export default function SimuladoresHub() {
             gap: 4,
           }}
         >
-          {TABS.filter((tab) => !("soMaster" in tab && tab.soMaster) || isMaster).map((tab) => {
+          {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
@@ -212,13 +208,6 @@ export default function SimuladoresHub() {
           <div style={{ display: activeTab === "amortizacao" ? "block" : "none", height: "100%", overflow: "hidden" }}>
             <SimuladorPortabilidadePage />
           </div>
-
-          {/* Bancos e Regras — administração do motor multibanco (só master) */}
-          {isMaster && (
-            <div style={{ display: activeTab === "bancos-regras" ? "block" : "none", height: "100%", overflow: "auto" }}>
-              <PortBancosRegras />
-            </div>
-          )}
 
           {/* Amortização Anual — native React */}
           <div style={{ display: activeTab === "amortizacao-anual" ? "block" : "none", height: "100%", overflow: "auto" }}>

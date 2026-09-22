@@ -32,7 +32,7 @@ async function chamar(url: string, method: string, body?: unknown) {
   return j;
 }
 
-type Ordem = "padrao" | "bruto" | "liberado" | "comissao";
+type Ordem = "padrao" | "banco" | "bruto" | "liberado" | "comissao";
 
 export default function SimuladorCompra() {
   const { user } = useAuth();
@@ -46,6 +46,7 @@ export default function SimuladorCompra() {
   const [margem, setMargem] = useState("");
   const [ordem, setOrdem] = useState<Ordem>("padrao");
   const [marcadas, setMarcadas] = useState<Set<number>>(new Set());
+  const [bancoFiltro, setBancoFiltro] = useState<string>("");   // "" = todos
 
   const carregar = useCallback(async () => {
     try {
@@ -60,13 +61,15 @@ export default function SimuladorCompra() {
     tabelas.filter(t => t.ativo !== false),
   ), [parcela, fator, saldo, margem, tabelas]);
 
+  const bancos = useMemo(() => Array.from(new Set(tabelas.filter(t => t.ativo !== false).map(t => t.banco))).sort((a, b) => a.localeCompare(b, "pt-BR")), [tabelas]);
   const linhas = useMemo(() => {
-    const l = [...res.linhas];
+    const l = res.linhas.filter(x => !bancoFiltro || x.tabela.banco === bancoFiltro);
+    if (ordem === "banco") l.sort((a, b) => a.tabela.banco.localeCompare(b.tabela.banco, "pt-BR"));
     if (ordem === "bruto") l.sort((a, b) => b.bruto - a.bruto);
     if (ordem === "liberado") l.sort((a, b) => b.liberado - a.liberado);
     if (ordem === "comissao") l.sort((a, b) => (b.comissao ?? 0) - (a.comissao ?? 0));
     return l;
-  }, [res, ordem]);
+  }, [res, ordem, bancoFiltro]);
 
   const marcar = (id: number) => setMarcadas(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const limpar = () => { setParcela(""); setSaldo(""); setMargem(""); setFator("23"); setMarcadas(new Set()); };
@@ -109,6 +112,17 @@ export default function SimuladorCompra() {
 
       {erro && <div className="rounded-md border border-red-300 bg-red-50 text-red-700 text-sm px-3 py-2">{erro}</div>}
 
+      {bancos.length > 1 && res.linhas.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-xs text-muted-foreground">Banco:</span>
+          {["", ...bancos].map(b => (
+            <button key={b || "todos"} onClick={() => setBancoFiltro(b)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${bancoFiltro === b ? "border-violet-600 bg-violet-600 text-white" : "border-border hover:bg-muted"}`}>
+              {b || "Todos"}</button>
+          ))}
+        </div>
+      )}
+
       <div className={cardCls + " p-0 overflow-x-auto"}>
         {!tabelas.length ? (
           <div className="p-6 text-sm text-muted-foreground">
@@ -119,7 +133,7 @@ export default function SimuladorCompra() {
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-muted/50"><tr>
-              <Th right={false}>Banco</Th><Th>Coeficiente</Th>{verCom && <Th>Percentual</Th>}
+              <Th k="banco" right={false}>Banco</Th><Th>Coeficiente</Th>{verCom && <Th>Percentual</Th>}
               <Th k="bruto">Bruto</Th><Th k="liberado">Liberado</Th>{verCom && <Th k="comissao">Comissão</Th>}
             </tr></thead>
             <tbody>

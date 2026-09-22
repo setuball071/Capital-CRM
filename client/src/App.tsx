@@ -79,6 +79,7 @@ import ContratosFluxosPage from "@/pages/contratos-fluxos";
 import ContratosConfigPage from "@/pages/contratos-config";
 import SystemUpdatesPage from "@/pages/system-updates";
 import PortfolioRulesPage from "@/pages/portfolio-rules";
+import PortBancosRegras from "@/pages/port-bancos-regras";
 import ImportarObservacoesPage from "@/pages/importar-observacoes";
 import SiapeHistoricoPage from "@/pages/siape-historico";
 import ImportarDadosComplementaresPage from "@/pages/importar-dados-complementares";
@@ -525,6 +526,9 @@ function Router() {
               </Route>
               <Route path="/admin/carteira-regras">
                 {() => <MasterOnlyRoute component={PortfolioRulesPage} />}
+              </Route>
+              <Route path="/admin/bancos-regras">
+                {() => <MasterRoute component={PortBancosRegras} />}
               </Route>
               <Route path="/simulador-portabilidade">
                 {() => <ModuleRoute component={SimuladorPortabilidadePage} module="modulo_simulador" />}
