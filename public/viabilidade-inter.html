@@ -1242,7 +1242,39 @@ window.addEventListener('message', function (event) {
     isMaster = Boolean(d.isMaster);
     if (document.getElementById('painelRegras').style.display !== 'none') renderRegras();
   }
+  if (d.type === 'CAPITAL_CRM_CONTRATOS_PORT' && d.payload) receberDoSimulador(d.payload);
 });
+
+/** Vem do Simulador de Portabilidade ("Validar no Inter"): preenche cliente e
+ *  contratos sem redigitar. A conta e o parecer continuam sendo os do Inter. */
+function receberDoSimulador(p) {
+  const lista = (p.contratos || []).filter(c => c.parcela > 0 || c.saldo > 0);
+  if (!lista.length) return;
+  if (linhas.length && !confirm('Substituir os contratos desta tela pelos ' + lista.length + ' do simulador de portabilidade?')) return;
+
+  if (p.cpf) document.getElementById('cpfCliente').value = p.cpf;
+  if (p.nome) document.getElementById('nomeCliente').value = p.nome;
+  // o convênio do simulador ("SIAPE") pode estar escrito diferente aqui ("Siape")
+  const sel = document.getElementById('convenio');
+  const alvo = String(p.convenio || '').trim().toLowerCase();
+  const opt = [...sel.options].find(o => o.value.toLowerCase() === alvo);
+  if (opt) { sel.value = opt.value; onConvenio(); }
+
+  linhas = lista.map(function (c) {
+    const l = novaLinha(c);
+    l.taxaAtual = num(c.taxa);
+    l.saldo = num(c.saldo);
+    // sem o saldo, deduz do jeito que a própria tela faz (parcela + prazo + taxa)
+    if (!l.saldo && l.parcela > 0 && l.restantes > 0 && l.taxaAtual > 0) l.saldo = saldoPrice(l.parcela, l.taxaAtual / 100, l.restantes);
+    else if (l.saldo && l.parcela > 0 && l.restantes > 0 && !l.taxaAtual) l.taxaAtual = taxaFromSaldo(l.parcela, l.saldo, l.restantes);
+    l.novaParcela = l.parcela;
+    return l;
+  });
+  recalcTudo();
+  const st = document.getElementById('cotacoesStatus');
+  if (st) { st.style.color = 'var(--green)'; st.textContent = lista.length + ' contrato(s) vieram do simulador de portabilidade. Confira as datas e o prazo do refin.'; }
+  document.querySelector('.box').scrollIntoView({ block: 'start' });
+}
 
 init();
 </script>

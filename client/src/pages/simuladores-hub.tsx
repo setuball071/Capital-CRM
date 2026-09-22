@@ -74,6 +74,23 @@ export default function SimuladoresHub() {
 
   const navigateToProposta = useCallback(() => setActiveTab("proposta"), []);
 
+  // "Validar no Inter": o simulador manda cliente + contratos, abrimos a aba e repassamos
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type !== "CAPITAL_CRM_ABRIR_INTER" || !event.data?.payload) return;
+      const payload = event.data.payload;
+      setActiveTab("viabilidade-inter");
+      // a aba já está montada (só escondida); um tique garante que o iframe recebeu o foco
+      setTimeout(() => {
+        try {
+          viabilidadeRef.current?.contentWindow?.postMessage({ type: "CAPITAL_CRM_CONTRATOS_PORT", payload }, "*");
+        } catch { /* ignore */ }
+      }, 100);
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
   // Apenas master verdadeiro (system master OU role 'master' do tenant) pode editar regras.
   // Coordenacao/financeiro/vendedor recebem isMaster=false.
   const isMaster = Boolean(user?.isMaster || user?.role === "master");

@@ -328,6 +328,10 @@ td { color: #111827 !important; }
       <button onclick="selecionarTodasPortabilidades(false)" style="padding:8px 16px;background:#EF4444;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">
         ❌ Desmarcar Todas
       </button>
+      <button onclick="enviarParaInter()" title="Leva cliente e contratos para a aba Viabilidade Inter, sem redigitar"
+        style="padding:8px 16px;background:#F3F4F6;color:#374151;border:1px solid #E5E7EB;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">
+        ➡️ Validar no Inter
+      </button>
       <span style="font-size:12px;color:#6B7280;margin-left:8px;">
         Marque os contratos que deseja portar/renegociar
       </span>
@@ -6613,6 +6617,28 @@ function _buildPropostaPayload() {
   }
 
   return { contratos: ctData, novas: nvData };
+}
+
+/** Leva cliente e contratos para a aba Viabilidade Inter já preenchida — a conta
+ *  de lá continua sendo a do Inter; aqui só evita redigitar tudo de novo. */
+function enviarParaInter() {
+  const lista = (contratos || []);
+  if (!lista.length) { alert('Adicione ou importe os contratos antes de validar no Inter.'); return; }
+  const payload = {
+    cpf: (document.getElementById('cpfCliente') || {}).value || '',
+    nome: (document.getElementById('nomeCliente') || {}).value || '',
+    convenio: (document.getElementById('convenio') || {}).value || '',
+    contratos: lista.map(c => ({
+      banco: c.banco || '', numero_contrato: c.numero_contrato || '',
+      parcela: parseBR(c.parcela), prazo: parseInt(c.prazo) || 0, prazo_total: parseInt(c.prazo_total) || 0,
+      taxa: parseBR(c.taxa), saldo: parseBR(c.saldo),
+    })),
+  };
+  try {
+    window.parent.postMessage({ type: 'CAPITAL_CRM_ABRIR_INTER', payload }, '*');
+  } catch (e) {
+    alert('Não consegui abrir a Viabilidade Inter daqui.');
+  }
 }
 
 function enviarParaProposta() {
