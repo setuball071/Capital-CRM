@@ -130,6 +130,19 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
   });
 
   /** Situação funcional, nascimento e nome pelo CPF. A base de clientes é global por desenho. */
+  /** "1980-03-05", "05/03/1980" ou timestamp → yyyy-mm-dd; nada disso → null. */
+  function dataISO(v: unknown): string | null {
+    if (!v) return null;
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10);
+    const t = String(v).trim();
+    const br = t.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{4})/);
+    if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+    const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return iso[0];
+    const d = new Date(t);
+    return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  }
+
   app.get("/api/port/cliente/:cpf", requireAuth, async (req: any, res) => {
     try {
       const cpf = soDigitos(req.params.cpf).padStart(11, "0");
@@ -143,10 +156,34 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
         LIMIT 10
       `);
       const rows = r.rows as any[];
-      if (!rows.length) return res.json(null);
+      let nascimento = rows.length ? dataISO(rows[0].data_nascimento) : null;
+      let origemNascimento: string | null = nascimento ? "cadastro do CRM" : null;
+
+      // o cadastro nem sempre tem a data: procura em quem mais guarda isso
+      if (!nascimento) {
+        const outras = await db.execute(sql`
+          SELECT data_nascimento, 'importação de contatos' AS origem, 2 AS ordem
+            FROM staging_contatos WHERE regexp_replace(coalesce(cpf,''), '\\D', '', 'g') = ${cpf}
+              AND data_nascimento IS NOT NULL AND data_nascimento <> ''
+          UNION ALL
+          SELECT data_nascimento, 'solicitação de boleto' AS origem, 3 AS ordem
+            FROM solicitacoes_boleto
+            WHERE tenant_id = ${req.tenantId ?? null} AND regexp_replace(cpf_cliente, '\\D', '', 'g') = ${cpf}
+              AND data_nascimento IS NOT NULL AND data_nascimento <> ''
+          ORDER BY ordem
+          LIMIT 5
+        `);
+        for (const o of outras.rows as any[]) {
+          const d = dataISO(o.data_nascimento);
+          if (d) { nascimento = d; origemNascimento = String(o.origem); break; }
+        }
+      }
+
+      if (!rows.length && !nascimento) return res.json(null);
       res.json({
-        nome: rows[0].nome,
-        dataNascimento: rows[0].data_nascimento ? new Date(rows[0].data_nascimento).toISOString().slice(0, 10) : null,
+        nome: rows.length ? rows[0].nome : null,
+        dataNascimento: nascimento,
+        origemNascimento,
         vinculos: rows.filter(x => x.sit_func || x.orgao).map(x => ({ sitFunc: x.sit_func, convenio: x.convenio, orgao: x.orgao })),
       });
     } catch (err: any) {

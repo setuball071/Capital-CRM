@@ -6830,6 +6830,7 @@ const MB = {
   escolha: null,            // banco escolhido após comparar
   cpfDono: null,            // de qual CPF são os dados complementares
   sugestaoCrm: null,        // o que o cadastro do CRM diz (dica, não dado confirmado)
+  crmNascimento: null,      // de onde veio a data de nascimento (ou por que não veio)
   resultado: null, codigosSituacao: [], alertasFormalizacao: [], bancosDesligados: [],
   analiseSalva: null,       // análise que veio junto com a cotação reaberta
   ultimaChave: null, chaveAgendada: null, timer: null, seq: 0, ctrl: null,
@@ -6976,6 +6977,7 @@ function mbTrocaDeCliente(cpf) {
   MB.cpfDono = dig;
   MB.dados = mbDadosVazios();
   MB.escolha = null; MB.sugestaoCrm = null; MB.analiseSalva = null;
+  MB.crmNascimento = dig.length === 11 ? { estado: 'buscando' } : { estado: 'sem-cpf' };
   if (dig.length === 11) mbBuscarCrm(dig);
 }
 
@@ -6983,13 +6985,21 @@ function mbTrocaDeCliente(cpf) {
 async function mbBuscarCrm(dig) {
   try {
     const r = await fetch('/api/port/cliente/' + dig, { credentials: 'include' });
-    if (!r.ok || dig !== MB.cpfDono) return;
+    if (dig !== MB.cpfDono) return;
+    if (!r.ok) { MB.crmNascimento = { estado: 'erro' }; mbRender(); return; }
     const cli = await r.json();
-    if (!cli || dig !== MB.cpfDono) return;
+    if (dig !== MB.cpfDono) return;
+    if (!cli) { MB.crmNascimento = { estado: 'nao-encontrado' }; mbRender(); return; }
     if (cli.dataNascimento && !MB.dados.dataNascimento) MB.dados.dataNascimento = cli.dataNascimento;
+    MB.crmNascimento = cli.dataNascimento
+      ? { estado: 'ok', origem: cli.origemNascimento || 'cadastro do CRM' }
+      : { estado: 'sem-data' };
     const sf = (cli.vinculos || []).map(v => v.sitFunc).find(Boolean);
     if (sf) { MB.sugestaoCrm = { situacaoFuncional: sf }; mbAutoSituacaoPeloCrm(); }
-  } catch (e) { /* conveniência: sem CRM, o motor pede o dado */ }
+    mbRender();
+  } catch (e) {
+    MB.crmNascimento = { estado: 'erro' };   // conveniência: sem CRM, o motor pede o dado
+  }
 }
 
 /** Só aproveita o texto do CRM se ele casar EXATAMENTE com uma situação das
@@ -7136,6 +7146,10 @@ function mbRestaurarDaCotacao(mb, cpf) {
   MB.resultado = MB.analiseSalva ? mbSemComissao(MB.analiseSalva.resultado) : null;   // mostra a salva até a reanálise chegar
   MB.comissaoVisivel = false;
   MB.ultimaChave = null; MB.chaveAgendada = null;
+  if (MB.cpfDono && MB.cpfDono.length === 11 && !MB.dados.dataNascimento) {
+    MB.crmNascimento = { estado: 'buscando' };
+    mbBuscarCrm(MB.cpfDono);
+  }
   mbRender();
   mbObservar();
 }
@@ -7166,6 +7180,22 @@ function mbPendenciasAgrupadas() {
   return [...mapa.values()].sort((a, b) => (a.escopo === b.escopo ? 0 : a.escopo === 'cliente' ? -1 : 1));
 }
 
+/** De onde veio (ou por que não veio) a data de nascimento do CRM. Sem isso a
+ *  tela ficava muda e ninguém sabia se o CRM tinha sido consultado. */
+function mbOrigemNascimentoHTML() {
+  const c = MB.crmNascimento;
+  if (!c) return '';
+  const txt = {
+    buscando: 'procurando no CRM…',
+    ok: 'preenchido — origem: ' + (c.origem || 'CRM') + '; confira',
+    'sem-cpf': 'informe o CPF do cliente para eu buscar no CRM',
+    'nao-encontrado': 'cliente não está no cadastro do CRM',
+    'sem-data': 'o cadastro do CRM está sem a data de nascimento',
+    erro: 'não consegui consultar o CRM agora',
+  }[c.estado];
+  return txt ? ` <span class="mb-sub">(${mbEsc(txt)})</span>` : '';
+}
+
 function mbCampoPendenteHTML(p) {
   const quem = `<span class="mb-quem">pedido por: ${mbEsc(p.bancos.join(', '))}</span>`;
   const rot = p.escopo === 'contrato'
@@ -7179,7 +7209,7 @@ function mbCampoPendenteHTML(p) {
       <select onchange="mbSetDado('situacaoFuncional', this.value)"><option value="">escolha o código</option>${opts}</select>${quem}</div>`;
   }
   if (p.campo === 'dataNascimento') {
-    return `<div class="mb-pend-linha"><span>${rot}</span>
+    return `<div class="mb-pend-linha"><span>${rot}${mbOrigemNascimentoHTML()}</span>
       <input type="date" value="${mbEsc(MB.dados.dataNascimento)}" onchange="mbSetDado('dataNascimento', this.value)">${quem}</div>`;
   }
   if (p.campo === 'pensaoTipo' || p.campo === 'pensaoFim') {
@@ -7219,6 +7249,14 @@ function mbOperacaoHTML() {
            ${falta ? '<span class="mb-sub" style="color:#B45309">informe o valor para calcular</span>' : ''}`}
       <span class="mb-sub" style="margin-left:auto">taxa: a de cada banco</span>
     </div>`;
+}
+
+/** Data de nascimento que veio do CRM sozinha: a tela avisa, com a origem. */
+function mbNascimentoDoCrmHTML() {
+  const c = MB.crmNascimento;
+  if (!c || c.estado !== 'ok' || !MB.dados.dataNascimento) return '';
+  const d = MB.dados.dataNascimento.split('-');
+  return `<div class="mb-sub" style="margin-top:8px">Data de nascimento ${mbEsc(d[2] + '/' + d[1] + '/' + d[0])} — origem: ${mbEsc(c.origem || 'CRM')}. Confira antes de usar.</div>`;
 }
 
 /** Banco desligado no cadastro não entra na análise — a tela diz quem e por quê. */
@@ -7419,7 +7457,7 @@ function mbRender() {
 
   corpo.innerHTML = erroNovo + salva + mbBannerEscolha() +
     (pend.length ? `<div class="mb-pend"><div style="font-weight:700;color:#92400E;margin-bottom:4px">Para concluir a análise — nada foi reprovado por falta destes dados</div>${pend.map(mbCampoPendenteHTML).join('')}</div>` : '') +
-    mbOrigemDesconhecidaHTML(bancos) + mbDesligadosHTML() + mbFormalizacaoHTML() + mbOperacaoHTML() +
+    mbOrigemDesconhecidaHTML(bancos) + mbDesligadosHTML() + mbNascimentoDoCrmHTML() + mbFormalizacaoHTML() + mbOperacaoHTML() +
     `<div class="mb-abas"><button class="mb-aba ${MB.aba === 'comparativo' ? 'on' : ''}" onclick="MB.aba='comparativo';mbRender()">Comparativo</button>` +
     bancos.map(b => `<button class="mb-aba ${MB.aba === b.bankId ? 'on' : ''}" onclick="MB.aba=${b.bankId};mbRender()"><span class="mb-ponto" style="background:${MB_STATUS_COR[b.status]}"></span>${mbEsc(b.banco)}</button>`).join('') +
     `</div>` +
