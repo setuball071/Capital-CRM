@@ -413,8 +413,9 @@ const INT = MODELOS.find(m => m.id === "inter-siape-2026-09")!;
 const bancoINT = (regras = INT.regras): BancoParaAnalise =>
   ({ bankId: 4, nome: "Inter", ruleSet: { id: 4, hash: "i", vigenciaInicio: "2026-09-23", regras }, excecoes: [] });
 const ctINT = (p: Partial<ContratoEntrada>) => ct({ bancoOrigem: "BMG", taxa: 0.9, saldo: 20000, parcela: 600, prazoTotal: 96, prazoRestante: 96, ...p });
+const cliINT = (anos = 50, upag = "26200"): ClienteEntrada => ({ convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(anos), upag });
 function statusINT(c: ContratoEntrada, esperado: Status, trecho?: string, anos = 50, prazo = 120) {
-  const r = analisarBanco(bancoINT(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(anos) }, [c], HOJE, { modo: "maximo", prazo });
+  const r = analisarBanco(bancoINT(), cliINT(anos), [c], HOJE, { modo: "maximo", prazo });
   assert.equal(r.contratos[0].status, esperado, `status ${r.contratos[0].status}, esperava ${esperado}`);
   if (trecho) {
     const todos = [...r.contratos[0].regras, ...r.cliente].map(x => x.motivo).join(" | ");
@@ -439,7 +440,7 @@ caso("Inter: terminar com 79 anos", () => {
 });
 caso("Teto de 270 mil conta o troco: contrato que passa disso não fecha", () => {
   const regras = { ...INT.regras, taxaRefin: 1.65 };      // taxa só para o teste calcular
-  const r = analisarBanco(bancoINT(regras), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
+  const r = analisarBanco(bancoINT(regras), cliINT(50),
     [ctINT({ saldo: 250000, parcela: 9000 })], HOJE, { modo: "maximo", prazo: 120 });
   const pr = r.contratos[0].preco!;
   assert.equal(pr.viavel, false);
@@ -447,12 +448,36 @@ caso("Teto de 270 mil conta o troco: contrato que passa disso não fecha", () =>
 });
 caso("Contrato dentro do teto fecha normalmente", () => {
   const regras = { ...INT.regras, taxaRefin: 1.65 };
-  const r = analisarBanco(bancoINT(regras), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
+  const r = analisarBanco(bancoINT(regras), cliINT(50),
     [ctINT({ saldo: 20000, parcela: 600 })], HOJE, { modo: "maximo", prazo: 120 });
   assert.ok(r.contratos[0].preco!.viavel, r.contratos[0].preco!.motivo);
 });
+caso("Inter: UPAG não atendida reprova (ADENE, por código)", () => {
+  const r = analisarBanco(bancoINT(), { ...cliINT(50), upag: "53206" }, [ctINT({})], HOJE, { modo: "maximo", prazo: 120 });
+  assert.equal(r.contratos[0].status, "NAO_ELEGIVEL");
+  assert.match(r.cliente.find(x => x.chave === "upag")!.motivo, /ADENE: UPAG não atendida pelo Inter/);
+});
+caso("Inter: UPAG atendida passa", () => statusINT(ctINT({}), "ELEGIVEL", "UPAG atendida"));
+caso("Inter: UPAG não atendida também casa pelo nome", () => {
+  const r = analisarBanco(bancoINT(), { ...cliINT(50), upag: "FUNDACAO NACIONAL DO INDIO - FUNAI" }, [ctINT({})], HOJE, { modo: "maximo", prazo: 120 });
+  assert.equal(r.contratos[0].status, "NAO_ELEGIVEL");
+});
+caso("Inter: sem a UPAG, pergunta em vez de reprovar", () => {
+  const r = analisarBanco(bancoINT(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) }, [ctINT({})], HOJE, { modo: "maximo", prazo: 120 });
+  const u = r.cliente.find(x => x.chave === "upag")!;
+  assert.equal(u.status, "PENDENTE_INFO"); assert.equal(u.campo, "upag");
+});
+caso("Inter: DNOCS só barra servidor ativo", () => {
+  const ativo = analisarBanco(bancoINT(), { ...cliINT(50), upag: "42204" }, [ctINT({})], HOJE, { modo: "maximo", prazo: 120 });
+  assert.equal(ativo.contratos[0].status, "NAO_ELEGIVEL");
+  const aposentado = analisarBanco(bancoINT(), { ...cliINT(50), upag: "42204", situacaoFuncional: "2" }, [ctINT({})], HOJE, { modo: "maximo", prazo: 120 });
+  assert.equal(aposentado.contratos[0].status, "ELEGIVEL", JSON.stringify(aposentado.cliente.map(x => x.motivo)));
+});
+caso("Banco sem lista de UPAG não pergunta nada", () =>
+  assert.ok(!analisarBanco(banco(), CLI, [ct({})], HOJE).cliente.some(x => x.chave === "upag")));
+caso("Inter tem as 52 UPAGs da arte", () => assert.equal(INT.regras.upagsNaoAtendidas!.length, 52));
 caso("Inter sem taxa de refin: troco vem da Viabilidade Inter", () => {
-  const r = analisarBanco(bancoINT(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
+  const r = analisarBanco(bancoINT(), cliINT(50),
     [ctINT({})], HOJE, { modo: "maximo", prazo: 120 });
   assert.equal(r.refin, null);
   assert.ok(r.avisos.some(a => a.includes("Validar no Inter")));

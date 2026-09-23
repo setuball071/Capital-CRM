@@ -18,7 +18,7 @@
 import { precificarRefin, type OperacaoEntrada, type PrecoContrato, type ResumoRefin } from "./refin";
 export type { OperacaoEntrada, PrecoContrato, ResumoRefin } from "./refin";
 
-export const ENGINE_VERSION = "1.7.0";   // 1.6: parcela mínima · 1.7: teto do valor da operação
+export const ENGINE_VERSION = "1.8.0";   // 1.7: teto do valor · 1.8: UPAG não atendida
 
 export type Status =
   | "ELEGIVEL"
@@ -39,6 +39,8 @@ export const STATUS_LABEL: Record<Status, string> = {
 
 export interface ClienteEntrada {
   convenio: string;
+  /** Unidade pagadora do servidor: código ("53205") ou nome. Vem do CRM. */
+  upag?: string | null;
   /** Código SIAPE ("1", "84", "NES 94") ou a descrição ("ATIVO PERMANENTE"). */
   situacaoFuncional?: string | null;
   /** yyyy-mm-dd */
@@ -81,6 +83,10 @@ export interface RegrasBanco {
   parcelaMinima?: number | null;
   /** teto do contrato novo, já com o troco (Inter: 270 mil) */
   valorMaxContrato?: number | null;
+  /** UPAGs/órgãos que o banco não atende. `apenasAtivos` = só barra servidor ativo. */
+  upagsNaoAtendidas?: { codigo?: string | null; descricao: string; apenasAtivos?: boolean }[] | null;
+  /** Códigos de situação que contam como "servidor ativo" para a regra acima. */
+  codigosAtivos?: string[] | null;
   origens?: {
     padraoPagasMin?: number | null;
     /** pagas exigidas dos BANCOS DE REDE (ORIGENS.rede); vale entre a lista da arte e o padrão */
@@ -155,7 +161,7 @@ export interface ResultadoRegra {
 }
 
 export type CampoPendente =
-  | "situacaoFuncional" | "dataNascimento" | "pensaoTipo" | "pensaoFim"   // do cliente
+  | "situacaoFuncional" | "dataNascimento" | "pensaoTipo" | "pensaoFim" | "upag"   // do cliente
   | "origemConfirmada" | "prazoTotal" | "prazoRestante" | "taxa" | "saldo"; // do contrato
 
 export interface CampoPendenteDetalhe {
@@ -461,6 +467,44 @@ function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string,
         // pode ser só que o CRM guarda "ATIVO" e a regra fala em "ATIVO PERMANENTE"
         out.push(regra({ ...base, campo: "situacaoFuncional", valorAnalisado: cli.situacaoFuncional, status: "PENDENTE_INFO",
           motivo: `"${cli.situacaoFuncional}" não bate com nenhum código da lista do ${banco}. Informe o código SIAPE da situação funcional.` }));
+      }
+    }
+  }
+
+  const upags = regras.upagsNaoAtendidas || [];
+  if (upags.length) {
+    const base = { chave: "upag", label: "UPAG (unidade pagadora)", esperado: `fora da lista de ${upags.length} não atendidas` };
+    const informada = (cli.upag || "").trim();
+    if (!informada) {
+      out.push(regra({ ...base, campo: "upag", valorAnalisado: null, status: "PENDENTE_INFO",
+        motivo: `O ${banco} não atende algumas UPAGs: informe a unidade pagadora do cliente.` }));
+    } else {
+      const digitos = informada.replace(/\D/g, "");
+      const texto = semAcento(informada);
+      const achada = upags.find(u => {
+        if (u.codigo && digitos && semAcento(u.codigo).replace(/\D/g, "") === digitos) return true;
+        const d = semAcento(u.descricao);
+        return d.length >= 6 && texto.length >= 6 && (d.includes(texto) || texto.includes(d));
+      });
+      if (!achada) {
+        out.push(regra({ ...base, valorAnalisado: informada, status: "ELEGIVEL", motivo: `UPAG atendida pelo ${banco}.` }));
+      } else if (achada.apenasAtivos) {
+        // só barra servidor ativo: sem a situação funcional, não dá para decidir
+        const ativos = (regras.codigosAtivos || []).map(semAcento);
+        const codigo = semAcento(codigoCliente || cli.situacaoFuncional || "");
+        if (!codigo) {
+          out.push(regra({ ...base, campo: "situacaoFuncional", valorAnalisado: informada, status: "PENDENTE_INFO",
+            motivo: `${achada.descricao} só não é atendida para servidor ativo: informe a situação funcional.` }));
+        } else if (ativos.includes(codigo)) {
+          out.push(regra({ ...base, valorAnalisado: informada, status: "NAO_ELEGIVEL",
+            motivo: `${achada.descricao}: o ${banco} não atende servidor ativo desta UPAG.` }));
+        } else {
+          out.push(regra({ ...base, valorAnalisado: informada, status: "ELEGIVEL",
+            motivo: `${achada.descricao} só é barrada para servidor ativo; este cliente não é.` }));
+        }
+      } else {
+        out.push(regra({ ...base, valorAnalisado: informada, status: "NAO_ELEGIVEL",
+          motivo: `${achada.descricao}: UPAG não atendida pelo ${banco}.` }));
       }
     }
   }

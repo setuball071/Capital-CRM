@@ -148,7 +148,8 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       const cpf = soDigitos(req.params.cpf).padStart(11, "0");
       if (cpf.length !== 11) return res.status(400).json({ message: "CPF inválido" });
       const r = await db.execute(sql`
-        SELECT p.nome, p.data_nascimento, v.sit_func, v.convenio, v.orgao
+        SELECT p.nome, p.data_nascimento, p.upag AS upag_pessoa, p.upag_nome_pessoa,
+               v.sit_func, v.convenio, v.orgao, v.upag AS upag_vinculo
         FROM clientes_pessoa p
         LEFT JOIN clientes_vinculo v ON v.pessoa_id = p.id AND v.ativo = TRUE
         WHERE p.cpf = ${cpf}
@@ -180,10 +181,15 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       }
 
       if (!rows.length && !nascimento) return res.json(null);
+      // UPAG: o vínculo é mais específico que o cadastro da pessoa
+      const linhaUpag = rows.find(x => x.upag_vinculo || x.upag_pessoa);
+      const upag = linhaUpag ? (linhaUpag.upag_vinculo || linhaUpag.upag_pessoa) : null;
       res.json({
         nome: rows.length ? rows[0].nome : null,
         dataNascimento: nascimento,
         origemNascimento,
+        upag: upag ? String(upag) : null,
+        upagNome: rows.length ? rows[0].upag_nome_pessoa || null : null,
         vinculos: rows.filter(x => x.sit_func || x.orgao).map(x => ({ sitFunc: x.sit_func, convenio: x.convenio, orgao: x.orgao })),
       });
     } catch (err: any) {

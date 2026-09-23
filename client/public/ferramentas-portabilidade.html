@@ -6803,6 +6803,7 @@ window.addEventListener('load', function() {
 const MB_CAMPO_LABEL = {
   situacaoFuncional: 'Situação funcional',
   dataNascimento: 'Data de nascimento',
+  upag: 'UPAG (unidade pagadora)',
   pensaoTipo: 'Tipo de pensão',
   pensaoFim: 'Término da pensão',
   origemConfirmada: 'Banco de origem (BRB Banco ou BRB Financeira)',
@@ -6818,7 +6819,7 @@ const MB_STATUS_LABEL = {
 const MB_STATUS_COR = { ELEGIVEL: '#10B981', NAO_ELEGIVEL: '#EF4444', PENDENTE_INFO: '#F59E0B', REGRA_NAO_CADASTRADA: '#9CA3AF', ANALISE_MANUAL: '#0EA5E9' };
 const MB_AVISO_NAO_INTEGRADO = 'Banco selecionado. Troco e parcela deste banco estão calculados aqui no painel, com a taxa dele; o simulador antigo abaixo ainda não calcula este banco.';
 
-const mbDadosVazios = () => ({ situacaoFuncional: '', dataNascimento: '', pensaoTipo: '', pensaoFim: '',
+const mbDadosVazios = () => ({ situacaoFuncional: '', dataNascimento: '', pensaoTipo: '', pensaoFim: '', upag: '',
   alertas: { analfabeto: false, naoAssina: false, leiEstadualIdoso: false },
   // refin: a TAXA é a de cada banco; prazo e modo quem escolhe é o operador
   operacao: { modo: 'maximo', prazo: '120', valor: '' },
@@ -6831,6 +6832,7 @@ const MB = {
   cpfDono: null,            // de qual CPF são os dados complementares
   sugestaoCrm: null,        // o que o cadastro do CRM diz (dica, não dado confirmado)
   crmNascimento: null,      // de onde veio a data de nascimento (ou por que não veio)
+  crmUpag: null,            // idem para a unidade pagadora
   resultado: null, codigosSituacao: [], alertasFormalizacao: [], bancosDesligados: [],
   analiseSalva: null,       // análise que veio junto com a cotação reaberta
   ultimaChave: null, chaveAgendada: null, timer: null, seq: 0, ctrl: null,
@@ -6891,6 +6893,7 @@ function mbEntradaMotor(s) {
       situacaoFuncional: d.situacaoFuncional || null,
       dataNascimento: d.dataNascimento || null,
       pensao: d.pensaoTipo ? { tipo: d.pensaoTipo, dataFim: d.pensaoTipo === 'temporaria' ? (d.pensaoFim || null) : null } : null,
+      upag: d.upag || null,
       alertas: d.alertas,
     },
     contratos: s.contratos,
@@ -6991,6 +6994,11 @@ async function mbBuscarCrm(dig) {
     if (dig !== MB.cpfDono) return;
     if (!cli) { MB.crmNascimento = { estado: 'nao-encontrado' }; mbRender(); return; }
     if (cli.dataNascimento && !MB.dados.dataNascimento) MB.dados.dataNascimento = cli.dataNascimento;
+    // UPAG do cadastro: o nome ajuda a conferir, o código é o que a regra usa
+    if (!MB.dados.upag && (cli.upag || cli.upagNome)) {
+      MB.dados.upag = String(cli.upag || cli.upagNome);
+      MB.crmUpag = { origem: 'cadastro do CRM', nome: cli.upagNome || null };
+    }
     MB.crmNascimento = cli.dataNascimento
       ? { estado: 'ok', origem: cli.origemNascimento || 'cadastro do CRM' }
       : { estado: 'sem-data' };
@@ -7140,6 +7148,7 @@ function mbRestaurarDaCotacao(mb, cpf) {
   MB.dados = Object.assign(mbDadosVazios(), (mb && mb.dadosComplementares) || {});
   MB.dados.alertas = Object.assign(mbDadosVazios().alertas, (mb && mb.dadosComplementares && mb.dadosComplementares.alertas) || {});
   MB.dados.operacao = Object.assign(mbDadosVazios().operacao, (mb && mb.dadosComplementares && mb.dadosComplementares.operacao) || {});
+  MB.dados.upag = (mb && mb.dadosComplementares && mb.dadosComplementares.upag) || '';
   MB.dados.foraDoCalculo = Array.isArray(mb && mb.dadosComplementares && mb.dadosComplementares.foraDoCalculo) ? mb.dadosComplementares.foraDoCalculo : [];
   MB.escolha = (mb && mb.bancoEscolhido) || null;
   MB.analiseSalva = mb && mb.resultado ? { resultado: mb.resultado, em: mb.analisadoEm } : null;
@@ -7207,6 +7216,11 @@ function mbCampoPendenteHTML(p) {
     const opts = MB.codigosSituacao.map(c => `<option value="${mbEsc(c.codigo)}" ${c.codigo === MB.dados.situacaoFuncional ? 'selected' : ''}>${mbEsc(c.codigo)} — ${mbEsc(c.descricao)}</option>`).join('');
     return `<div class="mb-pend-linha"><span>${rot}${dica}</span>
       <select onchange="mbSetDado('situacaoFuncional', this.value)"><option value="">escolha o código</option>${opts}</select>${quem}</div>`;
+  }
+  if (p.campo === 'upag') {
+    const dica = MB.crmUpag ? ` <span class="mb-sub">(${mbEsc(MB.crmUpag.origem)}${MB.crmUpag.nome ? ': ' + mbEsc(MB.crmUpag.nome) : ''})</span>` : '';
+    return `<div class="mb-pend-linha"><span>${rot}${dica}</span>
+      <input style="min-width:200px" placeholder="código ou nome da UPAG" value="${mbEsc(MB.dados.upag)}" onchange="mbSetDado('upag', this.value)">${quem}</div>`;
   }
   if (p.campo === 'dataNascimento') {
     return `<div class="mb-pend-linha"><span>${rot}${mbOrigemNascimentoHTML()}</span>
