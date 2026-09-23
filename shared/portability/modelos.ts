@@ -19,6 +19,37 @@ export interface ModeloRegra {
 
 export const MODELOS: ModeloRegra[] = [
   {
+    id: "inter-siape-2026-09",
+    banco: "Inter",
+    convenio: "SIAPE",
+    fonteDescricao: "Resumo Portabilidade SIAPE 08/06/2026 + cadastro antigo do simulador, conferidos com o Fábio em 23/09/2026",
+    regras: {
+      // o Inter não tem taxa de entrada: o contrato pode vir com qualquer taxa,
+      // desde que a PONDERADA passe (conta feita na aba Viabilidade Inter)
+      taxaEntradaMin: null,
+      saldoMin: 1000,
+      trocoMinPorContrato: 300,
+      valorMaxContrato: 270000,          // limite da operação, já somando o troco
+      idade: { min: 21, maxFimOperacao: 79 },   // terminar com 79 anos e 11 meses
+      origens: {
+        padraoPagasMin: 0,               // o Inter porta tudo com 0 pagas
+        lista: [
+          { origem: "Facta", porta: false },
+          { origem: "Master", porta: false },
+        ],
+      },
+      avisos: [
+        "Quem decide o Inter é a TAXA PONDERADA (mínimo 1,63% no SIAPE, 1,60% com seguro): use o botão \"Validar no Inter\" para a conta oficial.",
+        "Coobrigação de 90 dias.",
+        "Ajuste de tabela quando o saldo chega: normal, flex 1 ou flex 2.",
+        "Formalização: contrato da port, nuvídeo quando o saldo chega e novo contrato no refin.",
+      ],
+      // taxa do refin e comissão ficam na Viabilidade Inter (31 tabelas + taxa ponderada)
+      taxaRefin: null,
+      comissao: null,
+    },
+  },
+  {
     id: "daycoval-siape-2026-09",
     banco: "Daycoval",
     convenio: "SIAPE",

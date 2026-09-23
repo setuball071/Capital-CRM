@@ -408,5 +408,55 @@ caso("Banco sem taxa de refin cadastrada não inventa troco", () => {
   assert.match(r.contratos[0].operacao.find(o => o.chave === "troco")!.motivo, /taxa de refin do Daycoval não está cadastrada/);
 });
 
+console.log("\nInter (0 pagas, teto de 270 mil, sem taxa de entrada)");
+const INT = MODELOS.find(m => m.id === "inter-siape-2026-09")!;
+const bancoINT = (regras = INT.regras): BancoParaAnalise =>
+  ({ bankId: 4, nome: "Inter", ruleSet: { id: 4, hash: "i", vigenciaInicio: "2026-09-23", regras }, excecoes: [] });
+const ctINT = (p: Partial<ContratoEntrada>) => ct({ bancoOrigem: "BMG", taxa: 0.9, saldo: 20000, parcela: 600, prazoTotal: 96, prazoRestante: 96, ...p });
+function statusINT(c: ContratoEntrada, esperado: Status, trecho?: string, anos = 50, prazo = 120) {
+  const r = analisarBanco(bancoINT(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(anos) }, [c], HOJE, { modo: "maximo", prazo });
+  assert.equal(r.contratos[0].status, esperado, `status ${r.contratos[0].status}, esperava ${esperado}`);
+  if (trecho) {
+    const todos = [...r.contratos[0].regras, ...r.cliente].map(x => x.motivo).join(" | ");
+    assert.ok(todos.includes(trecho), `motivo sem "${trecho}": ${todos}`);
+  }
+}
+
+caso("Inter: qualquer taxa passa (quem decide é a ponderada)", () => statusINT(ctINT({ taxa: 0.5 }), "ELEGIVEL"));
+caso("Inter: 0 pagas em qualquer banco", () => statusINT(ctINT({ bancoOrigem: "C6", prazoRestante: 96 }), "ELEGIVEL"));
+caso("Inter não porta Facta nem Master", () => {
+  statusINT(ctINT({ bancoOrigem: "Facta" }), "NAO_ELEGIVEL", "não porta");
+  statusINT(ctINT({ bancoOrigem: "BANCO MASTER" }), "NAO_ELEGIVEL", "não porta");
+});
+caso("Banco Máxima é reconhecido como Master", () => assert.equal(normalizarOrigem("BANCO MAXIMA"), "MASTER"));
+caso("Inter: saldo mínimo de 1.000 e troco mínimo de 300", () => {
+  statusINT(ctINT({ saldo: 999 }), "NAO_ELEGIVEL", "abaixo do mínimo");
+  assert.equal(INT.regras.trocoMinPorContrato, 300);
+});
+caso("Inter: terminar com 79 anos", () => {
+  statusINT(ctINT({}), "ELEGIVEL", undefined, 69);        // 69 + 120 meses = 79
+  statusINT(ctINT({}), "NAO_ELEGIVEL", "termina com 80 anos", 70);
+});
+caso("Teto de 270 mil conta o troco: contrato que passa disso não fecha", () => {
+  const regras = { ...INT.regras, taxaRefin: 1.65 };      // taxa só para o teste calcular
+  const r = analisarBanco(bancoINT(regras), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
+    [ctINT({ saldo: 250000, parcela: 9000 })], HOJE, { modo: "maximo", prazo: 120 });
+  const pr = r.contratos[0].preco!;
+  assert.equal(pr.viavel, false);
+  assert.match(pr.motivo, /acima do limite do banco \(R\$ 270\.000,00\)/);
+});
+caso("Contrato dentro do teto fecha normalmente", () => {
+  const regras = { ...INT.regras, taxaRefin: 1.65 };
+  const r = analisarBanco(bancoINT(regras), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
+    [ctINT({ saldo: 20000, parcela: 600 })], HOJE, { modo: "maximo", prazo: 120 });
+  assert.ok(r.contratos[0].preco!.viavel, r.contratos[0].preco!.motivo);
+});
+caso("Inter sem taxa de refin: troco vem da Viabilidade Inter", () => {
+  const r = analisarBanco(bancoINT(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
+    [ctINT({})], HOJE, { modo: "maximo", prazo: 120 });
+  assert.equal(r.refin, null);
+  assert.ok(r.avisos.some(a => a.includes("Validar no Inter")));
+});
+
 console.log(`\n${ok} ok, ${falhas} falha(s)\n`);
 process.exit(falhas ? 1 : 0);
