@@ -458,5 +458,34 @@ caso("Inter sem taxa de refin: troco vem da Viabilidade Inter", () => {
   assert.ok(r.avisos.some(a => a.includes("Validar no Inter")));
 });
 
+console.log("\nParaná Banco");
+const PR = MODELOS.find(m => m.id === "parana-siape-2026-09")!;
+const bancoPR = (regras = PR.regras): BancoParaAnalise =>
+  ({ bankId: 6, nome: "Paraná Banco", ruleSet: { id: 6, hash: "p", vigenciaInicio: "2026-09-23", regras }, excecoes: [] });
+const ctPR = (p: Partial<ContratoEntrada>) => ct({ bancoOrigem: "BMG", taxa: 1.5, saldo: 20000, parcela: 600, prazoTotal: 96, prazoRestante: 60, ...p });
+function statusPR(c: ContratoEntrada, esperado: Status, trecho?: string, anos = 50, prazo = 96) {
+  const r = analisarBanco(bancoPR(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(anos) }, [c], HOJE, { modo: "maximo", prazo });
+  assert.equal(r.contratos[0].status, esperado, `status ${r.contratos[0].status}, esperava ${esperado}`);
+  if (trecho) {
+    const todos = [...r.contratos[0].regras, ...r.cliente].map(x => x.motivo).join(" | ");
+    assert.ok(todos.includes(trecho), `motivo sem "${trecho}": ${todos}`);
+  }
+}
+
+caso("Paraná: taxa de entrada 1,00", () => { statusPR(ctPR({ taxa: 0.99 }), "NAO_ELEGIVEL", "abaixo do mínimo"); statusPR(ctPR({ taxa: 1.0 }), "ELEGIVEL"); });
+caso("Paraná não porta Bari, Facta nem Mercantil", () => {
+  statusPR(ctPR({ bancoOrigem: "BANCO BARI" }), "NAO_ELEGIVEL", "não porta");
+  statusPR(ctPR({ bancoOrigem: "Facta" }), "NAO_ELEGIVEL", "não porta");
+  statusPR(ctPR({ bancoOrigem: "Mercantil" }), "NAO_ELEGIVEL", "não porta");
+});
+caso("Paraná: Agibank e Inbursa com 13 pagas", () => {
+  statusPR(ctPR({ bancoOrigem: "Agibank", prazoRestante: 84 }), "NAO_ELEGIVEL", "exige 13");
+  statusPR(ctPR({ bancoOrigem: "Agibank", prazoRestante: 83 }), "ELEGIVEL");
+});
+caso("Paraná: rede com 0 pagas", () => statusPR(ctPR({ bancoOrigem: "Caixa", prazoRestante: 96 }), "ELEGIVEL", "banco de rede"));
+caso("Paraná: sem saldo mínimo cadastrado, contrato pequeno passa na elegibilidade", () => statusPR(ctPR({ saldo: 800 }), "ELEGIVEL"));
+caso("Paraná: parcela mínima de 200 está cadastrada", () => assert.equal(PR.regras.parcelaMinima, 200));
+caso("Bari é reconhecido como banco de origem", () => assert.equal(normalizarOrigem("BANCO BARI"), "BARI"));
+
 console.log(`\n${ok} ok, ${falhas} falha(s)\n`);
 process.exit(falhas ? 1 : 0);

@@ -262,6 +262,7 @@ export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?
   { chave: "ALFA", nome: "Alfa", padroes: ["ALFA", "BANCO ALFA", "ALFA FINANCEIRA"], grupo: "SAFRA" },
   { chave: "NBC", nome: "NBC", padroes: ["NBC"] },
   { chave: "MASTER", nome: "Master", padroes: ["MASTER", "BANCO MASTER", "MAXIMA", "BANCO MAXIMA"] },
+  { chave: "BARI", nome: "Bari", padroes: ["BARI", "BANCO BARI"] },
   // Entidades FORA DA CIP (previdências, associações): NENHUM banco porta — a
   // portabilidade passa pela CIP (Fábio, 22/09/2026). Só uma exceção cadastrada libera.
   { chave: "FUTURO", nome: "Futuro Previdência", padroes: ["FUTURO"], foraCip: true },

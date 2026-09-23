@@ -19,6 +19,43 @@ export interface ModeloRegra {
 
 export const MODELOS: ModeloRegra[] = [
   {
+    id: "parana-siape-2026-09",
+    banco: "Paraná Banco",
+    convenio: "SIAPE",
+    fonteDescricao: "Resumo Portabilidade SIAPE 08/06/2026 + comparativo Bevi 18/09/2026 (taxa do refin, comissão e idade a confirmar com o Fábio)",
+    regras: {
+      taxaEntradaMin: 1.00,             // comparativo Bevi
+      // o PDF não traz saldo mínimo
+      trocoMinPorContrato: 100,         // "valor liberado: refin de port 100,00"
+      parcelaMinima: 200,
+      // ⚠️ o PDF diz "18 a 77 anos 11 meses e 29 dias". Nos outros bancos isso
+      // acabou sendo idade no FIM da operação — cadastrado assim, a confirmar.
+      idade: { min: 18, maxFimOperacao: 77 },
+      origens: {
+        padraoPagasMin: 12,
+        redePagasMin: 0,
+        lista: [
+          { origem: "Bari", porta: false },
+          { origem: "Facta", porta: false },
+          { origem: "Mercantil", porta: false },   // códigos 389 e 926
+          { origem: "Agibank", porta: true, pagasMin: 13 },
+          { origem: "Inbursa", porta: true, pagasMin: 13 },
+          { origem: "C6", porta: true, pagasMin: 25 },
+          { origem: "Pan", porta: true, pagasMin: 25 },
+        ],
+      },
+      avisos: [
+        "Faz port pura (único da lista) e unifica a parcela.",
+        "Reduz margem negativa.",
+        "O banco faz cálculo manual quando o contracheque tem comissão, abono ou gratificação.",
+        "Formaliza na digitação e de novo quando o saldo chega; não permite ajuste de tabela; saldo até as 17h.",
+        "Falta cadastrar a taxa do refin e a comissão do Paraná.",
+      ],
+      taxaRefin: null,                  // Bevi mostra 1,60 como MÍNIMA
+      comissao: null,
+    },
+  },
+  {
     id: "inter-siape-2026-09",
     banco: "Inter",
     convenio: "SIAPE",
@@ -43,6 +80,7 @@ export const MODELOS: ModeloRegra[] = [
         "Coobrigação de 90 dias.",
         "Ajuste de tabela quando o saldo chega: normal, flex 1 ou flex 2.",
         "Formalização: contrato da port, nuvídeo quando o saldo chega e novo contrato no refin.",
+        "Comissão por tabela (parte da casa, informada pelo Fábio em 23/09/2026): T1 0,35% · T2 0,65% · T3 1,00% · T4 1,35% · T5 1,70% · T6 2,05%.",
       ],
       // taxa do refin e comissão ficam na Viabilidade Inter (31 tabelas + taxa ponderada)
       taxaRefin: null,
