@@ -18,19 +18,24 @@ interface SimState {
 interface AporteAnoLinha {
   ano: number;
   mes: number;
+  /** soma das 12 parcelas do ano */
+  parcelasNoAno: number;
   aporte: number;
-  quitadas: string;
-  /** fração de uma parcela paga a mais no ano (0 = nenhuma) */
-  parcial: number;
-  restantes: number;
+  saldoAntes: number;
+  saldoDepois: number;
 }
 
 interface AporteAnualCard {
   anos: number;
   meses: number;
   aporte: number;
+  /** último aporte = saldo do dia, para o cliente não pagar centavos a mais */
+  aporteFinal: number;
   taxa: number;
+  saldoInicial: number;
   totalPago: number;
+  totalSemAporte: number;
+  economia: number;
   linhas: AporteAnoLinha[];
 }
 
@@ -253,29 +258,29 @@ function buildAporteAnualCards(s: SimState): AporteAnualCard[] {
     if (!(fator > 0) || !(vpAlvo > 0)) continue;
     const aporte = vpAlvo / fator;
 
-    // quais parcelas cada aporte quita (sempre as do fim, da última para trás)
+    // Simula mês a mês, como o extrato do banco: parcela abate, juros somam e,
+    // no 12º mês de cada ano, entra o aporte. O ÚLTIMO aporte é o saldo do dia,
+    // para nunca cobrar centavos a mais do cliente.
     const linhas: AporteAnoLinha[] = [];
-    let pos = n;
-    let falta = 1;              // quanto ainda falta da parcela em `pos` (1 = inteira)
+    let saldo = parcela * (1 - Math.pow(1 + i, -n)) / i;
+    const saldoInicial = saldo;
+    let pagoAportes = 0;
     for (let t = 1; t <= anos; t++) {
-      let sobra = aporte;
-      const quitadas: number[] = [];
-      while (pos > meses) {
-        const vpCheio = parcela / Math.pow(1 + i, pos - 12 * t);
-        const vpDevido = vpCheio * falta;
-        if (vpDevido <= sobra + 0.005) { sobra -= vpDevido; quitadas.push(pos); pos--; falta = 1; }
-        else { falta -= sobra / vpCheio; sobra = 0; break; }   // o pedaço pago continua valendo no ano seguinte
-      }
+      for (let m = 1; m <= 12; m++) saldo += saldo * i - parcela;
+      const saldoAntes = saldo;
+      const aporteDoAno = t === anos ? Math.max(0, saldo) : aporte;
+      saldo -= aporteDoAno;
+      pagoAportes += aporteDoAno;
       linhas.push({
-        ano: t, mes: 12 * t, aporte,
-        quitadas: quitadas.length
-          ? (quitadas.length === 1 ? `${quitadas[0]}` : `${quitadas[quitadas.length - 1]} a ${quitadas[0]}`)
-          : "—",
-        parcial: falta < 0.99 && pos > meses ? 1 - falta : 0,
-        restantes: Math.max(0, pos - meses),
+        ano: t, mes: 12 * t, parcelasNoAno: parcela * 12,
+        aporte: aporteDoAno, saldoAntes, saldoDepois: Math.abs(saldo) < 0.005 ? 0 : saldo,
       });
     }
-    cards.push({ anos, meses, aporte, taxa: i * 100, totalPago: parcela * meses + aporte * anos, linhas });
+    const totalPago = parcela * meses + pagoAportes;
+    cards.push({
+      anos, meses, aporte, aporteFinal: linhas[linhas.length - 1].aporte, taxa: i * 100, saldoInicial,
+      totalPago, totalSemAporte: parcela * n, economia: parcela * n - totalPago, linhas,
+    });
   }
   return cards;
 }
@@ -338,6 +343,7 @@ export default function SimuladorPortabilidadePage() {
   const [prazosOcultos, setPrazosOcultos] = useState<Set<number>>(new Set());
   // terceira estratégia: aporte uma vez por ano, em vez de mensal
   const [modoAporteAnual, setModoAporteAnual] = useState(false);
+  const [apresentando, setApresentando] = useState(false);   // tela limpa para o print do cliente
   const [anualEscolhido, setAnualEscolhido] = useState<{ side: "left" | "right"; anos: number } | null>(null);
   const cardsAnuaisEsq = leftState ? buildAporteAnualCards(leftState) : [];
   const cardsAnuaisDir = rightState ? buildAporteAnualCards(rightState) : [];
@@ -960,6 +966,59 @@ export default function SimuladorPortabilidadePage() {
           </div>
         </div>
 
+        {apresentando && anualAberto && (
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setApresentando(false); }}
+            style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,.55)", zIndex: 60, overflow: "auto", padding: 24 }}
+            data-testid="apresentacao"
+          >
+            <div style={{ maxWidth: 720, margin: "0 auto", background: "#fff", color: "#111827", borderRadius: 14, padding: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                {logoUrl ? <img src={logoUrl} alt="" style={{ height: 30 }} /> : null}
+                <div style={{ fontSize: 18, fontWeight: 700 }}>Plano de quitação antecipada</div>
+                <button onClick={() => setApresentando(false)}
+                  style={{ marginLeft: "auto", border: 0, background: "transparent", fontSize: 20, cursor: "pointer", color: "#6B7280" }}
+                  data-testid="btn-fechar-apresentacao">✕</button>
+              </div>
+              {pdfClientName ? <div style={{ fontSize: 14, marginBottom: 10 }}>Cliente: <b>{pdfClientName}</b></div> : null}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 18, fontSize: 14, marginBottom: 14 }}>
+                <div><div style={{ fontSize: 11, color: "#6B7280" }}>PARCELA MENSAL</div>
+                  <b>{fmtR(anualEscolhido?.side === "left" ? (leftState?.margem ?? 0) : (rightState?.margem ?? 0))}</b></div>
+                <div><div style={{ fontSize: 11, color: "#6B7280" }}>APORTE UMA VEZ POR ANO</div><b>{fmtR(anualAberto.aporte)}</b></div>
+                <div><div style={{ fontSize: 11, color: "#6B7280" }}>QUITA EM</div>
+                  <b>{anualAberto.anos} {anualAberto.anos === 1 ? "ano" : "anos"} ({anualAberto.meses} meses)</b></div>
+                <div><div style={{ fontSize: 11, color: "#6B7280" }}>EM VEZ DE</div>
+                  <b>{anualEscolhido?.side === "left" ? (leftState?.prazo ?? 0) : (rightState?.prazo ?? 0)} meses</b></div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 18, background: "#F5F3FF", borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                <div><div style={{ fontSize: 11, color: "#6B7280" }}>PAGANDO ATÉ O FIM</div><b>{fmtR(anualAberto.totalSemAporte)}</b></div>
+                <div><div style={{ fontSize: 11, color: "#6B7280" }}>COM OS APORTES</div><b>{fmtR(anualAberto.totalPago)}</b></div>
+                <div><div style={{ fontSize: 11, color: "#6B7280" }}>VOCÊ ECONOMIZA</div>
+                  <b style={{ color: "#047857", fontSize: 18 }}>{fmtR(anualAberto.economia)}</b></div>
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead><tr style={{ textAlign: "left", color: "#6B7280", fontSize: 11 }}>
+                  <th style={{ padding: "6px 8px" }}>ANO</th><th>MÊS</th><th>APORTE</th><th>SALDO DEPOIS</th>
+                </tr></thead>
+                <tbody>
+                  {anualAberto.linhas.map(l => (
+                    <tr key={l.ano} style={{ borderTop: "1px solid #E5E7EB" }}>
+                      <td style={{ padding: "7px 8px" }}>{l.ano}º</td>
+                      <td>{l.mes}</td>
+                      <td>{fmtR(l.aporte)}</td>
+                      <td style={l.saldoDepois === 0 ? { fontWeight: 700, color: "#047857" } : undefined}>{fmtR(l.saldoDepois)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p style={{ fontSize: 11.5, color: "#6B7280", marginTop: 12 }}>
+                A parcela mensal continua a mesma. O aporte anual abate o saldo devedor e encurta o contrato.
+                Simulação: valores podem variar conforme a data de pagamento.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="sim-section">
           <div className="section-title">Estratégia de Amortização — escolha um prazo para ver o cronograma</div>
           <div className="estrat-modo">
@@ -1024,23 +1083,46 @@ export default function SimuladorPortabilidadePage() {
                   </div>
                   <table className="tab-anual">
                     <thead><tr>
-                      <th>Ano</th><th>Mês do aporte</th><th>Aporte</th><th>Parcelas que ele quita</th><th>Parcelas ainda no fim</th>
+                      <th>Ano</th><th>Mês do aporte</th><th>Parcelas pagas no ano</th><th>Aporte</th>
+                      <th>Saldo antes</th><th>Saldo depois</th>
                     </tr></thead>
                     <tbody>
                       {anualAberto.linhas.map(l => (
                         <tr key={l.ano}>
                           <td>{l.ano}º</td>
                           <td>{l.mes}</td>
+                          <td>{fmtR(l.parcelasNoAno)}</td>
                           <td>{fmtR(l.aporte)}</td>
-                          <td>{l.quitadas}{l.parcial ? ` (+ ${Math.round(l.parcial * 100)}% da seguinte)` : ""}</td>
-                          <td>{l.restantes}</td>
+                          <td>{fmtR(l.saldoAntes)}</td>
+                          <td style={l.saldoDepois === 0 ? { fontWeight: 700, color: "#047857" } : undefined}>{fmtR(l.saldoDepois)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   <p className="table-meta" style={{ marginTop: 6 }}>
-                    Cada aporte quita as parcelas do fim do contrato pelo valor presente delas — o mesmo método das outras estratégias.
+                    O aporte abate o saldo devedor; o último é o saldo do dia, para não pagar centavos a mais.
+                    Mesma taxa do contrato ({fmtN(anualAberto.taxa, 4)}% a.m.) — o que muda é o tempo pagando juros.
                   </p>
+                  <div className="prazos-grid" style={{ marginTop: 10, gridTemplateColumns: "repeat(auto-fill, minmax(150px,1fr))" }}>
+                    <div className="pc" style={{ cursor: "default" }}>
+                      <div className="pc-taxa">Sem aporte ({anualEscolhido?.side === "left" ? (leftState?.prazo ?? 0) : (rightState?.prazo ?? 0)} meses)</div>
+                      <div className="pc-parc">{fmtR(anualAberto.totalSemAporte)}</div>
+                    </div>
+                    <div className="pc" style={{ cursor: "default" }}>
+                      <div className="pc-taxa">Com aporte ({anualAberto.meses} meses)</div>
+                      <div className="pc-parc">{fmtR(anualAberto.totalPago)}</div>
+                    </div>
+                    <div className="pc" style={{ cursor: "default", borderColor: "#047857" }}>
+                      <div className="pc-taxa">Economia</div>
+                      <div className="pc-parc" style={{ color: "#047857" }}>{fmtR(anualAberto.economia)}</div>
+                      <div className="pc-taxa">{fmtN(100 * anualAberto.economia / (anualAberto.totalSemAporte || 1), 1)}% do total</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setApresentando(true)}
+                    style={{ marginTop: 10, padding: "8px 14px", borderRadius: 8, border: 0, background: "#6C2BD9", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                    data-testid="btn-apresentar"
+                  >Apresentar ao cliente</button>
                 </div>
               )}
             </>
