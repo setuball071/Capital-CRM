@@ -29,6 +29,8 @@ export interface OperacaoEntrada {
 
 export interface PrecoContrato {
   contratoId: string;
+  /** taxa usada neste contrato (bancos com faixa cobram taxas diferentes por valor) */
+  taxa: number;
   saldo: number;
   parcelaAtual: number;
   parcelaNova: number;
@@ -44,7 +46,8 @@ export interface PrecoContrato {
 export interface ResumoRefin {
   modo: ModoRefin;
   prazo: number;
-  taxa: number;
+  /** null = o banco usou mais de uma taxa (faixas por valor) */
+  taxa: number | null;
   trocoMin: number;
   /** somas só dos contratos viáveis */
   contratos: number;
@@ -63,42 +66,57 @@ export function fatorPrice(taxaMes: number, prazo: number): number {
 const brl = (v: number) => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Precifica os contratos aceitos por UM banco. No modo troco o valor total é
- *  distribuído pelo saldo de cada contrato, como no simulador antigo. */
+ *  distribuído pelo saldo de cada contrato, como no simulador antigo.
+ *  `taxa` pode ser um número ou uma função do valor do contrato — bancos como o
+ *  Safra cobram taxas diferentes por faixa de valor. Como a taxa muda o valor e o
+ *  valor escolhe a taxa, calculamos duas vezes: pelo saldo e depois pelo valor. */
 export function precificarRefin(
   contratos: { id: string; saldo: number; parcela: number }[],
-  taxaPct: number, trocoMin: number, op: OperacaoEntrada,
+  taxa: number | ((valor: number) => number | null), trocoMin: number, op: OperacaoEntrada,
 ): { linhas: PrecoContrato[]; resumo: ResumoRefin } {
-  const f = fatorPrice(taxaPct / 100, op.prazo);
-  const pv = (pmt: number) => pmt / f;
-  const pmt = (v: number) => v * f;
+  const taxaDe = typeof taxa === "function" ? taxa : () => taxa;
   const totalSaldo = contratos.reduce((a, c) => a + c.saldo, 0);
   const valor = Number(op.valor) || 0;
 
   const linhas = contratos.map((c): PrecoContrato => {
     const peso = totalSaldo > 0 ? c.saldo / totalSaldo : 0;
-    let trocoBruto: number, parcelaNova: number;
-    if (op.modo === "maximo") {
-      parcelaNova = c.parcela;
-      trocoBruto = pv(parcelaNova) - c.saldo;
-    } else {
-      const liquido = op.modo === "parcela" ? trocoMin : valor * peso;
-      trocoBruto = liquido * (1 + IOF_RATE);
-      parcelaNova = pmt(c.saldo + trocoBruto);
-    }
     const base = { contratoId: c.id, saldo: c.saldo, parcelaAtual: c.parcela };
-    // banco sem troco mínimo, no modo reduzir: portabilidade pura (troco zero) é válida
-    const semTrocoOk = op.modo === "parcela" && trocoMin <= 0;
-    if (!(trocoBruto > 0) && !semTrocoOk) {
-      return { ...base, parcelaNova: pmt(c.saldo), trocoBruto: 0, iof: 0, trocoLiquido: 0, valorContrato: c.saldo,
-        viavel: false, motivo: `Sem troco em ${op.prazo} meses: a parcela mínima é ${brl(pmt(c.saldo))}.` };
+    const semTrocoOk = op.modo === "parcela" && trocoMin <= 0;   // portabilidade pura
+
+    const calcular = (taxaPct: number) => {
+      const f = fatorPrice(taxaPct / 100, op.prazo);
+      const pv = (pmt: number) => pmt / f;
+      const pmt = (v: number) => v * f;
+      let trocoBruto: number, parcelaNova: number;
+      if (op.modo === "maximo") {
+        parcelaNova = c.parcela;
+        trocoBruto = pv(parcelaNova) - c.saldo;
+      } else {
+        const liquido = op.modo === "parcela" ? trocoMin : valor * peso;
+        trocoBruto = liquido * (1 + IOF_RATE);
+        parcelaNova = pmt(c.saldo + trocoBruto);
+      }
+      if (!(trocoBruto > 0) && !semTrocoOk) {
+        return { ...base, taxa: taxaPct, parcelaNova: pmt(c.saldo), trocoBruto: 0, iof: 0, trocoLiquido: 0, valorContrato: c.saldo,
+          viavel: false, motivo: `Sem troco em ${op.prazo} meses: a parcela mínima é ${brl(pmt(c.saldo))}.` };
+      }
+      const iof = trocoBruto * (1 - 1 / (1 + IOF_RATE));
+      const trocoLiquido = trocoBruto - iof;
+      const erros: string[] = [];
+      if (trocoLiquido < trocoMin - 0.01) erros.push(`troco abaixo do mínimo de ${brl(trocoMin)}`);
+      if (parcelaNova > c.parcela + 0.01) erros.push(`parcela nova maior que a atual (${brl(c.parcela)})`);
+      return { ...base, taxa: taxaPct, parcelaNova, trocoBruto, iof, trocoLiquido, valorContrato: c.saldo + trocoBruto,
+        viavel: !erros.length, motivo: erros.length ? erros.join("; ") : "" };
+    };
+
+    const t0 = taxaDe(c.saldo);
+    if (t0 === null) {
+      return { ...base, taxa: 0, parcelaNova: 0, trocoBruto: 0, iof: 0, trocoLiquido: 0, valorContrato: c.saldo,
+        viavel: false, motivo: `Saldo de ${brl(c.saldo)} não cai em nenhuma faixa de taxa do banco.` };
     }
-    const iof = trocoBruto * (1 - 1 / (1 + IOF_RATE));
-    const trocoLiquido = trocoBruto - iof;
-    const erros: string[] = [];
-    if (trocoLiquido < trocoMin - 0.01) erros.push(`troco abaixo do mínimo de ${brl(trocoMin)}`);
-    if (parcelaNova > c.parcela + 0.01) erros.push(`parcela nova maior que a atual (${brl(c.parcela)})`);
-    return { ...base, parcelaNova, trocoBruto, iof, trocoLiquido, valorContrato: c.saldo + trocoBruto,
-      viavel: !erros.length, motivo: erros.length ? erros.join("; ") : "" };
+    const primeira = calcular(t0);
+    const t1 = taxaDe(primeira.valorContrato);
+    return t1 !== null && t1 !== t0 ? calcular(t1) : primeira;
   });
 
   const ok = linhas.filter(l => l.viavel);
@@ -106,7 +124,8 @@ export function precificarRefin(
   return {
     linhas,
     resumo: {
-      modo: op.modo, prazo: op.prazo, taxa: taxaPct, trocoMin, contratos: ok.length,
+      modo: op.modo, prazo: op.prazo, trocoMin, contratos: ok.length,
+      taxa: ok.length && ok.every(l => l.taxa === ok[0].taxa) ? ok[0].taxa : null,
       saldo: soma("saldo"), valorContrato: soma("valorContrato"), trocoLiquido: soma("trocoLiquido"),
       parcelaAtual: soma("parcelaAtual"), parcelaNova: soma("parcelaNova"),
     },

@@ -6840,6 +6840,9 @@ const MB = {
 // ── utilidades ─────────────────────────────────────────────────────────────
 const mbEsc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const mbBRL = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** Bancos com faixa de valor usam mais de uma taxa/percentual: null = "varia". */
+const mbTaxaTxt = t => t == null ? 'taxa por faixa' : t.toFixed(2).replace('.', ',') + '%';
+const mbPctTxt = p => p == null ? 'varia por faixa' : String(p).replace('.', ',') + '%';
 const mbNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
 /** número dos contratos: aceita 1,65 / 1.65 / "R$ 43.419,93"; 0 e vazio = não informado */
 function mbNum(v, casas) {
@@ -7282,7 +7285,7 @@ function mbComparativoHTML(bancos) {
   const verCom = MB.comissaoVisivel;
   // comissão = % sobre o SALDO DEVEDOR dos contratos aceitos; troco nunca entra
   const comissao = b => !b.comissao ? 'não cadastrada'
-    : `<b>${mbBRL(b.comissao.total)}</b><div>${String(b.comissao.percentual).replace('.', ',')}% do saldo · ${b.comissao.contratos} contrato(s)</div>` +
+    : `<b>${mbBRL(b.comissao.total)}</b><div>${mbPctTxt(b.comissao.percentual)} do saldo · ${b.comissao.contratos} contrato(s)</div>` +
       (b.comissao.estimadaEmAnalise ? `<div>+ ${mbBRL(b.comissao.estimadaEmAnalise)} se a análise manual aprovar</div>` : '');
   const rankCom = verCom ? ord.filter(b => b.comissao && b.comissao.total > 0).sort((a, b) => b.comissao.total - a.comissao.total) : [];
   const cartaoCom = !verCom ? '' : `<div class="mb-cartao"><div class="mb-kpi-t">Maior comissão <span class="mb-sub">(só master)</span></div>` +
@@ -7320,7 +7323,7 @@ function mbComparativoHTML(bancos) {
         <td>${b.contratos.length ? `${b.contagem.ELEGIVEL} de ${b.contratos.length}` : '—'}</td>
         <td style="max-width:320px">${r.length ? mbEsc(r.slice(0, 2).join(' · ')) + (r.length > 2 ? ` (+${r.length - 2})` : '') : '—'}</td>
         <td>${b.refin && b.refin.contratos ? `<b>${mbBRL(b.refin.valorContrato)}</b><div class="mb-sub">${b.refin.contratos} contrato(s)</div>` : '—'}</td>
-        <td>${b.refin && b.refin.contratos ? `<b>${mbBRL(b.refin.trocoLiquido)}</b><div class="mb-sub">${b.refin.prazo}x a ${b.refin.taxa.toFixed(2).replace('.', ',')}%</div>` : '—'}</td>
+        <td>${b.refin && b.refin.contratos ? `<b>${mbBRL(b.refin.trocoLiquido)}</b><div class="mb-sub">${b.refin.prazo}x a ${mbTaxaTxt(b.refin.taxa)}</div>` : '—'}</td>
         ${verCom ? `<td class="mb-sub">${comissao(b)}</td>` : ''}
         <td style="text-align:right">${mbAcaoBanco(b)}</td></tr>`;
     }).join('') + `</tbody></table>`;
@@ -7362,10 +7365,10 @@ function mbBancoHTML(b) {
           <div><span>Valor bruto do contrato</span><b>${mbBRL(f.valorContrato)}</b></div>
           <div><span>Líquido do cliente</span><b style="color:#047857">${mbBRL(f.trocoLiquido)}</b></div>
           <div><span>Parcela</span><b>${mbBRL(f.parcelaAtual)} → ${mbBRL(f.parcelaNova)}</b></div>
-          <div><span>Refin</span><b>${f.prazo}x a ${f.taxa.toFixed(2).replace('.', ',')}% a.m.</b></div>
+          <div><span>Refin</span><b>${f.prazo}x a ${mbTaxaTxt(f.taxa)}${f.taxa == null ? '' : ' a.m.'}</b></div>
           ${verCom && b.comissao ? `<div><span>Comissão (só master)</span><b>${mbBRL(b.comissao.total)}</b></div>` : ''}
         </div>` : (semTaxa ? `<div class="mb-sub" style="margin-top:6px">Troco não calculado: a taxa de refin do ${mbEsc(b.banco)} não está cadastrada em Bancos e Regras.</div>`
-          : (verCom && b.comissao ? `<div class="mb-sub" style="margin-top:6px">Comissão: <b>${mbBRL(b.comissao.total)}</b> (${String(b.comissao.percentual).replace('.', ',')}% do saldo)</div>` : ''))}
+          : (verCom && b.comissao ? `<div class="mb-sub" style="margin-top:6px">Comissão: <b>${mbBRL(b.comissao.total)}</b> (${mbPctTxt(b.comissao.percentual)} do saldo)</div>` : ''))}
     </div>
     ${clienteProblema.length ? `<div class="mb-banner aviso">${clienteProblema.map(r => mbEsc(r.motivo)).join(' · ')}</div>` : ''}
     ${fora ? `<div class="mb-sub" style="margin:4px 0">${fora} contrato(s) fora do cálculo — marque a caixinha para voltar.</div>` : ''}

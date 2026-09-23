@@ -267,5 +267,54 @@ caso("Comissão do BRB: 2,05% do saldo", () => {
   assert.deepEqual([r.comissao!.percentual, r.comissao!.total], [2.05, 410]);
 });
 
+console.log("\nSafra (faixas de taxa/comissão e idade no fim da operação)");
+const SAF = MODELOS.find(m => m.id === "safra-siape-2026-09")!;
+const bancoSAF = (): BancoParaAnalise =>
+  ({ bankId: 5, nome: "Safra Financeira", ruleSet: { id: 5, hash: "s", vigenciaInicio: "2026-09-22", regras: SAF.regras }, excecoes: [] });
+const cliSAF = (anos: number): ClienteEntrada => ({ convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(anos) });
+const ctSAF = (p: Partial<ContratoEntrada>) => ct({ bancoOrigem: "Bradesco", taxa: 1.5, prazoTotal: 96, prazoRestante: 60, ...p });
+
+caso("Safra não porta Alfa (mesmo grupo)", () => status(cliSAF(50), ctSAF({ bancoOrigem: "Banco Alfa", saldo: 30000 }), "NAO_ELEGIVEL", "mesmo grupo", bancoSAF()));
+caso("Safra: saldo de 9.999 fica abaixo do mínimo de 10 mil", () => status(cliSAF(50), ctSAF({ saldo: 9999 }), "NAO_ELEGIVEL", "abaixo do mínimo", bancoSAF()));
+caso("Safra: taxa de entrada 1,20", () => status(cliSAF(50), ctSAF({ saldo: 30000, taxa: 1.19 }), "NAO_ELEGIVEL", "abaixo do mínimo", bancoSAF()));
+caso("Contrato de 12 mil usa a faixa 10k–20k: 1,70% e comissão 2,55%", () => {
+  const r = analisarBanco(bancoSAF(), cliSAF(50), [ctSAF({ saldo: 12000, parcela: 600 })], HOJE, { modo: "parcela", prazo: 96 });
+  assert.equal(r.contratos[0].preco!.taxa, 1.70);
+  assert.equal(r.comissao!.percentual, 2.55);
+  assert.equal(r.comissao!.total, Math.round(12000 * 2.55) / 100);
+});
+caso("Contrato que passa de 20 mil usa a faixa de cima: 1,65% e comissão 1,70%", () => {
+  const r = analisarBanco(bancoSAF(), cliSAF(50), [ctSAF({ saldo: 30000, parcela: 1200 })], HOJE, { modo: "parcela", prazo: 96 });
+  assert.equal(r.contratos[0].preco!.taxa, 1.65);
+  assert.equal(r.comissao!.percentual, 1.70);
+});
+caso("Dois contratos em faixas diferentes: taxa e comissão saem como 'varia'", () => {
+  const r = analisarBanco(bancoSAF(), cliSAF(50), [ctSAF({ id: "a", saldo: 12000, parcela: 600 }), ctSAF({ id: "b", saldo: 30000, parcela: 1200 })], HOJE, { modo: "parcela", prazo: 96 });
+  assert.equal(r.refin!.taxa, null); assert.equal(r.comissao!.percentual, null);
+  assert.equal(r.comissao!.total, Math.round((12000 * 2.55 + 30000 * 1.70)) / 100);
+});
+caso("Idade no fim da operação: 70 anos em 120 meses estoura os 78", () => {
+  const r = analisarBanco(bancoSAF(), cliSAF(70), [ctSAF({ saldo: 30000, parcela: 1200 })], HOJE, { modo: "parcela", prazo: 120 });
+  assert.equal(r.contratos[0].status, "NAO_ELEGIVEL");
+  const f = r.cliente.find(x => x.chave === "idade_fim")!;
+  assert.match(f.motivo, /termina com 80 anos.*Prazo máximo: \d+ meses/);
+});
+caso("Idade no fim da operação: 70 anos em 84 meses passa", () => {
+  const r = analisarBanco(bancoSAF(), cliSAF(70), [ctSAF({ saldo: 30000, parcela: 1200 })], HOJE, { modo: "parcela", prazo: 84 });
+  assert.equal(r.contratos[0].status, "ELEGIVEL");
+});
+caso("Sem prazo informado, a idade do fim não reprova: fica como regra não calculada", () => {
+  const r = analisarBanco(bancoSAF(), cliSAF(70), [ctSAF({ saldo: 30000 })], HOJE, null);
+  assert.equal(r.cliente.find(x => x.chave === "idade_fim")!.status, "REGRA_NAO_CADASTRADA");
+});
+caso("Sem data de nascimento: pergunta em vez de reprovar", () => {
+  const r = analisarBanco(bancoSAF(), { convenio: "SIAPE", situacaoFuncional: "1" }, [ctSAF({ saldo: 30000 })], HOJE, { modo: "maximo", prazo: 96 });
+  assert.equal(r.cliente.find(x => x.chave === "idade_fim")!.status, "PENDENTE_INFO");
+});
+caso("PAN (taxa única) não virou 'varia'", () => {
+  const r = analisarBanco(banco(), CLI, [ct({ saldo: 20000, parcela: 520 })], HOJE, { modo: "maximo", prazo: 96 });
+  assert.equal(r.refin!.taxa, 1.70); assert.equal(r.comissao!.percentual, 0.75);
+});
+
 console.log(`\n${ok} ok, ${falhas} falha(s)\n`);
 process.exit(falhas ? 1 : 0);

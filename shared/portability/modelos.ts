@@ -19,6 +19,46 @@ export interface ModeloRegra {
 
 export const MODELOS: ModeloRegra[] = [
   {
+    id: "safra-siape-2026-09",
+    banco: "Safra Financeira",
+    convenio: "SIAPE",
+    fonteDescricao: "Resumo Portabilidade SIAPE 08/06/2026 + anotações da casa, conferidos com o Fábio em 22/09/2026",
+    regras: {
+      taxaEntradaMin: 1.20,
+      saldoMin: 10000,                  // Fábio: abaixo de 10 mil o Safra não porta
+      trocoMinPorContrato: 500,
+      grupoBancario: "SAFRA",           // Safra e Alfa são o mesmo grupo: um não porta o outro
+      // não há teto de idade hoje: o que manda é terminar a operação com até 78 anos
+      idade: { min: 21, maxFimOperacao: 78 },
+      // duas frentes de refin. A taxa é a da casa (tabela do banco + margem de segurança)
+      faixasRefin: [
+        { minValor: 10000, taxa: 1.70, taxaOficial: 1.65, comissaoPercentual: 2.55, rotulo: "10k a 20k" },
+        { minValor: 20000, taxa: 1.65, taxaOficial: 1.59, comissaoPercentual: 1.70, rotulo: "a partir de 20k" },
+      ],
+      origens: {
+        padraoPagasMin: 12,
+        lista: [
+          { origem: "Daycoval", porta: false },
+          { origem: "Inbursa", porta: false },
+          { origem: "Facta", porta: true, pagasMin: 24 },
+          // ⚠️ C6 e Pan: o PDF do banco diz 25 e as anotações da casa dizem 18 e 15.
+          // Ficou com o valor mais exigente até o Fábio confirmar.
+          { origem: "C6", porta: true, pagasMin: 25 },
+          { origem: "Pan", porta: true, pagasMin: 25 },
+          { origem: "Banrisul", porta: true, pagasMin: 12 },
+        ],
+      },
+      avisos: [
+        "Bancos de rede portam com 0 pagas — ainda falta cadastrar quais bancos contam como rede.",
+        "O banco tem cálculo próprio de viabilidade: digite com o saldo mais atualizado possível.",
+        "A proposta trava no STOP até o saldo voltar; o saldo só é pago depois da liberação.",
+        "Atuação do saldo até as 12h.",
+        "Não atende secretarias de ex-territórios (Amapá, Roraima, Rondônia e demais).",
+        "Pensionista temporário sem data fim: o banco só aceita mulheres — o sistema manda para conferência.",
+      ],
+    },
+  },
+  {
     id: "brb-red-siape-2026-09",
     banco: "BRB Red",
     convenio: "SIAPE",

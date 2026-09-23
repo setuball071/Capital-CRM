@@ -18,7 +18,7 @@
 import { precificarRefin, type OperacaoEntrada, type PrecoContrato, type ResumoRefin } from "./refin";
 export type { OperacaoEntrada, PrecoContrato, ResumoRefin } from "./refin";
 
-export const ENGINE_VERSION = "1.3.0";   // 1.1: refin · 1.2: fora da CIP/próprio banco · 1.3: idade e grupo bancário
+export const ENGINE_VERSION = "1.4.0";   // 1.3: idade e grupo · 1.4: faixas de taxa/comissão e idade no fim da operação
 
 export type Status =
   | "ELEGIVEL"
@@ -86,8 +86,12 @@ export interface RegrasBanco {
     temporarioComFim?: { folgaMeses: number } | null;
     temporarioSemFim?: { idadeMin: number } | null;
   } | null;
-  /** Idade do cliente na data da análise. Celetista costuma ter teto menor. */
-  idade?: { min?: number | null; max?: number | null; maxCeletista?: number | null; codigosCeletista?: string[] } | null;
+  /** Idade do cliente na data da análise. Celetista costuma ter teto menor.
+   *  `maxFimOperacao`: idade máxima na ÚLTIMA parcela (Safra: "terminar com 78"). */
+  idade?: { min?: number | null; max?: number | null; maxCeletista?: number | null; maxFimOperacao?: number | null; codigosCeletista?: string[] } | null;
+  /** Bancos que mudam taxa (e comissão) conforme o valor do contrato. A faixa é
+   *  escolhida pelo valor financiado (saldo + troco). Quando existe, manda na taxaRefin. */
+  faixasRefin?: FaixaRefin[] | null;
   /** Grupo do banco (ex.: "BRB"): não porta contrato de nenhuma empresa do mesmo grupo. */
   grupoBancario?: string | null;
   alertasFormalizacao?: string[];
@@ -97,6 +101,18 @@ export interface RegrasBanco {
   /** Comissão que o banco paga à empresa. Hoje só base "saldo" (PAN: 0,75% do saldo devedor).
    *  Dado confidencial: o servidor tira da resposta para quem não é master. */
   comissao?: { percentual?: number | null; base?: "saldo" | null } | null;
+}
+
+export interface FaixaRefin {
+  /** vale a partir deste valor de contrato */
+  minValor: number;
+  /** taxa que o sistema usa (já com a margem de segurança da casa, se houver) */
+  taxa: number;
+  /** taxa de tabela do banco, só para registro */
+  taxaOficial?: number | null;
+  /** % de comissão desta faixa (sobre o saldo devedor) */
+  comissaoPercentual?: number | null;
+  rotulo?: string | null;
 }
 
 export interface Excecao {
@@ -179,7 +195,8 @@ export interface ResultadoBanco {
 }
 
 export interface ResumoComissao {
-  percentual: number;
+  /** null = o banco usou mais de um percentual (faixas por valor) */
+  percentual: number | null;
   base: "saldo";
   /** Soma só dos contratos ELEGÍVEIS: é o que o banco efetivamente paga. */
   total: number;
@@ -210,7 +227,7 @@ export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?
   { chave: "CAIXA", nome: "Caixa", padroes: ["CAIXA", "CEF"] },
   { chave: "BB", nome: "Banco do Brasil", padroes: ["BANCO DO BRASIL", "BCO BRAS", "BCO DO BRASIL"] },
   { chave: "ITAU", nome: "Itaú", padroes: ["ITAU"] },
-  { chave: "SAFRA", nome: "Safra", padroes: ["SAFRA"] },
+  { chave: "SAFRA", nome: "Safra", padroes: ["SAFRA", "SAFRA FINANCEIRA"], grupo: "SAFRA" },
   { chave: "FACTA", nome: "Facta", padroes: ["FACTA"] },
   { chave: "BANRISUL", nome: "Banrisul", padroes: ["BANRISUL"] },
   { chave: "C6", nome: "C6", padroes: ["C6"] },
@@ -232,7 +249,7 @@ export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?
   { chave: "PICPAY", nome: "PicPay", padroes: ["PICPAY"] },
   { chave: "PARANA", nome: "Paraná Banco", padroes: ["PARANA"] },
   { chave: "OLE", nome: "Olé", padroes: ["OLE"] },
-  { chave: "ALFA", nome: "Alfa", padroes: ["ALFA", "BANCO ALFA", "ALFA FINANCEIRA"] },
+  { chave: "ALFA", nome: "Alfa", padroes: ["ALFA", "BANCO ALFA", "ALFA FINANCEIRA"], grupo: "SAFRA" },
   // Entidades FORA DA CIP (previdências, associações): NENHUM banco porta — a
   // portabilidade passa pela CIP (Fábio, 22/09/2026). Só uma exceção cadastrada libera.
   { chave: "FUTURO", nome: "Futuro Previdência", padroes: ["FUTURO"], foraCip: true },
@@ -406,7 +423,7 @@ function idadeEm(nascimento: string, ref: Date): number | null {
 }
 
 /** Regras que dependem só do cliente (valem para todos os contratos). */
-function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string, hoje: Date) {
+function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string, hoje: Date, operacao?: OperacaoEntrada | null) {
   const out: ResultadoRegra[] = [];
   let codigoCliente: string | null = null;
   let ehPensionista = false;
@@ -449,6 +466,35 @@ function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string,
         motivo: cedo ? `Cliente tem ${anos} anos; o ${banco} atende a partir de ${id.min}.`
               : tarde ? `Cliente tem ${anos} anos; o ${banco} atende até ${max}${celetista ? " (celetista)" : ""}.`
               : `${anos} anos: dentro do limite do ${banco}.` }));
+    }
+  }
+
+  if (id && temNum(id.maxFimOperacao)) {
+    const base = { chave: "idade_fim", label: "Idade no fim da operação", esperado: `terminar com até ${id.maxFimOperacao} anos` };
+    if (!cli.dataNascimento) {
+      out.push(regra({ ...base, campo: "dataNascimento", valorAnalisado: null, status: "PENDENTE_INFO",
+        motivo: `Falta a data de nascimento: o ${banco} exige terminar a operação com até ${id.maxFimOperacao} anos.` }));
+    } else if (!operacao) {
+      out.push(regra({ ...base, valorAnalisado: null, status: "REGRA_NAO_CADASTRADA", fonte: "sistema",
+        motivo: `Depende do prazo do refin: informe o prazo para conferir a idade no fim da operação.` }));
+    } else {
+      const fim = new Date(hoje.getTime());
+      fim.setMonth(fim.getMonth() + operacao.prazo);
+      const idadeFim = idadeEm(cli.dataNascimento, fim);
+      const hojeIdade = idadeEm(cli.dataNascimento, hoje);
+      const ok = idadeFim !== null && idadeFim <= id.maxFimOperacao!;
+      // prazo máximo = meses que faltam para ele passar do limite
+      let prazoMax: number | null = null;
+      if (!ok && hojeIdade !== null) {
+        const virada = new Date(cli.dataNascimento + "T00:00:00");
+        virada.setFullYear(virada.getFullYear() + id.maxFimOperacao! + 1);
+        prazoMax = Math.max(0, (virada.getFullYear() - hoje.getFullYear()) * 12 + (virada.getMonth() - hoje.getMonth()) - (virada.getDate() < hoje.getDate() ? 1 : 0));
+      }
+      out.push(regra({ ...base, valorAnalisado: idadeFim === null ? cli.dataNascimento : `${idadeFim} anos em ${operacao.prazo} meses`,
+        status: idadeFim === null ? "PENDENTE_INFO" : ok ? "ELEGIVEL" : "NAO_ELEGIVEL",
+        motivo: idadeFim === null ? "Data de nascimento inválida."
+          : ok ? `Termina com ${idadeFim} anos: dentro do limite do ${banco}.`
+               : `Em ${operacao.prazo} meses o cliente termina com ${idadeFim} anos; o ${banco} aceita até ${id.maxFimOperacao}. Prazo máximo: ${prazoMax} meses.` }));
     }
   }
 
@@ -524,6 +570,15 @@ function avaliarPensaoContrato(c: ContratoEntrada, cli: ClienteEntrada, regras: 
 
 const pctSimples = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%";
 
+/** Faixa de taxa que vale para um valor de contrato (a maior que couber). */
+export function faixaPara(valor: number, faixas?: FaixaRefin[] | null): FaixaRefin | null {
+  if (!faixas || !faixas.length) return null;
+  const ordenadas = [...faixas].sort((a, b) => a.minValor - b.minValor);
+  let achada: FaixaRefin | null = null;
+  for (const f of ordenadas) if (valor >= f.minValor - 0.01) achada = f;
+  return achada;
+}
+
 /** Percentual de comissão sobre o saldo, se a regra existir e for suportada. */
 function percentualComissao(regras: RegrasBanco): number | null {
   const c = regras.comissao;
@@ -537,6 +592,12 @@ function avaliarOperacao(c: ContratoEntrada, statusContrato: Status, regras: Reg
   const out: ResultadoRegra[] = [];
   const p = percentualComissao(regras);
   const base = { chave: "comissao", label: "Comissão" };
+  if (p === null && (regras.faixasRefin || []).some(f => temNum(f.comissaoPercentual))) {
+    // a faixa (e com ela a comissão) só se sabe depois de calcular o contrato
+    out.push(regra({ ...base, valorAnalisado: null, esperado: "conforme a faixa de valor", status: "REGRA_NAO_CADASTRADA", fonte: "sistema",
+      motivo: `A comissão do ${banco} depende da faixa de valor: informe o prazo do refin para calcular.` }));
+    return out;
+  }
   if (p === null) {
     out.push(regra({ ...base, valorAnalisado: null, esperado: null, status: "REGRA_NAO_CADASTRADA", fonte: "sistema",
       motivo: `Regra de comissão do ${banco} não cadastrada.` }));
@@ -567,13 +628,16 @@ function avaliarOperacao(c: ContratoEntrada, statusContrato: Status, regras: Reg
 function linhaTroco(preco: PrecoContrato | null | undefined, regras: RegrasBanco, banco: string, op: OperacaoEntrada | null | undefined): ResultadoRegra {
   const min = temNum(regras.trocoMinPorContrato) ? regras.trocoMinPorContrato : 0;
   const base = { chave: "troco", label: "Troco", esperado: min ? `≥ ${brl(min)}` : null, fonte: "sistema" as const };
-  if (!temNum(regras.taxaRefin) || regras.taxaRefin <= 0) {
+  const temFaixa = (regras.faixasRefin || []).some(f => temNum(f.taxa));
+  if (!temFaixa && (!temNum(regras.taxaRefin) || regras.taxaRefin <= 0)) {
     return regra({ ...base, valorAnalisado: null, status: "REGRA_NAO_CADASTRADA",
       motivo: `Troco não calculável: a taxa de refin do ${banco} não está cadastrada.` });
   }
   if (!op) {
     return regra({ ...base, valorAnalisado: null, status: "REGRA_NAO_CADASTRADA",
-      motivo: `Troco não calculado: taxa de refin de ${pct(regras.taxaRefin)} cadastrada; informe o prazo do refin.` });
+      motivo: temFaixa
+        ? `Troco não calculado: o ${banco} tem taxa por faixa de valor; informe o prazo do refin.`
+        : `Troco não calculado: taxa de refin de ${pct(regras.taxaRefin || 0)} cadastrada; informe o prazo do refin.` });
   }
   if (!preco) {
     return regra({ ...base, valorAnalisado: null, status: "PENDENTE_INFO",
@@ -581,8 +645,27 @@ function linhaTroco(preco: PrecoContrato | null | undefined, regras: RegrasBanco
   }
   return regra({ ...base, valorAnalisado: brl(preco.trocoLiquido), status: preco.viavel ? "ELEGIVEL" : "NAO_ELEGIVEL",
     motivo: preco.viavel
-      ? `Parcela ${brl(preco.parcelaAtual)} → ${brl(preco.parcelaNova)} em ${op.prazo} meses a ${pct(regras.taxaRefin)}.`
+      ? `Parcela ${brl(preco.parcelaAtual)} → ${brl(preco.parcelaNova)} em ${op.prazo} meses a ${pct(preco.taxa)}.`
       : preco.motivo });
+}
+
+/** Linha "Comissão" de um contrato, com um percentual já conhecido. */
+function linhaComissao(saldo: number | null | undefined, statusContrato: Status, p: number, banco: string, sufixoFaixa = ""): ResultadoRegra {
+  const base = { chave: "comissao", label: "Comissão" };
+  const esperado = `${pctSimples(p)} do saldo devedor${sufixoFaixa}`;
+  if (statusContrato === "NAO_ELEGIVEL") {
+    return regra({ ...base, valorAnalisado: null, esperado, status: "NAO_ELEGIVEL", motivo: `Sem comissão: o ${banco} não aceita este contrato.` });
+  }
+  if (!temNum(saldo) || saldo <= 0) {
+    return regra({ ...base, valorAnalisado: null, esperado, status: "PENDENTE_INFO", motivo: "A comissão depende do saldo devedor do contrato." });
+  }
+  const sufixo: Partial<Record<Status, string>> = {
+    ELEGIVEL: `${pctSimples(p)} sobre o saldo devedor de ${brl(saldo)}${sufixoFaixa}.`,
+    ANALISE_MANUAL: "Estimada — o contrato depende de análise manual.",
+    PENDENTE_INFO: "Estimada — o contrato ainda tem informação pendente.",
+    REGRA_NAO_CADASTRADA: "Estimada — parte da análise não tem regra cadastrada.",
+  };
+  return regra({ ...base, valorAnalisado: brl(r2(saldo * p / 100)), esperado, status: statusContrato, motivo: sufixo[statusContrato] || "" });
 }
 
 /** Pior status vence: reprovação > falta dado > regra ausente > manual > ok. */
@@ -607,7 +690,7 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
   if (!banco.ruleSet) return vazio;
 
   const regras = banco.ruleSet.regras;
-  const cli = avaliarCliente(cliente, regras, banco.nome, hoje);
+  const cli = avaliarCliente(cliente, regras, banco.nome, hoje, operacao);
   const excecoesAplicadas = new Set<number>();
 
   const resultadoContratos: ResultadoContrato[] = contratos.map(c => {
@@ -629,12 +712,17 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
   // troco e parcela: só dos contratos que o banco aceitou, na taxa DELE e no prazo escolhido
   let refin: ResumoRefin | null = null;
   const aceitos = resultadoContratos.map((rc, i) => ({ rc, c: contratos[i] })).filter(x => x.rc.status === "ELEGIVEL" && !x.c.foraDoCalculo);
-  if (temNum(regras.taxaRefin) && regras.taxaRefin > 0 && operacao && aceitos.length) {
+  const faixas = (regras.faixasRefin || []).filter(f => temNum(f.minValor) && temNum(f.taxa));
+  const temTaxa = faixas.length > 0 || (temNum(regras.taxaRefin) && regras.taxaRefin > 0);
+  if (temTaxa && operacao && aceitos.length) {
     const precificaveis = aceitos.filter(x => temNum(x.c.saldo) && x.c.saldo > 0 && temNum(x.c.parcela) && x.c.parcela > 0);
     if (precificaveis.length) {
       const trocoMin = temNum(regras.trocoMinPorContrato) ? regras.trocoMinPorContrato : 0;
+      const taxaParam = faixas.length
+        ? (valor: number) => faixaPara(valor, faixas)?.taxa ?? null
+        : regras.taxaRefin!;
       const p = precificarRefin(precificaveis.map(x => ({ id: x.c.id, saldo: x.c.saldo!, parcela: x.c.parcela! })),
-        regras.taxaRefin, trocoMin, operacao);
+        taxaParam, trocoMin, operacao);
       refin = p.resumo;
       const porId = new Map(p.linhas.map(l => [l.contratoId, l]));
       aceitos.forEach(x => { x.rc.preco = porId.get(x.c.id) || null; });
@@ -683,16 +771,31 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
 
   // comissão do banco = só contratos ELEGÍVEIS (é o que ele paga); análise manual fica à parte
   const pc = percentualComissao(regras);
+  const comissaoPorFaixa = faixas.some(f => temNum(f.comissaoPercentual));
   let comissao: ResumoComissao | null = null;
-  if (pc !== null) {
+  if (pc !== null || comissaoPorFaixa) {
     let total = 0, n = 0, manual = 0;
+    const usados = new Set<number>();
     resultadoContratos.forEach((rc, i) => {
       const saldo = contratos[i].saldo;
       if (!temNum(saldo) || saldo <= 0 || contratos[i].foraDoCalculo) return;
-      if (rc.status === "ELEGIVEL") { total += saldo * pc / 100; n++; }
-      else if (rc.status === "ANALISE_MANUAL") manual += saldo * pc / 100;
+      // com faixas, o percentual sai da faixa do valor do contrato calculado
+      const daFaixa = comissaoPorFaixa && rc.preco ? faixaPara(rc.preco.valorContrato, faixas)?.comissaoPercentual : null;
+      const p = temNum(daFaixa) ? daFaixa : pc;
+      if (p === null || p === undefined) return;
+      usados.add(p);
+      // a linha da comissão do contrato é refeita com o percentual certo
+      if (temNum(daFaixa)) {
+        const faixa = faixaPara(rc.preco!.valorContrato, faixas);
+        const sufixo = faixa ? ` (faixa ${faixa.rotulo || "a partir de " + brl(faixa.minValor)})` : "";
+        const nova = linhaComissao(saldo, rc.status, p, banco.nome, sufixo);
+        const idx = rc.operacao.findIndex(o => o.chave === "comissao");
+        if (idx >= 0) rc.operacao[idx] = nova; else rc.operacao.push(nova);
+      }
+      if (rc.status === "ELEGIVEL") { total += saldo * p / 100; n++; }
+      else if (rc.status === "ANALISE_MANUAL") manual += saldo * p / 100;
     });
-    comissao = { percentual: pc, base: "saldo", total: r2(total), contratos: n, estimadaEmAnalise: r2(manual) };
+    comissao = { percentual: usados.size === 1 ? Array.from(usados)[0] : pc, base: "saldo", total: r2(total), contratos: n, estimadaEmAnalise: r2(manual) };
   }
 
   return {
