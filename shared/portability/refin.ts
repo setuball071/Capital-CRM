@@ -73,6 +73,7 @@ const brl = (v: number) => "R$ " + v.toLocaleString("pt-BR", { minimumFractionDi
 export function precificarRefin(
   contratos: { id: string; saldo: number; parcela: number }[],
   taxa: number | ((valor: number) => number | null), trocoMin: number, op: OperacaoEntrada,
+  parcelaMin = 0,
 ): { linhas: PrecoContrato[]; resumo: ResumoRefin } {
   const taxaDe = typeof taxa === "function" ? taxa : () => taxa;
   const totalSaldo = contratos.reduce((a, c) => a + c.saldo, 0);
@@ -105,6 +106,7 @@ export function precificarRefin(
       const erros: string[] = [];
       if (trocoLiquido < trocoMin - 0.01) erros.push(`troco abaixo do mínimo de ${brl(trocoMin)}`);
       if (parcelaNova > c.parcela + 0.01) erros.push(`parcela nova maior que a atual (${brl(c.parcela)})`);
+      if (parcelaMin > 0 && parcelaNova < parcelaMin - 0.01) erros.push(`parcela nova abaixo da mínima do banco (${brl(parcelaMin)})`);
       return { ...base, taxa: taxaPct, parcelaNova, trocoBruto, iof, trocoLiquido, valorContrato: c.saldo + trocoBruto,
         viavel: !erros.length, motivo: erros.length ? erros.join("; ") : "" };
     };

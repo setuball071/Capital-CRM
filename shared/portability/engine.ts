@@ -18,7 +18,7 @@
 import { precificarRefin, type OperacaoEntrada, type PrecoContrato, type ResumoRefin } from "./refin";
 export type { OperacaoEntrada, PrecoContrato, ResumoRefin } from "./refin";
 
-export const ENGINE_VERSION = "1.5.0";   // 1.4: faixas e idade no fim · 1.5: bancos de rede
+export const ENGINE_VERSION = "1.6.0";   // 1.5: bancos de rede · 1.6: parcela mínima da operação
 
 export type Status =
   | "ELEGIVEL"
@@ -77,6 +77,8 @@ export interface RegrasBanco {
   saldoMin?: number | null;
   saldoMax?: number | null;
   trocoMinPorContrato?: number | null;
+  /** parcela mínima da operação nova (Daycoval 20, Paraná 200, Banrisul 8…) */
+  parcelaMinima?: number | null;
   origens?: {
     padraoPagasMin?: number | null;
     /** pagas exigidas dos BANCOS DE REDE (ORIGENS.rede); vale entre a lista da arte e o padrão */
@@ -256,6 +258,7 @@ export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?
   { chave: "PARANA", nome: "Paraná Banco", padroes: ["PARANA"] },
   { chave: "OLE", nome: "Olé", padroes: ["OLE"] },
   { chave: "ALFA", nome: "Alfa", padroes: ["ALFA", "BANCO ALFA", "ALFA FINANCEIRA"], grupo: "SAFRA" },
+  { chave: "NBC", nome: "NBC", padroes: ["NBC"] },
   // Entidades FORA DA CIP (previdências, associações): NENHUM banco porta — a
   // portabilidade passa pela CIP (Fábio, 22/09/2026). Só uma exceção cadastrada libera.
   { chave: "FUTURO", nome: "Futuro Previdência", padroes: ["FUTURO"], foraCip: true },
@@ -733,7 +736,7 @@ export function analisarBanco(banco: BancoParaAnalise, cliente: ClienteEntrada, 
         ? (valor: number) => faixaPara(valor, faixas)?.taxa ?? null
         : regras.taxaRefin!;
       const p = precificarRefin(precificaveis.map(x => ({ id: x.c.id, saldo: x.c.saldo!, parcela: x.c.parcela! })),
-        taxaParam, trocoMin, operacao);
+        taxaParam, trocoMin, operacao, temNum(regras.parcelaMinima) ? regras.parcelaMinima : 0);
       refin = p.resumo;
       const porId = new Map(p.linhas.map(l => [l.contratoId, l]));
       aceitos.forEach(x => { x.rc.preco = porId.get(x.c.id) || null; });

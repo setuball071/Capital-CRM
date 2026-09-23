@@ -337,5 +337,49 @@ caso("PAN (taxa única) não virou 'varia'", () => {
   assert.equal(r.refin!.taxa, 1.70); assert.equal(r.comissao!.percentual, 0.75);
 });
 
+console.log("\nDaycoval (parcela mínima e regra própria por banco)");
+const DAY = MODELOS.find(m => m.id === "daycoval-siape-2026-09")!;
+const bancoDAY = (regras = DAY.regras): BancoParaAnalise =>
+  ({ bankId: 3, nome: "Daycoval", ruleSet: { id: 3, hash: "d", vigenciaInicio: "2026-09-22", regras }, excecoes: [] });
+const cliDAY = (anos = 50): ClienteEntrada => ({ convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(anos) });
+const ctDAY = (p: Partial<ContratoEntrada>) => ct({ bancoOrigem: "BMG", taxa: 1.5, saldo: 20000, parcela: 600, prazoTotal: 96, prazoRestante: 60, ...p });
+
+caso("Daycoval: taxa de entrada 1,36", () => status(cliDAY(), ctDAY({ taxa: 1.35 }), "NAO_ELEGIVEL", "abaixo do mínimo", bancoDAY()));
+caso("Daycoval não porta Safra nem Alfa", () => {
+  status(cliDAY(), ctDAY({ bancoOrigem: "Safra" }), "NAO_ELEGIVEL", "não porta", bancoDAY());
+  status(cliDAY(), ctDAY({ bancoOrigem: "Banco Alfa" }), "NAO_ELEGIVEL", "não porta", bancoDAY());
+});
+caso("Daycoval: rede com 6 pagas (Caixa 5 não passa, 6 passa)", () => {
+  status(cliDAY(), ctDAY({ bancoOrigem: "Caixa", prazoRestante: 91 }), "NAO_ELEGIVEL", "banco de rede", bancoDAY());
+  status(cliDAY(), ctDAY({ bancoOrigem: "Caixa", prazoRestante: 90 }), "ELEGIVEL", "banco de rede", bancoDAY());
+});
+caso("Daycoval: Itaú tem regra própria (12) mesmo sendo rede", () =>
+  status(cliDAY(), ctDAY({ bancoOrigem: "Itaú", prazoRestante: 88 }), "NAO_ELEGIVEL", "exige 12", bancoDAY()));
+caso("Daycoval: BRB, Pine e QI com 0 pagas", () => {
+  status(cliDAY(), ctDAY({ bancoOrigem: "BRB", origemConfirmada: "BRB", prazoRestante: 96 }), "ELEGIVEL", undefined, bancoDAY());
+  status(cliDAY(), ctDAY({ bancoOrigem: "QI TECH", prazoRestante: 96 }), "ELEGIVEL", undefined, bancoDAY());
+});
+caso("Daycoval: idade máxima 75", () => {
+  status(cliDAY(75), ctDAY({}), "ELEGIVEL", "dentro do limite", bancoDAY());
+  status(cliDAY(76), ctDAY({}), "NAO_ELEGIVEL", "atende até 75", bancoDAY());
+});
+caso("Parcela mínima: operação que ficaria abaixo de R$ 20 não fecha", () => {
+  const regras = { ...DAY.regras, taxaRefin: 1.60, trocoMinPorContrato: 0, parcelaMinima: 20 };
+  const r = analisarBanco(bancoDAY(regras), cliDAY(), [ctDAY({ saldo: 300, parcela: 15 })], HOJE, { modo: "parcela", prazo: 120 });
+  const pr = r.contratos[0].preco!;
+  assert.equal(pr.viavel, false);
+  assert.match(pr.motivo, /parcela nova abaixo da mínima do banco \(R\$ 20,00\)/);
+});
+caso("Parcela mínima não atrapalha operação normal", () => {
+  const regras = { ...DAY.regras, taxaRefin: 1.60, parcelaMinima: 20 };
+  const r = analisarBanco(bancoDAY(regras), cliDAY(), [ctDAY({ saldo: 20000, parcela: 600 })], HOJE, { modo: "maximo", prazo: 120 });
+  assert.ok(r.contratos[0].preco!.viavel, r.contratos[0].preco!.motivo);
+});
+caso("Daycoval sem taxa de refin: não calcula troco e não inventa", () => {
+  const r = analisarBanco(bancoDAY(), cliDAY(), [ctDAY({})], HOJE, { modo: "maximo", prazo: 120 });
+  assert.equal(r.refin, null);
+  assert.match(r.contratos[0].operacao.find(o => o.chave === "troco")!.motivo, /taxa de refin do Daycoval não está cadastrada/);
+});
+
 console.log(`\n${ok} ok, ${falhas} falha(s)\n`);
 process.exit(falhas ? 1 : 0);

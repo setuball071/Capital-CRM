@@ -19,6 +19,44 @@ export interface ModeloRegra {
 
 export const MODELOS: ModeloRegra[] = [
   {
+    id: "daycoval-siape-2026-09",
+    banco: "Daycoval",
+    convenio: "SIAPE",
+    fonteDescricao: "Resumo Portabilidade SIAPE 08/06/2026 + comparativo Bevi 18/09/2026 (taxa de refin e comissão ainda a confirmar com o Fábio)",
+    regras: {
+      taxaEntradaMin: 1.36,             // comparativo Bevi
+      trocoMinPorContrato: 100,
+      parcelaMinima: 20,
+      idade: { min: 18, max: 75 },
+      origens: {
+        padraoPagasMin: 12,
+        redePagasMin: 6,                // "bancos de rede — 6"
+        lista: [
+          { origem: "C6", porta: false },
+          { origem: "Safra", porta: false },
+          { origem: "Alfa", porta: false },
+          { origem: "Facta", porta: true, pagasMin: 24 },
+          { origem: "Inbursa", porta: true, pagasMin: 13 },
+          { origem: "Agibank", porta: true, pagasMin: 15 },
+          { origem: "Pan", porta: true, pagasMin: 25 },
+          { origem: "Itaú", porta: true, pagasMin: 12 },   // mesmo sendo banco de rede, o PDF dá regra própria
+          { origem: "BRB", porta: true, pagasMin: 0 },
+          { origem: "Pine", porta: true, pagasMin: 0 },
+          { origem: "QI Tech", porta: true, pagasMin: 0 },
+          { origem: "NBC", porta: true, pagasMin: 24 },
+        ],
+      },
+      avisos: [
+        "Reduz margem negativa; não agrega margem.",
+        "Permite ajuste de tabela; o saldo precisa de atuação até as 16h50.",
+        "Não faz port pura.",
+        "Falta cadastrar a taxa do refin e a comissão do Daycoval.",
+      ],
+      taxaRefin: null,                  // Bevi mostra 1,55 como MÍNIMA; a taxa usada é com o Fábio
+      comissao: null,
+    },
+  },
+  {
     id: "safra-siape-2026-09",
     banco: "Safra Financeira",
     convenio: "SIAPE",
