@@ -15,6 +15,25 @@ interface SimState {
   cliente: number;
 }
 
+interface AporteAnoLinha {
+  ano: number;
+  mes: number;
+  aporte: number;
+  quitadas: string;
+  /** fração de uma parcela paga a mais no ano (0 = nenhuma) */
+  parcial: number;
+  restantes: number;
+}
+
+interface AporteAnualCard {
+  anos: number;
+  meses: number;
+  aporte: number;
+  taxa: number;
+  totalPago: number;
+  linhas: AporteAnoLinha[];
+}
+
 interface AmortCol {
   prazo: number;
   vp: number;
@@ -210,6 +229,57 @@ function baixarCSVPrazoMaximo(c: { parcMedia: number; taxaImpl: number; meses: n
   URL.revokeObjectURL(url);
 }
 
+/** Aporte ANUAL: o cliente paga a parcela todo mês e, uma vez por ano, um
+ *  aporte que quita as parcelas do fim do contrato pelo valor presente delas —
+ *  o mesmo método das outras estratégias. O aporte é igual em todos os anos:
+ *
+ *    aporte = VP das parcelas que sobram ÷ soma dos fatores anuais
+ *
+ *  Ex.: 120 meses, parcela 500, taxa 1,6431% → terminar em 5 anos custa
+ *  R$ 2.472,25 por ano. */
+function buildAporteAnualCards(s: SimState): AporteAnualCard[] {
+  const i = taxaDeCoef(s.margem / s.comIof, s.prazo) / 100;
+  const n = s.prazo;
+  const parcela = s.margem;
+  if (!(i > 0) || !(n > 12) || !(parcela > 0)) return [];
+
+  const cards: AporteAnualCard[] = [];
+  for (let anos = 1; anos <= Math.min(10, Math.floor((n - 1) / 12)); anos++) {
+    const meses = anos * 12;
+    let vpAlvo = 0;
+    for (let k = meses + 1; k <= n; k++) vpAlvo += parcela / Math.pow(1 + i, k);
+    let fator = 0;
+    for (let t = 1; t <= anos; t++) fator += 1 / Math.pow(1 + i, 12 * t);
+    if (!(fator > 0) || !(vpAlvo > 0)) continue;
+    const aporte = vpAlvo / fator;
+
+    // quais parcelas cada aporte quita (sempre as do fim, da última para trás)
+    const linhas: AporteAnoLinha[] = [];
+    let pos = n;
+    let falta = 1;              // quanto ainda falta da parcela em `pos` (1 = inteira)
+    for (let t = 1; t <= anos; t++) {
+      let sobra = aporte;
+      const quitadas: number[] = [];
+      while (pos > meses) {
+        const vpCheio = parcela / Math.pow(1 + i, pos - 12 * t);
+        const vpDevido = vpCheio * falta;
+        if (vpDevido <= sobra + 0.005) { sobra -= vpDevido; quitadas.push(pos); pos--; falta = 1; }
+        else { falta -= sobra / vpCheio; sobra = 0; break; }   // o pedaço pago continua valendo no ano seguinte
+      }
+      linhas.push({
+        ano: t, mes: 12 * t, aporte,
+        quitadas: quitadas.length
+          ? (quitadas.length === 1 ? `${quitadas[0]}` : `${quitadas[quitadas.length - 1]} a ${quitadas[0]}`)
+          : "—",
+        parcial: falta < 0.99 && pos > meses ? 1 - falta : 0,
+        restantes: Math.max(0, pos - meses),
+      });
+    }
+    cards.push({ anos, meses, aporte, taxa: i * 100, totalPago: parcela * meses + aporte * anos, linhas });
+  }
+  return cards;
+}
+
 function buildPrazoCards(s: SimState): PrazoCard[] {
   const mesesList = PRAZOS.filter((p) => p <= s.prazo);
   // Inclui o próprio prazo máximo do contrato como card, mesmo quando "quebrado"
@@ -266,6 +336,14 @@ export default function SimuladorPortabilidadePage() {
   const [faixaDe, setFaixaDe] = useState("");
   const [faixaAte, setFaixaAte] = useState("");
   const [prazosOcultos, setPrazosOcultos] = useState<Set<number>>(new Set());
+  // terceira estratégia: aporte uma vez por ano, em vez de mensal
+  const [modoAporteAnual, setModoAporteAnual] = useState(false);
+  const [anualEscolhido, setAnualEscolhido] = useState<{ side: "left" | "right"; anos: number } | null>(null);
+  const cardsAnuaisEsq = leftState ? buildAporteAnualCards(leftState) : [];
+  const cardsAnuaisDir = rightState ? buildAporteAnualCards(rightState) : [];
+  const anualAberto = anualEscolhido
+    ? (anualEscolhido.side === "left" ? cardsAnuaisEsq : cardsAnuaisDir).find(c => c.anos === anualEscolhido.anos) || null
+    : null;
   const prazoVisivel = (m: number) => {
     const de = parseInt(faixaDe, 10), ate = parseInt(faixaAte, 10);
     return !prazosOcultos.has(m) && (!de || m >= de) && (!ate || m <= ate);
@@ -704,6 +782,13 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .pc-parc { font-size: 12px; font-weight: 600; color: #6C2BD9; margin-top: 5px; }
         .sim-wrap .pc.ar .pc-parc { color: #1E88E5; }
         .sim-wrap .pc-taxa { font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 2px; }
+        .sim-wrap .estrat-modo { display:inline-flex; margin: 0 0 10px; border:1px solid hsl(var(--border)); border-radius:8px; overflow:hidden; }
+        .sim-wrap .estrat-modo button { background: transparent; border: 0; padding: 5px 12px; font-size: 12px; cursor: pointer; color: inherit; }
+        .sim-wrap .estrat-modo button.on { background: #6C2BD9; color: #fff; font-weight: 600; }
+        .sim-wrap .pc-anos { font-size: 20px; font-weight: 700; }
+        .sim-wrap .tab-anual { width:100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+        .sim-wrap .tab-anual th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.4px; padding:6px 8px; color: hsl(var(--muted-foreground)); }
+        .sim-wrap .tab-anual td { padding:7px 8px; border-top:1px solid hsl(var(--border)); }
         .sim-wrap .pc-x { position: absolute; top: 4px; left: 6px; font-size: 12px; line-height: 1; color: hsl(var(--muted-foreground)); background: none; border: 0; cursor: pointer; opacity: 0; transition: opacity .15s; }
         .sim-wrap .pc:hover .pc-x { opacity: 1; }
         .sim-wrap .faixa-prazos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; margin: -4px 0 12px; color: hsl(var(--muted-foreground)); }
@@ -877,7 +962,11 @@ export default function SimuladorPortabilidadePage() {
 
         <div className="sim-section">
           <div className="section-title">Estratégia de Amortização — escolha um prazo para ver o cronograma</div>
-          {(leftCards.length > 0 || rightCards.length > 0) && (() => {
+          <div className="estrat-modo">
+            <button className={modoAporteAnual ? "" : "on"} onClick={() => setModoAporteAnual(false)} data-testid="btn-estrategia-mensal">Aporte mensal</button>
+            <button className={modoAporteAnual ? "on" : ""} onClick={() => setModoAporteAnual(true)} data-testid="btn-estrategia-anual">Aporte anual</button>
+          </div>
+          {!modoAporteAnual && (leftCards.length > 0 || rightCards.length > 0) && (() => {
             const todos = Array.from(new Set([...leftCards, ...rightCards].map(c => c.meses)));
             const escondidos = todos.filter(m => !prazoVisivel(m)).length;
             return (
@@ -891,7 +980,73 @@ export default function SimuladorPortabilidadePage() {
               </div>
             );
           })()}
-          <div className="prazos-wrap">
+          {modoAporteAnual && (
+            <>
+              <div className="prazos-wrap">
+                {[{ lado: "left" as const, cards: cardsAnuaisEsq, rotulo: "Contrato novo" },
+                  { lado: "right" as const, cards: cardsAnuaisDir, rotulo: "Contrato final" }].map(({ lado, cards, rotulo }) => (
+                  <div key={lado}>
+                    <div className={`prazos-col-label ${lado === "left" ? "col-left-label" : "col-right-label"}`}>{rotulo} — aporte por ano</div>
+                    <div className="prazos-grid">
+                      {cards.length === 0 ? (
+                        <div className="empty-sim" style={{ padding: 16, gridColumn: "1/-1" }}>
+                          Calcule o contrato {lado === "left" ? "novo" : "final"} primeiro.
+                        </div>
+                      ) : (
+                        cards.filter(c => prazoVisivel(c.meses)).map(c => (
+                          <div
+                            key={c.anos}
+                            className={`pc${anualEscolhido?.side === lado && anualEscolhido?.anos === c.anos ? (lado === "left" ? " al" : " ar") : ""}`}
+                            onClick={() => setAnualEscolhido({ side: lado, anos: c.anos })}
+                            data-testid={`card-anual-${lado}-${c.anos}`}
+                          >
+                            <button className="pc-x" title="Esconder este prazo do cliente" onClick={(e) => { e.stopPropagation(); ocultarPrazo(c.meses); }}>✕</button>
+                            <div className="pc-anos">{c.anos}<small> {c.anos === 1 ? "ano" : "anos"}</small></div>
+                            <div className="pc-parc">{fmtR(c.aporte)}/ano</div>
+                            <div className="pc-taxa">{c.meses} meses · total {fmtR(c.totalPago)}</div>
+                            <div className="pc-tag">ANUAL</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {anualAberto && (
+                <div style={{ marginTop: 14 }} data-testid="cronograma-anual">
+                  <div className="section-title" style={{ marginBottom: 4 }}>
+                    Aportes anuais — terminar em {anualAberto.anos} {anualAberto.anos === 1 ? "ano" : "anos"} ({anualAberto.meses} meses)
+                  </div>
+                  <div className="table-meta">
+                    Parcela mensal de {fmtR(anualEscolhido?.side === "left" ? (leftState?.margem ?? 0) : (rightState?.margem ?? 0))} +
+                    {" "}{fmtR(anualAberto.aporte)} uma vez por ano · taxa {fmtN(anualAberto.taxa, 4)}% a.m. ·
+                    {" "}total pago {fmtR(anualAberto.totalPago)}
+                  </div>
+                  <table className="tab-anual">
+                    <thead><tr>
+                      <th>Ano</th><th>Mês do aporte</th><th>Aporte</th><th>Parcelas que ele quita</th><th>Parcelas ainda no fim</th>
+                    </tr></thead>
+                    <tbody>
+                      {anualAberto.linhas.map(l => (
+                        <tr key={l.ano}>
+                          <td>{l.ano}º</td>
+                          <td>{l.mes}</td>
+                          <td>{fmtR(l.aporte)}</td>
+                          <td>{l.quitadas}{l.parcial ? ` (+ ${Math.round(l.parcial * 100)}% da seguinte)` : ""}</td>
+                          <td>{l.restantes}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="table-meta" style={{ marginTop: 6 }}>
+                    Cada aporte quita as parcelas do fim do contrato pelo valor presente delas — o mesmo método das outras estratégias.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="prazos-wrap" style={{ display: modoAporteAnual ? "none" : undefined }}>
             <div>
               <div className="prazos-col-label col-left-label">Taxa Média</div>
               <div className="prazos-grid">
