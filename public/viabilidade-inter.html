@@ -447,6 +447,18 @@ const DIA_VENCIMENTO = {
   'Pref. Contagem': 20, 'Pref. Goiânia': 27, 'Pref. SP': 5, 'SPPrev': 8
 };
 
+// Comissão que fica com a casa em cada tabela de comissionamento do Inter
+// (coluna "fabio" da planilha, informada em 23/09/2026). Sempre sobre o SALDO
+// DEVEDOR portado — regra do Fábio, vale para todos os bancos. Só o master vê.
+const COMISSAO_TABELA = { 1: 0.35, 2: 0.65, 3: 1.00, 4: 1.35, 5: 1.70, 6: 2.05 };
+/** Comissão da casa de uma linha aprovada; null quando não dá para saber. */
+function comissaoDaLinha(l) {
+  if (!l.parecer.ok || !l.saldo) return null;
+  const n = parseInt(String(l.parecer.tabela).replace(/\D/g, ''), 10);
+  const pct = COMISSAO_TABELA[n];
+  return pct ? { tabela: n, pct: pct, valor: l.saldo * pct / 100 } : null;
+}
+
 let REGRAS = JSON.parse(JSON.stringify(REGRAS_PADRAO));
 let isMaster = false;
 let comSeguro = false;
@@ -674,8 +686,13 @@ function render() {
     const opTab = TABELAS_REFIN.map(t =>
       '<option value="' + t.n + '"' + (t.n === l.tabelaRefin ? ' selected' : '') + '>' + t.n + ' · ' +
       fmtPct(comSeguro ? Math.round((t.sem - DESCONTO_SEGURO) * 100) / 100 : t.sem, 2) + '</option>').join('');
+    const com = isMaster ? comissaoDaLinha(l) : null;
+    const comHtml = com
+      ? '<div class="vi-sub" title="' + fmtPct(com.pct, 2) + ' do saldo devedor — só master">Comissão: ' +
+        fmtBRL(com.valor) + ' (' + fmtPct(com.pct, 2) + ')</div>'
+      : '';
     const parecer = l.parecer.ok
-      ? '<span class="vi-tag vi-ok">Favorável · ' + esc(l.parecer.tabela) + '</span>'
+      ? '<span class="vi-tag vi-ok">Favorável · ' + esc(l.parecer.tabela) + '</span>' + comHtml
       : '<span class="vi-nao">' + esc(l.parecer.msg) + '</span>' +
         (l.sugestao
           ? '<button class="vi-link" style="margin-top:3px;font-size:11px;" ' +
@@ -747,6 +764,9 @@ function pintarResumo() {
   const trocoRefin = sel.reduce((a, l) => a + (l.passo2 ? l.passo2.troco : 0), 0);
   const total = sel.reduce((a, l) => a + l.calc.totalFinanciado, 0);
   const fora = linhas.filter(l => l.calc && !l.parecer.ok).length;
+  const comissao = isMaster
+    ? sel.reduce((a, l) => { const c = comissaoDaLinha(l); return a + (c ? c.valor : 0); }, 0)
+    : 0;
 
   document.getElementById('resumo').innerHTML =
     '<span>Contratos selecionados: <b>' + sel.length + '</b></span>' +
@@ -758,6 +778,10 @@ function pintarResumo() {
     '<span>Valor liberado' + (trocoRefin > 0 ? ' total' : '') +
       ': <b style="color:var(--green)">' + fmtBRL(trocoPort + trocoRefin) + '</b></span>' +
     '<span>Total financiado: <b>' + fmtBRL(total) + '</b></span>' +
+    (isMaster && comissao > 0
+      ? '<span title="Soma da comissão da casa em cada tabela — sobre o saldo devedor">Comissão (só master): <b>' +
+        fmtBRL(comissao) + '</b></span>'
+      : '') +
     (fora ? '<span style="color:var(--red);font-size:12px;">' + fora + ' fora da faixa, fora do resultado</span>' : '');
 }
 
@@ -1241,6 +1265,7 @@ window.addEventListener('message', function (event) {
   if (d.type === 'CAPITAL_CRM_ROLE') {
     isMaster = Boolean(d.isMaster);
     if (document.getElementById('painelRegras').style.display !== 'none') renderRegras();
+    if (linhas.length) render();   // a comissão só aparece para master
   }
   if (d.type === 'CAPITAL_CRM_CONTRATOS_PORT' && d.payload) receberDoSimulador(d.payload);
 });
