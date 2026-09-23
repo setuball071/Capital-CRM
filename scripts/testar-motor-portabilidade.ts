@@ -478,9 +478,16 @@ caso("Paraná não porta Bari, Facta nem Mercantil", () => {
   statusPR(ctPR({ bancoOrigem: "Facta" }), "NAO_ELEGIVEL", "não porta");
   statusPR(ctPR({ bancoOrigem: "Mercantil" }), "NAO_ELEGIVEL", "não porta");
 });
-caso("Paraná: Agibank e Inbursa com 13 pagas", () => {
-  statusPR(ctPR({ bancoOrigem: "Agibank", prazoRestante: 84 }), "NAO_ELEGIVEL", "exige 13");
-  statusPR(ctPR({ bancoOrigem: "Agibank", prazoRestante: 83 }), "ELEGIVEL");
+caso("Paraná: Agibank, C6 e Inbursa com 12 pagas", () => {
+  statusPR(ctPR({ bancoOrigem: "Agibank", prazoRestante: 85 }), "NAO_ELEGIVEL", "exige 12");
+  statusPR(ctPR({ bancoOrigem: "Agibank", prazoRestante: 84 }), "ELEGIVEL");
+  statusPR(ctPR({ bancoOrigem: "C6", prazoRestante: 84 }), "ELEGIVEL");
+  statusPR(ctPR({ bancoOrigem: "Inbursa", prazoRestante: 84 }), "ELEGIVEL");
+});
+caso("Paraná: comissão 2,70% do saldo", () => {
+  const r = analisarBanco(bancoPR(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
+    [ctPR({ saldo: 20000 })], HOJE, { modo: "maximo", prazo: 96 });
+  assert.deepEqual([r.comissao!.percentual, r.comissao!.total], [2.70, 540]);
 });
 caso("Paraná: rede com 0 pagas", () => statusPR(ctPR({ bancoOrigem: "Caixa", prazoRestante: 96 }), "ELEGIVEL", "banco de rede"));
 caso("Paraná: sem saldo mínimo cadastrado, contrato pequeno passa na elegibilidade", () => statusPR(ctPR({ saldo: 800 }), "ELEGIVEL"));

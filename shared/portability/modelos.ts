@@ -38,9 +38,10 @@ export const MODELOS: ModeloRegra[] = [
           { origem: "Bari", porta: false },
           { origem: "Facta", porta: false },
           { origem: "Mercantil", porta: false },   // códigos 389 e 926
-          { origem: "Agibank", porta: true, pagasMin: 13 },
-          { origem: "Inbursa", porta: true, pagasMin: 13 },
-          { origem: "C6", porta: true, pagasMin: 25 },
+          // Fábio corrigiu em 23/09: Agibank, C6 e Inbursa com 12 (o PDF dizia 13 e 25)
+          { origem: "Agibank", porta: true, pagasMin: 12 },
+          { origem: "Inbursa", porta: true, pagasMin: 12 },
+          { origem: "C6", porta: true, pagasMin: 12 },
           { origem: "Pan", porta: true, pagasMin: 25 },
         ],
       },
@@ -49,10 +50,10 @@ export const MODELOS: ModeloRegra[] = [
         "Reduz margem negativa.",
         "O banco faz cálculo manual quando o contracheque tem comissão, abono ou gratificação.",
         "Formaliza na digitação e de novo quando o saldo chega; não permite ajuste de tabela; saldo até as 17h.",
-        "Falta cadastrar a taxa do refin e a comissão do Paraná.",
+        "Falta cadastrar a taxa do refin do Paraná (o mínimo do banco é 1,60).",
       ],
-      taxaRefin: null,                  // Bevi mostra 1,60 como MÍNIMA
-      comissao: null,
+      taxaRefin: null,                                  // a confirmar com o Fábio
+      comissao: { percentual: 2.70, base: "saldo" },    // Fábio, 23/09/2026
     },
   },
   {
