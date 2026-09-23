@@ -18,7 +18,7 @@
 import { precificarRefin, type OperacaoEntrada, type PrecoContrato, type ResumoRefin } from "./refin";
 export type { OperacaoEntrada, PrecoContrato, ResumoRefin } from "./refin";
 
-export const ENGINE_VERSION = "1.4.0";   // 1.3: idade e grupo · 1.4: faixas de taxa/comissão e idade no fim da operação
+export const ENGINE_VERSION = "1.5.0";   // 1.4: faixas e idade no fim · 1.5: bancos de rede
 
 export type Status =
   | "ELEGIVEL"
@@ -77,7 +77,12 @@ export interface RegrasBanco {
   saldoMin?: number | null;
   saldoMax?: number | null;
   trocoMinPorContrato?: number | null;
-  origens?: { padraoPagasMin?: number | null; lista: OrigemRegra[] } | null;
+  origens?: {
+    padraoPagasMin?: number | null;
+    /** pagas exigidas dos BANCOS DE REDE (ORIGENS.rede); vale entre a lista da arte e o padrão */
+    redePagasMin?: number | null;
+    lista: OrigemRegra[];
+  } | null;
   situacaoFuncional?: { aceitos: { codigo: string; descricao: string }[] } | null;
   pensionistas?: {
     codigos: string[];
@@ -218,15 +223,15 @@ export interface ResultadoAnalise {
 //  texto. Ordem importa: o mais específico vem antes (BRB Financeira antes de BRB).
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?: boolean; grupo?: string }[] = [
+export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?: boolean; grupo?: string; rede?: boolean }[] = [
   // Padrões são PALAVRAS INTEIRAS — escreva a forma completa, nunca um prefixo.
   // ("BRB FINANC" não casa "BRB FINANCEIRA", e o nome cai no BRB Banco.)
   { chave: "BRB_FINANCEIRA", nome: "BRB Financeira", padroes: ["BRB FINANCEIRA", "BRB CFI", "BRB - CFI", "BRB CREDITO", "BRB CRED"], grupo: "BRB" },
   // BRB Red, BRB Consig360 e BRB Banco de Brasília são o mesmo grupo e não se portam entre si
   { chave: "BRB", nome: "BRB Banco", padroes: ["BRB", "BRB RED", "BRB CONSIG", "BRB CONSIG360", "BRB 360"], grupo: "BRB" },
-  { chave: "CAIXA", nome: "Caixa", padroes: ["CAIXA", "CEF"] },
-  { chave: "BB", nome: "Banco do Brasil", padroes: ["BANCO DO BRASIL", "BCO BRAS", "BCO DO BRASIL"] },
-  { chave: "ITAU", nome: "Itaú", padroes: ["ITAU"] },
+  { chave: "CAIXA", nome: "Caixa", padroes: ["CAIXA", "CEF"], rede: true },
+  { chave: "BB", nome: "Banco do Brasil", padroes: ["BANCO DO BRASIL", "BCO BRAS", "BCO DO BRASIL"], rede: true },
+  { chave: "ITAU", nome: "Itaú", padroes: ["ITAU"], rede: true },
   { chave: "SAFRA", nome: "Safra", padroes: ["SAFRA", "SAFRA FINANCEIRA"], grupo: "SAFRA" },
   { chave: "FACTA", nome: "Facta", padroes: ["FACTA"] },
   { chave: "BANRISUL", nome: "Banrisul", padroes: ["BANRISUL"] },
@@ -237,15 +242,16 @@ export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?
   { chave: "QI_TECH", nome: "QI Tech", padroes: ["QI TECH", "QI SCD", "QI SOCIEDADE"] },
   { chave: "ZEMA", nome: "Zema", padroes: ["ZEMA"] },
   { chave: "PINE", nome: "Pine", padroes: ["PINE"] },
-  { chave: "BRADESCO", nome: "Bradesco", padroes: ["BRADESCO"] },
-  { chave: "SANTANDER", nome: "Santander", padroes: ["SANTANDER"] },
+  { chave: "BRADESCO", nome: "Bradesco", padroes: ["BRADESCO"], rede: true },
+  { chave: "SANTANDER", nome: "Santander", padroes: ["SANTANDER"], rede: true },
   { chave: "PAN", nome: "Pan", padroes: ["BANCO PAN", "BCO PAN", "PAN"] },
   { chave: "BMG", nome: "BMG", padroes: ["BMG"] },
   { chave: "MERCANTIL", nome: "Mercantil", padroes: ["MERCANTIL"] },
-  { chave: "INTER", nome: "Inter", padroes: ["INTERMEDIUM", "BANCO INTER", "INTER"] },
+  { chave: "INTER", nome: "Inter", padroes: ["INTERMEDIUM", "BANCO INTER", "INTER"], rede: true },
   { chave: "DIGIO", nome: "Digio", padroes: ["DIGIO"] },
-  { chave: "SICOOB", nome: "Sicoob", padroes: ["SICOOB", "BANCOOB"] },
-  { chave: "NUBANK", nome: "Nubank", padroes: ["NUBANK", "NU FINANCEIRA", "NU PAGAMENTOS"] },
+  { chave: "SICOOB", nome: "Sicoob", padroes: ["SICOOB", "BANCOOB"], rede: true },
+  { chave: "SICREDI", nome: "Sicredi", padroes: ["SICREDI"], rede: true },
+  { chave: "NUBANK", nome: "Nubank", padroes: ["NUBANK", "NU FINANCEIRA", "NU PAGAMENTOS"], rede: true },
   { chave: "PICPAY", nome: "PicPay", padroes: ["PICPAY"] },
   { chave: "PARANA", nome: "Paraná Banco", padroes: ["PARANA"] },
   { chave: "OLE", nome: "Olé", padroes: ["OLE"] },
@@ -304,6 +310,11 @@ function resolverOrigem(chave: string | null, regras: RegrasBanco, excecoes: Exc
     if (exc.length === 1) return { regra: exc[0].parametros, fonte: "excecao" as const, excecao: exc[0] };
     const daArte = (regras.origens?.lista || []).find(o => normalizarOrigem(o.origem) === chave);
     if (daArte) return { regra: daArte, fonte: "infografico" as const };
+    // banco de rede (BB, Caixa, Itaú, Bradesco, Santander, Nubank, Inter, Sicoob, Sicredi…)
+    const rede = regras.origens?.redePagasMin;
+    if (ORIGENS.find(o => o.chave === chave)?.rede && temNum(rede)) {
+      return { regra: { origem: "bancos de rede", porta: true, pagasMin: rede }, fonte: "infografico" as const, rede: true };
+    }
   }
   const padrao = regras.origens?.padraoPagasMin;
   if (temNum(padrao)) return { regra: { origem: "demais bancos", porta: true, pagasMin: padrao }, fonte: "infografico" as const, padrao: true };
@@ -353,7 +364,7 @@ function avaliarOrigem(c: ContratoEntrada, chave: string | null, regras: RegrasB
   }
   const fonte = r.fonte as ResultadoRegra["fonte"];
   const excecaoId = r.excecao?.id;
-  const rotuloOrigem = r.padrao ? `${nomeO} (demais bancos)` : nomeO;
+  const rotuloOrigem = r.padrao ? `${nomeO} (demais bancos)` : r.rede ? `${nomeO} (banco de rede)` : nomeO;
 
   if (!r.regra.porta) {
     return regra({ ...base, valorAnalisado: rotuloOrigem, esperado: "banco aceito", status: "NAO_ELEGIVEL", fonte, excecaoId,

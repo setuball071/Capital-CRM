@@ -273,6 +273,15 @@ const bancoSAF = (): BancoParaAnalise =>
   ({ bankId: 5, nome: "Safra Financeira", ruleSet: { id: 5, hash: "s", vigenciaInicio: "2026-09-22", regras: SAF.regras }, excecoes: [] });
 const cliSAF = (anos: number): ClienteEntrada => ({ convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(anos) });
 const ctSAF = (p: Partial<ContratoEntrada>) => ct({ bancoOrigem: "Bradesco", taxa: 1.5, prazoTotal: 96, prazoRestante: 60, ...p });
+/** o Safra só conclui a análise com o prazo informado (idade no fim da operação) */
+function statusSAF(anos: number, c: ContratoEntrada, esperado: Status, trecho?: string) {
+  const r = analisarBanco(bancoSAF(), cliSAF(anos), [c], HOJE, { modo: "maximo", prazo: 96 });
+  assert.equal(r.contratos[0].status, esperado, `status ${r.contratos[0].status}, esperava ${esperado}`);
+  if (trecho) {
+    const todos = [...r.contratos[0].regras, ...r.cliente].map(x => x.motivo).join(" | ");
+    assert.ok(todos.includes(trecho), `motivo sem "${trecho}": ${todos}`);
+  }
+}
 
 caso("Safra não porta Alfa (mesmo grupo)", () => status(cliSAF(50), ctSAF({ bancoOrigem: "Banco Alfa", saldo: 30000 }), "NAO_ELEGIVEL", "mesmo grupo", bancoSAF()));
 caso("Safra: saldo de 9.999 fica abaixo do mínimo de 10 mil", () => status(cliSAF(50), ctSAF({ saldo: 9999 }), "NAO_ELEGIVEL", "abaixo do mínimo", bancoSAF()));
@@ -311,6 +320,18 @@ caso("Sem data de nascimento: pergunta em vez de reprovar", () => {
   const r = analisarBanco(bancoSAF(), { convenio: "SIAPE", situacaoFuncional: "1" }, [ctSAF({ saldo: 30000 })], HOJE, { modo: "maximo", prazo: 96 });
   assert.equal(r.cliente.find(x => x.chave === "idade_fim")!.status, "PENDENTE_INFO");
 });
+caso("Safra: banco de rede porta com 0 pagas (Caixa)", () =>
+  statusSAF(50, ctSAF({ bancoOrigem: "Caixa", saldo: 30000, prazoRestante: 96, parcela: 900 }), "ELEGIVEL", "banco de rede"));
+caso("Safra: Sicredi também é rede", () =>
+  statusSAF(50, ctSAF({ bancoOrigem: "SICREDI", saldo: 30000, prazoRestante: 96, parcela: 900 }), "ELEGIVEL", "banco de rede"));
+caso("Safra: Nubank é rede (0 pagas)", () =>
+  statusSAF(50, ctSAF({ bancoOrigem: "NU FINANCEIRA", saldo: 30000, prazoRestante: 96, parcela: 900 }), "ELEGIVEL", "banco de rede"));
+caso("Safra: banco fora da rede (BMG) continua em 12 pagas", () =>
+  statusSAF(50, ctSAF({ bancoOrigem: "BMG", saldo: 30000, prazoRestante: 90 }), "NAO_ELEGIVEL", "demais bancos"));
+caso("Safra: regra da arte vence a regra de rede (Facta não é rede, exige 24)", () =>
+  statusSAF(50, ctSAF({ bancoOrigem: "Facta", saldo: 30000, prazoRestante: 80 }), "NAO_ELEGIVEL", "exige 24"));
+caso("PAN sem regra de rede: Caixa segue pela exceção, não por rede", () =>
+  status(CLI, ct({ bancoOrigem: "Caixa", prazoRestante: 96 }), "ELEGIVEL", "(exceção)"));
 caso("PAN (taxa única) não virou 'varia'", () => {
   const r = analisarBanco(banco(), CLI, [ct({ saldo: 20000, parcela: 520 })], HOJE, { modo: "maximo", prazo: 96 });
   assert.equal(r.refin!.taxa, 1.70); assert.equal(r.comissao!.percentual, 0.75);

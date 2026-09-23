@@ -37,6 +37,7 @@ export const MODELOS: ModeloRegra[] = [
       ],
       origens: {
         padraoPagasMin: 12,
+        redePagasMin: 0,                // bancos de rede portam com 0 pagas
         lista: [
           { origem: "Daycoval", porta: false },
           { origem: "Inbursa", porta: false },
@@ -49,7 +50,6 @@ export const MODELOS: ModeloRegra[] = [
         ],
       },
       avisos: [
-        "Bancos de rede portam com 0 pagas — ainda falta cadastrar quais bancos contam como rede.",
         "O banco tem cálculo próprio de viabilidade: digite com o saldo mais atualizado possível.",
         "A proposta trava no STOP até o saldo voltar; o saldo só é pago depois da liberação.",
         "Atuação do saldo até as 12h.",
