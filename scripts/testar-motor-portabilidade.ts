@@ -484,6 +484,12 @@ caso("Paraná: Agibank, C6 e Inbursa com 12 pagas", () => {
   statusPR(ctPR({ bancoOrigem: "C6", prazoRestante: 84 }), "ELEGIVEL");
   statusPR(ctPR({ bancoOrigem: "Inbursa", prazoRestante: 84 }), "ELEGIVEL");
 });
+caso("Paraná: refin 1,65% (banco 1,60 + margem) calcula troco", () => {
+  const r = analisarBanco(bancoPR(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
+    [ctPR({ saldo: 20000, parcela: 600 })], HOJE, { modo: "maximo", prazo: 96 });
+  assert.equal(r.contratos[0].preco!.taxa, 1.65);
+  assert.ok(r.contratos[0].preco!.viavel, r.contratos[0].preco!.motivo);
+});
 caso("Paraná: comissão 2,70% do saldo", () => {
   const r = analisarBanco(bancoPR(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
     [ctPR({ saldo: 20000 })], HOJE, { modo: "maximo", prazo: 96 });

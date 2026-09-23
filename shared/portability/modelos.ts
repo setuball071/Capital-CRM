@@ -50,9 +50,8 @@ export const MODELOS: ModeloRegra[] = [
         "Reduz margem negativa.",
         "O banco faz cálculo manual quando o contracheque tem comissão, abono ou gratificação.",
         "Formaliza na digitação e de novo quando o saldo chega; não permite ajuste de tabela; saldo até as 17h.",
-        "Falta cadastrar a taxa do refin do Paraná (o mínimo do banco é 1,60).",
       ],
-      taxaRefin: null,                                  // a confirmar com o Fábio
+      taxaRefin: 1.65,                                  // mínima do banco 1,60 + margem de segurança (Fábio, 23/09)
       comissao: { percentual: 2.70, base: "saldo" },    // Fábio, 23/09/2026
     },
   },
