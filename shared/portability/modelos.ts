@@ -22,9 +22,10 @@ export const MODELOS: ModeloRegra[] = [
     id: "daycoval-siape-2026-09",
     banco: "Daycoval",
     convenio: "SIAPE",
-    fonteDescricao: "Resumo Portabilidade SIAPE 08/06/2026 + comparativo Bevi 18/09/2026 (taxa de refin e comissão ainda a confirmar com o Fábio)",
+    fonteDescricao: "Resumo Portabilidade SIAPE 08/06/2026 + comparativo Bevi 18/09/2026, completado com o Fábio em 23/09/2026",
     regras: {
       taxaEntradaMin: 1.36,             // comparativo Bevi
+      saldoMin: 5000,                   // Fábio, 23/09/2026
       trocoMinPorContrato: 100,
       parcelaMinima: 20,
       idade: { min: 18, max: 75 },
@@ -50,10 +51,9 @@ export const MODELOS: ModeloRegra[] = [
         "Reduz margem negativa; não agrega margem.",
         "Permite ajuste de tabela; o saldo precisa de atuação até as 16h50.",
         "Não faz port pura.",
-        "Falta cadastrar a taxa do refin e a comissão do Daycoval.",
       ],
-      taxaRefin: null,                  // Bevi mostra 1,55 como MÍNIMA; a taxa usada é com o Fábio
-      comissao: null,
+      taxaRefin: 1.70,                                   // Fábio, 23/09/2026 (mínima do banco: 1,55)
+      comissao: { percentual: 0.75, base: "saldo" },     // Fábio, 23/09/2026
     },
   },
   {

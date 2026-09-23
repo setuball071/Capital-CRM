@@ -364,7 +364,7 @@ caso("Daycoval: idade máxima 75", () => {
   status(cliDAY(76), ctDAY({}), "NAO_ELEGIVEL", "atende até 75", bancoDAY());
 });
 caso("Parcela mínima: operação que ficaria abaixo de R$ 20 não fecha", () => {
-  const regras = { ...DAY.regras, taxaRefin: 1.60, trocoMinPorContrato: 0, parcelaMinima: 20 };
+  const regras = { ...DAY.regras, taxaRefin: 1.60, trocoMinPorContrato: 0, parcelaMinima: 20, saldoMin: null };
   const r = analisarBanco(bancoDAY(regras), cliDAY(), [ctDAY({ saldo: 300, parcela: 15 })], HOJE, { modo: "parcela", prazo: 120 });
   const pr = r.contratos[0].preco!;
   assert.equal(pr.viavel, false);
@@ -375,8 +375,17 @@ caso("Parcela mínima não atrapalha operação normal", () => {
   const r = analisarBanco(bancoDAY(regras), cliDAY(), [ctDAY({ saldo: 20000, parcela: 600 })], HOJE, { modo: "maximo", prazo: 120 });
   assert.ok(r.contratos[0].preco!.viavel, r.contratos[0].preco!.motivo);
 });
-caso("Daycoval sem taxa de refin: não calcula troco e não inventa", () => {
-  const r = analisarBanco(bancoDAY(), cliDAY(), [ctDAY({})], HOJE, { modo: "maximo", prazo: 120 });
+caso("Daycoval: saldo mínimo de 5.000", () => {
+  status(cliDAY(), ctDAY({ saldo: 4999 }), "NAO_ELEGIVEL", "abaixo do mínimo", bancoDAY());
+  status(cliDAY(), ctDAY({ saldo: 5000 }), "ELEGIVEL", undefined, bancoDAY());
+});
+caso("Daycoval: refin 1,70% e comissão 0,75% do saldo", () => {
+  const r = analisarBanco(bancoDAY(), cliDAY(), [ctDAY({ saldo: 20000, parcela: 600 })], HOJE, { modo: "maximo", prazo: 120 });
+  assert.equal(r.contratos[0].preco!.taxa, 1.70);
+  assert.deepEqual([r.comissao!.percentual, r.comissao!.total], [0.75, 150]);
+});
+caso("Banco sem taxa de refin cadastrada não inventa troco", () => {
+  const r = analisarBanco(bancoDAY({ ...DAY.regras, taxaRefin: null }), cliDAY(), [ctDAY({})], HOJE, { modo: "maximo", prazo: 120 });
   assert.equal(r.refin, null);
   assert.match(r.contratos[0].operacao.find(o => o.chave === "troco")!.motivo, /taxa de refin do Daycoval não está cadastrada/);
 });
