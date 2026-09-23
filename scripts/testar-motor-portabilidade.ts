@@ -253,6 +253,15 @@ caso("Sem data de nascimento: pergunta, não reprova", () =>
   status({ convenio: "SIAPE", situacaoFuncional: "1" }, ct({ prazoRestante: 84 }), "PENDENTE_INFO", "Falta a data de nascimento", bancoBRB()));
 caso("Banco sem regra de idade não pede nascimento", () =>
   assert.ok(!analisarBanco(banco(), { convenio: "SIAPE", situacaoFuncional: "1" }, [ct({})], HOJE).cliente.some(r => r.chave === "idade")));
+caso("BRB: pensão vitalícia passa", () =>
+  status({ ...CLI_BRB(60, "84"), pensao: { tipo: "vitalicia" } }, ct({ prazoRestante: 84 }), "ELEGIVEL", "vitalícia é aceita", bancoBRB()));
+caso("BRB: pensão temporária não passa (só vitalícia)", () =>
+  status({ ...CLI_BRB(60, "84"), pensao: { tipo: "temporaria", dataFim: "2030-01-01" } }, ct({ prazoRestante: 84 }), "NAO_ELEGIVEL", "só atende pensão vitalícia", bancoBRB()));
+caso("BRB: cedido SUS (45) fora da lista de situações", () =>
+  status(CLI_BRB(50, "45"), ct({ prazoRestante: 84 }), "PENDENTE_INFO", "não bate com nenhum código", bancoBRB()));
+caso("BRB: cedido comum (8) é aceito", () => status(CLI_BRB(50, "8"), ct({ prazoRestante: 84 }), "ELEGIVEL", "é aceita pelo BRB Red", bancoBRB()));
+caso("PAN segue aceitando pensão temporária (regra não vazou)", () =>
+  status({ convenio: "SIAPE", situacaoFuncional: "84", dataNascimento: "1966-01-10", pensao: { tipo: "temporaria" } }, ct({}), "ELEGIVEL"));
 caso("Comissão do BRB: 2,05% do saldo", () => {
   const r = analisarBanco(bancoBRB(), CLI_BRB(50), [ct({ saldo: 20000, prazoRestante: 84 })], HOJE);
   assert.deepEqual([r.comissao!.percentual, r.comissao!.total], [2.05, 410]);

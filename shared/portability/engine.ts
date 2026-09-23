@@ -81,6 +81,8 @@ export interface RegrasBanco {
   situacaoFuncional?: { aceitos: { codigo: string; descricao: string }[] } | null;
   pensionistas?: {
     codigos: string[];
+    /** false = o banco só faz pensão vitalícia (BRB). */
+    temporariaAceita?: boolean;
     temporarioComFim?: { folgaMeses: number } | null;
     temporarioSemFim?: { idadeMin: number } | null;
   } | null;
@@ -460,6 +462,9 @@ function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string,
         motivo: "Cliente é pensionista: informe se a pensão é vitalícia ou temporária." }));
     } else if (tipo === "vitalicia") {
       out.push(regra({ ...base, valorAnalisado: "vitalícia", esperado: null, status: "ELEGIVEL", motivo: "Pensão vitalícia é aceita." }));
+    } else if (pens.temporariaAceita === false) {
+      out.push(regra({ ...base, valorAnalisado: "temporária", esperado: "vitalícia", status: "NAO_ELEGIVEL",
+        motivo: `O ${banco} só atende pensão vitalícia.` }));
     } else if (!cli.pensao?.dataFim) {
       const min = pens.temporarioSemFim?.idadeMin;
       if (!temNum(min)) {

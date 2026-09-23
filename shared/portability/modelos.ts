@@ -30,6 +30,22 @@ export const MODELOS: ModeloRegra[] = [
       trocoMinPorContrato: 50,          // confirmado pelo Fábio (o PDF dizia 100)
       grupoBancario: "BRB",             // BRB Red, Consig360 e Banco de Brasília não se portam
       idade: { max: 64, maxCeletista: 58, codigosCeletista: ["25", "27", "43"] },
+      situacaoFuncional: {
+        // lista do Word confirmada com o Fábio em 22/09/2026. Cedido SUS (45) fica de fora.
+        aceitos: [
+          { codigo: "1", descricao: "ATIVO PERMANENTE" },
+          { codigo: "2", descricao: "APOSENTADO" },
+          { codigo: "8", descricao: "CEDIDO" },
+          { codigo: "25", descricao: "CLT ANS DEC JUDICIAL" },
+          { codigo: "27", descricao: "CLT ANS JUD. CEDIDO" },
+          { codigo: "33", descricao: "REFORMA CBM / PM" },
+          { codigo: "34", descricao: "RESERVA CBM / PM" },
+          { codigo: "43", descricao: "CLT ANS - DEC 6657/08" },
+          { codigo: "84", descricao: "PENSIONISTA" },
+          { codigo: "93", descricao: "BENEFICIARIO PENSÃO" },
+        ],
+      },
+      pensionistas: { codigos: ["84", "93"], temporariaAceita: false },   // BRB só faz pensão vitalícia
       origens: {
         padraoPagasMin: 12,             // demais bancos: 12 pagas (+ 360 dias de averbação, ainda não conferido pelo sistema)
         lista: [
@@ -58,7 +74,8 @@ export const MODELOS: ModeloRegra[] = [
         "Refin obrigatório para comissionamento.",
         "Santander: a regra de 1 paga vale para contratos iniciados em 20, 30 ou 40 — confira o número.",
         "Demais bancos: além das 12 pagas, o contrato precisa de 360 dias de averbação (o sistema ainda não confere isso).",
-        "Não faz cedido SUS nem pensionista temporário.",
+        "Cedido: o BRB só faz refinanciamento nesses casos.",
+        "Cedido SUS (código 45) não é atendido: fica fora da lista de situações aceitas.",
         "Não aceita e-mail funcional no cadastro.",
         "Convênios suspensos: Amazônia Azul, CBTU, EBSERH, EBC, EPL, Trensurb, FUNAI, HC Porto Alegre, INB, IPHAN, NUCLEP, Presidência da República, Telebrás, UFV e Valec.",
       ],
