@@ -28,7 +28,9 @@ export const MODELOS: ModeloRegra[] = [
       saldoMin: 5000,                   // Fábio, 23/09/2026
       trocoMinPorContrato: 100,
       parcelaMinima: 20,
-      idade: { min: 18, max: 75 },
+      // 75 anos é a idade no FIM da operação (Fábio, 23/09): com 120 meses, no
+      // máximo 64 anos e 11 meses na contratação.
+      idade: { min: 18, maxFimOperacao: 75 },
       origens: {
         padraoPagasMin: 12,
         redePagasMin: 6,                // "bancos de rede — 6"
@@ -41,7 +43,7 @@ export const MODELOS: ModeloRegra[] = [
           { origem: "Agibank", porta: true, pagasMin: 15 },
           { origem: "Pan", porta: true, pagasMin: 25 },
           { origem: "Itaú", porta: true, pagasMin: 12 },   // mesmo sendo banco de rede, o PDF dá regra própria
-          { origem: "BRB", porta: true, pagasMin: 0 },
+          { origem: "BRB", porta: true, pagasMin: 12 },   // Fábio corrigiu em 23/09 (o PDF dizia 0)
           { origem: "Pine", porta: true, pagasMin: 0 },
           { origem: "QI Tech", porta: true, pagasMin: 0 },
           { origem: "NBC", porta: true, pagasMin: 24 },

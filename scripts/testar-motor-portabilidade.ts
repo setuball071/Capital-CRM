@@ -343,25 +343,43 @@ const bancoDAY = (regras = DAY.regras): BancoParaAnalise =>
   ({ bankId: 3, nome: "Daycoval", ruleSet: { id: 3, hash: "d", vigenciaInicio: "2026-09-22", regras }, excecoes: [] });
 const cliDAY = (anos = 50): ClienteEntrada => ({ convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(anos) });
 const ctDAY = (p: Partial<ContratoEntrada>) => ct({ bancoOrigem: "BMG", taxa: 1.5, saldo: 20000, parcela: 600, prazoTotal: 96, prazoRestante: 60, ...p });
+/** o Daycoval também só conclui com o prazo informado (idade no fim da operação) */
+function statusDAY(c: ContratoEntrada, esperado: Status, trecho?: string, anos = 50, b = bancoDAY()) {
+  const r = analisarBanco(b, cliDAY(anos), [c], HOJE, { modo: "maximo", prazo: 120 });
+  assert.equal(r.contratos[0].status, esperado, `status ${r.contratos[0].status}, esperava ${esperado}`);
+  if (trecho) {
+    const todos = [...r.contratos[0].regras, ...r.cliente].map(x => x.motivo).join(" | ");
+    assert.ok(todos.includes(trecho), `motivo sem "${trecho}": ${todos}`);
+  }
+}
 
-caso("Daycoval: taxa de entrada 1,36", () => status(cliDAY(), ctDAY({ taxa: 1.35 }), "NAO_ELEGIVEL", "abaixo do mínimo", bancoDAY()));
+caso("Daycoval: taxa de entrada 1,36", () => statusDAY(ctDAY({ taxa: 1.35 }), "NAO_ELEGIVEL", "abaixo do mínimo"));
 caso("Daycoval não porta Safra nem Alfa", () => {
-  status(cliDAY(), ctDAY({ bancoOrigem: "Safra" }), "NAO_ELEGIVEL", "não porta", bancoDAY());
-  status(cliDAY(), ctDAY({ bancoOrigem: "Banco Alfa" }), "NAO_ELEGIVEL", "não porta", bancoDAY());
+  statusDAY(ctDAY({ bancoOrigem: "Safra" }), "NAO_ELEGIVEL", "não porta");
+  statusDAY(ctDAY({ bancoOrigem: "Banco Alfa" }), "NAO_ELEGIVEL", "não porta");
 });
 caso("Daycoval: rede com 6 pagas (Caixa 5 não passa, 6 passa)", () => {
-  status(cliDAY(), ctDAY({ bancoOrigem: "Caixa", prazoRestante: 91 }), "NAO_ELEGIVEL", "banco de rede", bancoDAY());
-  status(cliDAY(), ctDAY({ bancoOrigem: "Caixa", prazoRestante: 90 }), "ELEGIVEL", "banco de rede", bancoDAY());
+  statusDAY(ctDAY({ bancoOrigem: "Caixa", prazoRestante: 91 }), "NAO_ELEGIVEL", "banco de rede");
+  statusDAY(ctDAY({ bancoOrigem: "Caixa", prazoRestante: 90 }), "ELEGIVEL", "banco de rede");
 });
 caso("Daycoval: Itaú tem regra própria (12) mesmo sendo rede", () =>
-  status(cliDAY(), ctDAY({ bancoOrigem: "Itaú", prazoRestante: 88 }), "NAO_ELEGIVEL", "exige 12", bancoDAY()));
-caso("Daycoval: BRB, Pine e QI com 0 pagas", () => {
-  status(cliDAY(), ctDAY({ bancoOrigem: "BRB", origemConfirmada: "BRB", prazoRestante: 96 }), "ELEGIVEL", undefined, bancoDAY());
-  status(cliDAY(), ctDAY({ bancoOrigem: "QI TECH", prazoRestante: 96 }), "ELEGIVEL", undefined, bancoDAY());
+  statusDAY(ctDAY({ bancoOrigem: "Itaú", prazoRestante: 88 }), "NAO_ELEGIVEL", "exige 12"));
+caso("Daycoval: Pine e QI com 0 pagas; BRB exige 12", () => {
+  statusDAY(ctDAY({ bancoOrigem: "QI TECH", prazoRestante: 96 }), "ELEGIVEL", undefined);
+  statusDAY(ctDAY({ bancoOrigem: "PINE", prazoRestante: 96 }), "ELEGIVEL", undefined);
+  statusDAY(ctDAY({ bancoOrigem: "BRB", origemConfirmada: "BRB", prazoRestante: 96 }), "NAO_ELEGIVEL", "exige 12");
+  statusDAY(ctDAY({ bancoOrigem: "BRB", origemConfirmada: "BRB", prazoRestante: 84 }), "ELEGIVEL", undefined);
 });
-caso("Daycoval: idade máxima 75", () => {
-  status(cliDAY(75), ctDAY({}), "ELEGIVEL", "dentro do limite", bancoDAY());
-  status(cliDAY(76), ctDAY({}), "NAO_ELEGIVEL", "atende até 75", bancoDAY());
+caso("Daycoval: 75 anos é no FIM da operação", () => {
+  // 64 anos e 120 meses = termina com 74: passa
+  const ok = analisarBanco(bancoDAY(), cliDAY(64), [ctDAY({})], HOJE, { modo: "maximo", prazo: 120 });
+  assert.equal(ok.contratos[0].status, "ELEGIVEL");
+  // 66 anos e 120 meses = termina com 76: não passa, e a tela sugere o prazo
+  const nao = analisarBanco(bancoDAY(), cliDAY(66), [ctDAY({})], HOJE, { modo: "maximo", prazo: 120 });
+  assert.equal(nao.contratos[0].status, "NAO_ELEGIVEL");
+  assert.match(nao.cliente.find(x => x.chave === "idade_fim")!.motivo, /termina com 76 anos.*Prazo máximo/);
+  // 80 anos hoje continua elegível em prazo curto? não: termina com 81
+  assert.equal(analisarBanco(bancoDAY(), cliDAY(80), [ctDAY({})], HOJE, { modo: "maximo", prazo: 24 }).contratos[0].status, "NAO_ELEGIVEL");
 });
 caso("Parcela mínima: operação que ficaria abaixo de R$ 20 não fecha", () => {
   const regras = { ...DAY.regras, taxaRefin: 1.60, trocoMinPorContrato: 0, parcelaMinima: 20, saldoMin: null };
@@ -376,8 +394,8 @@ caso("Parcela mínima não atrapalha operação normal", () => {
   assert.ok(r.contratos[0].preco!.viavel, r.contratos[0].preco!.motivo);
 });
 caso("Daycoval: saldo mínimo de 5.000", () => {
-  status(cliDAY(), ctDAY({ saldo: 4999 }), "NAO_ELEGIVEL", "abaixo do mínimo", bancoDAY());
-  status(cliDAY(), ctDAY({ saldo: 5000 }), "ELEGIVEL", undefined, bancoDAY());
+  statusDAY(ctDAY({ saldo: 4999 }), "NAO_ELEGIVEL", "abaixo do mínimo");
+  statusDAY(ctDAY({ saldo: 5000 }), "ELEGIVEL", undefined);
 });
 caso("Daycoval: refin 1,70% e comissão 0,75% do saldo", () => {
   const r = analisarBanco(bancoDAY(), cliDAY(), [ctDAY({ saldo: 20000, parcela: 600 })], HOJE, { modo: "maximo", prazo: 120 });
