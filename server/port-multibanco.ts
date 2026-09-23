@@ -51,7 +51,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
   /** Bancos ativos + regra vigente do convênio + exceções ativas: o que o motor consome. */
   async function carregarParaAnalise(tenantId: number, convenio: string, soAtivos = true) {
     const bancos = (await db.execute(sql`
-      SELECT id, nome, codigo, ativo, ordem FROM port_banks
+      SELECT id, nome, codigo, ativo, ordem, inativo_motivo, inativo_em FROM port_banks
       WHERE tenant_id = ${tenantId} ${soAtivos ? sql`AND ativo = TRUE` : sql``}
       ORDER BY ordem, nome
     `)).rows as any[];
@@ -179,9 +179,14 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
     try {
       const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
       const b = req.body || {};
+      // desligar guarda o porquê e a data; religar limpa os dois
+      const mexeAtivo = typeof b.ativo === "boolean";
+      const motivo = mexeAtivo && !b.ativo ? (String(b.motivo || "").trim() || null) : null;
       const r = await db.execute(sql`
         UPDATE port_banks SET
-          ativo = COALESCE(${typeof b.ativo === "boolean" ? b.ativo : null}, ativo),
+          inativo_motivo = CASE WHEN ${mexeAtivo} THEN ${motivo} ELSE inativo_motivo END,
+          inativo_em = CASE WHEN ${mexeAtivo} THEN (CASE WHEN ${!!b.ativo} THEN NULL ELSE NOW() END) ELSE inativo_em END,
+          ativo = COALESCE(${mexeAtivo ? b.ativo : null}, ativo),
           ordem = COALESCE(${Number.isFinite(b.ordem) ? b.ordem : null}, ordem),
           codigo = COALESCE(${b.codigo ?? null}, codigo)
         WHERE id = ${Number(req.params.id)} AND tenant_id = ${tenantId}
@@ -327,7 +332,14 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       if (!cliente?.convenio) return res.status(400).json({ message: "Informe o convênio do cliente" });
 
       const { paraMotor } = await carregarParaAnalise(tenantId, cliente.convenio);
-      const resp = respostaSimulacao(paraMotor, cliente, contratos, new Date(), normalizarOperacao(req.body?.operacao));
+      const desligados = (await db.execute(sql`
+        SELECT nome, inativo_motivo, inativo_em FROM port_banks
+        WHERE tenant_id = ${tenantId} AND ativo = FALSE ORDER BY nome
+      `)).rows as any[];
+      const resp = {
+        ...respostaSimulacao(paraMotor, cliente, contratos, new Date(), normalizarOperacao(req.body?.operacao)),
+        bancosDesligados: desligados.map(d => ({ banco: d.nome, motivo: d.inativo_motivo, desde: d.inativo_em })),
+      };
       // corretor NUNCA vê a comissão da empresa: sai daqui, não só da tela
       res.json(isMaster(req) ? { ...resp, comissaoVisivel: true }
         : { ...resp, resultado: semComissao(resp.resultado), comissaoVisivel: false });

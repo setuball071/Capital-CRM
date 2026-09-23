@@ -229,5 +229,34 @@ caso("Banco que o sistema não conhece: tratado como demais, mas marcado", () =>
   assert.equal(analisarBanco(banco(), CLI, [ct({})], HOJE).contratos[0].origemDesconhecida, undefined);
 });
 
+console.log("\nBRB Red (idade e grupo)");
+const BRB = MODELOS.find(m => m.id === "brb-red-siape-2026-09")!;
+const bancoBRB = (regras = BRB.regras): BancoParaAnalise =>
+  ({ bankId: 9, nome: "BRB Red", ruleSet: { id: 9, hash: "b", vigenciaInicio: "2026-09-22", regras }, excecoes: [] });
+const nasc = (anos: number) => `${HOJE.getFullYear() - anos}-01-10`;   // faz aniversário antes de 18/09
+const CLI_BRB = (anos: number, situacao = "1"): ClienteEntrada => ({ convenio: "SIAPE", situacaoFuncional: situacao, dataNascimento: nasc(anos) });
+
+caso("BRB Red não porta BRB Banco (mesmo grupo)", () => status(CLI_BRB(50), ct({ bancoOrigem: "BRB" }), "NAO_ELEGIVEL", "mesmo grupo do BRB Red", bancoBRB()));
+caso("BRB Red não porta BRB Financeira (mesmo grupo)", () => status(CLI_BRB(50), ct({ bancoOrigem: "BRB CFI" }), "NAO_ELEGIVEL", "mesmo grupo", bancoBRB()));
+caso("BRB Red não porta BRB Consig360 (mesmo grupo)", () => status(CLI_BRB(50), ct({ bancoOrigem: "BRB CONSIG360" }), "NAO_ELEGIVEL", "mesmo grupo", bancoBRB()));
+caso("Caixa com 1 paga: BRB porta", () => status(CLI_BRB(50), ct({ bancoOrigem: "Caixa", prazoRestante: 95 }), "ELEGIVEL", "exige 1", bancoBRB()));
+caso("Bradesco entra na lista de 1 paga do BRB", () => status(CLI_BRB(50), ct({ bancoOrigem: "Bradesco", prazoRestante: 95 }), "ELEGIVEL", "exige 1", bancoBRB()));
+caso("BMG (demais bancos) com 11 pagas: exige 12", () => status(CLI_BRB(50), ct({ bancoOrigem: "BMG", prazoRestante: 85 }), "NAO_ELEGIVEL", "exige 12", bancoBRB()));
+caso("C6: BRB não porta", () => status(CLI_BRB(50), ct({ bancoOrigem: "C6 BANK" }), "NAO_ELEGIVEL", "não porta", bancoBRB()));
+caso("BRB não tem taxa de entrada: contrato a 1,00% passa", () => status(CLI_BRB(50), ct({ taxa: 1.0, prazoRestante: 84 }), "ELEGIVEL", undefined, bancoBRB()));
+caso("Saldo 4.000,00 fica abaixo do mínimo (4.000,01)", () => status(CLI_BRB(50), ct({ saldo: 4000, prazoRestante: 84 }), "NAO_ELEGIVEL", "abaixo do mínimo", bancoBRB()));
+caso("Estatutário com 64 anos: passa", () => status(CLI_BRB(64), ct({ prazoRestante: 84 }), "ELEGIVEL", "dentro do limite", bancoBRB()));
+caso("Estatutário com 65 anos: não passa", () => status(CLI_BRB(65), ct({ prazoRestante: 84 }), "NAO_ELEGIVEL", "atende até 64", bancoBRB()));
+caso("Celetista (código 25) com 58 anos: passa", () => status(CLI_BRB(58, "25"), ct({ prazoRestante: 84 }), "ELEGIVEL", undefined, bancoBRB()));
+caso("Celetista (código 25) com 59 anos: não passa", () => status(CLI_BRB(59, "25"), ct({ prazoRestante: 84 }), "NAO_ELEGIVEL", "atende até 58 (celetista)", bancoBRB()));
+caso("Sem data de nascimento: pergunta, não reprova", () =>
+  status({ convenio: "SIAPE", situacaoFuncional: "1" }, ct({ prazoRestante: 84 }), "PENDENTE_INFO", "Falta a data de nascimento", bancoBRB()));
+caso("Banco sem regra de idade não pede nascimento", () =>
+  assert.ok(!analisarBanco(banco(), { convenio: "SIAPE", situacaoFuncional: "1" }, [ct({})], HOJE).cliente.some(r => r.chave === "idade")));
+caso("Comissão do BRB: 2,05% do saldo", () => {
+  const r = analisarBanco(bancoBRB(), CLI_BRB(50), [ct({ saldo: 20000, prazoRestante: 84 })], HOJE);
+  assert.deepEqual([r.comissao!.percentual, r.comissao!.total], [2.05, 410]);
+});
+
 console.log(`\n${ok} ok, ${falhas} falha(s)\n`);
 process.exit(falhas ? 1 : 0);

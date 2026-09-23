@@ -6830,7 +6830,7 @@ const MB = {
   escolha: null,            // banco escolhido após comparar
   cpfDono: null,            // de qual CPF são os dados complementares
   sugestaoCrm: null,        // o que o cadastro do CRM diz (dica, não dado confirmado)
-  resultado: null, codigosSituacao: [], alertasFormalizacao: [],
+  resultado: null, codigosSituacao: [], alertasFormalizacao: [], bancosDesligados: [],
   analiseSalva: null,       // análise que veio junto com a cotação reaberta
   ultimaChave: null, chaveAgendada: null, timer: null, seq: 0, ctrl: null,
   estado: 'ocioso', aba: 'comparativo', intervalo: null,
@@ -6947,6 +6947,7 @@ async function mbAnalisar(entrada, chave) {
     MB.resultado = j.resultado || null;
     MB.codigosSituacao = j.codigosSituacao || [];
     MB.alertasFormalizacao = j.alertasFormalizacao || [];
+    MB.bancosDesligados = j.bancosDesligados || [];
     MB.comissaoVisivel = j.comissaoVisivel === true;
     MB.ultimaChave = chave; MB.chaveAgendada = null;
     MB.estado = 'ok';
@@ -7217,6 +7218,15 @@ function mbOperacaoHTML() {
     </div>`;
 }
 
+/** Banco desligado no cadastro não entra na análise — a tela diz quem e por quê. */
+function mbDesligadosHTML() {
+  const lista = MB.bancosDesligados || [];
+  if (!lista.length) return '';
+  const item = d => mbEsc(d.banco) + (d.motivo ? ' (' + mbEsc(d.motivo) + ')' : '') +
+    (d.desde ? ' desde ' + new Date(d.desde).toLocaleDateString('pt-BR') : '');
+  return `<div class="mb-sub" style="margin-top:8px">Fora da análise agora: ${lista.map(item).join(' · ')}.</div>`;
+}
+
 /** Banco de origem que o sistema não reconhece cai em "demais bancos" — avisa em vez de passar calado. */
 function mbOrigemDesconhecidaHTML(bancos) {
   const nomes = new Set();
@@ -7406,7 +7416,7 @@ function mbRender() {
 
   corpo.innerHTML = erroNovo + salva + mbBannerEscolha() +
     (pend.length ? `<div class="mb-pend"><div style="font-weight:700;color:#92400E;margin-bottom:4px">Para concluir a análise — nada foi reprovado por falta destes dados</div>${pend.map(mbCampoPendenteHTML).join('')}</div>` : '') +
-    mbOrigemDesconhecidaHTML(bancos) + mbFormalizacaoHTML() + mbOperacaoHTML() +
+    mbOrigemDesconhecidaHTML(bancos) + mbDesligadosHTML() + mbFormalizacaoHTML() + mbOperacaoHTML() +
     `<div class="mb-abas"><button class="mb-aba ${MB.aba === 'comparativo' ? 'on' : ''}" onclick="MB.aba='comparativo';mbRender()">Comparativo</button>` +
     bancos.map(b => `<button class="mb-aba ${MB.aba === b.bankId ? 'on' : ''}" onclick="MB.aba=${b.bankId};mbRender()"><span class="mb-ponto" style="background:${MB_STATUS_COR[b.status]}"></span>${mbEsc(b.banco)}</button>`).join('') +
     `</div>` +

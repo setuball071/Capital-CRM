@@ -768,6 +768,9 @@ app.use((req, res, next) => {
             )
           `);
           await simMigDb.execute(simMigSql`CREATE UNIQUE INDEX IF NOT EXISTS port_banks_tenant_nome ON port_banks(tenant_id, lower(nome))`);
+          // por que o banco está desligado (ex.: "suspenso por problema técnico") e desde quando
+          await simMigDb.execute(simMigSql`ALTER TABLE port_banks ADD COLUMN IF NOT EXISTS inativo_motivo TEXT`);
+          await simMigDb.execute(simMigSql`ALTER TABLE port_banks ADD COLUMN IF NOT EXISTS inativo_em TIMESTAMP`);
           await simMigDb.execute(simMigSql`
             CREATE TABLE IF NOT EXISTS port_rule_sets (
               id              SERIAL PRIMARY KEY,

@@ -12,6 +12,7 @@ import { ORIGENS } from "@shared/portability/engine";
 
 interface BancoApi {
   id: number; nome: string; codigo: string | null; ativo: boolean; ordem: number;
+  inativo_motivo?: string | null; inativo_em?: string | null;
   regraVigente: { id: number; hash: string; fonteDescricao: string | null; vigenciaInicio: string; regras: any } | null;
   excecoes: { id: number; tipo: string; parametros: any; motivo: string | null; criado_em: string }[];
 }
@@ -111,11 +112,23 @@ function PainelBancos({ bancos, convenio, aoMudar }: { bancos: BancoApi[]; conve
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="text-sm font-bold">{b.nome}</div>
                 <label className="flex items-center gap-1.5 text-[12px] cursor-pointer">
-                  <input type="checkbox" checked={b.ativo} onChange={e => executar(async () => {
-                    await chamar(`/api/port/bancos/${b.id}`, "PATCH", { ativo: e.target.checked });
-                    return `${b.nome} ${e.target.checked ? "ativado" : "desativado"} — ${e.target.checked ? "volta" : "sai"} da análise.`;
-                  })} />ativo
+                  <input type="checkbox" checked={b.ativo} onChange={e => {
+                    const ligar = e.target.checked;
+                    // desligar sem dizer o porquê vira mistério depois; religar limpa o motivo
+                    const motivo = ligar ? "" : (window.prompt(`Por que o ${b.nome} está saindo da análise? (ex.: suspenso por problema técnico)`) ?? "").trim();
+                    if (!ligar && motivo === "" ) return;   // cancelou o prompt: não desliga
+                    executar(async () => {
+                      await chamar(`/api/port/bancos/${b.id}`, "PATCH", { ativo: ligar, motivo });
+                      return `${b.nome} ${ligar ? "ligado — volta para a análise" : "desligado — sai da análise"}.`;
+                    });
+                  }} />ativo
                 </label>
+                {!b.ativo && (
+                  <span className="text-[11px] rounded bg-amber-100 text-amber-800 px-1.5 py-0.5">
+                    desligado{b.inativo_em ? ` desde ${new Date(b.inativo_em).toLocaleDateString("pt-BR")}` : ""}
+                    {b.inativo_motivo ? ` — ${b.inativo_motivo}` : ""}
+                  </span>
+                )}
                 <div className="text-[11px] text-muted-foreground">
                   {b.regraVigente
                     ? <>Regras {convenio}: {b.regraVigente.fonteDescricao || "cadastro manual"} · vigentes desde {new Date(b.regraVigente.vigenciaInicio).toLocaleString("pt-BR")} · #{b.regraVigente.id}</>

@@ -19,6 +19,54 @@ export interface ModeloRegra {
 
 export const MODELOS: ModeloRegra[] = [
   {
+    id: "brb-red-siape-2026-09",
+    banco: "BRB Red",
+    convenio: "SIAPE",
+    fonteDescricao: "Anotações da casa (REGRAS PORT BRB) + Resumo Portabilidade SIAPE 08/06/2026, conferidos com o Fábio em 22/09/2026",
+    regras: {
+      // o BRB não tem taxa de entrada na portabilidade (o refin é que remunera)
+      taxaEntradaMin: null,
+      saldoMin: 4000.01,
+      trocoMinPorContrato: 50,          // confirmado pelo Fábio (o PDF dizia 100)
+      grupoBancario: "BRB",             // BRB Red, Consig360 e Banco de Brasília não se portam
+      idade: { max: 64, maxCeletista: 58, codigosCeletista: ["25", "27", "43"] },
+      origens: {
+        padraoPagasMin: 12,             // demais bancos: 12 pagas (+ 360 dias de averbação, ainda não conferido pelo sistema)
+        lista: [
+          { origem: "C6", porta: false },
+          { origem: "Agibank", porta: false },
+          { origem: "PicPay", porta: false },
+          { origem: "Pine", porta: false },
+          { origem: "Inbursa", porta: false },
+          // porta com 1 parcela paga
+          { origem: "Banco do Brasil", porta: true, pagasMin: 1 },
+          { origem: "Itaú", porta: true, pagasMin: 1 },
+          { origem: "Caixa", porta: true, pagasMin: 1 },
+          { origem: "Bradesco", porta: true, pagasMin: 1 },
+          { origem: "Sicoob", porta: true, pagasMin: 1 },
+          { origem: "Alfa", porta: true, pagasMin: 1 },
+          { origem: "Nubank", porta: true, pagasMin: 1 },
+          { origem: "Inter", porta: true, pagasMin: 1 },
+          { origem: "QI Tech", porta: true, pagasMin: 1 },
+          { origem: "Mercantil", porta: true, pagasMin: 1 },
+          { origem: "Santander", porta: true, pagasMin: 1 },
+          { origem: "Daycoval", porta: true, pagasMin: 1 },
+          { origem: "Pan", porta: true, pagasMin: 12 },
+        ],
+      },
+      avisos: [
+        "Refin obrigatório para comissionamento.",
+        "Santander: a regra de 1 paga vale para contratos iniciados em 20, 30 ou 40 — confira o número.",
+        "Demais bancos: além das 12 pagas, o contrato precisa de 360 dias de averbação (o sistema ainda não confere isso).",
+        "Não faz cedido SUS nem pensionista temporário.",
+        "Não aceita e-mail funcional no cadastro.",
+        "Convênios suspensos: Amazônia Azul, CBTU, EBSERH, EBC, EPL, Trensurb, FUNAI, HC Porto Alegre, INB, IPHAN, NUCLEP, Presidência da República, Telebrás, UFV e Valec.",
+      ],
+      taxaRefin: 1.65,                                   // mínima do banco é 1,60; o Fábio calcula com 1,65 (margem de segurança)
+      comissao: { percentual: 2.05, base: "saldo" },     // informado pelo Fábio em 22/09/2026
+    },
+  },
+  {
     id: "pan-siape-2026-09",
     banco: "PAN",
     convenio: "SIAPE",

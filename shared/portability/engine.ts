@@ -18,7 +18,7 @@
 import { precificarRefin, type OperacaoEntrada, type PrecoContrato, type ResumoRefin } from "./refin";
 export type { OperacaoEntrada, PrecoContrato, ResumoRefin } from "./refin";
 
-export const ENGINE_VERSION = "1.2.0";   // 1.1: troco/parcela do refin · 1.2: fora da CIP, próprio banco, origem desconhecida
+export const ENGINE_VERSION = "1.3.0";   // 1.1: refin · 1.2: fora da CIP/próprio banco · 1.3: idade e grupo bancário
 
 export type Status =
   | "ELEGIVEL"
@@ -84,6 +84,10 @@ export interface RegrasBanco {
     temporarioComFim?: { folgaMeses: number } | null;
     temporarioSemFim?: { idadeMin: number } | null;
   } | null;
+  /** Idade do cliente na data da análise. Celetista costuma ter teto menor. */
+  idade?: { min?: number | null; max?: number | null; maxCeletista?: number | null; codigosCeletista?: string[] } | null;
+  /** Grupo do banco (ex.: "BRB"): não porta contrato de nenhuma empresa do mesmo grupo. */
+  grupoBancario?: string | null;
   alertasFormalizacao?: string[];
   avisos?: string[];
   /** % a.m. do refin: a taxa que o banco aplica. O prazo quem escolhe é o operador. */
@@ -195,11 +199,12 @@ export interface ResultadoAnalise {
 //  texto. Ordem importa: o mais específico vem antes (BRB Financeira antes de BRB).
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?: boolean }[] = [
+export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?: boolean; grupo?: string }[] = [
   // Padrões são PALAVRAS INTEIRAS — escreva a forma completa, nunca um prefixo.
   // ("BRB FINANC" não casa "BRB FINANCEIRA", e o nome cai no BRB Banco.)
-  { chave: "BRB_FINANCEIRA", nome: "BRB Financeira", padroes: ["BRB FINANCEIRA", "BRB CFI", "BRB - CFI", "BRB CREDITO", "BRB CRED"] },
-  { chave: "BRB", nome: "BRB Banco", padroes: ["BRB"] },
+  { chave: "BRB_FINANCEIRA", nome: "BRB Financeira", padroes: ["BRB FINANCEIRA", "BRB CFI", "BRB - CFI", "BRB CREDITO", "BRB CRED"], grupo: "BRB" },
+  // BRB Red, BRB Consig360 e BRB Banco de Brasília são o mesmo grupo e não se portam entre si
+  { chave: "BRB", nome: "BRB Banco", padroes: ["BRB", "BRB RED", "BRB CONSIG", "BRB CONSIG360", "BRB 360"], grupo: "BRB" },
   { chave: "CAIXA", nome: "Caixa", padroes: ["CAIXA", "CEF"] },
   { chave: "BB", nome: "Banco do Brasil", padroes: ["BANCO DO BRASIL", "BCO BRAS", "BCO DO BRASIL"] },
   { chave: "ITAU", nome: "Itaú", padroes: ["ITAU"] },
@@ -225,6 +230,7 @@ export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?
   { chave: "PICPAY", nome: "PicPay", padroes: ["PICPAY"] },
   { chave: "PARANA", nome: "Paraná Banco", padroes: ["PARANA"] },
   { chave: "OLE", nome: "Olé", padroes: ["OLE"] },
+  { chave: "ALFA", nome: "Alfa", padroes: ["ALFA", "BANCO ALFA", "ALFA FINANCEIRA"] },
   // Entidades FORA DA CIP (previdências, associações): NENHUM banco porta — a
   // portabilidade passa pela CIP (Fábio, 22/09/2026). Só uma exceção cadastrada libera.
   { chave: "FUTURO", nome: "Futuro Previdência", padroes: ["FUTURO"], foraCip: true },
@@ -289,6 +295,11 @@ function avaliarOrigem(c: ContratoEntrada, chave: string | null, regras: RegrasB
   const base = { chave: "origem_pagas", label: "Banco de origem e parcelas pagas" };
   const nomeO = chave ? nomeOrigem(chave) : (c.bancoOrigem || "desconhecido");
 
+  // empresas do mesmo grupo não se portam (ex.: BRB Red, BRB Consig360 e BRB Banco de Brasília)
+  if (chave && regras.grupoBancario && ORIGENS.find(o => o.chave === chave)?.grupo === regras.grupoBancario) {
+    return regra({ ...base, valorAnalisado: nomeO, esperado: "banco de fora do grupo", status: "NAO_ELEGIVEL", fonte: "infografico",
+      motivo: `${nomeO} é do mesmo grupo do ${banco} (${regras.grupoBancario}): o grupo não porta ele mesmo.` });
+  }
   // contrato do próprio banco não é portabilidade — é refin (vale para todo banco)
   if (chave && chave === normalizarOrigem(banco)) {
     return regra({ ...base, valorAnalisado: nomeO, esperado: "outro banco", status: "NAO_ELEGIVEL", fonte: "sistema",
@@ -414,6 +425,28 @@ function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string,
         out.push(regra({ ...base, campo: "situacaoFuncional", valorAnalisado: cli.situacaoFuncional, status: "PENDENTE_INFO",
           motivo: `"${cli.situacaoFuncional}" não bate com nenhum código da lista do ${banco}. Informe o código SIAPE da situação funcional.` }));
       }
+    }
+  }
+
+  const id = regras.idade;
+  if (id && (temNum(id.min) || temNum(id.max) || temNum(id.maxCeletista))) {
+    // sem lista de situações cadastrada, o código vem direto do que o operador informou
+    const codigoSit = codigoCliente || (cli.situacaoFuncional || "").trim();
+    const celetista = !!(codigoSit && (id.codigosCeletista || []).map(semAcento).includes(semAcento(codigoSit)));
+    const max = celetista && temNum(id.maxCeletista) ? id.maxCeletista : id.max;
+    const partes = [temNum(id.min) ? `a partir de ${id.min}` : null, temNum(max) ? `até ${max} anos` : null].filter(Boolean);
+    const base = { chave: "idade", label: "Idade do cliente", esperado: partes.join(", ") + (celetista ? " (celetista)" : "") };
+    const anos = cli.dataNascimento ? idadeEm(cli.dataNascimento, hoje) : null;
+    if (anos === null) {
+      out.push(regra({ ...base, campo: "dataNascimento", valorAnalisado: null, status: "PENDENTE_INFO",
+        motivo: `Falta a data de nascimento: o ${banco} tem limite de idade.` }));
+    } else {
+      const cedo = temNum(id.min) && anos < id.min!;
+      const tarde = temNum(max) && anos > max!;
+      out.push(regra({ ...base, valorAnalisado: `${anos} anos`, status: cedo || tarde ? "NAO_ELEGIVEL" : "ELEGIVEL",
+        motivo: cedo ? `Cliente tem ${anos} anos; o ${banco} atende a partir de ${id.min}.`
+              : tarde ? `Cliente tem ${anos} anos; o ${banco} atende até ${max}${celetista ? " (celetista)" : ""}.`
+              : `${anos} anos: dentro do limite do ${banco}.` }));
     }
   }
 
