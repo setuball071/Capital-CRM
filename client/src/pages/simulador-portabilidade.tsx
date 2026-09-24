@@ -348,8 +348,10 @@ export default function SimuladorPortabilidadePage() {
   const [anualEscolhido, setAnualEscolhido] = useState<{ side: "left" | "right"; anos: number } | null>(null);
   const cardsAnuaisEsq = leftState ? buildAporteAnualCards(leftState) : [];
   const cardsAnuaisDir = rightState ? buildAporteAnualCards(rightState) : [];
-  const anualAberto = anualEscolhido
-    ? (anualEscolhido.side === "left" ? cardsAnuaisEsq : cardsAnuaisDir).find(c => c.anos === anualEscolhido.anos) || null
+  // só mostra o cronograma do lado que está aberto na tela: senão a conta de um
+  // contrato aparecia embaixo do outro, que nem foi calculado
+  const anualAberto = anualEscolhido && anualEscolhido.side === ladoAnual
+    ? (ladoAnual === "left" ? cardsAnuaisEsq : cardsAnuaisDir).find(c => c.anos === anualEscolhido.anos) || null
     : null;
   const prazoVisivel = (m: number) => {
     const de = parseInt(faixaDe, 10), ate = parseInt(faixaAte, 10);
@@ -1085,8 +1087,8 @@ export default function SimuladorPortabilidadePage() {
             <>
               {/* uma tabela por vez: 18 cartões lado a lado viravam bagunça */}
               <div className="estrat-modo" style={{ marginBottom: 8 }}>
-                <button className={ladoAnual === "left" ? "on" : ""} onClick={() => setLadoAnual("left")} data-testid="btn-lado-novo">Contrato novo</button>
-                <button className={ladoAnual === "right" ? "on" : ""} onClick={() => setLadoAnual("right")} data-testid="btn-lado-final">Contrato final</button>
+                <button className={ladoAnual === "left" ? "on" : ""} onClick={() => { setLadoAnual("left"); setAnualEscolhido(null); setApresentando(false); }} data-testid="btn-lado-novo">Contrato novo</button>
+                <button className={ladoAnual === "right" ? "on" : ""} onClick={() => { setLadoAnual("right"); setAnualEscolhido(null); setApresentando(false); }} data-testid="btn-lado-final">Contrato final</button>
               </div>
               {(ladoAnual === "left" ? cardsAnuaisEsq : cardsAnuaisDir).length === 0 ? (
                 <div className="empty-sim" style={{ padding: 16 }}>
