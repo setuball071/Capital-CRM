@@ -344,6 +344,7 @@ export default function SimuladorPortabilidadePage() {
   // terceira estratégia: aporte uma vez por ano, em vez de mensal
   const [modoAporteAnual, setModoAporteAnual] = useState(false);
   const [apresentando, setApresentando] = useState(false);   // tela limpa para o print do cliente
+  const [ladoAnual, setLadoAnual] = useState<"left" | "right">("left");
   const [anualEscolhido, setAnualEscolhido] = useState<{ side: "left" | "right"; anos: number } | null>(null);
   const cardsAnuaisEsq = leftState ? buildAporteAnualCards(leftState) : [];
   const cardsAnuaisDir = rightState ? buildAporteAnualCards(rightState) : [];
@@ -966,58 +967,99 @@ export default function SimuladorPortabilidadePage() {
           </div>
         </div>
 
-        {apresentando && anualAberto && (
+        {apresentando && anualAberto && (() => {
+          const lado = anualEscolhido?.side === "right" ? rightState : leftState;
+          const parcela = lado?.margem ?? 0;
+          const prazoOriginal = lado?.prazo ?? 0;
+          const maior = Math.max(anualAberto.totalSemAporte, anualAberto.totalPago) || 1;
+          const barra = (v: number) => `${Math.max(6, (v / maior) * 100)}%`;
+          const hoje = new Date().toLocaleDateString("pt-BR");
+          return (
           <div
             onClick={(e) => { if (e.target === e.currentTarget) setApresentando(false); }}
-            style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,.55)", zIndex: 60, overflow: "auto", padding: 24 }}
+            style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,.6)", zIndex: 60, overflow: "auto", padding: 20 }}
             data-testid="apresentacao"
           >
-            <div style={{ maxWidth: 720, margin: "0 auto", background: "#fff", color: "#111827", borderRadius: 14, padding: 24 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <div style={{ maxWidth: 760, margin: "0 auto", background: "#fff", color: "#111827", borderRadius: 16, padding: 28, fontFamily: "inherit" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
                 {logoUrl ? <img src={logoUrl} alt="" style={{ height: 30 }} /> : null}
-                <div style={{ fontSize: 18, fontWeight: 700 }}>Plano de quitação antecipada</div>
                 <button onClick={() => setApresentando(false)}
-                  style={{ marginLeft: "auto", border: 0, background: "transparent", fontSize: 20, cursor: "pointer", color: "#6B7280" }}
+                  style={{ marginLeft: "auto", border: 0, background: "transparent", fontSize: 22, cursor: "pointer", color: "#9CA3AF" }}
                   data-testid="btn-fechar-apresentacao">✕</button>
               </div>
-              {pdfClientName ? <div style={{ fontSize: 14, marginBottom: 10 }}>Cliente: <b>{pdfClientName}</b></div> : null}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 18, fontSize: 14, marginBottom: 14 }}>
-                <div><div style={{ fontSize: 11, color: "#6B7280" }}>PARCELA MENSAL</div>
-                  <b>{fmtR(anualEscolhido?.side === "left" ? (leftState?.margem ?? 0) : (rightState?.margem ?? 0))}</b></div>
-                <div><div style={{ fontSize: 11, color: "#6B7280" }}>APORTE UMA VEZ POR ANO</div><b>{fmtR(anualAberto.aporte)}</b></div>
-                <div><div style={{ fontSize: 11, color: "#6B7280" }}>QUITA EM</div>
-                  <b>{anualAberto.anos} {anualAberto.anos === 1 ? "ano" : "anos"} ({anualAberto.meses} meses)</b></div>
-                <div><div style={{ fontSize: 11, color: "#6B7280" }}>EM VEZ DE</div>
-                  <b>{anualEscolhido?.side === "left" ? (leftState?.prazo ?? 0) : (rightState?.prazo ?? 0)} meses</b></div>
+
+              {/* manchete */}
+              {pdfClientName ? <div style={{ fontSize: 13, color: "#6B7280" }}>{pdfClientName}</div> : null}
+              <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.2 }}>
+                Quite seu contrato em <span style={{ color: "#6C2BD9" }}>{anualAberto.anos} {anualAberto.anos === 1 ? "ano" : "anos"}</span><br />
+                em vez de {Math.round(prazoOriginal / 12)} anos
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 18, background: "#F5F3FF", borderRadius: 10, padding: 14, marginBottom: 14 }}>
-                <div><div style={{ fontSize: 11, color: "#6B7280" }}>PAGANDO ATÉ O FIM</div><b>{fmtR(anualAberto.totalSemAporte)}</b></div>
-                <div><div style={{ fontSize: 11, color: "#6B7280" }}>COM OS APORTES</div><b>{fmtR(anualAberto.totalPago)}</b></div>
-                <div><div style={{ fontSize: 11, color: "#6B7280" }}>VOCÊ ECONOMIZA</div>
-                  <b style={{ color: "#047857", fontSize: 18 }}>{fmtR(anualAberto.economia)}</b></div>
+              <div style={{ marginTop: 14, background: "linear-gradient(135deg,#ECFDF5,#F5F3FF)", borderRadius: 14, padding: "16px 18px" }}>
+                <div style={{ fontSize: 12, letterSpacing: ".06em", color: "#047857", fontWeight: 700 }}>VOCÊ ECONOMIZA</div>
+                <div style={{ fontSize: 36, fontWeight: 800, color: "#047857", lineHeight: 1.1 }} data-testid="apres-economia">{fmtR(anualAberto.economia)}</div>
+                <div style={{ fontSize: 12.5, color: "#374151" }}>{(100 * anualAberto.economia / (anualAberto.totalSemAporte || 1)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% do que pagaria até o fim</div>
               </div>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead><tr style={{ textAlign: "left", color: "#6B7280", fontSize: 11 }}>
-                  <th style={{ padding: "6px 8px" }}>ANO</th><th>MÊS</th><th>APORTE</th><th>SALDO DEPOIS</th>
-                </tr></thead>
-                <tbody>
-                  {anualAberto.linhas.map(l => (
-                    <tr key={l.ano} style={{ borderTop: "1px solid #E5E7EB" }}>
-                      <td style={{ padding: "7px 8px" }}>{l.ano}º</td>
-                      <td>{l.mes}</td>
-                      <td>{fmtR(l.aporte)}</td>
-                      <td style={l.saldoDepois === 0 ? { fontWeight: 700, color: "#047857" } : undefined}>{fmtR(l.saldoDepois)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p style={{ fontSize: 11.5, color: "#6B7280", marginTop: 12 }}>
-                A parcela mensal continua a mesma. O aporte anual abate o saldo devedor e encurta o contrato.
-                Simulação: valores podem variar conforme a data de pagamento.
-              </p>
+
+              {/* comparação visual */}
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 6 }}>Pagando até o fim · {prazoOriginal} meses</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ height: 26, width: barra(anualAberto.totalSemAporte), background: "#CBD5E1", borderRadius: 6 }} />
+                  <b style={{ fontSize: 14 }}>{fmtR(anualAberto.totalSemAporte)}</b>
+                </div>
+                <div style={{ fontSize: 12, color: "#6B7280", margin: "12px 0 6px" }}>Com os aportes · {anualAberto.meses} meses</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ height: 26, width: barra(anualAberto.totalPago), background: "#6C2BD9", borderRadius: 6 }} />
+                  <b style={{ fontSize: 14 }}>{fmtR(anualAberto.totalPago)}</b>
+                </div>
+              </div>
+
+              {/* como funciona */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px,1fr))", gap: 12, marginTop: 22 }}>
+                {[
+                  { n: "1", t: "Sua parcela não muda", d: `Você segue pagando ${fmtR(parcela)} por mês.` },
+                  { n: "2", t: "Um aporte por ano", d: `Uma vez por ano você paga ${fmtR(anualAberto.aporte)} a mais.` },
+                  { n: "3", t: "O contrato acaba antes", d: `Quitado em ${anualAberto.meses} meses, com ${fmtR(anualAberto.economia)} de economia.` },
+                ].map(x => (
+                  <div key={x.n} style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: 14 }}>
+                    <div style={{ width: 24, height: 24, borderRadius: 999, background: "#6C2BD9", color: "#fff", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>{x.n}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13.5 }}>{x.t}</div>
+                    <div style={{ fontSize: 12.5, color: "#4B5563", marginTop: 2 }}>{x.d}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* linha do tempo dos aportes */}
+              <div style={{ marginTop: 22 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Seu saldo ano a ano</div>
+                {anualAberto.linhas.map(l => (
+                  <div key={l.ano} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 7 }}>
+                    <div style={{ width: 54, fontSize: 12.5, color: "#6B7280" }}>{l.ano}º ano</div>
+                    <div style={{ flex: 1, height: 18, background: "#F3F4F6", borderRadius: 5, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.max(0, (l.saldoDepois / (anualAberto.saldoInicial || 1)) * 100)}%`, background: l.saldoDepois === 0 ? "#047857" : "#A78BFA" }} />
+                    </div>
+                    <div style={{ width: 110, textAlign: "right", fontSize: 12.5, fontWeight: l.saldoDepois === 0 ? 700 : 400, color: l.saldoDepois === 0 ? "#047857" : "#111827" }}>
+                      {l.saldoDepois === 0 ? "quitado" : fmtR(l.saldoDepois)}
+                    </div>
+                  </div>
+                ))}
+                <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 4 }}>
+                  Aportes de {fmtR(anualAberto.aporte)} nos meses {anualAberto.linhas.map(l => l.mes).join(", ")}.
+                </div>
+              </div>
+
+              {/* rodapé */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", borderTop: "1px solid #E5E7EB", marginTop: 22, paddingTop: 12, fontSize: 12, color: "#6B7280" }}>
+                <div>
+                  {pdfConsultorNome ? <b style={{ color: "#111827" }}>{pdfConsultorNome}</b> : null}
+                  {pdfConsultorTel ? <span> · {pdfConsultorTel}</span> : null}
+                </div>
+                <div style={{ marginLeft: "auto" }}>Simulação de {hoje} · valores podem variar conforme a data de pagamento.</div>
+              </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         <div className="sim-section">
           <div className="section-title">Estratégia de Amortização — escolha um prazo para ver o cronograma</div>
@@ -1041,36 +1083,42 @@ export default function SimuladorPortabilidadePage() {
           })()}
           {modoAporteAnual && (
             <>
-              <div className="prazos-wrap">
-                {[{ lado: "left" as const, cards: cardsAnuaisEsq, rotulo: "Contrato novo" },
-                  { lado: "right" as const, cards: cardsAnuaisDir, rotulo: "Contrato final" }].map(({ lado, cards, rotulo }) => (
-                  <div key={lado}>
-                    <div className={`prazos-col-label ${lado === "left" ? "col-left-label" : "col-right-label"}`}>{rotulo} — aporte por ano</div>
-                    <div className="prazos-grid">
-                      {cards.length === 0 ? (
-                        <div className="empty-sim" style={{ padding: 16, gridColumn: "1/-1" }}>
-                          Calcule o contrato {lado === "left" ? "novo" : "final"} primeiro.
-                        </div>
-                      ) : (
-                        cards.filter(c => prazoVisivel(c.meses)).map(c => (
-                          <div
-                            key={c.anos}
-                            className={`pc${anualEscolhido?.side === lado && anualEscolhido?.anos === c.anos ? (lado === "left" ? " al" : " ar") : ""}`}
-                            onClick={() => setAnualEscolhido({ side: lado, anos: c.anos })}
-                            data-testid={`card-anual-${lado}-${c.anos}`}
-                          >
-                            <button className="pc-x" title="Esconder este prazo do cliente" onClick={(e) => { e.stopPropagation(); ocultarPrazo(c.meses); }}>✕</button>
-                            <div className="pc-anos">{c.anos}<small> {c.anos === 1 ? "ano" : "anos"}</small></div>
-                            <div className="pc-parc">{fmtR(c.aporte)}/ano</div>
-                            <div className="pc-taxa">{c.meses} meses · total {fmtR(c.totalPago)}</div>
-                            <div className="pc-tag">ANUAL</div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                ))}
+              {/* uma tabela por vez: 18 cartões lado a lado viravam bagunça */}
+              <div className="estrat-modo" style={{ marginBottom: 8 }}>
+                <button className={ladoAnual === "left" ? "on" : ""} onClick={() => setLadoAnual("left")} data-testid="btn-lado-novo">Contrato novo</button>
+                <button className={ladoAnual === "right" ? "on" : ""} onClick={() => setLadoAnual("right")} data-testid="btn-lado-final">Contrato final</button>
               </div>
+              {(ladoAnual === "left" ? cardsAnuaisEsq : cardsAnuaisDir).length === 0 ? (
+                <div className="empty-sim" style={{ padding: 16 }}>
+                  Calcule o contrato {ladoAnual === "left" ? "novo" : "final"} primeiro.
+                </div>
+              ) : (
+                <table className="tab-anual" data-testid="tabela-anual">
+                  <thead><tr>
+                    <th>Terminar em</th><th>Aporte por ano</th><th>Prazo</th><th>Total pago</th><th>Economia</th><th></th>
+                  </tr></thead>
+                  <tbody>
+                    {(ladoAnual === "left" ? cardsAnuaisEsq : cardsAnuaisDir).filter(c => prazoVisivel(c.meses)).map(c => {
+                      const aberta = anualEscolhido?.side === ladoAnual && anualEscolhido?.anos === c.anos;
+                      return (
+                        <tr key={c.anos} onClick={() => setAnualEscolhido({ side: ladoAnual, anos: c.anos })}
+                          data-testid={`linha-anual-${ladoAnual}-${c.anos}`}
+                          style={{ cursor: "pointer", background: aberta ? "rgba(108,43,217,.10)" : undefined, fontWeight: aberta ? 700 : undefined }}>
+                          <td>{c.anos} {c.anos === 1 ? "ano" : "anos"}</td>
+                          <td>{fmtR(c.aporte)}</td>
+                          <td>{c.meses} meses</td>
+                          <td>{fmtR(c.totalPago)}</td>
+                          <td style={{ color: "#047857", fontWeight: 700 }}>{fmtR(c.economia)}</td>
+                          <td style={{ textAlign: "right" }}>
+                            <button title="Esconder este prazo do cliente" onClick={(e) => { e.stopPropagation(); ocultarPrazo(c.meses); }}
+                              style={{ border: 0, background: "transparent", cursor: "pointer", color: "hsl(var(--muted-foreground))" }}>✕</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
               {anualAberto && (
                 <div style={{ marginTop: 14 }} data-testid="cronograma-anual">
                   <div className="section-title" style={{ marginBottom: 4 }}>
@@ -1115,7 +1163,7 @@ export default function SimuladorPortabilidadePage() {
                     <div className="pc" style={{ cursor: "default", borderColor: "#047857" }}>
                       <div className="pc-taxa">Economia</div>
                       <div className="pc-parc" style={{ color: "#047857" }}>{fmtR(anualAberto.economia)}</div>
-                      <div className="pc-taxa">{fmtN(100 * anualAberto.economia / (anualAberto.totalSemAporte || 1), 1)}% do total</div>
+                      <div className="pc-taxa">{(100 * anualAberto.economia / (anualAberto.totalSemAporte || 1)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% do total</div>
                     </div>
                   </div>
                   <button
