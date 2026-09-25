@@ -19,6 +19,50 @@ export interface ModeloRegra {
 
 export const MODELOS: ModeloRegra[] = [
   {
+    id: "facta-siape-2026-09",
+    banco: "Facta Financeira",
+    convenio: "SIAPE",
+    fonteDescricao: "Resumo Portabilidade SIAPE 08/06/2026 + comparativo Bevi 18/09/2026 (taxa do refin, comissão e idade a confirmar com o Fábio)",
+    regras: {
+      // o Bevi marca a Facta como "cálculo automático", sem taxa ponderada nem taxa mínima
+      taxaEntradaMin: null,
+      saldoMin: 2000,
+      trocoMinPorContrato: 50,
+      parcelaMinima: 50,
+      // ⚠️ o PDF diz "22 a 74 anos 11 meses e 29 dias"; nos outros bancos isso
+      // acabou sendo idade no FIM da operação — cadastrado assim, a confirmar.
+      idade: { min: 22, maxFimOperacao: 74 },
+      origens: {
+        padraoPagasMin: 0,               // "demais bancos: 0 pagas"
+        lista: [
+          { origem: "Inbursa", porta: false },
+          { origem: "Pine", porta: false },
+          { origem: "Socicred", porta: false },     // código 917
+          // só não porta quando o contrato nasceu na própria Facta: o sistema não
+          // sabe disso sozinho, então manda conferir em vez de chutar
+          { origem: "Paulista", porta: true, conferir: "o Facta não porta contrato originado pela própria Facta — confira a origem do contrato." },
+          { origem: "Zema", porta: true, conferir: "o Facta não porta contrato originado pela própria Facta — confira a origem do contrato." },
+          { origem: "Agibank", porta: true, pagasMin: 15 },
+          { origem: "Paraná Banco", porta: true, pagasMin: 15 },
+          { origem: "BMG", porta: true, pagasMin: 12 },
+          { origem: "Santander", porta: true, pagasMin: 12 },
+          { origem: "Olé", porta: true, pagasMin: 12 },
+          { origem: "C6", porta: true, pagasMin: 25 },
+          { origem: "Daycoval", porta: true, pagasMin: 24 },
+          { origem: "Pan", porta: true, pagasMin: 30 },
+        ],
+      },
+      avisos: [
+        "Aceita CNH vencida como documento.",
+        "Permite ajuste de tabela; se o troco variar mais de 10%, precisa de nova formalização.",
+        "Atuação do saldo: segunda a quinta até as 16h, sexta até as 15h.",
+        "Falta cadastrar a taxa do refin e a comissão do Facta.",
+      ],
+      taxaRefin: null,
+      comissao: null,
+    },
+  },
+  {
     id: "parana-siape-2026-09",
     banco: "Paraná Banco",
     convenio: "SIAPE",

@@ -18,7 +18,7 @@
 import { precificarRefin, type OperacaoEntrada, type PrecoContrato, type ResumoRefin } from "./refin";
 export type { OperacaoEntrada, PrecoContrato, ResumoRefin } from "./refin";
 
-export const ENGINE_VERSION = "1.8.0";   // 1.7: teto do valor · 1.8: UPAG não atendida
+export const ENGINE_VERSION = "1.9.0";   // 1.8: UPAG · 1.9: origem que exige conferência
 
 export type Status =
   | "ELEGIVEL"
@@ -71,6 +71,9 @@ export interface OrigemRegra {
   origem: string;
   porta: boolean;
   pagasMin?: number | null;
+  /** Regra que depende de algo que o sistema não sabe (ex.: "só não porta se o
+   *  contrato foi originado pela Facta"). Vai para conferência, não reprova. */
+  conferir?: string | null;
 }
 
 /** Conteúdo de uma versão de regras (vem do infográfico). */
@@ -269,6 +272,8 @@ export const ORIGENS: { chave: string; nome: string; padroes: string[]; foraCip?
   { chave: "NBC", nome: "NBC", padroes: ["NBC"] },
   { chave: "MASTER", nome: "Master", padroes: ["MASTER", "BANCO MASTER", "MAXIMA", "BANCO MAXIMA"] },
   { chave: "BARI", nome: "Bari", padroes: ["BARI", "BANCO BARI"] },
+  { chave: "PAULISTA", nome: "Paulista", padroes: ["PAULISTA", "BANCO PAULISTA"] },
+  { chave: "SOCICRED", nome: "Socicred", padroes: ["SOCICRED"] },
   // Entidades FORA DA CIP (previdências, associações): NENHUM banco porta — a
   // portabilidade passa pela CIP (Fábio, 22/09/2026). Só uma exceção cadastrada libera.
   { chave: "FUTURO", nome: "Futuro Previdência", padroes: ["FUTURO"], foraCip: true },
@@ -379,6 +384,10 @@ function avaliarOrigem(c: ContratoEntrada, chave: string | null, regras: RegrasB
   const excecaoId = r.excecao?.id;
   const rotuloOrigem = r.padrao ? `${nomeO} (demais bancos)` : r.rede ? `${nomeO} (banco de rede)` : nomeO;
 
+  if (r.regra.conferir) {
+    return regra({ ...base, valorAnalisado: rotuloOrigem, esperado: null, status: "ANALISE_MANUAL", fonte, excecaoId,
+      motivo: `${nomeO}: ${r.regra.conferir}` });
+  }
   if (!r.regra.porta) {
     return regra({ ...base, valorAnalisado: rotuloOrigem, esperado: "banco aceito", status: "NAO_ELEGIVEL", fonte, excecaoId,
       motivo: `O ${banco} não porta contratos do ${nomeO}.` });

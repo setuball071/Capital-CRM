@@ -525,5 +525,44 @@ caso("Paraná: sem saldo mínimo cadastrado, contrato pequeno passa na elegibili
 caso("Paraná: parcela mínima de 200 está cadastrada", () => assert.equal(PR.regras.parcelaMinima, 200));
 caso("Bari é reconhecido como banco de origem", () => assert.equal(normalizarOrigem("BANCO BARI"), "BARI"));
 
+console.log("\nFacta (origem que exige conferência)");
+const FAC = MODELOS.find(m => m.id === "facta-siape-2026-09")!;
+const bancoFAC = (): BancoParaAnalise =>
+  ({ bankId: 7, nome: "Facta", ruleSet: { id: 7, hash: "f", vigenciaInicio: "2026-09-24", regras: FAC.regras }, excecoes: [] });
+const ctFAC = (p: Partial<ContratoEntrada>) => ct({ bancoOrigem: "BMG", taxa: 1.5, saldo: 20000, parcela: 600, prazoTotal: 96, prazoRestante: 60, ...p });
+function statusFAC(c: ContratoEntrada, esperado: Status, trecho?: string, anos = 50) {
+  const r = analisarBanco(bancoFAC(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(anos) }, [c], HOJE, { modo: "maximo", prazo: 96 });
+  assert.equal(r.contratos[0].status, esperado, `status ${r.contratos[0].status}, esperava ${esperado}`);
+  if (trecho) {
+    const todos = [...r.contratos[0].regras, ...r.cliente].map(x => x.motivo).join(" | ");
+    assert.ok(todos.includes(trecho), `motivo sem "${trecho}": ${todos}`);
+  }
+}
+
+caso("Facta: Paulista e Zema vão para conferência, não reprovam", () => {
+  statusFAC(ctFAC({ bancoOrigem: "BANCO PAULISTA" }), "ANALISE_MANUAL", "originado pela própria Facta");
+  statusFAC(ctFAC({ bancoOrigem: "ZEMA" }), "ANALISE_MANUAL", "originado pela própria Facta");
+});
+caso("Facta não porta Inbursa, Pine e Socicred", () => {
+  statusFAC(ctFAC({ bancoOrigem: "Inbursa" }), "NAO_ELEGIVEL", "não porta");
+  statusFAC(ctFAC({ bancoOrigem: "PINE" }), "NAO_ELEGIVEL", "não porta");
+  statusFAC(ctFAC({ bancoOrigem: "SOCICRED" }), "NAO_ELEGIVEL", "não porta");
+});
+caso("Facta: demais bancos com 0 pagas", () => statusFAC(ctFAC({ bancoOrigem: "Bradesco", prazoRestante: 96 }), "ELEGIVEL"));
+caso("Facta: Pan exige 30 pagas", () => {
+  statusFAC(ctFAC({ bancoOrigem: "Pan", prazoRestante: 67 }), "NAO_ELEGIVEL", "exige 30");
+  statusFAC(ctFAC({ bancoOrigem: "Pan", prazoRestante: 66 }), "ELEGIVEL");
+});
+caso("Facta: saldo mínimo 2.000 e parcela mínima 50", () => {
+  statusFAC(ctFAC({ saldo: 1999 }), "NAO_ELEGIVEL", "abaixo do mínimo");
+  assert.equal(FAC.regras.parcelaMinima, 50);
+});
+caso("Paulista e Socicred reconhecidos como bancos de origem", () => {
+  assert.equal(normalizarOrigem("BANCO PAULISTA"), "PAULISTA");
+  assert.equal(normalizarOrigem("SOCICRED 917"), "SOCICRED");
+});
+caso("Conferência não vaza para banco sem a regra (PAN porta Zema normalmente)", () =>
+  status(CLI, ct({ bancoOrigem: "ZEMA", prazoRestante: 84 }), "ELEGIVEL"));
+
 console.log(`\n${ok} ok, ${falhas} falha(s)\n`);
 process.exit(falhas ? 1 : 0);
