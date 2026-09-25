@@ -117,6 +117,7 @@ export const MODELOS: ModeloRegra[] = [
         lista: [
           { origem: "Facta", porta: false },
           { origem: "Master", porta: false },
+          { origem: "Digimais", porta: false },   // Fábio, 25/09/2026
         ],
       },
       // UPAGs não atendidas (arte do Inter, 23/09/2026)

@@ -425,9 +425,14 @@ function statusINT(c: ContratoEntrada, esperado: Status, trecho?: string, anos =
 
 caso("Inter: qualquer taxa passa (quem decide é a ponderada)", () => statusINT(ctINT({ taxa: 0.5 }), "ELEGIVEL"));
 caso("Inter: 0 pagas em qualquer banco", () => statusINT(ctINT({ bancoOrigem: "C6", prazoRestante: 96 }), "ELEGIVEL"));
-caso("Inter não porta Facta nem Master", () => {
+caso("Inter não porta Facta, Master nem Digimais", () => {
   statusINT(ctINT({ bancoOrigem: "Facta" }), "NAO_ELEGIVEL", "não porta");
   statusINT(ctINT({ bancoOrigem: "BANCO MASTER" }), "NAO_ELEGIVEL", "não porta");
+  statusINT(ctINT({ bancoOrigem: "BANCO DIGIMAIS" }), "NAO_ELEGIVEL", "não porta");
+});
+caso("Digimais é reconhecido e não se confunde com Master", () => {
+  assert.equal(normalizarOrigem("DIGIMAIS"), "DIGIMAIS");
+  assert.equal(normalizarOrigem("BANCO MASTER"), "MASTER");
 });
 caso("Banco Máxima é reconhecido como Master", () => assert.equal(normalizarOrigem("BANCO MAXIMA"), "MASTER"));
 caso("Inter: saldo mínimo de 1.000 e troco mínimo de 300", () => {
