@@ -598,6 +598,12 @@ caso("Facta: saldo mínimo 2.000 e parcela mínima 50", () => {
   statusFAC(ctFAC({ saldo: 1999 }), "NAO_ELEGIVEL", "abaixo do mínimo");
   assert.equal(FAC.regras.parcelaMinima, 50);
 });
+caso("Facta: refin 1,80% e comissão 2,50% do saldo", () => {
+  const r = analisarBanco(bancoFAC(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
+    [ctFAC({ saldo: 20000, parcela: 600 })], HOJE, { modo: "maximo", prazo: 96 });
+  assert.equal(r.contratos[0].preco!.taxa, 1.80);
+  assert.deepEqual([r.comissao!.percentual, r.comissao!.total], [2.50, 500]);
+});
 caso("Paulista e Socicred reconhecidos como bancos de origem", () => {
   assert.equal(normalizarOrigem("BANCO PAULISTA"), "PAULISTA");
   assert.equal(normalizarOrigem("SOCICRED 917"), "SOCICRED");

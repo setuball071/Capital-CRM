@@ -83,10 +83,9 @@ export const MODELOS: ModeloRegra[] = [
         "Aceita CNH vencida como documento.",
         "Permite ajuste de tabela; se o troco variar mais de 10%, precisa de nova formalização.",
         "Atuação do saldo: segunda a quinta até as 16h, sexta até as 15h.",
-        "Falta cadastrar a taxa do refin e a comissão do Facta.",
       ],
-      taxaRefin: null,
-      comissao: null,
+      taxaRefin: 1.80,                                  // Fábio, 25/09/2026
+      comissao: { percentual: 2.50, base: "saldo" },    // Fábio, 25/09/2026
     },
   },
   {
