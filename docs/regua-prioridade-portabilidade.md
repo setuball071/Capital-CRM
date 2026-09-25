@@ -7,6 +7,11 @@ cadastradas no motor do simulador (`shared/portability/modelos.ts`, 8 bancos).
 por teste. O que está **[DECIDIR]** é política comercial: precisa da palavra do Fábio, e até
 lá o atendimento não deve afirmar.
 
+> **Antes de portar, olhe os outros dois — [regra do Fábio]**
+> **Margem de cartão** e **contrato novo** são os produtos mais rentáveis da casa e têm
+> **prioridade no atendimento**. Portabilidade vem **depois** deles. Ver
+> `regua-prioridade-cartao.md` e `regua-prioridade-credito-novo.md`.
+
 ---
 
 ## 1. Quando vale portar
@@ -122,6 +127,9 @@ Nos cortes da base o piso usado é R$ 50 de margem.
 
 ## 4. Prioridade — **[DECIDIR: rascunho para o Fábio aprovar]**
 
+⚠️ Esta régua vale **dentro** da portabilidade. Na fila do atendimento, cliente com margem
+de cartão ou de contrato novo passa na frente de tudo o que está abaixo.
+
 Proposta, usando o que o sistema calcula:
 
 - **ALTA:** contrato que pelo menos um banco aceita **e** libera troco acima do mínimo, com
@@ -167,3 +175,7 @@ O simulador recusa sozinho quando:
 3. Confirmar a régua de prioridade do item 4.
 4. Ordem de preferência dos bancos na chegada (item 1).
 5. Comissão do Digio.
+
+---
+
+Ver também: `regua-prioridade-cartao.md` e `regua-prioridade-credito-novo.md`.
