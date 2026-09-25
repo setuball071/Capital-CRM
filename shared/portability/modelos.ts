@@ -19,6 +19,33 @@ export interface ModeloRegra {
 
 export const MODELOS: ModeloRegra[] = [
   {
+    id: "digio-siape-2026-09",
+    banco: "Digio",
+    convenio: "SIAPE",
+    fonteDescricao: "Comparativo Bevi 18/09/2026 + cadastro antigo do simulador, conferidos com o Fábio em 25/09/2026",
+    regras: {
+      taxaEntradaMin: 1.39,
+      saldoMin: 6000,
+      trocoMinPorContrato: 250,
+      idade: { min: 18, maxFimOperacao: 79 },   // terminar com 79 (Fábio, 25/09)
+      origens: {
+        padraoPagasMin: 12,
+        redePagasMin: 0,                        // rede: porta e comissiona a partir de 0 pagas
+        lista: [
+          { origem: "Inter", porta: false },
+          { origem: "C6", porta: true, pagasMin: 25 },   // acordo entre os bancos
+        ],
+      },
+      avisos: [
+        "Não unifica, não abate margem negativa e não agrega margem.",
+        "Não tem simulador próprio; formalização figital.",
+        "Falta cadastrar a comissão do Digio.",
+      ],
+      taxaRefin: 1.71,     // mínima do banco 1,65 + margem de segurança (Fábio, 25/09)
+      comissao: null,      // a confirmar
+    },
+  },
+  {
     id: "facta-siape-2026-09",
     banco: "Facta Financeira",
     convenio: "SIAPE",

@@ -530,6 +530,42 @@ caso("Paraná: sem saldo mínimo cadastrado, contrato pequeno passa na elegibili
 caso("Paraná: parcela mínima de 200 está cadastrada", () => assert.equal(PR.regras.parcelaMinima, 200));
 caso("Bari é reconhecido como banco de origem", () => assert.equal(normalizarOrigem("BANCO BARI"), "BARI"));
 
+console.log("\nDigio");
+const DIG = MODELOS.find(m => m.id === "digio-siape-2026-09")!;
+const bancoDIG = (): BancoParaAnalise =>
+  ({ bankId: 8, nome: "Digio", ruleSet: { id: 8, hash: "g", vigenciaInicio: "2026-09-25", regras: DIG.regras }, excecoes: [] });
+const ctDIG = (p: Partial<ContratoEntrada>) => ct({ bancoOrigem: "BMG", taxa: 1.5, saldo: 20000, parcela: 600, prazoTotal: 96, prazoRestante: 60, ...p });
+function statusDIG(c: ContratoEntrada, esperado: Status, trecho?: string, anos = 50, prazo = 96) {
+  const r = analisarBanco(bancoDIG(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(anos) }, [c], HOJE, { modo: "maximo", prazo });
+  assert.equal(r.contratos[0].status, esperado, `status ${r.contratos[0].status}, esperava ${esperado}`);
+  if (trecho) {
+    const todos = [...r.contratos[0].regras, ...r.cliente].map(x => x.motivo).join(" | ");
+    assert.ok(todos.includes(trecho), `motivo sem "${trecho}": ${todos}`);
+  }
+}
+
+caso("Digio: entrada 1,39", () => { statusDIG(ctDIG({ taxa: 1.38 }), "NAO_ELEGIVEL", "abaixo do mínimo"); statusDIG(ctDIG({ taxa: 1.39 }), "ELEGIVEL"); });
+caso("Digio: saldo mínimo 6.000", () => { statusDIG(ctDIG({ saldo: 5999 }), "NAO_ELEGIVEL", "abaixo do mínimo"); statusDIG(ctDIG({ saldo: 6000 }), "ELEGIVEL"); });
+caso("Digio não porta Inter", () => statusDIG(ctDIG({ bancoOrigem: "BANCO INTER" }), "NAO_ELEGIVEL", "não porta"));
+caso("Digio: C6 com 25 pagas (acordo)", () => {
+  statusDIG(ctDIG({ bancoOrigem: "C6", prazoRestante: 72 }), "NAO_ELEGIVEL", "exige 25");
+  statusDIG(ctDIG({ bancoOrigem: "C6", prazoRestante: 71 }), "ELEGIVEL");
+});
+caso("Digio: rede com 0 pagas, demais com 12", () => {
+  statusDIG(ctDIG({ bancoOrigem: "Caixa", prazoRestante: 96 }), "ELEGIVEL", "banco de rede");
+  statusDIG(ctDIG({ bancoOrigem: "BMG", prazoRestante: 85 }), "NAO_ELEGIVEL", "demais bancos");
+});
+caso("Digio: terminar com 79 anos", () => {
+  statusDIG(ctDIG({}), "ELEGIVEL", undefined, 71, 96);
+  statusDIG(ctDIG({}), "NAO_ELEGIVEL", "termina com 80 anos", 72, 96);
+});
+caso("Digio: refin 1,71% calcula troco; comissão ainda não cadastrada", () => {
+  const r = analisarBanco(bancoDIG(), { convenio: "SIAPE", situacaoFuncional: "1", dataNascimento: nasc(50) },
+    [ctDIG({})], HOJE, { modo: "maximo", prazo: 96 });
+  assert.equal(r.contratos[0].preco!.taxa, 1.71);
+  assert.equal(r.comissao, null);
+});
+
 console.log("\nFacta (origem que exige conferência)");
 const FAC = MODELOS.find(m => m.id === "facta-siape-2026-09")!;
 const bancoFAC = (): BancoParaAnalise =>
