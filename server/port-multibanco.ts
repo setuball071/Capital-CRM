@@ -16,7 +16,7 @@ import { createHash } from "crypto";
 import { sql } from "drizzle-orm";
 import { db } from "./storage";
 import {
-  analisar, respostaSimulacao, semComissao, normalizarOrigem, nomeOrigem,
+  analisar, respostaSimulacao, semComissao, normalizarOrigem, nomeOrigem, acharUpag,
   type BancoParaAnalise, type ClienteEntrada, type ContratoEntrada, type Excecao, type RegrasBanco,
 } from "../shared/portability/engine";
 import { MODELOS } from "../shared/portability/modelos";
@@ -195,6 +195,72 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
     } catch (err: any) {
       console.error("[PORT] GET cliente:", err);
       res.status(500).json({ message: "Erro ao buscar o cliente" });
+    }
+  });
+
+  // A Viabilidade Inter é uma página à parte e não roda o motor: sem isto ela
+  // fechava operação que o portal do próprio Inter recusa por UPAG.
+  app.get("/api/port/upag-inter", requireAuth, async (req: any, res) => {
+    try {
+      const modelo = MODELOS.find(m => m.id === "inter-siape-2026-09");
+      const upags = modelo?.regras.upagsNaoAtendidas || [];
+      const ativos = modelo?.regras.codigosAtivos || [];
+
+      let upag = String(req.query.upag || "").trim();
+      let upagNome: string | null = null;
+      let situacao: string | null = null;
+      let origem: string | null = upag ? "informada na tela" : null;
+
+      const cpf = soDigitos(String(req.query.cpf || ""));
+      if (!upag && cpf.length === 11) {
+        const r = await db.execute(sql`
+          SELECT p.upag AS upag_pessoa, p.upag_nome_pessoa, v.upag AS upag_vinculo, v.sit_func
+          FROM clientes_pessoa p
+          LEFT JOIN clientes_vinculo v ON v.pessoa_id = p.id AND v.ativo = TRUE
+          WHERE p.cpf = ${cpf}
+          ORDER BY v.ultima_atualizacao DESC NULLS LAST
+          LIMIT 10
+        `);
+        const rows = r.rows as any[];
+        const linha = rows.find(x => x.upag_vinculo || x.upag_pessoa);
+        if (linha) {
+          upag = String(linha.upag_vinculo || linha.upag_pessoa);
+          origem = "cadastro do CRM";
+        }
+        if (rows.length) {
+          upagNome = rows[0].upag_nome_pessoa || null;
+          situacao = rows.find(x => x.sit_func)?.sit_func || null;
+        }
+      }
+
+      if (!upag) {
+        return res.json({ upag: null, upagNome, situacao, origem, atendida: null,
+          motivo: "UPAG não encontrada no CRM: informe a unidade pagadora." });
+      }
+
+      const achada = acharUpag(upags, upag);
+      if (!achada) {
+        return res.json({ upag, upagNome, situacao, origem, atendida: true,
+          motivo: "UPAG atendida pelo Inter." });
+      }
+      // DNOCS: só é barrada para servidor ativo
+      if (achada.apenasAtivos) {
+        const codigo = String(situacao || "").trim();
+        if (!codigo) {
+          return res.json({ upag, upagNome, situacao, origem, atendida: null,
+            motivo: `${achada.descricao} só não é atendida para servidor ativo: confirme a situação funcional.` });
+        }
+        const ehAtivo = ativos.some(c => c.trim() === codigo);
+        return res.json({ upag, upagNome, situacao, origem, atendida: !ehAtivo,
+          motivo: ehAtivo
+            ? `${achada.descricao}: o Inter não atende servidor ativo desta UPAG.`
+            : `${achada.descricao} só é barrada para servidor ativo; este cliente não é.` });
+      }
+      res.json({ upag, upagNome, situacao, origem, atendida: false,
+        motivo: `UPAG ${upag} não é atendida pelo Inter para portabilidade${achada.descricao ? " — " + achada.descricao : ""}.` });
+    } catch (err: any) {
+      console.error("[PORT] GET upag-inter:", err);
+      res.status(500).json({ message: "Erro ao conferir a UPAG" });
     }
   });
 

@@ -197,7 +197,12 @@ td{color:#111827!important}
       <div class="vi-campo">
         <label class="vi-lbl" for="cpfCliente">CPF do cliente</label>
         <input id="cpfCliente" placeholder="000.000.000-00" style="width:160px"
-               oninput="this.value=formatarCpf(this.value)" onchange="buscarCotacoes()">
+               oninput="this.value=formatarCpf(this.value)" onchange="buscarCotacoes();conferirUpag()">
+      </div>
+      <div class="vi-campo">
+        <label class="vi-lbl" for="upagCliente">UPAG</label>
+        <input id="upagCliente" placeholder="código ou órgão" style="width:150px"
+               title="Preenchida pelo CRM a partir do CPF; pode digitar" onchange="conferirUpag()">
       </div>
       <div class="vi-campo" style="flex:1;min-width:200px;">
         <label class="vi-lbl" for="nomeCliente">Nome</label>
@@ -209,6 +214,7 @@ td{color:#111827!important}
       <button class="vi-link" style="padding-bottom:10px;color:var(--red);"
               onclick="limparTudo()">Limpar</button>
     </div>
+    <div id="upagAviso" style="font-size:12px;margin-bottom:8px;"></div>
     <div id="cotacoesStatus" style="font-size:12px;margin-bottom:8px;"></div>
     <div id="cotacoesPanel"></div>
 
@@ -253,6 +259,9 @@ td{color:#111827!important}
       <button class="btn-add purple" onclick="addLinha()">+ Adicionar contrato</button>
       <button class="btn-add blue" id="btnTabelaTodas" style="display:none;"
               onclick="aplicarTabelaEmTodas()">Aplicar a tabela que aprova nas reprovadas</button>
+      <button class="btn-add" id="btnRentavelTodas" style="display:none;border-color:var(--green);color:var(--green);"
+              title="Sobe a tabela de refin até a maior faixa de comissionamento — o cliente recebe menos troco"
+              onclick="aplicarRentavelEmTodas()">Aplicar a mais rentável</button>
     </div>
   </div>
 
@@ -575,14 +584,11 @@ function avaliar(taxaPondPct, regra) {
   return { ok: true, msg: 'Favorável', tabela: tabela };
 }
 
-/** Menor tabela de refin que aprova a linha — o mesmo que o botão laranja da
- *  planilha do banco faz ("encontrar a taxa do Refin que torna a operação viável").
- *  A taxa ponderada sobe junto com a taxa da tabela, então dá para buscar por
- *  bisseção: ~5 cálculos por linha em vez de varrer as 31. E como a menor tabela
- *  que atinge o mínimo é também a que devolve o maior troco, ela é a melhor
- *  para o cliente, não só a primeira que passa. */
-function menorTabelaViavel(l, ctx) {
-  if (!ctx.regra || !ctx.dataContrato || !ctx.primeiroVenc) return null;
+/** Menor tabela de refin cuja ponderada alcança `alvo`, sem passar do máximo.
+ *  A ponderada sobe junto com a taxa da tabela, então dá para buscar por
+ *  bisseção: ~5 cálculos por linha em vez de varrer as 31. E a MENOR tabela que
+ *  atinge o alvo é também a que devolve o maior troco. */
+function menorTabelaQueAtinge(l, ctx, alvo) {
   const arred = tp => Math.round(tp * 100 * 100) / 100;
   const calc = n => motorInter({
     saldoPortado: l.saldo, prazoRemanescente: l.restantes, parcelaAtual: l.parcela,
@@ -593,17 +599,48 @@ function menorTabelaViavel(l, ctx) {
 
   const ultima = TABELAS_REFIN.length;
   const topo = calc(ultima);
-  if (!topo || arred(topo.taxaPonderada) < ctx.regra.min) return null;  // nem a maior alcança
+  if (!topo || arred(topo.taxaPonderada) < alvo) return null;           // nem a maior alcança
 
   let lo = 1, hi = ultima;
   while (lo < hi) {
     const meio = Math.floor((lo + hi) / 2);
     const r = calc(meio);
-    if (r && arred(r.taxaPonderada) >= ctx.regra.min) hi = meio; else lo = meio + 1;
+    if (r && arred(r.taxaPonderada) >= alvo) hi = meio; else lo = meio + 1;
   }
   const r = calc(lo);
   if (!r || arred(r.taxaPonderada) > ctx.regra.max) return null;        // passa do teto
   return { tabela: lo, troco: r.troco, taxaPonderada: r.taxaPonderada };
+}
+
+/** Menor tabela de refin que aprova a linha — o mesmo que o botão laranja da
+ *  planilha do banco faz ("encontrar a taxa do Refin que torna a operação viável").
+ *  É a melhor para o CLIENTE: passa no mínimo devolvendo o maior troco. */
+function menorTabelaViavel(l, ctx) {
+  if (!ctx.regra || !ctx.dataContrato || !ctx.primeiroVenc) return null;
+  return menorTabelaQueAtinge(l, ctx, ctx.regra.min);
+}
+
+/** Tabela de refin que leva a operação à FAIXA DE COMISSIONAMENTO mais alta que
+ *  ainda cabe no máximo do convênio — e, dentro dessa faixa, a menor, que é a
+ *  que devolve o maior troco.
+ *
+ *  ⚠️ É o contrário do botão acima: sobe a ponderada de propósito. A casa ganha
+ *  mais e o CLIENTE RECEBE MENOS troco. Por isso é só sugestão, só para o master,
+ *  e a tela mostra os dois números lado a lado. */
+function tabelaMaisRentavel(l, ctx) {
+  if (!ctx.regra || !ctx.dataContrato || !ctx.primeiroVenc) return null;
+  for (let i = ctx.regra.grade.length - 1; i >= 0; i--) {
+    const achou = menorTabelaQueAtinge(l, ctx, ctx.regra.grade[i].taxa);
+    if (achou) { achou.faixa = ctx.regra.grade[i].tabela; return achou; }
+  }
+  return null;
+}
+
+/** Comissão da casa numa tabela de comissionamento ("Tabela 6"), sobre o saldo. */
+function comissaoDaFaixa(faixa, saldo) {
+  const n = parseInt(String(faixa).replace(/\D/g, ''), 10);
+  const pct = COMISSAO_TABELA[n];
+  return pct && saldo ? { pct: pct, valor: saldo * pct / 100 } : null;
 }
 
 function aplicarTabela(id, n) {
@@ -611,6 +648,32 @@ function aplicarTabela(id, n) {
   if (!l) return;
   l.tabelaRefin = n;
   l.desmarcadoManual = false;   // pediu para aprovar: quer a linha no resultado
+  recalcTudo();
+}
+
+/** O tooltip mostra os dois lados da troca, sem esconder o que o cliente perde. */
+function tituloRentavel(l) {
+  const r = l.rentavel;
+  const dTroco = r.troco - r.trocoAtual;
+  const dCom = r.comissao.valor - (r.comissaoAtual ? r.comissaoAtual.valor : 0);
+  return 'Tabela ' + r.tabela + ' de refin (' + fmtPct(taxaDaTabela(r.tabela), 2) + ')' +
+    ' · ponderada ' + fmtPct(r.taxaPonderada * 100, 2) + ' · ' + r.faixa + ' de comissionamento' +
+    '\nTroco do cliente: ' + fmtBRL(r.trocoAtual) + ' → ' + fmtBRL(r.troco) +
+    ' (' + (dTroco >= 0 ? '+' : '−') + fmtBRL(Math.abs(dTroco)) + ')' +
+    '\nComissão da casa: ' + fmtBRL(r.comissaoAtual ? r.comissaoAtual.valor : 0) + ' → ' +
+    fmtBRL(r.comissao.valor) + ' (+' + fmtBRL(Math.abs(dCom)) + ')';
+}
+
+function aplicarRentavelEmTodas() {
+  const alvo = linhas.filter(l => l.rentavel);
+  if (!alvo.length) return;
+  const perda = alvo.reduce((a, l) => a + (l.rentavel.trocoAtual - l.rentavel.troco), 0);
+  const ganho = alvo.reduce((a, l) => a + l.rentavel.comissao.valor -
+    (l.rentavel.comissaoAtual ? l.rentavel.comissaoAtual.valor : 0), 0);
+  if (!confirm('Aplicar a tabela mais rentável em ' + alvo.length + ' contrato(s)?\n\n' +
+      'Comissão da casa: +' + fmtBRL(ganho) + '\n' +
+      'Troco do cliente: ' + (perda > 0 ? '−' + fmtBRL(perda) : '+' + fmtBRL(-perda)))) return;
+  alvo.forEach(l => { l.tabelaRefin = l.rentavel.tabela; l.desmarcadoManual = false; });
   recalcTudo();
 }
 
@@ -630,9 +693,12 @@ function recalcTudo() {
   const dataContrato = dc ? new Date(dc + 'T00:00:00') : null;
   const primeiroVenc = pv ? new Date(pv + 'T00:00:00') : null;
 
+  const ctx = { regra: regra, prazoRefin: prazoRefin, dataContrato: dataContrato, primeiroVenc: primeiroVenc };
+
   for (const l of linhas) {
     l.calc = null;
     l.sugestao = null;
+    l.rentavel = null;
     l.passo2 = null;
     l.parecer = { ok: false, msg: '', tabela: '' };
     if (!dataContrato || !primeiroVenc) { l.parecer.msg = 'Informe as datas em "Ajustes da operação"'; continue; }
@@ -657,11 +723,22 @@ function recalcTudo() {
     // aprovado entra no resultado por padrao; reprovado sai sempre
     l.marcado = l.parecer.ok && !l.desmarcadoManual;
     if (!l.parecer.ok) {
-      l.sugestao = menorTabelaViavel(l, {
-        regra: regra, prazoRefin: prazoRefin,
-        dataContrato: dataContrato, primeiroVenc: primeiroVenc
-      });
+      l.sugestao = menorTabelaViavel(l, ctx);
       if (l.sugestao && l.sugestao.tabela === l.tabelaRefin) l.sugestao = null;
+    }
+
+    // a mais rentável só faz sentido para quem vê comissão, e só quando ganha
+    // faixa de verdade — senão é só tirar troco do cliente à toa
+    if (isMaster && l.saldo) {
+      const r = tabelaMaisRentavel(l, ctx);
+      const nova = r ? comissaoDaFaixa(r.faixa, l.saldo) : null;
+      const atual = l.parecer.ok ? comissaoDaFaixa(l.parecer.tabela, l.saldo) : null;
+      if (r && nova && r.tabela !== l.tabelaRefin && (!atual || nova.pct > atual.pct)) {
+        r.comissao = nova;
+        r.comissaoAtual = atual;
+        r.trocoAtual = l.parecer.ok ? trocoTotal(l) : 0;
+        l.rentavel = r;
+      }
     }
   }
   render();
@@ -691,7 +768,13 @@ function render() {
       ? '<div class="vi-sub" title="' + fmtPct(com.pct, 2) + ' do saldo devedor — só master">Comissão: ' +
         fmtBRL(com.valor) + ' (' + fmtPct(com.pct, 2) + ')</div>'
       : '';
-    const parecer = l.parecer.ok
+    const rentHtml = l.rentavel
+      ? '<button class="vi-link" style="margin-top:3px;font-size:11px;color:var(--green);" ' +
+        'title="' + esc(tituloRentavel(l)) + '" ' +
+        'onclick="aplicarTabela(' + l.id + ',' + l.rentavel.tabela + ')">Tabela ' +
+        l.rentavel.tabela + ' rende mais →</button>'
+      : '';
+    const parecer = (l.parecer.ok
       ? '<span class="vi-tag vi-ok">Favorável · ' + esc(l.parecer.tabela) + '</span>' + comHtml
       : '<span class="vi-nao">' + esc(l.parecer.msg) + '</span>' +
         (l.sugestao
@@ -700,7 +783,7 @@ function render() {
             fmtPct(l.sugestao.taxaPonderada * 100, 2) + '" ' +
             'onclick="aplicarTabela(' + l.id + ',' + l.sugestao.tabela + ')">Tabela ' +
             l.sugestao.tabela + ' aprova →</button>'
-          : '');
+          : '')) + (rentHtml ? '<div>' + rentHtml + '</div>' : '');
 
     return '<tr class="' + (l.calc && !l.parecer.ok ? 'vi-linha-nao' : '') + '">' +
       '<td><input type="checkbox" ' + (l.marcado ? 'checked' : '') + (l.parecer.ok ? '' : ' disabled') +
@@ -740,6 +823,14 @@ function render() {
     btn.textContent = comSugestao === 1
       ? 'Aplicar a tabela que aprova (1 contrato)'
       : 'Aplicar a tabela que aprova (' + comSugestao + ' contratos)';
+  }
+  const comRentavel = linhas.filter(l => l.rentavel).length;
+  const btnR = document.getElementById('btnRentavelTodas');
+  if (btnR) {
+    btnR.style.display = comRentavel ? '' : 'none';
+    btnR.textContent = comRentavel === 1
+      ? 'Aplicar a mais rentável (1 contrato)'
+      : 'Aplicar a mais rentável (' + comRentavel + ' contratos)';
   }
   pintarResumo();
 }
@@ -826,6 +917,7 @@ async function importarPDF(event) {
     if (mCpf && !document.getElementById('cpfCliente').value) {
       document.getElementById('cpfCliente').value = mCpf[0];
       buscarCotacoes();
+      conferirUpag();
     }
     const achados = extrairContratos(texto, items) || [];
     if (!achados.length) {
@@ -932,6 +1024,8 @@ function salvarParaDigitacao() {
     st.textContent = 'Nenhum contrato aprovado e marcado para exportar.';
     return;
   }
+  if (upagStatus && upagStatus.atendida === false &&
+      !confirm(upagStatus.motivo + '\n\nO portal do Inter recusa esta UPAG. Exportar mesmo assim?')) return;
   const prazoRefin = num(document.getElementById('prazoRefin').value);
   const nome = document.getElementById('nomeCliente').value.trim() || 'cliente';
 
@@ -987,6 +1081,42 @@ function salvarParaDigitacao() {
   URL.revokeObjectURL(url);
   st.style.color = 'var(--green)';
   st.textContent = sel.length + ' contrato(s) exportado(s) para digitacao.';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  UPAG — o portal do Inter recusa algumas unidades pagadoras. Esta tela não
+//  roda o motor de regras, então confere pela API antes de fechar a operação.
+// ═══════════════════════════════════════════════════════════════════════════
+let upagStatus = null;
+
+async function conferirUpag() {
+  const av = document.getElementById('upagAviso');
+  const cpf = document.getElementById('cpfCliente').value.replace(/\D/g, '');
+  const upag = document.getElementById('upagCliente').value.trim();
+  if (!upag && cpf.length !== 11) { upagStatus = null; av.innerHTML = ''; return; }
+  try {
+    const q = new URLSearchParams();
+    if (upag) q.set('upag', upag);
+    if (cpf.length === 11) q.set('cpf', cpf);
+    const r = await fetch('/api/port/upag-inter?' + q.toString(), { credentials: 'include' });
+    if (!r.ok) throw new Error('falhou');
+    const d = await r.json();
+    upagStatus = d;
+    if (d.upag && !upag) document.getElementById('upagCliente').value = d.upag;
+    const origem = d.origem ? ' (' + d.origem + ')' : '';
+    if (d.atendida === false) {
+      av.innerHTML = '<span style="color:var(--red);font-weight:600;">⚠ ' + esc(d.motivo) + '</span>' +
+        '<span style="color:var(--muted);"> O portal do Inter recusa esta operação.</span>';
+    } else if (d.atendida === null) {
+      av.innerHTML = '<span style="color:var(--orange,#B45309);">' + esc(d.motivo) + '</span>';
+    } else {
+      av.innerHTML = '<span style="color:var(--muted);">UPAG ' + esc(d.upag) + origem + ' — atendida pelo Inter.</span>';
+    }
+  } catch (e) {
+    // a conferência é uma rede de proteção: se cair, não trava a tela
+    upagStatus = null;
+    av.innerHTML = '';
+  }
 }
 
 async function buscarCotacoes() {
@@ -1059,6 +1189,9 @@ function limparTudo() {
   linhas = [];
   proxId = 1;
   document.getElementById('cpfCliente').value = '';
+  document.getElementById('upagCliente').value = '';
+  document.getElementById('upagAviso').innerHTML = '';
+  upagStatus = null;
   document.getElementById('nomeCliente').value = '';
   document.getElementById('cotacoesPanel').innerHTML = '';
   document.getElementById('cotacoesStatus').textContent = '';
@@ -1277,7 +1410,8 @@ function receberDoSimulador(p) {
   if (!lista.length) return;
   if (linhas.length && !confirm('Substituir os contratos desta tela pelos ' + lista.length + ' do simulador de portabilidade?')) return;
 
-  if (p.cpf) document.getElementById('cpfCliente').value = p.cpf;
+  if (p.upag) document.getElementById('upagCliente').value = p.upag;
+  if (p.cpf || p.upag) { if (p.cpf) document.getElementById('cpfCliente').value = p.cpf; conferirUpag(); }
   if (p.nome) document.getElementById('nomeCliente').value = p.nome;
   // o convênio do simulador ("SIAPE") pode estar escrito diferente aqui ("Siape")
   const sel = document.getElementById('convenio');

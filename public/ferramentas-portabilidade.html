@@ -6628,6 +6628,7 @@ function enviarParaInter() {
     cpf: (document.getElementById('cpfCliente') || {}).value || '',
     nome: (document.getElementById('nomeCliente') || {}).value || '',
     convenio: (document.getElementById('convenio') || {}).value || '',
+    upag: (MB.dados && MB.dados.upag) || '',
     contratos: lista.map(c => ({
       banco: c.banco || '', numero_contrato: c.numero_contrato || '',
       parcela: parseBR(c.parcela), prazo: parseInt(c.prazo) || 0, prazo_total: parseInt(c.prazo_total) || 0,

@@ -18,7 +18,7 @@
 import { precificarRefin, type OperacaoEntrada, type PrecoContrato, type ResumoRefin } from "./refin";
 export type { OperacaoEntrada, PrecoContrato, ResumoRefin } from "./refin";
 
-export const ENGINE_VERSION = "1.9.0";   // 1.8: UPAG · 1.9: origem que exige conferência
+export const ENGINE_VERSION = "1.9.1";   // 1.9: origem que exige conferência · 1.9.1: acharUpag exportada
 
 export type Status =
   | "ELEGIVEL"
@@ -291,6 +291,23 @@ export const ehForaDaCip = (chave: string | null) => !!(chave && ORIGENS.find(o 
 const semAcento = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
 
+/** Acha a UPAG informada dentro da lista de não atendidas do banco.
+ *  Casa por código (só os dígitos) ou por descrição, em qualquer direção —
+ *  o CRM guarda "36205" e a arte do banco guarda o nome por extenso.
+ *  Exportada porque a Viabilidade Inter faz a mesma conferência por fora. */
+export function acharUpag(
+  upags: { codigo?: string | null; descricao: string; apenasAtivos?: boolean }[],
+  informada: string,
+): { codigo?: string | null; descricao: string; apenasAtivos?: boolean } | null {
+  const digitos = informada.replace(/\D/g, "");
+  const texto = semAcento(informada);
+  return upags.find(u => {
+    if (u.codigo && digitos && semAcento(u.codigo).replace(/\D/g, "") === digitos) return true;
+    const d = semAcento(u.descricao);
+    return d.length >= 6 && texto.length >= 6 && (d.includes(texto) || texto.includes(d));
+  }) || null;
+}
+
 /** Chave canônica do banco de origem, ou null se não reconhecido. */
 export function normalizarOrigem(nome: string | null | undefined): string | null {
   if (!nome) return null;
@@ -489,13 +506,7 @@ function avaliarCliente(cli: ClienteEntrada, regras: RegrasBanco, banco: string,
       out.push(regra({ ...base, campo: "upag", valorAnalisado: null, status: "PENDENTE_INFO",
         motivo: `O ${banco} não atende algumas UPAGs: informe a unidade pagadora do cliente.` }));
     } else {
-      const digitos = informada.replace(/\D/g, "");
-      const texto = semAcento(informada);
-      const achada = upags.find(u => {
-        if (u.codigo && digitos && semAcento(u.codigo).replace(/\D/g, "") === digitos) return true;
-        const d = semAcento(u.descricao);
-        return d.length >= 6 && texto.length >= 6 && (d.includes(texto) || texto.includes(d));
-      });
+      const achada = acharUpag(upags, informada);
       if (!achada) {
         out.push(regra({ ...base, valorAnalisado: informada, status: "ELEGIVEL", motivo: `UPAG atendida pelo ${banco}.` }));
       } else if (achada.apenasAtivos) {
