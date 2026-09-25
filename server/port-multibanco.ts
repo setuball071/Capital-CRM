@@ -214,7 +214,8 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       const cpf = soDigitos(String(req.query.cpf || ""));
       if (!upag && cpf.length === 11) {
         const r = await db.execute(sql`
-          SELECT p.upag AS upag_pessoa, p.upag_nome_pessoa, v.upag AS upag_vinculo, v.sit_func
+          SELECT p.upag AS upag_pessoa, p.upag_nome_pessoa, v.upag AS upag_vinculo,
+                 v.sit_func, v.orgao
           FROM clientes_pessoa p
           LEFT JOIN clientes_vinculo v ON v.pessoa_id = p.id AND v.ativo = TRUE
           WHERE p.cpf = ${cpf}
@@ -228,7 +229,8 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
           origem = "cadastro do CRM";
         }
         if (rows.length) {
-          upagNome = rows[0].upag_nome_pessoa || null;
+          // o cadastro da pessoa é o mais confiável; o órgão do vínculo serve de reserva
+          upagNome = rows[0].upag_nome_pessoa || rows.find(x => x.orgao)?.orgao || null;
           situacao = rows.find(x => x.sit_func)?.sit_func || null;
         }
       }
@@ -239,6 +241,8 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       }
 
       const achada = acharUpag(upags, upag);
+      // a lista do banco tem o nome por extenso: serve quando o CRM não tem
+      if (achada && !upagNome) upagNome = achada.descricao;
       if (!achada) {
         return res.json({ upag, upagNome, situacao, origem, atendida: true,
           motivo: "UPAG atendida pelo Inter." });

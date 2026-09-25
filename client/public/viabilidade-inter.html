@@ -1103,14 +1103,21 @@ async function conferirUpag() {
     const d = await r.json();
     upagStatus = d;
     if (d.upag && !upag) document.getElementById('upagCliente').value = d.upag;
-    const origem = d.origem ? ' (' + d.origem + ')' : '';
+    // o operador reconhece o órgão, não o código: mostra os dois, sempre
+    const quem = (d.upag ? 'UPAG ' + esc(d.upag) : 'UPAG') +
+      (d.upagNome ? ' · ' + esc(d.upagNome) : '') +
+      (d.origem ? ' <span style="color:var(--muted);">(' + esc(d.origem) + ')</span>' : '');
     if (d.atendida === false) {
-      av.innerHTML = '<span style="color:var(--red);font-weight:600;">⚠ ' + esc(d.motivo) + '</span>' +
-        '<span style="color:var(--muted);"> O portal do Inter recusa esta operação.</span>';
+      av.innerHTML = '<div style="color:var(--red);font-weight:600;">⚠ ' + quem + '</div>' +
+        '<div style="color:var(--red);">' + esc(d.motivo) + '</div>' +
+        '<div style="color:var(--muted);">O portal do Inter recusa esta operação.</div>';
     } else if (d.atendida === null) {
-      av.innerHTML = '<span style="color:var(--orange,#B45309);">' + esc(d.motivo) + '</span>';
+      // sem UPAG nenhuma, o cabeçalho "UPAG" sozinho não diria nada
+      av.innerHTML = (d.upag ? '<div style="color:#B45309;font-weight:600;">' + quem + '</div>' : '') +
+        '<div style="color:#B45309;">' + esc(d.motivo) + '</div>';
     } else {
-      av.innerHTML = '<span style="color:var(--muted);">UPAG ' + esc(d.upag) + origem + ' — atendida pelo Inter.</span>';
+      av.innerHTML = '<div style="color:var(--muted);">' + quem +
+        ' <span style="color:var(--green);">— atendida pelo Inter.</span></div>';
     }
   } catch (e) {
     // a conferência é uma rede de proteção: se cair, não trava a tela
