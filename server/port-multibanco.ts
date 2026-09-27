@@ -20,6 +20,7 @@ import {
   type BancoParaAnalise, type ClienteEntrada, type ContratoEntrada, type Excecao, type RegrasBanco,
 } from "../shared/portability/engine";
 import { MODELOS } from "../shared/portability/modelos";
+import { registrarConsultaCliente } from "./consulta-cliente-log";
 import { normalizarOperacao } from "../shared/portability/refin";
 
 /** JSON com chaves ordenadas: o mesmo conteúdo sempre dá o mesmo hash. */
@@ -180,6 +181,9 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
         }
       }
 
+      registrarConsultaCliente(req, {
+        cpf, origem: "port-cliente", encontrado: !!(rows.length || nascimento),
+      });
       if (!rows.length && !nascimento) return res.json(null);
       // UPAG: o vínculo é mais específico que o cadastro da pessoa
       const linhaUpag = rows.find(x => x.upag_vinculo || x.upag_pessoa);
@@ -223,6 +227,9 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
           LIMIT 10
         `);
         const rows = r.rows as any[];
+        registrarConsultaCliente(req, {
+          cpf, origem: "port-upag", encontrado: rows.length > 0,
+        });
         const linha = rows.find(x => x.upag_vinculo || x.upag_pessoa);
         if (linha) {
           upag = String(linha.upag_vinculo || linha.upag_pessoa);

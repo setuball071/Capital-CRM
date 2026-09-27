@@ -419,6 +419,10 @@ function dedupVinculosPorMatricula<
 }
 import { z } from "zod";
 import {
+  registrarConsultaCliente,
+  registerConsultaClienteRoutes,
+} from "./consulta-cliente-log";
+import {
   REGRAS_PADRAO as VIABILIDADE_REGRAS_PADRAO,
   REFIN as VIABILIDADE_REFIN,
   COMISSAO_TABELA as VIABILIDADE_COMISSAO,
@@ -1508,6 +1512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== DASHBOARD GERENCIAL (só-Master) =====
   registerDashboardGerencialRoutes(app, requireAuth, requireMaster);
+  registerConsultaClienteRoutes(app, requireAuth);
 
   // ===== DATABASE ERROR HANDLING MIDDLEWARE =====
   // Catches database connection errors and returns user-friendly messages
@@ -16085,6 +16090,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           cliente = await storage.getClientePessoaById(vinculos[0].pessoaId);
         }
       }
+
+      // a base de clientes e compartilhada entre tenants: fica registrado quem
+      // consultou qual CPF (serve de medidor e de prova)
+      registrarConsultaCliente(req, {
+        cpf: termoLimpo, origem: "vendas-busca", encontrado: !!cliente,
+      });
 
       if (!cliente) {
         // Check if CPF exists as a lead in any campaign (helps user understand the situation)
@@ -30905,6 +30916,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     try {
       const cpf = req.params.cpf.replace(/\D/g, '').padStart(11, '0').slice(-11);
       if (!cpf || cpf.length !== 11) return res.status(400).json({ dados: null });
+      registrarConsultaCliente(req, { cpf, origem: "siape-dados", encontrado: true });
       const result = await db.execute(sql`
         SELECT
           mes_pagamento,
@@ -30950,6 +30962,7 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
     try {
       const cpf = req.params.cpf.replace(/\D/g, "");
       if (!cpf || cpf.length !== 11) return res.status(400).json({ message: "CPF inválido" });
+      registrarConsultaCliente(req, { cpf, origem: "siape-parcelas", encontrado: true });
 
       const result = await db.execute(sql`
         SELECT mes_pagamento,
@@ -31786,6 +31799,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
       // Busca a pessoa globalmente por CPF
       const pessoas = await storage.getClientesByCpf(rawCpf);
+      registrarConsultaCliente(
+        { tenantId: req.apiTenantId, headers: req.headers, socket: req.socket },
+        { cpf: rawCpf, origem: "api-externa", encontrado: pessoas.length > 0 },
+      );
       if (pessoas.length === 0) {
         return res.status(404).json({ error: "Cliente não encontrado." });
       }
