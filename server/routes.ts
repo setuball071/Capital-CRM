@@ -418,6 +418,11 @@ function dedupVinculosPorMatricula<
   return repr;
 }
 import { z } from "zod";
+import {
+  REGRAS_PADRAO as VIABILIDADE_REGRAS_PADRAO,
+  REFIN as VIABILIDADE_REFIN,
+  COMISSAO_TABELA as VIABILIDADE_COMISSAO,
+} from "./viabilidade-inter-config";
 import { storage, db } from "./storage";
 import { registerDashboardGerencialRoutes } from "./dashboard-gerencial";
 import {
@@ -29834,6 +29839,37 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
   // ── VIABILIDADE INTER: regras por convênio ────────────────────────────────
   // Faixa aceita de taxa ponderada + grade de comissionamento. Uma linha por tenant.
+  // A tela da Viabilidade Inter nao carrega mais numero de negocio nenhum no
+  // proprio arquivo: pede aqui, e o servidor decide o que cada um pode receber.
+  app.get("/api/viabilidade-config", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const ehMaster = user.isMaster || user.role === "master";
+
+      // a grade salva pelo master vale mais que o padrao de fabrica
+      let regras: unknown = VIABILIDADE_REGRAS_PADRAO;
+      try {
+        const r = await db.execute(sql`
+          SELECT regras FROM viabilidade_conv_rules WHERE tenant_id = ${req.tenantId!}
+        `);
+        const salvas = (r.rows[0] as any)?.regras;
+        if (Array.isArray(salvas) && salvas.length && salvas[0]?.conv) regras = salvas;
+      } catch (e) {
+        // sem a tabela ou sem linha: segue com o padrao
+      }
+
+      res.json({
+        regras,
+        refin: VIABILIDADE_REFIN,
+        // ⚠ o numero da comissao so sai daqui para o master
+        comissao: ehMaster ? VIABILIDADE_COMISSAO : null,
+      });
+    } catch (err: any) {
+      console.error("[VIABILIDADE_CONFIG] GET error:", err);
+      res.status(500).json({ message: "Erro ao carregar a configuracao da viabilidade" });
+    }
+  });
+
   app.get("/api/viabilidade-regras", requireAuth, async (req: any, res) => {
     try {
       const r = await db.execute(sql`

@@ -10,7 +10,11 @@ import {
   botDetection,
   additionalSecurityHeaders,
   requireSessionForUploads,
+  requireSessionForSimuladores,
+  ehSimuladorProtegido,
+  SIMULADORES_PROTEGIDOS,
 } from "./security";
+import nodeFs from "fs";
 
 const app = express();
 
@@ -127,8 +131,14 @@ app.use(express.urlencoded({ extended: false, limit: "50mb" }));
 
 import nodePath from "path";
 
+// Os simuladores saem daqui: sao servidos mais abaixo, ja depois da sessao.
+// Sem este desvio o express.static entregaria o arquivo antes do guard rodar.
+const semSimuladores =
+  (mw: any) => (req: Request, res: Response, next: NextFunction) =>
+    ehSimuladorProtegido(req.path) ? next() : mw(req, res, next);
+
 // Static público (logos etc.) — não exige sessão
-app.use(express.static(nodePath.join(process.cwd(), "public")));
+app.use(semSimuladores(express.static(nodePath.join(process.cwd(), "public"))));
 
 // Assets do cliente buildado (JS/CSS hasheados) — servidos AQUI, ANTES do
 // middleware de sessão. Arquivos estáticos não precisam de sessão; passar pela
@@ -138,7 +148,7 @@ app.use(express.static(nodePath.join(process.cwd(), "public")));
 // `index: false` mantém o "/" passando pelo fluxo normal (check de tenant).
 if (isProduction) {
   app.use(
-    express.static(nodePath.join(import.meta.dirname, "public"), {
+    semSimuladores(express.static(nodePath.join(import.meta.dirname, "public"), {
       index: false,
       // Assets com hash no nome (JS/CSS/imgs em /assets) são imutáveis → cache longo.
       // HTML (ex.: simuladores em client/public) NÃO pode ser immutable, senão o
@@ -150,7 +160,7 @@ if (isProduction) {
           res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         }
       },
-    }),
+    })),
   );
 }
 // NOTA: /uploads (protegido) é registrado DEPOIS do middleware de sessão,
@@ -216,6 +226,21 @@ app.use((req, res, next) => {
   // Arquivos públicos (logos) passam pelo bypass dentro de requireSessionForUploads.
   app.use("/uploads", requireSessionForUploads);
   app.use("/uploads", express.static(nodePath.join(process.cwd(), "uploads")));
+
+  // Simuladores — registrados AQUI, depois da sessao, para o guard ver req.session.
+  // Vem antes do vite/serveStatic, entao ganham deles tambem em desenvolvimento.
+  app.get(SIMULADORES_PROTEGIDOS, requireSessionForSimuladores, (req, res, next) => {
+    const nome = nodePath.basename(req.path);
+    const candidatos = [
+      nodePath.join(import.meta.dirname, "public", nome),   // build de producao
+      nodePath.join(process.cwd(), "public", nome),
+      nodePath.join(process.cwd(), "client", "public", nome),
+    ];
+    const achado = candidatos.find((p) => nodeFs.existsSync(p));
+    if (!achado) return next();
+    res.setHeader("Cache-Control", "no-cache");
+    res.sendFile(achado);
+  });
 
   if (!isProduction) {
     log("Using memory session store for development");

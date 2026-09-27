@@ -501,6 +501,41 @@ const PUBLIC_UPLOAD_PATTERNS = [
   /\.(png|jpg|jpeg|svg|gif|webp|ico)$/i,
 ];
 
+/**
+ * Paginas de simulador: tem regra de negocio e conta dentro do arquivo, entao
+ * nao podem ser baixadas por quem nao entrou. Ate 27/09/2026 qualquer um abria
+ * pelo endereco direto, sem login.
+ *
+ * O caminho vem exatamente assim na URL (`/arquivo.html`).
+ */
+export const SIMULADORES_PROTEGIDOS = [
+  "/ferramentas-portabilidade.html",
+  "/viabilidade-inter.html",
+  "/simulador-contracheque.html",
+  "/SIMULADOR_MARGEM.html",
+  "/financeiro-comissoes.html",
+  "/editor-pdf.html",
+];
+
+export function ehSimuladorProtegido(caminho: string) {
+  return SIMULADORES_PROTEGIDOS.some(
+    (p) => p.toLowerCase() === caminho.toLowerCase(),
+  );
+}
+
+/** Sem sessao, manda para o login. E navegacao de pagina, nao chamada de API:
+ *  por isso redireciona em vez de devolver 401 em JSON. */
+export function requireSessionForSimuladores(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  if (!(req as any).session?.userId) {
+    return res.redirect(302, "/");
+  }
+  next();
+}
+
 export function requireSessionForUploads(
   req: Request,
   res: Response,

@@ -12,6 +12,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+// os números de negócio não moram mais na página: vêm daqui, como na produção
+import { REGRAS_PADRAO, REFIN, COMISSAO_TABELA } from "../server/viabilidade-inter-config";
 
 const html = readFileSync(new URL("../public/viabilidade-inter.html", import.meta.url), "utf8");
 
@@ -21,24 +23,24 @@ const inicio = html.indexOf("function days360");
 const fim = html.indexOf("function aplicarTabela(");
 if (inicio < 0 || fim < 0) throw new Error("não achei o trecho do motor na Viabilidade Inter");
 
-const sandbox: any = { console, out: {} };
+const sandbox: any = { console, out: {}, cfgRefin: REFIN, cfgComissao: COMISSAO_TABELA };
 vm.runInNewContext(
   html.slice(inicio, fim) +
   `
-out.motorInter = motorInter; out.tabelaMaisRentavel = tabelaMaisRentavel;
+montarTabelasRefin(cfgRefin);
+   COMISSAO_TABELA = cfgComissao;
+   out.motorInter = motorInter; out.tabelaMaisRentavel = tabelaMaisRentavel;
    out.menorTabelaQueAtinge = menorTabelaQueAtinge; out.taxaDaTabela = taxaDaTabela;
    out.comissaoDaFaixa = comissaoDaFaixa; out.TABELAS_REFIN = TABELAS_REFIN;`,
   sandbox,
 );
 const P = sandbox.out;
 
-// Grade do SIAPE sem seguro, como regraAtual() monta: taxa mínima de cada faixa.
-const GRADE = [
-  { taxa: 1.63, tabela: "Tabela 1" }, { taxa: 1.65, tabela: "Tabela 2" },
-  { taxa: 1.66, tabela: "Tabela 3" }, { taxa: 1.67, tabela: "Tabela 4" },
-  { taxa: 1.68, tabela: "Tabela 5" }, { taxa: 1.69, tabela: "Tabela 6" },
-];
-const REGRA = { min: 1.63, max: 1.8, grade: GRADE };
+// Grade do SIAPE sem seguro, montada como regraAtual() monta: coluna 0 da grade.
+const siape = REGRAS_PADRAO.find(r => r.conv === "Siape");
+if (!siape) throw new Error("SIAPE sumiu de REGRAS_PADRAO");
+const GRADE = siape.grade.map(g => ({ taxa: g[0], tabela: "Tabela " + g[2] }));
+const REGRA = { min: GRADE[0].taxa, max: siape.max, grade: GRADE };
 const ctxDe = (prazoRefin: number) => ({
   regra: REGRA, prazoRefin,
   dataContrato: new Date("2026-09-25T00:00:00"),

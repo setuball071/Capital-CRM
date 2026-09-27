@@ -416,30 +416,8 @@ function refinPosPort(p) {
 //  grade = [taxa sem seguro, taxa com seguro, nº da tabela de comissionamento].
 //  O MÍNIMO aceito é a 1ª linha da grade; o máximo é o campo `max`.
 // ═══════════════════════════════════════════════════════════════════════════
-const REGRAS_PADRAO = [
-  { conv: 'Aeronáutica', max: 5.0, grade: [[1.85,1.85,1], [1.86,1.86,2], [1.88,1.88,3], [1.89,1.89,4], [1.91,1.91,5], [1.92,1.92,6]] },
-  { conv: 'Bombeiros MG', max: 5.0, grade: [[2.25,2.25,1], [2.26,2.26,2], [2.28,2.28,3], [2.29,2.29,4], [2.3,2.3,5], [2.32,2.32,6]] },
-  { conv: 'Def. Pública MG', max: 5.0, grade: [[2.25,2.25,1], [2.26,2.26,2], [2.28,2.28,3], [2.29,2.29,4], [2.3,2.3,5], [2.32,2.32,6]] },
-  { conv: 'Estado BA', max: 5.0, grade: [[1.91,1.91,1], [1.92,1.92,2], [1.93,1.93,3], [1.94,1.94,4], [1.95,1.95,5], [1.96,1.96,6]] },
-  { conv: 'Estado MS', max: 5.0, grade: [[1.88,1.88,1], [1.89,1.89,2], [1.91,1.91,3], [1.92,1.92,4], [1.93,1.93,5], [1.94,1.94,6]] },
-  { conv: 'Estado SC', max: 5.0, grade: [[2.0,2.0,1], [2.01,2.01,2], [2.03,2.03,3], [2.04,2.04,4], [2.05,2.05,5], [2.07,2.07,6]] },
-  { conv: 'Exército', max: 2.04, grade: [[1.7,1.7,1], [1.71,1.71,2], [1.73,1.73,3], [1.74,1.74,4], [1.76,1.76,5], [1.77,1.77,6]] },
-  { conv: 'Grupo I Governos', max: 5.0, grade: [[2.19,2.19,1], [2.21,2.21,2], [2.22,2.22,3], [2.23,2.23,4], [2.24,2.24,5], [2.26,2.26,6]] },
-  { conv: 'Grupo II Prefeituras', max: 5.0, grade: [[2.12,2.12,1], [2.14,2.14,2], [2.15,2.15,3], [2.17,2.17,4], [2.19,2.19,5], [2.2,2.2,6]] },
-  { conv: 'INSS', max: 1.85, grade: [[1.78,1.78,1], [1.79,1.79,2], [1.81,1.81,3], [1.82,1.82,4], [1.83,1.83,5], [1.85,1.85,6]] },
-  { conv: 'IPSEMG', max: 5.0, grade: [[2.25,2.25,1], [2.26,2.26,2], [2.28,2.28,3], [2.29,2.29,4], [2.3,2.3,5], [2.32,2.32,6]] },
-  { conv: 'IPSM', max: 5.0, grade: [[2.25,2.25,1], [2.26,2.26,2], [2.28,2.28,3], [2.29,2.29,4], [2.3,2.3,5], [2.32,2.32,6]] },
-  { conv: 'Marinha', max: 2.04, grade: [[1.83,1.83,1], [1.85,1.85,2], [1.87,1.87,3], [1.89,1.89,4], [1.91,1.91,5], [1.93,1.93,6]] },
-  { conv: 'PMMG', max: 5.0, grade: [[2.17,2.17,1], [2.19,2.19,2], [2.2,2.2,3], [2.21,2.21,4], [2.23,2.23,5], [2.24,2.24,6]] },
-  { conv: 'Pref. Contagem', max: 5.0, grade: [[1.97,1.97,1], [1.98,1.98,2], [2.0,2.0,3], [2.01,2.01,4], [2.03,2.03,5], [2.05,2.05,6]] },
-  { conv: 'Pref. Goiânia', max: 5.0, grade: [[2.04,2.04,1], [2.06,2.06,2], [2.08,2.08,3], [2.09,2.09,4], [2.11,2.11,5], [2.13,2.13,6]] },
-  { conv: 'Pref. SP', max: 5.0, grade: [[1.76,1.76,1], [1.77,1.77,2], [1.79,1.79,3], [1.8,1.8,4], [1.82,1.82,5], [1.83,1.83,6]] },
-  { conv: 'SEPLAG MG', max: 5.0, grade: [[2.25,2.25,1], [2.26,2.26,2], [2.28,2.28,3], [2.29,2.29,4], [2.3,2.3,5], [2.32,2.32,6]] },
-  { conv: 'SPPrev', max: 5.0, grade: [[1.74,1.74,1], [1.75,1.75,2], [1.77,1.77,3], [1.78,1.78,4], [1.79,1.79,5], [1.81,1.81,6]] },
-  { conv: 'Siape', max: 1.8, grade: [[1.63,1.6,1], [1.65,1.62,2], [1.66,1.63,3], [1.67,1.64,4], [1.68,1.65,5], [1.69,1.66,6]] },
-  { conv: 'Tribunais Estaduais', max: 5.0, grade: [[1.92,1.92,1], [1.94,1.94,2], [1.95,1.95,3], [1.96,1.96,4], [1.97,1.97,5], [1.99,1.99,6]] },
-  { conv: 'Tribunais Federais', max: 5.0, grade: [[2.01,2.01,1], [2.02,2.02,2], [2.03,2.03,3], [2.04,2.04,4], [2.05,2.05,5], [2.07,2.07,6]] }
-];
+// A grade por convenio agora vem de /api/viabilidade-config (server/
+// viabilidade-inter-config.ts). Ficava aqui dentro, e quem abria o arquivo lia.
 
 // Dia do vencimento por convênio — aba "Dia de Vencimento" da planilha do banco.
 // O DIA é regra fixa; o MÊS depende da data de corte da folha e a planilha não a
@@ -456,10 +434,10 @@ const DIA_VENCIMENTO = {
   'Pref. Contagem': 20, 'Pref. Goiânia': 27, 'Pref. SP': 5, 'SPPrev': 8
 };
 
-// Comissão que fica com a casa em cada tabela de comissionamento do Inter
-// (coluna "fabio" da planilha, informada em 23/09/2026). Sempre sobre o SALDO
-// DEVEDOR portado — regra do Fábio, vale para todos os bancos. Só o master vê.
-const COMISSAO_TABELA = { 1: 0.35, 2: 0.65, 3: 1.00, 4: 1.35, 5: 1.70, 6: 2.05 };
+// Comissão da casa por tabela de comissionamento. NÃO mora mais neste arquivo:
+// vem de /api/viabilidade-config e o servidor só a manda para o master. Antes o
+// número estava aqui em texto puro — o isMaster escondia da tela, não do Ctrl+U.
+let COMISSAO_TABELA = {};
 /** Comissão da casa de uma linha aprovada; null quando não dá para saber. */
 function comissaoDaLinha(l) {
   if (!l.parecer.ok || !l.saldo) return null;
@@ -468,17 +446,20 @@ function comissaoDaLinha(l) {
   return pct ? { tabela: n, pct: pct, valor: l.saldo * pct / 100 } : null;
 }
 
-let REGRAS = JSON.parse(JSON.stringify(REGRAS_PADRAO));
+let REGRAS = [];              // preenchida por carregarConfig()
 let isMaster = false;
 let comSeguro = false;
 
-// Range Refin (aba "Range Refin"): 31 tabelas, 1,50% a 3,00% de 0,05 em 0,05.
-// Com seguro prestamista a taxa de cada tabela cai 0,03 ponto.
-const TABELAS_REFIN = [];
-for (let n = 1; n <= 31; n++) {
-  TABELAS_REFIN.push({ n: n, sem: Math.round((1.50 + (n - 1) * 0.05) * 100) / 100 });
+// Range Refin (aba "Range Refin") — os parâmetros vêm da API; aqui só a montagem.
+let TABELAS_REFIN = [];
+let DESCONTO_SEGURO = 0.03;
+function montarTabelasRefin(r) {
+  TABELAS_REFIN = [];
+  for (let n = 1; n <= r.quantidade; n++) {
+    TABELAS_REFIN.push({ n: n, sem: Math.round((r.primeira + (n - 1) * r.passo) * 100) / 100 });
+  }
+  DESCONTO_SEGURO = r.descontoSeguro;
 }
-const DESCONTO_SEGURO = 0.03;
 const taxaDaTabela = n => {
   const t = TABELAS_REFIN.find(x => x.n === n);
   if (!t) return 0;
@@ -1299,13 +1280,23 @@ async function salvarRegras() {
   }
 }
 
-async function carregarRegras() {
+/** Grade, range do refin e (só para o master) a tabela de comissão. Sem isto a
+ *  tela não calcula nada — é de propósito: o número não está mais no arquivo. */
+async function carregarConfig() {
+  const st = document.getElementById('regrasStatus');
   try {
-    const r = await fetch('/api/viabilidade-regras', { credentials: 'include' });
-    if (!r.ok) return;
+    const r = await fetch('/api/viabilidade-config', { credentials: 'include' });
+    if (!r.ok) throw new Error('erro ' + r.status);
     const d = await r.json();
-    if (Array.isArray(d) && d.length && d[0].conv) REGRAS = d;
-  } catch (e) { /* mantém o padrão */ }
+    if (Array.isArray(d.regras) && d.regras.length && d.regras[0].conv) REGRAS = d.regras;
+    if (d.refin) montarTabelasRefin(d.refin);
+    COMISSAO_TABELA = d.comissao || {};
+  } catch (e) {
+    if (st) {
+      st.style.color = 'var(--red)';
+      st.textContent = 'Não consegui carregar as regras do servidor. Recarregue a página.';
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1371,13 +1362,14 @@ function onConvenio() {
 }
 
 async function init() {
+  // a config vem primeiro: o select do refin e a grade dependem dela
+  await carregarConfig();
+
   document.getElementById('tabelaPos').innerHTML =
     '<option value="0">— não usar —</option>' + TABELAS_REFIN.map(t =>
       '<option value="' + t.n + '">Tabela ' + t.n + ' · ' + fmtPct(t.sem, 2) + '</option>').join('');
 
   document.getElementById('dataContrato').value = isoData(new Date());
-
-  await carregarRegras();
   const sel = document.getElementById('convenio');
   sel.innerHTML = REGRAS.map(r =>
     '<option value="' + esc(r.conv) + '"' + (r.conv === 'Siape' ? ' selected' : '') + '>' + esc(r.conv) + '</option>').join('');
