@@ -10,6 +10,7 @@ import bcrypt from "bcrypt";
 import { db } from "./storage";
 import { sql } from "drizzle-orm";
 import { normalizeDomain } from "./tenant-middleware";
+import { MODULE_LIST } from "@shared/schema";
 
 export interface ProvisionInput {
   nome: string;
@@ -110,6 +111,29 @@ export async function provisionTenant(input: ProvisionInput): Promise<ProvisionR
     } else {
       warnings.push(`Catálogo módulos×plano sem entrada para "${input.plano}" — todos os módulos ficaram liberados.`);
     }
+  }
+
+  // 4b) Permissões do admin do cliente. Sem isso ele entra e não vê NADA: o menu é
+  // montado por permissão e o provisionamento nunca criava nenhuma (a ConsigOne nasceu
+  // com zero). Se o plano definiu módulos, vale o catálogo; senão, libera todos e o
+  // admin distribui para a equipe dele. O painel SaaS continua fora: é isMaster.
+  const modRows = (await db.execute(
+    sql`SELECT modulo_key FROM tenant_modulos WHERE tenant_id = ${tenantId} AND ativo = true`,
+  )).rows as any[];
+  const modulosDoAdmin = modRows.length
+    ? modRows.map((r) => String(r.modulo_key))
+    : [...MODULE_LIST];
+  for (const modulo of modulosDoAdmin) {
+    await db.execute(sql`
+      INSERT INTO user_permissions (user_id, module, can_view, can_edit, can_delegate)
+      VALUES (${adminUserId}, ${modulo}, true, true, true)
+      ON CONFLICT DO NOTHING
+    `);
+  }
+  if (!modRows.length) {
+    warnings.push(
+      `Admin do cliente recebeu os ${modulosDoAdmin.length} módulos (catálogo do plano vazio). Ajuste em Usuários se quiser restringir.`,
+    );
   }
 
   // 5) Assinatura
