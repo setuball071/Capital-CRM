@@ -4,6 +4,15 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useTenant } from "@/components/tenant-theme-provider";
 
+// Converte #RRGGBB em rgba() para as bolas de luz do fundo.
+function rgba(hex: string, alpha: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return `rgba(108,43,217,${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 const FRASES = [
   ["O melhor time de", "crédito consignado"],
   ["Cada contrato fechado", "é uma vitória do time"],
@@ -19,10 +28,13 @@ export default function LoginPage() {
   const { toast } = useToast();
   // Marca do ambiente: cada cliente tem a sua. Sem logo cadastrada, mostramos o
   // nome do ambiente em texto — nunca a marca de outro cliente.
-  const { tenant, primaryColor } = useTenant();
+  const { tenant, primaryColor, secondaryColor, loginBgColor, loginGradient, useLoginGradient } = useTenant();
   const nomeAmbiente = tenant?.name || "Sistema";
   const logoAmbiente = tenant?.logoLoginUrl || tenant?.logoUrl || null;
   const corPrimaria = primaryColor || "#6C2BD9";
+  const corSecundaria = secondaryColor || corPrimaria;
+  // Fundo do painel da marca: gradiente do ambiente, se ligado; senão a cor lisa.
+  const fundoMarca = useLoginGradient && loginGradient ? loginGradient : (loginBgColor || "#121212");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,10 +70,10 @@ export default function LoginPage() {
       `}</style>
 
       {/* Painel esquerdo — marca */}
-      <div className="hidden md:flex md:w-[52%]" style={{ background: "#121212", position: "relative", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-        <div style={{ position: "absolute", width: 360, height: 360, borderRadius: "50%", background: "radial-gradient(circle, rgba(233,30,99,0.55), transparent 70%)", top: -80, left: -60, filter: "blur(14px)", animation: "cgOrbA 10s ease-in-out infinite" }} />
-        <div style={{ position: "absolute", width: 320, height: 320, borderRadius: "50%", background: "radial-gradient(circle, rgba(30,136,229,0.5), transparent 70%)", bottom: -100, right: -60, filter: "blur(14px)", animation: "cgOrbB 12s ease-in-out infinite" }} />
-        <div style={{ position: "absolute", width: 260, height: 260, borderRadius: "50%", background: "radial-gradient(circle, rgba(168,85,247,0.55), transparent 70%)", top: "35%", right: "10%", filter: "blur(14px)", animation: "cgOrbC 9s ease-in-out infinite" }} />
+      <div className="hidden md:flex md:w-[52%]" style={{ background: fundoMarca, position: "relative", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        <div style={{ position: "absolute", width: 360, height: 360, borderRadius: "50%", background: `radial-gradient(circle, ${rgba(corPrimaria, 0.55)}, transparent 70%)`, top: -80, left: -60, filter: "blur(14px)", animation: "cgOrbA 10s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", width: 320, height: 320, borderRadius: "50%", background: `radial-gradient(circle, ${rgba(corSecundaria, 0.5)}, transparent 70%)`, bottom: -100, right: -60, filter: "blur(14px)", animation: "cgOrbB 12s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", width: 260, height: 260, borderRadius: "50%", background: `radial-gradient(circle, ${rgba(corPrimaria, 0.4)}, transparent 70%)`, top: "35%", right: "10%", filter: "blur(14px)", animation: "cgOrbC 9s ease-in-out infinite" }} />
         <div style={{ position: "relative", textAlign: "center", padding: "0 40px" }}>
           {logoAmbiente ? (
             <img src={logoAmbiente} alt={nomeAmbiente} style={{ height: 120, maxWidth: "90%", marginBottom: 24, objectFit: "contain" }} />
