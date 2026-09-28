@@ -4,7 +4,7 @@
 <style id="cor-da-marca">
 /* Cor da marca do ambiente. O padrao e o roxo antigo; o script logo abaixo
    troca pelo --primary do CRM quando esta pagina roda dentro do sistema. */
-:root { --brand: #6C2BD9; --brand-dark: #4B1FA6; --brand-90: rgba(108,43,217,0.9); }
+:root { --brand-hsl: 262 70% 51%; --brand: hsl(var(--brand-hsl)); --brand-dark: hsl(var(--brand-hsl)); --brand-90: hsl(var(--brand-hsl)/0.9); }
 </style>
 <script>
 /* Esta pagina roda em iframe, e iframe nao herda as variaveis de CSS do pai.
@@ -21,6 +21,7 @@
         .getPropertyValue('--primary').trim();
       if (!hsl) return false; // o CRM ainda nao aplicou o tema
       var r = document.documentElement;
+      r.style.setProperty('--brand-hsl', hsl);
       r.style.setProperty('--brand', 'hsl(' + hsl + ')');
       r.style.setProperty('--brand-dark', 'hsl(' + hsl + ')');
       r.style.setProperty('--brand-90', 'hsl(' + hsl + ' / 0.9)');
@@ -45,8 +46,8 @@
 <title>Capital Go — Viabilidade Inter</title>
 <style id="force-light">
 html,body,*,*::before,*::after{-webkit-color-scheme:light!important;color-scheme:light!important}
-body{background:#F8F8FC!important;color:#111827!important}
-.box,.card{background:#FFFFFF!important;color:#111827!important;border-color:#E8E8F0!important}
+body{background:hsl(var(--brand-hsl)/0.06)!important;color:#111827!important}
+.box,.card{background:#FFFFFF!important;color:#111827!important;border-color:hsl(var(--brand-hsl)/0.12)!important}
 input,select,textarea{background:#F9FAFB!important;color:#111827!important;border-color:#E5E7EB!important}
 th{background:#F3F4F6!important;color:#6B7280!important}
 td{color:#111827!important}
@@ -95,7 +96,7 @@ td{color:#111827!important}
   /* botoes herdados de ferramentas.css que a regra guarda-chuva tambem pegaria */
   #tab-sim-content .btn-add { background:transparent; color:var(--purple); box-shadow:none;
                border:1.5px dashed var(--purple); padding:7px 14px; font-size:12px; }
-  #tab-sim-content .btn-add:hover { transform:none; box-shadow:none; background:#f3eeff; }
+  #tab-sim-content .btn-add:hover { transform:none; box-shadow:none; background:hsl(var(--brand-hsl)/0.10); }
   #tab-sim-content .btn-rem-inline { background:transparent; color:#a32d2d; box-shadow:none;
                border:0.5px solid rgba(163,45,45,.3); padding:0; font-size:15px; }
   #tab-sim-content .btn-rem-inline:hover { transform:none; box-shadow:none; background:#fcebeb; }
@@ -116,7 +117,7 @@ td{color:#111827!important}
                width:16px!important; min-width:0; margin-top:8px; }
   .vi-sub    { font-size:10px; color:var(--text-muted); margin-top:3px; padding-left:2px; }
   [data-theme="dark"] #tab-sim-content .vi-seg button.on {
-               background:var(--purple-light); color:#C4B5FD; }
+               background:var(--purple-light); color:hsl(var(--brand-hsl)/0.45); }
   .vi-par    { display:flex; align-items:center; gap:4px; }
   .vi-par input { flex:1; min-width:0; width:auto!important; text-align:center; padding:8px 2px!important; }
   .vi-par span { color:var(--text-muted); font-size:12px; }
@@ -1424,8 +1425,8 @@ window.addEventListener('message', function (event) {
     if (forceStyle) {
       forceStyle.textContent = isDark ? '/* dark mode active */' : [
         'html,body,*,*::before,*::after{-webkit-color-scheme:light!important;color-scheme:light!important}',
-        'body{background:#F8F8FC!important;color:#111827!important}',
-        '.box,.card{background:#FFFFFF!important;color:#111827!important;border-color:#E8E8F0!important}',
+        'body{background:hsl(var(--brand-hsl)/0.06)!important;color:#111827!important}',
+        '.box,.card{background:#FFFFFF!important;color:#111827!important;border-color:hsl(var(--brand-hsl)/0.12)!important}',
         'input,select,textarea{background:#F9FAFB!important;color:#111827!important;border-color:#E5E7EB!important}',
         'th{background:#F3F4F6!important;color:#6B7280!important}',
         'td{color:#111827!important}'

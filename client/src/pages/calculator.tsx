@@ -1121,7 +1121,7 @@ export default function CalculatorPage() {
                       </div>
 
                       {/* DESTAQUE PRINCIPAL: muda conforme o modo */}
-                      <Card className="mb-4 overflow-hidden border-0 shadow-xl rounded-[14px]" style={{ background: "linear-gradient(135deg, hsl(var(--primary)) 0%, #1E88E5 100%)" }}>
+                      <Card className="mb-4 overflow-hidden border-0 shadow-xl rounded-[14px]" style={{ background: "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.72) 100%)" }}>
                         <CardContent className="p-6 text-center text-white">
                           {isModoReducao ? (
                             <>
@@ -1271,7 +1271,7 @@ export default function CalculatorPage() {
                     });
                   }}
                   className="w-full h-10 rounded-lg font-semibold text-[13px] text-white flex items-center justify-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: "linear-gradient(135deg, hsl(var(--primary)) 0%, #EC4899 100%)", boxShadow: "0 4px 14px rgba(124,58,237,.28)" }}
+                  style={{ background: "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.72) 100%)", boxShadow: "0 4px 14px rgba(124,58,237,.28)" }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>

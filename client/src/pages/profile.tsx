@@ -148,7 +148,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-4 pb-2">
               <Avatar className="h-20 w-20">
                 {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} className="object-cover" />}
-                <AvatarFallback className="text-lg font-semibold text-white" style={{ background: "linear-gradient(90deg,#A855F7 0%,#E91E63 100%)" }}>
+                <AvatarFallback className="text-lg font-semibold text-white" style={{ background: "linear-gradient(90deg,hsl(var(--primary)) 0%,hsl(var(--accent)) 100%)" }}>
                   {getInitials(user.name)}
                 </AvatarFallback>
               </Avatar>

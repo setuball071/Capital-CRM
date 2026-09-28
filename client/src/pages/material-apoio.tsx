@@ -256,7 +256,7 @@ export default function MaterialApoioPage() {
                   <Button
                     size="sm"
                     className="flex-1"
-                    style={{ background: "linear-gradient(90deg, hsl(var(--primary)), #1E88E5)" }}
+                    style={{ background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)/0.72))" }}
                     onClick={() => window.open((mat as any).storageKey ? `/api/materials/${mat.id}/file` : mat.url || "", "_blank")}
                     data-testid={`button-open-${mat.id}`}
                   >

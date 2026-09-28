@@ -155,6 +155,29 @@ const THEME_SENSITIVE_VARS: Record<string, string[]> = {
   "--destructive": ["destructive", "errorColor"],
 };
 
+// Variaveis do menu lateral que o CSS base deixa cravadas no roxo da Capital Go
+// (--sidebar-primary, --sidebar-accent do item selecionado, --sidebar-ring...).
+// Sem isto o item ativo do menu continua roxo por mais que o gestor troque a cor.
+// Derivamos tudo do matiz e da saturacao da cor primaria do ambiente.
+function aplicarSidebarDaMarca(root: HTMLElement, primaryHsl: string | null, isDark: boolean) {
+  if (!primaryHsl) return;
+  const partes = primaryHsl.split(/\s+/);
+  if (partes.length < 3) return;
+  const h = partes[0];
+  const s = partes[1];
+  const def = (nome: string, valor: string) => root.style.setProperty(nome, valor);
+  def("--sidebar-primary", primaryHsl);
+  def("--sidebar-ring", primaryHsl);
+  if (isDark) {
+    def("--sidebar-accent", `${h} ${s} 22%`);
+    def("--sidebar-accent-foreground", `${h} ${s} 79%`);
+  } else {
+    def("--sidebar-accent", `${h} ${s} 96%`);
+    def("--sidebar-accent-foreground", `${h} ${s} 45%`);
+    def("--sidebar-primary-border", `${h} ${s} 43%`);
+  }
+}
+
 // Primeiro valor valido entre as chaves candidatas.
 function corDoTema(theme: any, chaves: string[]): string | null {
   for (const chave of chaves) {
@@ -174,6 +197,8 @@ function applyThemeVariables(theme: TenantTheme, isDark: boolean) {
       root.style.setProperty(cssVar, value);
     }
   });
+
+  aplicarSidebarDaMarca(root, corDoTema(theme, BRAND_VARS["--primary"]), isDark);
 
   if (isDark) {
     // Dark mode: remove theme-sensitive overrides so .dark CSS class takes over

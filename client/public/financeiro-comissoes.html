@@ -4,7 +4,7 @@
 <style id="cor-da-marca">
 /* Cor da marca do ambiente. O padrao e o roxo antigo; o script logo abaixo
    troca pelo --primary do CRM quando esta pagina roda dentro do sistema. */
-:root { --brand: #6C2BD9; --brand-dark: #4B1FA6; --brand-90: rgba(108,43,217,0.9); }
+:root { --brand-hsl: 262 70% 51%; --brand: hsl(var(--brand-hsl)); --brand-dark: hsl(var(--brand-hsl)); --brand-90: hsl(var(--brand-hsl)/0.9); }
 </style>
 <script>
 /* Esta pagina roda em iframe, e iframe nao herda as variaveis de CSS do pai.
@@ -21,6 +21,7 @@
         .getPropertyValue('--primary').trim();
       if (!hsl) return false; // o CRM ainda nao aplicou o tema
       var r = document.documentElement;
+      r.style.setProperty('--brand-hsl', hsl);
       r.style.setProperty('--brand', 'hsl(' + hsl + ')');
       r.style.setProperty('--brand-dark', 'hsl(' + hsl + ')');
       r.style.setProperty('--brand-90', 'hsl(' + hsl + ' / 0.9)');
@@ -1205,7 +1206,7 @@ tfoot tr td{background:var(--surface2);font-weight:700;border-top:2px solid var(
           <div class="color-swatch" style="background:#f59e0b" onclick="selecionarCorGrupo('#f59e0b',this)"></div>
           <div class="color-swatch" style="background:#ef4444" onclick="selecionarCorGrupo('#ef4444',this)"></div>
           <div class="color-swatch" style="background:#4fc3f7" onclick="selecionarCorGrupo('#4fc3f7',this)"></div>
-          <div class="color-swatch" style="background:#a855f7" onclick="selecionarCorGrupo('#a855f7',this)"></div>
+          <div class="color-swatch" style="background:var(--brand)" onclick="selecionarCorGrupo('var(--brand)',this)"></div>
         </div>
         <input type="hidden" id="grp-cor" value="#6c63ff"/>
       </div>

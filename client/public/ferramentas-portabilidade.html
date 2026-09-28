@@ -4,7 +4,7 @@
 <style id="cor-da-marca">
 /* Cor da marca do ambiente. O padrao e o roxo antigo; o script logo abaixo
    troca pelo --primary do CRM quando esta pagina roda dentro do sistema. */
-:root { --brand: #6C2BD9; --brand-dark: #4B1FA6; --brand-90: rgba(108,43,217,0.9); }
+:root { --brand-hsl: 262 70% 51%; --brand: hsl(var(--brand-hsl)); --brand-dark: hsl(var(--brand-hsl)); --brand-90: hsl(var(--brand-hsl)/0.9); }
 </style>
 <script>
 /* Esta pagina roda em iframe, e iframe nao herda as variaveis de CSS do pai.
@@ -21,6 +21,7 @@
         .getPropertyValue('--primary').trim();
       if (!hsl) return false; // o CRM ainda nao aplicou o tema
       var r = document.documentElement;
+      r.style.setProperty('--brand-hsl', hsl);
       r.style.setProperty('--brand', 'hsl(' + hsl + ')');
       r.style.setProperty('--brand-dark', 'hsl(' + hsl + ')');
       r.style.setProperty('--brand-90', 'hsl(' + hsl + ' / 0.9)');
@@ -47,13 +48,13 @@ html, body, *, *::before, *::after {
   color-scheme: light !important;
 }
 body {
-  background: #F8F8FC !important;
+  background: hsl(var(--brand-hsl)/0.06) !important;
   color: #111827 !important;
 }
 .box, .card {
   background: #FFFFFF !important;
   color: #111827 !important;
-  border-color: #E8E8F0 !important;
+  border-color: hsl(var(--brand-hsl)/0.12) !important;
 }
 input, select, textarea {
   background: #F9FAFB !important;
@@ -296,10 +297,10 @@ td { color: #111827 !important; }
     <button onclick="buscarCotacoesPorCpf(document.getElementById('cpfCliente').value)" style="padding:4px 10px;background:#16A34A;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;">📂 Ver cotações salvas</button>
   </div>
   <!-- BUSCA: cotações salvas por CPF (sem precisar anexar o extrato) -->
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:10px 16px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;flex-wrap:wrap;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:10px 16px;background:hsl(var(--brand-hsl)/0.08);border:1px solid hsl(var(--brand-hsl)/0.30);border-radius:8px;flex-wrap:wrap;">
     <span style="font-size:12px;font-weight:700;color:var(--brand);white-space:nowrap;">🔎 Buscar cotações salvas por CPF:</span>
     <input id="buscaCpfCotacoes" placeholder="000.000.000-00" maxlength="14"
-      style="width:150px;font-size:13px;padding:5px 8px;border:1px solid #DDD6FE;border-radius:5px;"
+      style="width:150px;font-size:13px;padding:5px 8px;border:1px solid hsl(var(--brand-hsl)/0.30);border-radius:5px;"
       oninput="this.value = _formatarCpf(this.value)"
       onkeydown="if(event.key==='Enter'){buscarCotacoesPorCpfManual();}">
     <button onclick="buscarCotacoesPorCpfManual()"
@@ -343,7 +344,7 @@ td { color: #111827 !important; }
 
     <style>
       #dropZone.dz-hover {
-        background: #EDE9FE !important;
+        background: hsl(var(--brand-hsl)/0.14) !important;
         border-color: var(--brand-dark) !important;
         transform: scale(1.01);
       }
@@ -373,9 +374,9 @@ td { color: #111827 !important; }
       <span style="font-size:12px;color:#6B7280;margin-left:8px;">
         Marque os contratos que deseja portar/renegociar
       </span>
-      <div style="margin-left:auto;display:flex;gap:6px;align-items:center;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:6px;padding:5px 8px;">
+      <div style="margin-left:auto;display:flex;gap:6px;align-items:center;background:hsl(var(--brand-hsl)/0.08);border:1px solid hsl(var(--brand-hsl)/0.30);border-radius:6px;padding:5px 8px;">
         <span style="font-size:12px;color:var(--brand);font-weight:600;white-space:nowrap;">Taxa p/ todos:</span>
-        <input id="taxaTodos" placeholder="1,80" style="width:64px;text-align:center;font-size:12px;padding:4px 6px;border:1px solid #DDD6FE;border-radius:4px;"
+        <input id="taxaTodos" placeholder="1,80" style="width:64px;text-align:center;font-size:12px;padding:4px 6px;border:1px solid hsl(var(--brand-hsl)/0.30);border-radius:4px;"
           title="Aplica esta taxa a todos os contratos de uma vez"
           onkeydown="if(event.key==='Enter'){aplicarTaxaTodos();}">
         <button onclick="aplicarTaxaTodos()" style="padding:5px 12px;background:var(--brand);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
@@ -483,12 +484,12 @@ td { color: #111827 !important; }
     #mbPainel .mb-banner.erro { background:#FEF2F2; border:1px solid #FECACA; color:#991B1B; }
     #mbPainel .mb-btn { font:600 12px var(--font); border-radius:6px; padding:6px 12px; cursor:pointer; border:none;
       background:var(--brand); color:#fff; box-shadow:none; }
-    #mbPainel .mb-btn.sec { background:#fff; color:var(--brand); border:1px solid #C4B5FD; }
+    #mbPainel .mb-btn.sec { background:#fff; color:var(--brand); border:1px solid hsl(var(--brand-hsl)/0.45); }
     #mbPainel .mb-btn:hover { transform:none; box-shadow:none; opacity:.92; }
     #mbPainel .mb-link { background:none; border:none; color:var(--brand); font:600 12px var(--font); cursor:pointer; padding:0; box-shadow:none; text-decoration:underline; }
     #mbPainel .mb-link:hover { transform:none; box-shadow:none; }
     #mbPainel .mb-sub { font-size:11px; color:var(--text-muted); }
-    #mbPainel .mb-exc { display:inline-block; font-size:10px; font-weight:700; color:var(--brand-dark); background:#EDE9FE; border-radius:4px; padding:1px 5px; }
+    #mbPainel .mb-exc { display:inline-block; font-size:10px; font-weight:700; color:var(--brand-dark); background:hsl(var(--brand-hsl)/0.14); border-radius:4px; padding:1px 5px; }
     #mbPainel .mb-grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
     #mbPainel .mb-kpi-t { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); }
     #mbPainel .mb-vazio { text-align:center; color:var(--text-muted); font-size:12.5px; padding:22px 10px; }
@@ -633,7 +634,7 @@ td { color: #111827 !important; }
           </select>
         </div>
         <div id="refimRegraInfo" style="display:none;">
-          <div style="padding:10px 16px;background:#EDE9FE;border-radius:8px;font-size:12px;color:var(--brand-dark);">
+          <div style="padding:10px 16px;background:hsl(var(--brand-hsl)/0.14);border-radius:8px;font-size:12px;color:var(--brand-dark);">
             <div style="font-weight:700;display:flex;flex-wrap:wrap;gap:14px;">
               <span>📋 Entrada mín: <b><span id="refimEntradaMin">-</span>%</b></span>
               <span>Taxa Refim: <b><span id="refimTaxaRefim">-</span>% a.m.</b></span>
@@ -669,7 +670,7 @@ td { color: #111827 !important; }
       </div>
 
       <!-- CONFIGURAÇÃO DO REFIM -->
-      <div style="margin-top:20px;padding:16px;background:#F8F7FF;border:1px solid #DDD6FE;border-radius:8px;">
+      <div style="margin-top:20px;padding:16px;background:#F8F7FF;border:1px solid hsl(var(--brand-hsl)/0.30);border-radius:8px;">
         <h3 style="font-size:14px;margin:0 0 14px 0;">⚙️ Configuração do Refinanciamento</h3>
 
         <!-- Taxa negociada: um campo por banco SEM taxa fixa (ex: Caixa) -->
@@ -712,7 +713,7 @@ td { color: #111827 !important; }
           </div>
         </div>
         <div style="margin-top:10px;text-align:right;">
-          <button onclick="atualizarSimuladorRefim()" style="padding:7px 18px;background:#EDE9FE;border:1px solid #DDD6FE;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:var(--brand);font-family:inherit;">
+          <button onclick="atualizarSimuladorRefim()" style="padding:7px 18px;background:hsl(var(--brand-hsl)/0.14);border:1px solid hsl(var(--brand-hsl)/0.30);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:var(--brand);font-family:inherit;">
             🔄 Recalcular
           </button>
         </div>
@@ -728,7 +729,7 @@ td { color: #111827 !important; }
             <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Parcela Atual (total)</div>
             <div style="font-size:18px;font-weight:700;color:#374151;" id="rParcelaAtual">-</div>
           </div>
-          <div style="background:#EDE9FE;padding:12px;border-radius:8px;">
+          <div style="background:hsl(var(--brand-hsl)/0.14);padding:12px;border-radius:8px;">
             <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Parcela Nova</div>
             <div style="font-size:22px;font-weight:800;color:var(--brand);" id="rParcelaTotal">-</div>
           </div>
@@ -784,7 +785,7 @@ td { color: #111827 !important; }
         <div style="overflow-x:auto;">
           <table style="width:100%;border-collapse:collapse;font-size:12px;">
             <thead>
-              <tr style="background:#EDE9FE;color:var(--brand-dark);">
+              <tr style="background:hsl(var(--brand-hsl)/0.14);color:var(--brand-dark);">
                 <th style="padding:8px;text-align:left;">Banco Origem</th>
                 <th style="padding:8px;text-align:right;">Saldo</th>
                 <th style="padding:8px;text-align:center;">Prazo</th>
@@ -809,7 +810,7 @@ td { color: #111827 !important; }
 
     <!-- BOTÕES FINAIS -->
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;">
-      <button onclick="simularEEnviar()" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,var(--brand) 0%,#EC4899 100%);border:none;color:white;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(124,58,237,.3);display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;letter-spacing:.01em;">
+      <button onclick="simularEEnviar()" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,var(--brand) 0%,hsl(var(--brand-hsl)/0.72) 100%);border:none;color:white;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(124,58,237,.3);display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;letter-spacing:.01em;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Enviar para Criador de Proposta
       </button>
@@ -832,7 +833,7 @@ td { color: #111827 !important; }
         <button onclick="fecharModalRegras()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6B7280;">✕</button>
       </div>
       <!-- Legenda -->
-      <div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#4C1D95;line-height:1.7;">
+      <div style="background:hsl(var(--brand-hsl)/0.08);border:1px solid hsl(var(--brand-hsl)/0.30);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#4C1D95;line-height:1.7;">
         <b>Legenda das colunas:</b><br>
         <b>Entrada Mín %</b> — porcentagem mínima do saldo devedor como entrada para o refim &nbsp;·&nbsp;
         <b>Taxa Refim %</b> — taxa a.m. do refinanciamento &nbsp;·&nbsp;
@@ -851,8 +852,8 @@ td { color: #111827 !important; }
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;">Taxa<br><span style="font-weight:400;color:#6B7280;">Refim (%)</span></th>
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;">Saldo<br><span style="font-weight:400;color:#6B7280;">Mín (R$)</span></th>
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;">Troco<br><span style="font-weight:400;color:#6B7280;">Mín (R$)</span></th>
-            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#EDE9FE;" title="Nº mínimo de parcelas PAGAS para portar (0 = aceita qualquer)">Pagas p/<br><span style="font-weight:400;color:var(--brand);">Portar</span></th>
-            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#EDE9FE;" title="Nº mínimo de parcelas PAGAS para o banco remunerar (0 = remunera sempre)">Pagas p/<br><span style="font-weight:400;color:var(--brand);">Remunerar</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:hsl(var(--brand-hsl)/0.14);" title="Nº mínimo de parcelas PAGAS para portar (0 = aceita qualquer)">Pagas p/<br><span style="font-weight:400;color:var(--brand);">Portar</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:hsl(var(--brand-hsl)/0.14);" title="Nº mínimo de parcelas PAGAS para o banco remunerar (0 = remunera sempre)">Pagas p/<br><span style="font-weight:400;color:var(--brand);">Remunerar</span></th>
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;" title="Une saldos negativos de vários contratos para cobrir margem">Une<br><span style="font-weight:400;color:#6B7280;">Neg.</span></th>
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#FEF3C7;" title="Seguro prestamista: % somado ao valor financiado (saldo + troco) antes de calcular a parcela. 0 = banco não cobra">Seguro<br><span style="font-weight:400;color:#B45309;">(%)</span></th>
             <th style="width:60px;border-bottom:2px solid #E5E7EB;"></th>
@@ -1025,8 +1026,8 @@ function toggleTheme() {
   } else {
     forceStyle.textContent = [
       'html, body, *, *::before, *::after { -webkit-color-scheme: light !important; color-scheme: light !important; }',
-      'body { background: #F8F8FC !important; color: #111827 !important; }',
-      '.box, .card { background: #FFFFFF !important; color: #111827 !important; border-color: #E8E8F0 !important; }',
+      'body { background: hsl(var(--brand-hsl)/0.06) !important; color: #111827 !important; }',
+      '.box, .card { background: #FFFFFF !important; color: #111827 !important; border-color: hsl(var(--brand-hsl)/0.12) !important; }',
       'input, select, textarea { background: #F9FAFB !important; color: #111827 !important; border-color: #E5E7EB !important; }',
       'th { background: #F3F4F6 !important; color: #6B7280 !important; }',
       'td { color: #111827 !important; }'
@@ -1046,15 +1047,15 @@ function toggleTheme() {
 // ── COMPREHENSIVE DARK MODE ENGINE ──────────────────────────────────
 const LIGHT_TO_DARK_BG = {
   '#ffffff': '#1A1A2E', '#fff': '#1A1A2E',
-  '#f8f8fc': '#0F0F1A', '#f8f7ff': '#1E1535', '#f9fafb': '#252540',
+  'hsl(var(--brand-hsl)/0.06)': '#0F0F1A', '#f8f7ff': '#1E1535', '#f9fafb': '#252540',
   '#f3f4f6': '#252540', '#f0f9ff': '#0A1929', '#f0fdf4': '#0A2E1F',
-  '#f0eef8': '#0F0F1A', '#ede9fe': '#2D1F5E', '#dbeafe': '#0A1E3D',
-  '#ddd6fe': '#2D1F5E', '#e5e7eb': '#2E2E4A', '#fff7ed': '#2E1A0A',
+  '#f0eef8': '#0F0F1A', 'hsl(var(--brand-hsl)/0.14)': '#2D1F5E', '#dbeafe': '#0A1E3D',
+  'hsl(var(--brand-hsl)/0.30)': '#2D1F5E', '#e5e7eb': '#2E2E4A', '#fff7ed': '#2E1A0A',
 };
 const LIGHT_TO_DARK_COLOR = {
-  '#121212': '#F1F1F8', '#111827': '#F1F1F8', '#1f2937': '#E5E7EB',
+  '#121212': 'hsl(var(--brand-hsl)/0.07)', '#111827': 'hsl(var(--brand-hsl)/0.07)', '#1f2937': '#E5E7EB',
   '#374151': '#D1D5DB', '#4b5563': '#9CA3AF', '#6b7280': '#9CA3AF',
-  '#6B7280': '#9CA3AF', 'var(--brand-dark)': '#C4B5FD',
+  '#6B7280': '#9CA3AF', 'var(--brand-dark)': 'hsl(var(--brand-hsl)/0.45)',
 };
 
 function normHex(c) {
@@ -1628,7 +1629,7 @@ function renderizarLogo() {
       `;
     } else {
       loginLogo.innerHTML = `
-        <div style="font-size:48px;font-weight:700;background:linear-gradient(135deg, var(--brand) 0%, #1E88E5 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">capital go</div>
+        <div style="font-size:48px;font-weight:700;background:linear-gradient(135deg, var(--brand) 0%, hsl(var(--brand-hsl)/0.72) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">capital go</div>
         <div style="font-size:14px;color:#6B7280">Soluções Financeiras</div>
       `;
     }
@@ -1644,7 +1645,7 @@ function renderizarLogo() {
       `;
     } else {
       headerLogo.innerHTML = `
-        <div style="font-size:36px;font-weight:700;background:linear-gradient(135deg, var(--brand) 0%, #1E88E5 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">capital go</div>
+        <div style="font-size:36px;font-weight:700;background:linear-gradient(135deg, var(--brand) 0%, hsl(var(--brand-hsl)/0.72) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">capital go</div>
         <div style="font-size:14px;color:#6B7280;border-left:2px solid #E5E7EB;padding-left:16px">Soluções Financeiras</div>
       `;
     }
@@ -4917,7 +4918,7 @@ function calcSimples() {
     // Modo junto: uma única linha com saldo e parcela consolidados
     const parcelaConsolidada = taxa > 0 ? calcParcela(totalSaldo * fatorSeguro, taxa, prazo) : 0;
     const economiaConsol = totalParcelaAtual - parcelaConsolidada;
-    tb.innerHTML = `<tr style="background:#F5F3FF;">
+    tb.innerHTML = `<tr style="background:hsl(var(--brand-hsl)/0.08);">
       <td style="font-weight:700;color:var(--brand);">${marcados.length} contrato(s) — parcela unificada</td>
       <td class="text-right" style="font-weight:700;">${fmtBRL(totalSaldo)}</td>
       <td>-</td>
@@ -4983,7 +4984,7 @@ function calcSimples() {
         <td>${fmtBRL(parcelaAtual)}</td>
         <td style="text-align:center;">
           <input type="number" value="${prazoInd}" min="1" max="360"
-            style="width:56px;text-align:center;border:1px solid #DDD6FE;border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;color:var(--brand);"
+            style="width:56px;text-align:center;border:1px solid hsl(var(--brand-hsl)/0.30);border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;color:var(--brand);"
             onchange="prazosSimpSeparado[${idx}]=parseInt(this.value)||prazo;calcSimples()">
         </td>
         <td style="text-align:center;">
@@ -5921,14 +5922,14 @@ function calcRefim() {
       if (!multiBanco) return b.linhas.map(renderLinha).join('');
       const subDiff = b.linhas.reduce((a, l) => a + (l.parcelaOriginal - l.parcelaTotal), 0);
       return `
-      <tr style="background:#EDE9FE;">
+      <tr style="background:hsl(var(--brand-hsl)/0.14);">
         <td colspan="10" style="padding:6px 8px;font-size:11px;font-weight:800;color:var(--brand-dark);letter-spacing:.3px;">
           ➜ ${b.banco}
           <span style="font-weight:500;color:var(--brand);"> · taxa ${fmtPct(b.taxa * 100)}% a.m.${b.seguroPerc > 0 ? ' · seguro ' + fmtPct(b.seguroPerc) + '%' : ''} · ${b.linhas.length} contrato(s)</span>
         </td>
       </tr>
       ${b.linhas.map(renderLinha).join('')}
-      <tr style="background:#FAFAFF;border-bottom:2px solid #DDD6FE;">
+      <tr style="background:#FAFAFF;border-bottom:2px solid hsl(var(--brand-hsl)/0.30);">
         <td style="padding:5px 8px;font-size:11px;font-weight:700;color:#6B7280;">Subtotal ${b.banco}</td>
         <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;">${fmtBRL(b.subSaldo)}</td>
         <td></td>
@@ -6218,10 +6219,10 @@ async function buscarCotacoesPorCpf(cpf) {
     const lista = (Array.isArray(todas) ? todas : []).filter(c => (c.tipoSimulador || 'portabilidade') === 'portabilidade');
     if (!lista.length) { panel.innerHTML = ''; return 0; }
     panel.innerHTML = `
-      <div style="margin-bottom:12px;padding:12px 16px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;">
+      <div style="margin-bottom:12px;padding:12px 16px;background:hsl(var(--brand-hsl)/0.08);border:1px solid hsl(var(--brand-hsl)/0.30);border-radius:8px;">
         <div style="font-size:12px;font-weight:700;color:var(--brand);margin-bottom:8px;">📂 Cotações salvas para este cliente</div>
         ${lista.map(c => `
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #EDE9FE;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid hsl(var(--brand-hsl)/0.14);flex-wrap:wrap;">
             <div style="flex:1;min-width:0;font-size:12px;">
               <span style="font-weight:600;">${new Date(c.criadoEm).toLocaleDateString('pt-BR')}</span>
               ${c.descricao ? `<span style="color:#6B7280;"> — ${c.descricao}</span>` : ''}
@@ -6348,9 +6349,9 @@ function renderTbRegras() {
             <button onclick="document.getElementById('exc-add-${i}').style.display='none'" style="padding:4px 8px;background:#E5E7EB;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Cancelar</button>
           </div>
           ${outrosBancos.length ? `
-          <div style="border-top:1px solid #DDD6FE;padding-top:8px;">
+          <div style="border-top:1px solid hsl(var(--brand-hsl)/0.30);padding-top:8px;">
             <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:6px;">📋 Replicar todas as exceções acima para outros bancos destino:</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:6px 8px;background:#fff;border:1px solid #DDD6FE;border-radius:6px;margin-bottom:6px;">${replicarCheckboxHtml}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:6px 8px;background:#fff;border:1px solid hsl(var(--brand-hsl)/0.30);border-radius:6px;margin-bottom:6px;">${replicarCheckboxHtml}</div>
             <button onclick="replicarExcecoes(${i})" style="padding:4px 10px;background:#059669;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">Replicar selecionados</button>
           </div>` : ''}
         </td>
@@ -6391,7 +6392,7 @@ function renderTbRegras() {
           onchange="regrasBancos[${i}].seguro=parseBR(this.value);salvarRegras();atualizarSimuladorRefim();">
       </td>
       <td style="padding:6px;white-space:nowrap;">
-        <button onclick="toggleExcForm(${i})" style="background:#EDE9FE;color:var(--brand);border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;" title="Gerenciar exceções por banco de origem">⚙</button>
+        <button onclick="toggleExcForm(${i})" style="background:hsl(var(--brand-hsl)/0.14);color:var(--brand);border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;" title="Gerenciar exceções por banco de origem">⚙</button>
         <button onclick="removerRegra(${i})" style="background:#FEE2E2;color:#DC2626;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;">✕</button>
       </td>
     </tr>
@@ -6761,8 +6762,8 @@ window.addEventListener('message', function(event) {
       } else {
         forceStyle.textContent = [
           'html,body,*,*::before,*::after{-webkit-color-scheme:light!important;color-scheme:light!important}',
-          'body{background:#F8F8FC!important;color:#111827!important}',
-          '.box,.card{background:#FFFFFF!important;color:#111827!important;border-color:#E8E8F0!important}',
+          'body{background:hsl(var(--brand-hsl)/0.06)!important;color:#111827!important}',
+          '.box,.card{background:#FFFFFF!important;color:#111827!important;border-color:hsl(var(--brand-hsl)/0.12)!important}',
           'input,select,textarea{background:#F9FAFB!important;color:#111827!important;border-color:#E5E7EB!important}',
           'th{background:#F3F4F6!important;color:#6B7280!important}',
           'td{color:#111827!important}'

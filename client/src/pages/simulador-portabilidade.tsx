@@ -627,7 +627,7 @@ export default function SimuladorPortabilidadePage() {
     .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.5);font-weight:600}
     .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
     .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,hsl(var(--primary)) 0%,#1E88E5 100%);flex:0 0 auto;min-width:280px;min-height:110px;box-shadow:6px 0 20px hsl(var(--primary)/0.18);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,hsl(var(--primary)) 0%,hsl(var(--primary)/0.72) 100%);flex:0 0 auto;min-width:280px;min-height:110px;box-shadow:6px 0 20px hsl(var(--primary)/0.18);-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto{position:absolute;bottom:0;left:0;height:110px;width:auto;object-fit:contain;object-position:bottom left;display:block;z-index:1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto-ini{position:absolute;bottom:14px;left:14px;width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;z-index:2;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-info{position:relative;z-index:2;margin-left:120px;text-shadow:0 1px 6px rgba(0,0,0,0.5)}
@@ -773,8 +773,8 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .ri .v.destaque { font-size: 20px; }
         .sim-wrap .btn-sim { width: 100%; margin-top: 14px; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: .04em; transition: opacity .15s, transform .1s, box-shadow .15s; }
         .sim-wrap .btn-sim:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 4px 12px hsl(var(--primary)/.12); }
-        .sim-wrap .btn-sim-left { background: linear-gradient(90deg, hsl(var(--primary)) 0%, #1E88E5 100%); color: #fff; }
-        .sim-wrap .btn-sim-right { background: linear-gradient(90deg, #1E88E5 0%, #0d47a1 100%); color: #fff; }
+        .sim-wrap .btn-sim-left { background: linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.72) 100%); color: #fff; }
+        .sim-wrap .btn-sim-right { background: linear-gradient(90deg, hsl(var(--accent)) 0%, hsl(var(--accent)/0.72) 100%); color: #fff; }
         .sim-wrap .sim-section { border-top: 1px solid hsl(var(--border)); padding: 24px 28px; background: hsl(var(--muted)); }
         .sim-wrap .section-title { font-size: 16px; font-weight: 700; color: hsl(var(--foreground)); margin-bottom: 16px; }
         .sim-wrap .prazos-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
@@ -805,12 +805,12 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .faixa-prazos button { background: none; border: 0; color: hsl(var(--primary)); text-decoration: underline; cursor: pointer; font-size: 12px; }
         .sim-wrap .pc-tag { position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 700; letter-spacing: .05em; padding: 2px 7px; border-radius: 20px; text-transform: uppercase; display: none; }
         .sim-wrap .pc.al .pc-tag { display: block; background: hsl(var(--primary)); color: #fff; }
-        .sim-wrap .pc.ar .pc-tag { display: block; background: #1E88E5; color: #fff; }
+        .sim-wrap .pc.ar .pc-tag { display: block; background: hsl(var(--accent)); color: #fff; }
         .sim-wrap .table-section { border-top: 1px solid hsl(var(--border)); padding: 24px 28px; background: hsl(var(--card)); }
         .sim-wrap .table-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
         .sim-wrap .table-title { font-size: 15px; font-weight: 700; color: hsl(var(--foreground)); }
         .sim-wrap .table-meta { font-size: 11px; color: hsl(var(--muted-foreground)); margin-top: 3px; }
-        .sim-wrap .btn-pdf { background: linear-gradient(90deg, hsl(var(--primary)) 0%, #1E88E5 100%); color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer; white-space: nowrap; transition: opacity .15s, box-shadow .15s; box-shadow: 0 4px 12px hsl(var(--primary)/.12); }
+        .sim-wrap .btn-pdf { background: linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.72) 100%); color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer; white-space: nowrap; transition: opacity .15s, box-shadow .15s; box-shadow: 0 4px 12px hsl(var(--primary)/.12); }
         .sim-wrap .btn-pdf:hover { opacity: .88; box-shadow: 0 6px 18px hsl(var(--primary)/.25); }
         .sim-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .sim-wrap thead th { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing: .07em; padding: 10px 12px; text-align: left; border-bottom: 2px solid hsl(var(--border)); }
@@ -823,7 +823,7 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .empty-sim { text-align: center; padding: 48px; color: hsl(var(--muted-foreground)); font-size: 13px; }
         .sim-wrap .mode-toggle { display: flex; gap: 0; margin-bottom: 16px; border-radius: 8px; overflow: hidden; border: 1.5px solid hsl(var(--border)); }
         .sim-wrap .mode-btn { flex: 1; padding: 8px 12px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .03em; border: none; cursor: pointer; transition: all .15s; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
-        .sim-wrap .mode-btn.active { background: linear-gradient(90deg, hsl(var(--primary)) 0%, #1E88E5 100%); color: #fff; }
+        .sim-wrap .mode-btn.active { background: linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.72) 100%); color: #fff; }
         .sim-wrap .mode-btn:first-child { border-right: 1px solid hsl(var(--border)); }
         .sim-wrap .pdf-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
         .sim-wrap .pdf-dialog { background: hsl(var(--card)); border-radius: 12px; padding: 28px; width: 420px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
@@ -1268,7 +1268,7 @@ export default function SimuladorPortabilidadePage() {
                     }}
                     style={{
                       height: 32, padding: "0 14px", borderRadius: 8, border: "none",
-                      background: "linear-gradient(135deg, hsl(var(--primary)) 0%, #EC4899 100%)",
+                      background: "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.72) 100%)",
                       color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer",
                       display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
                       boxShadow: "0 2px 10px rgba(124,58,237,.3)", fontFamily: "inherit",
@@ -1430,7 +1430,7 @@ export default function SimuladorPortabilidadePage() {
                     {pdfIncluirFoto
                       ? (fotoAtiva
                           ? <img src={fotoAtiva} style={{ height: 56, width: "auto", maxWidth: 68, objectFit: "contain", display: "block", borderRadius: 4 }} alt="Foto" />
-                          : <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,hsl(var(--primary)),#1E88E5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 18, border: "2.5px solid hsl(var(--primary))" }}>
+                          : <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,hsl(var(--primary)),hsl(var(--primary)/0.72))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 18, border: "2.5px solid hsl(var(--primary))" }}>
                               {(pdfConsultorNome || user?.name || "?").split(" ").filter(Boolean).map((n: string) => n[0].toUpperCase()).slice(0, 2).join("")}
                             </div>)
                       : <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#f1f5f9", border: "2px dashed #cbd5e1", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🚫</div>
@@ -1571,7 +1571,7 @@ export default function SimuladorPortabilidadePage() {
                 <button
                   type="button"
                   onClick={confirmCrop}
-                  style={{ flex: 1, padding: "9px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,hsl(var(--primary)),#1E88E5)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                  style={{ flex: 1, padding: "9px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,hsl(var(--primary)),hsl(var(--primary)/0.72))", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                 >Usar esta foto</button>
               </div>
             </div>
