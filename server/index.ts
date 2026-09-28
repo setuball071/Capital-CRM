@@ -66,35 +66,49 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .filter(Boolean);
 
 app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Em desenvolvimento: permite tudo
-      if (!isProduction) return callback(null, true);
+  cors((req: any, callback: (err: Error | null, options?: any) => void) => {
+    const origin = req.headers.origin as string | undefined;
+    const base = {
+      credentials: true, // necessário para cookies de sessão
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    };
 
-      // Sem origin (ex: chamadas server-to-server, curl): só bloqueia em prod se não vier de origens conhecidas
-      if (!origin) return callback(null, false);
+    // Em desenvolvimento: permite tudo
+    if (!isProduction) return callback(null, { ...base, origin: true });
 
-      // Sempre permite o próprio domínio Replit/Railway e dominios configurados.
-      // OBS: os assets buildados são servidos com <script crossorigin>, o que faz
-      // o navegador mandar Origin (mesmo same-origin) e EXIGIR Access-Control-Allow-Origin.
-      // Sem liberar o domínio do Railway aqui, o CORS bloqueava o JS → tela branca.
-      const replitPattern = /\.replit\.app$/;
-      const railwayPattern = /\.up\.railway\.app$/;
-      if (
-        replitPattern.test(origin) ||
-        railwayPattern.test(origin) ||
-        allowedOrigins.some((allowed) => origin.includes(allowed))
-      ) {
-        return callback(null, true);
-      }
+    // Sem origin (ex: chamadas server-to-server, curl): só bloqueia em prod se não vier de origens conhecidas
+    if (!origin) return callback(null, { ...base, origin: false });
 
-      // Bloqueia outras origens em produção
-      callback(new Error("Origem não permitida pelo CORS"));
-    },
-    credentials: true, // necessário para cookies de sessão
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  })
+    // Sempre permite o próprio domínio Replit/Railway e dominios configurados.
+    // OBS: os assets buildados são servidos com <script crossorigin>, o que faz
+    // o navegador mandar Origin (mesmo same-origin) e EXIGIR Access-Control-Allow-Origin.
+    // Sem liberar o domínio do Railway aqui, o CORS bloqueava o JS → tela branca.
+    //
+    // Como cada cliente tem o SEU domínio (app.consigcore.com.br, crm.empresa...),
+    // lista fixa nunca daria conta: se o Origin é o mesmo host da requisição,
+    // é same-origin de fato e não há nada de cross-origin para barrar.
+    let mesmoHost = false;
+    try {
+      mesmoHost = new URL(origin).host === req.headers.host;
+    } catch {
+      // Origin malformado: cai nas regras abaixo.
+    }
+
+    const replitPattern = /\.replit\.app$/;
+    const railwayPattern = /\.up\.railway\.app$/;
+    if (
+      mesmoHost ||
+      replitPattern.test(origin) ||
+      railwayPattern.test(origin) ||
+      allowedOrigins.some((allowed) => origin.includes(allowed))
+    ) {
+      return callback(null, { ...base, origin: true });
+    }
+
+    // Bloqueia outras origens em produção
+    callback(new Error("Origem não permitida pelo CORS"));
+  }),
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
