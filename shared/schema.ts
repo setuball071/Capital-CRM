@@ -2780,6 +2780,26 @@ export type InsertCommercialTeamMember = z.infer<
 >;
 
 // Vendedor Contratos table - contratos fechados pelos vendedores (produção)
+// Parceiros que o vendedor individual salvou para reaproveitar nos próximos
+// registros. Lista pessoal: cada vendedor tem a sua, dentro do próprio ambiente.
+export const minhaProducaoParceiros = pgTable(
+  "minha_producao_parceiros",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    vendedorId: integer("vendedor_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    nome: varchar("nome", { length: 150 }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    porVendedor: unique("uq_minha_producao_parceiro").on(table.tenantId, table.vendedorId, table.nome),
+  }),
+);
+
 export const vendedorContratos = pgTable("vendedor_contratos", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id")
@@ -2804,6 +2824,7 @@ export const vendedorContratos = pgTable("vendedor_contratos", {
   // sistema. Não tem relação com as comissões do financeiro oficial.
   comissaoPrevista: decimal("comissao_prevista", { precision: 10, scale: 2 }),
   comissaoRecebida: decimal("comissao_recebida", { precision: 10, scale: 2 }),
+  parceiroNome: varchar("parceiro_nome", { length: 150 }),
   dataPrevistaPagamento: date("data_prevista_pagamento"),
   dataRecebimento: date("data_recebimento"),
   dataContrato: timestamp("data_contrato").notNull().defaultNow(),

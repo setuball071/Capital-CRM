@@ -16,7 +16,7 @@
 import type { Express, RequestHandler } from "express";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { db } from "./storage";
-import { vendedorContratos } from "@shared/schema";
+import { vendedorContratos, minhaProducaoParceiros } from "@shared/schema";
 
 const MODULO = "modulo_minha_producao";
 
@@ -56,15 +56,13 @@ function corpoValido(body: any): { erro?: string; dados?: any } {
       banco: String(body?.banco || "").trim() || null,
       convenio: String(body?.convenio || "").trim() || null,
       tipoOperacao: String(body?.tipoOperacao || "").trim() || null,
-      prazo: body?.prazo ? parseInt(String(body.prazo), 10) || null : null,
+      parceiroNome: String(body?.parceiroNome || "").trim() || null,
       valorContrato: String(valorContrato),
-      valorParcela: body?.valorParcela ? String(num(body.valorParcela)) : null,
-      valorTroco: body?.valorTroco ? String(num(body.valorTroco)) : null,
-      // Comissão é DIGITADA pelo vendedor (decisão do Fábio): o sistema não calcula
+      // Comissão é DIGITADA pelo vendedor: o sistema não calcula.
+      // O RECEBIDO não vem daqui — entra pela ação "marcar como recebido",
+      // que pergunta a data e o valor. Assim ninguém marca recebimento sem querer.
       comissaoPrevista: body?.comissaoPrevista ? String(num(body.comissaoPrevista)) : null,
-      comissaoRecebida: body?.comissaoRecebida ? String(num(body.comissaoRecebida)) : null,
       dataPrevistaPagamento: String(body?.dataPrevistaPagamento || "").trim() || null,
-      dataRecebimento: String(body?.dataRecebimento || "").trim() || null,
       dataContrato,
       status,
       observacoes: String(body?.observacoes || "").trim() || null,
@@ -175,6 +173,63 @@ export function registerMinhaProducaoRoutes(
     } catch (e) {
       console.error("[minha-producao] editar:", e);
       return res.status(500).json({ message: "Erro ao salvar o registro" });
+    }
+  });
+
+  // Marcar como recebido: a tela pergunta a data e o valor, já sugerindo o previsto
+  app.post("/api/minha-producao/:id/recebimento", requireAuth, requireModuleAccess(MODULO, "edit"), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "Registro inválido" });
+      const valor = num(req.body?.valor);
+      if (valor <= 0) return res.status(400).json({ message: "Informe o valor recebido" });
+      const data = String(req.body?.data || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return res.status(400).json({ message: "Informe a data do recebimento" });
+
+      const [salvo] = await db
+        .update(vendedorContratos)
+        .set({ comissaoRecebida: String(valor), dataRecebimento: data, updatedAt: new Date() })
+        .where(and(eq(vendedorContratos.id, id), doUsuario(req)))
+        .returning();
+      if (!salvo) return res.status(404).json({ message: "Registro não encontrado" });
+      return res.json(salvo);
+    } catch (e) {
+      console.error("[minha-producao] recebimento:", e);
+      return res.status(500).json({ message: "Erro ao registrar o recebimento" });
+    }
+  });
+
+  // Parceiros salvos pelo vendedor para reaproveitar
+  app.get("/api/minha-producao/parceiros", requireAuth, requireModuleAccess(MODULO), async (req: any, res) => {
+    try {
+      const lista = await db
+        .select({ id: minhaProducaoParceiros.id, nome: minhaProducaoParceiros.nome })
+        .from(minhaProducaoParceiros)
+        .where(and(
+          eq(minhaProducaoParceiros.tenantId, req.tenantId!),
+          eq(minhaProducaoParceiros.vendedorId, req.user!.id),
+        ))
+        .orderBy(minhaProducaoParceiros.nome);
+      return res.json(lista);
+    } catch (e) {
+      console.error("[minha-producao] parceiros:", e);
+      return res.status(500).json({ message: "Erro ao carregar os parceiros" });
+    }
+  });
+
+  app.post("/api/minha-producao/parceiros", requireAuth, requireModuleAccess(MODULO, "edit"), async (req: any, res) => {
+    try {
+      const nome = String(req.body?.nome || "").trim();
+      if (!nome) return res.status(400).json({ message: "Informe o nome do parceiro" });
+      const [novo] = await db
+        .insert(minhaProducaoParceiros)
+        .values({ tenantId: req.tenantId!, vendedorId: req.user!.id, nome })
+        .onConflictDoNothing()
+        .returning();
+      return res.status(201).json(novo || { nome });
+    } catch (e) {
+      console.error("[minha-producao] salvar parceiro:", e);
+      return res.status(500).json({ message: "Erro ao salvar o parceiro" });
     }
   });
 

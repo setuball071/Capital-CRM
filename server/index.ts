@@ -320,7 +320,18 @@ app.use((req, res, next) => {
               ADD COLUMN IF NOT EXISTS comissao_prevista        NUMERIC(10,2),
               ADD COLUMN IF NOT EXISTS comissao_recebida        NUMERIC(10,2),
               ADD COLUMN IF NOT EXISTS data_prevista_pagamento  DATE,
-              ADD COLUMN IF NOT EXISTS data_recebimento         DATE
+              ADD COLUMN IF NOT EXISTS data_recebimento         DATE,
+              ADD COLUMN IF NOT EXISTS parceiro_nome            VARCHAR(150)
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS minha_producao_parceiros (
+              id          SERIAL PRIMARY KEY,
+              tenant_id   INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              vendedor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              nome        VARCHAR(150) NOT NULL,
+              created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+              CONSTRAINT uq_minha_producao_parceiro UNIQUE (tenant_id, vendedor_id, nome)
+            )
           `);
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS lemit_jobs (
