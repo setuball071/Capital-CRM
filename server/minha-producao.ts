@@ -199,6 +199,25 @@ export function registerMinhaProducaoRoutes(
     }
   });
 
+  // Estorno: único caminho que sobra depois do recebimento confirmado. O registro
+  // sai dos totais mas continua no histórico, com os valores como foram recebidos.
+  app.post("/api/minha-producao/:id/estorno", requireAuth, requireModuleAccess(MODULO, "edit"), async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ message: "Registro inválido" });
+      const [salvo] = await db
+        .update(vendedorContratos)
+        .set({ status: "estornada", updatedAt: new Date() })
+        .where(and(eq(vendedorContratos.id, id), doUsuario(req)))
+        .returning();
+      if (!salvo) return res.status(404).json({ message: "Registro não encontrado" });
+      return res.json(salvo);
+    } catch (e) {
+      console.error("[minha-producao] estorno:", e);
+      return res.status(500).json({ message: "Erro ao estornar o registro" });
+    }
+  });
+
   // Parceiros salvos pelo vendedor para reaproveitar
   app.get("/api/minha-producao/parceiros", requireAuth, requireModuleAccess(MODULO), async (req: any, res) => {
     try {

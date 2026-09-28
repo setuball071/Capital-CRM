@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Pencil, Trash2, TrendingUp, Wallet, Clock, XCircle, CheckCircle2 } from "lucide-react";
+import { Plus, Pencil, Trash2, TrendingUp, Wallet, Clock, XCircle, CheckCircle2, Eye, Undo2 } from "lucide-react";
 
 interface Registro {
   id: number;
@@ -80,6 +80,13 @@ const fmtDinheiro = (v: number) => (v > 0 ? v.toFixed(2) : "");
 /** Percentual sem zeros à toa: 7.1429 em vez de 7.142857 */
 const fmtPct = (v: number) => (v > 0 ? String(parseFloat(v.toFixed(4))) : "");
 
+/** Dias corridos desde uma data YYYY-MM-DD. Meio-dia evita erro de fuso. */
+const diasDesde = (iso: string): number => {
+  const d = new Date(iso + "T12:00:00");
+  const hoje = new Date(hojeISO() + "T12:00:00");
+  return Math.max(0, Math.round((hoje.getTime() - d.getTime()) / 86400000));
+};
+
 export default function MinhaProducaoPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -89,6 +96,7 @@ export default function MinhaProducaoPage() {
   const [form, setForm] = useState({ ...VAZIO });
   const [recebendo, setRecebendo] = useState<Registro | null>(null);
   const [receb, setReceb] = useState({ valor: "", data: hojeISO() });
+  const [vendo, setVendo] = useState<Registro | null>(null);
 
   const { data, isLoading } = useQuery<{ registros: Registro[]; resumo: Resumo }>({
     queryKey: ["/api/minha-producao", mes],
@@ -148,6 +156,12 @@ export default function MinhaProducaoPage() {
     },
     onSuccess: () => { invalidar(); setRecebendo(null); toast({ title: "Recebimento registrado" }); },
     onError: (e: Error) => toast({ title: "Não foi possível registrar", description: e.message, variant: "destructive" }),
+  });
+
+  const estornar = useMutation({
+    mutationFn: async (id: number) => apiRequest("POST", `/api/minha-producao/${id}/estorno`, {}),
+    onSuccess: () => { invalidar(); setVendo(null); toast({ title: "Registro estornado" }); },
+    onError: (e: Error) => toast({ title: "Não foi possível estornar", description: e.message, variant: "destructive" }),
   });
 
   const excluir = useMutation({
@@ -304,27 +318,36 @@ export default function MinhaProducaoPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          {ativo && falta > 0 && (
-                            <Button
-                              variant="ghost" size="icon" title="Marcar comissão como recebida"
-                              onClick={() => abrirRecebimento(reg)}
-                              data-testid={`button-receber-${reg.id}`}
-                            >
-                              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        {/* Recebimento confirmado fecha o registro: sobra só visualizar.
+                            Mexer em valor de comissão já paga bagunçaria o histórico.
+                            O que ainda pode acontecer com ele é estorno, que fica lá dentro. */}
+                        {reg.comissaoRecebida ? (
+                          <Button variant="ghost" size="icon" title="Ver registro" onClick={() => setVendo(reg)} data-testid={`button-ver-${reg.id}`}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            {ativo && falta > 0 && (
+                              <Button
+                                variant="ghost" size="icon" title="Marcar comissão como recebida"
+                                onClick={() => abrirRecebimento(reg)}
+                                data-testid={`button-receber-${reg.id}`}
+                              >
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" onClick={() => abrirEdicao(reg)} data-testid={`button-editar-${reg.id}`}>
+                              <Pencil className="h-4 w-4" />
                             </Button>
-                          )}
-                          <Button variant="ghost" size="icon" onClick={() => abrirEdicao(reg)} data-testid={`button-editar-${reg.id}`}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost" size="icon"
-                            onClick={() => { if (confirm(`Excluir o registro de ${reg.clienteNome}?`)) excluir.mutate(reg.id); }}
-                            data-testid={`button-excluir-${reg.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                            <Button
+                              variant="ghost" size="icon"
+                              onClick={() => { if (confirm(`Excluir o registro de ${reg.clienteNome}?`)) excluir.mutate(reg.id); }}
+                              data-testid={`button-excluir-${reg.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -448,6 +471,79 @@ export default function MinhaProducaoPage() {
             <Button onClick={() => salvar.mutate()} disabled={salvar.isPending} data-testid="button-salvar-registro">
               {salvar.isPending ? "Salvando…" : "Salvar"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Visualização do registro já recebido: sem edição, com o contador e o estorno */}
+      <Dialog open={!!vendo} onOpenChange={(o) => { if (!o) setVendo(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{vendo?.clienteNome}</DialogTitle>
+            <DialogDescription>
+              Comissão já recebida. O registro não é mais editável, mas pode ser estornado.
+            </DialogDescription>
+          </DialogHeader>
+
+          {vendo && (
+            <div className="space-y-3 text-sm">
+              {vendo.dataRecebimento && (
+                <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+                  <p className="text-emerald-800 dark:text-emerald-300 font-semibold">
+                    {diasDesde(vendo.dataRecebimento) === 0
+                      ? "Recebida hoje"
+                      : `Recebida há ${diasDesde(vendo.dataRecebimento)} dia(s)`}
+                  </p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                    Em {new Date(vendo.dataRecebimento + "T12:00:00").toLocaleDateString("pt-BR")}, no valor de {BRL(Number(vendo.comissaoRecebida || 0))}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ["Data da venda", new Date(vendo.dataContrato).toLocaleDateString("pt-BR")],
+                  ["Banco", vendo.banco || "—"],
+                  ["Convênio", vendo.convenio || "—"],
+                  ["Operação", vendo.tipoOperacao || "—"],
+                  ["Parceiro", vendo.parceiroNome || "—"],
+                  ["CPF", vendo.clienteCpf || "—"],
+                  ["Valor do contrato", BRL(Number(vendo.valorContrato || 0))],
+                  ["Comissão prevista", BRL(Number(vendo.comissaoPrevista || 0))],
+                  ["Status", STATUS_LABEL[vendo.status] || vendo.status],
+                ].map(([rotulo, valor]) => (
+                  <div key={rotulo as string}>
+                    <p className="text-xs text-muted-foreground">{rotulo}</p>
+                    <p className="font-medium">{valor}</p>
+                  </div>
+                ))}
+              </div>
+
+              {vendo.observacoes && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Observações</p>
+                  <p>{vendo.observacoes}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setVendo(null)}>Fechar</Button>
+            {vendo?.status === "vendida" && (
+              <Button
+                variant="destructive"
+                disabled={estornar.isPending}
+                onClick={() => {
+                  if (confirm(`Marcar a venda de ${vendo.clienteNome} como estornada? Ela sai dos totais do mês.`)) {
+                    estornar.mutate(vendo.id);
+                  }
+                }}
+                data-testid="button-estornar"
+              >
+                <Undo2 className="h-4 w-4 mr-1.5" /> Marcar como estornado
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
