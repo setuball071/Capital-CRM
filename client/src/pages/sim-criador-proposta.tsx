@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import jsPDF from "jspdf";
 import { useProposta } from "@/contexts/proposta-context";
+import { corMarcaRgb } from "@/lib/marca";
 import { useTenant } from "@/components/tenant-theme-provider";
 import { useAuth } from "@/lib/auth";
 
@@ -15,8 +16,17 @@ function maskDoc(v: string): string {
   return d.slice(0, -3).replace(/./g, "*") + d.slice(-3).replace(/./, "*");
 }
 
-function gerarNum(): string {
-  return "CG-" + Date.now().toString().slice(-6);
+// Prefixo do numero da proposta: iniciais do ambiente (Consig Core -> CC).
+// Antes era "CG-" fixo, da Capital Go, e saia assim no PDF de todo cliente.
+function gerarNum(nomeAmbiente?: string): string {
+  const iniciais = (nomeAmbiente || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 3) || "PR";
+  return iniciais + "-" + Date.now().toString().slice(-6);
 }
 
 function mascaraCpf(v: string): string {
@@ -194,7 +204,7 @@ export default function SimCriadorProposta() {
     const valid = new Date(hoje);
     valid.setDate(valid.getDate() + 1);
     setProposta({
-      num: gerarNum(),
+      num: gerarNum(tenant?.name),
       data: hoje.toLocaleDateString("pt-BR"),
       validade: valid.toLocaleDateString("pt-BR"),
       nome: nome.trim(),
@@ -225,12 +235,13 @@ export default function SimCriadorProposta() {
     const cw = W - ml - mr;
     let y = 0;
 
-    // barra de cor no topo — única faixa roxa (cor primária Capital Go)
-    doc.setFillColor(108, 43, 217); doc.rect(0, 0, W, 4, "F");
+    // barra de cor no topo — cor primária do ambiente
+    const [mr_, mg_, mb_] = corMarcaRgb();
+    doc.setFillColor(mr_, mg_, mb_); doc.rect(0, 0, W, 4, "F");
     y = 14;
 
     // Logo ou nome da empresa — usa dimensões pré-carregadas (logoDims) para aspect ratio correto
-    const tenantName = tenant?.name ?? "Capital Go";
+    const tenantName = tenant?.name || "Sistema";
     if (logoBase64 && logoDims && logoDims.w > 0 && logoDims.h > 0) {
       const ratio = logoDims.w / logoDims.h;
       const logoH = 10; // altura fixa 10mm
@@ -238,7 +249,7 @@ export default function SimCriadorProposta() {
       doc.addImage(logoBase64, "PNG", ml, y - 8, logoW, logoH);
     } else {
       doc.setFont("helvetica", "bold"); doc.setFontSize(16);
-      doc.setTextColor(108, 43, 217); doc.text(tenantName, ml, y);
+      doc.setTextColor(mr_, mg_, mb_); doc.text(tenantName, ml, y);
     }
     doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(140, 140, 140);
     doc.text("Crédito Consignado", ml, y + 5);
@@ -278,7 +289,7 @@ export default function SimCriadorProposta() {
         const s = styles?.[i] ?? "normal";
         doc.setFont("helvetica", s === "bold" || s === "purple" ? "bold" : "normal");
         doc.setFontSize(8);
-        if (s === "purple") doc.setTextColor(108, 43, 217);
+        if (s === "purple") doc.setTextColor(mr_, mg_, mb_);
         else if (s === "blue") doc.setTextColor(30, 136, 229);
         else if (s === "muted") doc.setTextColor(120, 120, 120);
         else doc.setTextColor(40, 40, 40);
@@ -293,7 +304,7 @@ export default function SimCriadorProposta() {
       doc.setFillColor(242, 242, 242); doc.rect(ml, yy, cw, 7, "F");
       doc.setFont("helvetica", "bold"); doc.setFontSize(8);
       doc.setTextColor(100, 100, 100); doc.text(label, ml + 3, yy + 5);
-      if (valStyle === "purple") doc.setTextColor(108, 43, 217);
+      if (valStyle === "purple") doc.setTextColor(mr_, mg_, mb_);
       else doc.setTextColor(30, 30, 30);
       doc.text(val, W - mr - 3, yy + 5, { align: "right" });
       return yy + 9;
@@ -381,7 +392,7 @@ export default function SimCriadorProposta() {
       const lH2 = 6; const lW2 = Math.min(lH2 * ratio2, 30);
       doc.addImage(logoBase64, "PNG", W - mr - lW2, y, lW2, lH2);
     } else {
-      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(108, 43, 217);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(mr_, mg_, mb_);
       doc.text(tenantName, W - mr, y + 4, { align: "right" });
     }
     doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(140, 140, 140);
@@ -664,6 +675,7 @@ function PropostaVisual({
   onExportPDF: () => void;
   onFechar: () => void;
 }) {
+  const { tenant } = useTenant();
   const totalAt = proposta.contratos.reduce((s, c) => s + (parseFloat(c.parcela) || 0), 0);
   const totalNv = proposta.novas.reduce((s, n) => s + (parseFloat(n.parcela) || 0), 0);
   const totalTroco = proposta.novas.reduce((s, n) => s + (parseFloat(n.troco) || 0), 0);
@@ -675,13 +687,13 @@ function PropostaVisual({
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden shadow-md mt-2">
       {/* barra de gradiente */}
-      <div className="h-1 bg-gradient-to-r from-primary via-blue-500 to-pink-500" />
+      <div className="h-1 bg-gradient-to-r from-primary to-[hsl(var(--accent))]" />
 
       {/* cabeçalho */}
       <div className="flex justify-between items-start px-6 py-4 border-b border-border">
         <div>
-          <div className="text-lg font-bold bg-gradient-to-r from-primary via-blue-500 to-pink-500 bg-clip-text text-transparent">
-            Capital Go
+          <div className="text-lg font-bold text-primary">
+            {tenant?.name || "Sistema"}
           </div>
           <div className="text-[10px] text-muted-foreground mt-0.5">Crédito Consignado</div>
         </div>
@@ -739,8 +751,8 @@ function PropostaVisual({
 
         {/* Nova proposta */}
         <div className="rounded-lg border border-border overflow-hidden">
-          <div className="text-[9px] font-semibold uppercase tracking-widest text-primary dark:text-primary px-4 py-2 bg-gradient-to-r from-primary to-blue-50 dark:from-primary/20 dark:to-blue-900/20 border-b border-border">
-            Nova proposta · Capital Go
+          <div className="text-[9px] font-semibold uppercase tracking-widest text-primary px-4 py-2 bg-primary/10 border-b border-border">
+            Nova proposta · {tenant?.name || "Sistema"}
           </div>
           <table className="w-full text-[13px]">
             <thead>
@@ -824,7 +836,7 @@ function PropostaVisual({
           </div>
         </div>
         <div className="ml-auto text-right">
-          <div className="text-[11px] font-semibold bg-gradient-to-r from-primary to-blue-500 bg-clip-text text-transparent">Capital Go</div>
+          <div className="text-[11px] font-semibold text-primary">{tenant?.name || "Sistema"}</div>
           <div className="text-[10px] text-muted-foreground">{proposta.data}</div>
         </div>
       </div>

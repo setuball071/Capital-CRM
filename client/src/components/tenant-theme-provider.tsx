@@ -173,7 +173,10 @@ function aplicarSidebarDaMarca(root: HTMLElement, primaryHsl: string | null, isD
     def("--sidebar-accent-foreground", `${h} ${s} 79%`);
   } else {
     def("--sidebar-accent", `${h} ${s} 96%`);
-    def("--sidebar-accent-foreground", `${h} ${s} 45%`);
+    // Texto do item selecionado: 45% dava contraste fraco sobre o fundo de 96%.
+    // Usa o tom mais escuro entre a cor do ambiente e 32%.
+    const lPrim = parseFloat(partes[2]) || 50;
+    def("--sidebar-accent-foreground", `${h} ${s} ${Math.min(lPrim, 32)}%`);
     def("--sidebar-primary-border", `${h} ${s} 43%`);
   }
 }
@@ -199,6 +202,17 @@ function applyThemeVariables(theme: TenantTheme, isDark: boolean) {
   });
 
   aplicarSidebarDaMarca(root, corDoTema(theme, BRAND_VARS["--primary"]), isDark);
+
+  // --accent-strong: a cor secundaria escurecida ate dar contraste com texto
+  // branco. A secundaria costuma ser clara demais para fundo de botao.
+  const acc = corDoTema(theme, THEME_SENSITIVE_VARS["--accent"]);
+  if (acc) {
+    const pa = acc.split(/\s+/);
+    if (pa.length >= 3) {
+      const l = parseFloat(pa[2]) || 50;
+      root.style.setProperty("--accent-strong", `${pa[0]} ${pa[1]} ${Math.min(l, 34)}%`);
+    }
+  }
 
   if (isDark) {
     // Dark mode: remove theme-sensitive overrides so .dark CSS class takes over
@@ -343,6 +357,15 @@ export function TenantThemeProvider({ children }: { children: React.ReactNode })
     setAppliedTheme(true);
   }, [tenant, isLoading, theme]);
   
+  // Quem gera PDF precisa do NOME e da COR em JavaScript, nao em CSS — inclusive
+  // os simuladores em iframe, que leem isto do window.parent (mesma origem).
+  useEffect(() => {
+    (window as any).__MARCA__ = {
+      nome: tenant?.name || "",
+      primaria: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
+    };
+  }, [tenant?.id, tenant?.name, appliedTheme, theme]);
+
   useEffect(() => {
     if (faviconUrl) {
       updateFavicon(faviconUrl);

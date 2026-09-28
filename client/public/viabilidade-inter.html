@@ -38,6 +38,43 @@
     }, 200);
   }
 })();
+
+/* Nome e cor da marca do ambiente, para os PDFs gerados aqui dentro.
+   O nome vem do window.parent.__MARCA__ (mesma origem); a cor sai do
+   --brand-hsl que o script acima ja resolveu. Fora do sistema, cai no padrao. */
+window.marcaNome = function () {
+  try {
+    var m = window.parent && window.parent !== window && window.parent.__MARCA__;
+    if (m && m.nome) return m.nome;
+  } catch (e) { /* origem diferente */ }
+  return 'Sistema';
+};
+window.marcaRgb = function () {
+  try {
+    var hsl = getComputedStyle(document.documentElement)
+      .getPropertyValue('--brand-hsl').trim().split(/\s+/);
+    var h = parseFloat(hsl[0]), s = parseFloat(hsl[1]) / 100, l = parseFloat(hsl[2]) / 100;
+    if (isNaN(h) || isNaN(s) || isNaN(l)) return [108, 43, 217];
+    var c = (1 - Math.abs(2 * l - 1)) * s;
+    var x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    var m2 = l - c / 2, r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; }
+    else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; }
+    else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+    return [Math.round((r + m2) * 255), Math.round((g + m2) * 255), Math.round((b + m2) * 255)];
+  } catch (e) { return [108, 43, 217]; }
+};
+/* Troca os textos fixos "Capital Go" da tela pelo nome do ambiente. */
+document.addEventListener('DOMContentLoaded', function () {
+  var nome = window.marcaNome();
+  if (!nome || nome === 'Sistema') return;
+  document.querySelectorAll('[data-marca]').forEach(function (el) {
+    el.textContent = el.getAttribute('data-marca').replace('{nome}', nome);
+  });
+  if (document.title.indexOf('Capital Go') === 0) {
+    document.title = document.title.replace('Capital Go', nome);
+  }
+});
 </script>
 
 <meta charset="UTF-8">

@@ -774,7 +774,7 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .btn-sim { width: 100%; margin-top: 14px; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: .04em; transition: opacity .15s, transform .1s, box-shadow .15s; }
         .sim-wrap .btn-sim:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 4px 12px hsl(var(--primary)/.12); }
         .sim-wrap .btn-sim-left { background: linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.72) 100%); color: #fff; }
-        .sim-wrap .btn-sim-right { background: linear-gradient(90deg, hsl(var(--accent)) 0%, hsl(var(--accent)/0.72) 100%); color: #fff; }
+        .sim-wrap .btn-sim-right { background: linear-gradient(90deg, hsl(var(--accent-strong, var(--accent))) 0%, hsl(var(--accent)) 100%); color: #fff; }
         .sim-wrap .sim-section { border-top: 1px solid hsl(var(--border)); padding: 24px 28px; background: hsl(var(--muted)); }
         .sim-wrap .section-title { font-size: 16px; font-weight: 700; color: hsl(var(--foreground)); margin-bottom: 16px; }
         .sim-wrap .prazos-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
@@ -805,7 +805,7 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .faixa-prazos button { background: none; border: 0; color: hsl(var(--primary)); text-decoration: underline; cursor: pointer; font-size: 12px; }
         .sim-wrap .pc-tag { position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 700; letter-spacing: .05em; padding: 2px 7px; border-radius: 20px; text-transform: uppercase; display: none; }
         .sim-wrap .pc.al .pc-tag { display: block; background: hsl(var(--primary)); color: #fff; }
-        .sim-wrap .pc.ar .pc-tag { display: block; background: hsl(var(--accent)); color: #fff; }
+        .sim-wrap .pc.ar .pc-tag { display: block; background: hsl(var(--accent-strong, var(--accent))); color: #fff; }
         .sim-wrap .table-section { border-top: 1px solid hsl(var(--border)); padding: 24px 28px; background: hsl(var(--card)); }
         .sim-wrap .table-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
         .sim-wrap .table-title { font-size: 15px; font-weight: 700; color: hsl(var(--foreground)); }

@@ -38,6 +38,43 @@
     }, 200);
   }
 })();
+
+/* Nome e cor da marca do ambiente, para os PDFs gerados aqui dentro.
+   O nome vem do window.parent.__MARCA__ (mesma origem); a cor sai do
+   --brand-hsl que o script acima ja resolveu. Fora do sistema, cai no padrao. */
+window.marcaNome = function () {
+  try {
+    var m = window.parent && window.parent !== window && window.parent.__MARCA__;
+    if (m && m.nome) return m.nome;
+  } catch (e) { /* origem diferente */ }
+  return 'Sistema';
+};
+window.marcaRgb = function () {
+  try {
+    var hsl = getComputedStyle(document.documentElement)
+      .getPropertyValue('--brand-hsl').trim().split(/\s+/);
+    var h = parseFloat(hsl[0]), s = parseFloat(hsl[1]) / 100, l = parseFloat(hsl[2]) / 100;
+    if (isNaN(h) || isNaN(s) || isNaN(l)) return [108, 43, 217];
+    var c = (1 - Math.abs(2 * l - 1)) * s;
+    var x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    var m2 = l - c / 2, r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; }
+    else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; }
+    else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+    return [Math.round((r + m2) * 255), Math.round((g + m2) * 255), Math.round((b + m2) * 255)];
+  } catch (e) { return [108, 43, 217]; }
+};
+/* Troca os textos fixos "Capital Go" da tela pelo nome do ambiente. */
+document.addEventListener('DOMContentLoaded', function () {
+  var nome = window.marcaNome();
+  if (!nome || nome === 'Sistema') return;
+  document.querySelectorAll('[data-marca]').forEach(function (el) {
+    el.textContent = el.getAttribute('data-marca').replace('{nome}', nome);
+  });
+  if (document.title.indexOf('Capital Go') === 0) {
+    document.title = document.title.replace('Capital Go', nome);
+  }
+});
 </script>
 
 <meta name="color-scheme" content="light only">
@@ -124,7 +161,7 @@ td { color: #111827 !important; }
     <div class="dot" style="background:var(--p)"></div>
     <div class="dot" style="background:var(--b)"></div>
     <div class="dot" style="background:var(--k)"></div>
-    <span class="topbar-label">Capital Go — Criador de Proposta</span>
+    <span class="topbar-label" data-marca="{nome} — Criador de Proposta">Capital Go — Criador de Proposta</span>
   </div>
 
   <!-- CLIENTE -->
@@ -166,7 +203,7 @@ td { color: #111827 !important; }
   </button>
 
   <!-- NOVA PROPOSTA -->
-  <div class="sec-label" style="margin-top:1.5rem">Nova proposta Capital Go</div>
+  <div class="sec-label" style="margin-top:1.5rem" data-marca="Nova proposta {nome}">Nova proposta Capital Go</div>
   <div class="tbl-wrap">
     <div class="tbl-head nova">
       <span>Parcela (R$)</span>
@@ -228,7 +265,7 @@ td { color: #111827 !important; }
         </table>
       </div>
       <div class="pv-bloco">
-        <div class="pv-bloco-titulo nova">Nova proposta · Capital Go</div>
+        <div class="pv-bloco-titulo nova" data-marca="Nova proposta &middot; {nome}">Nova proposta · Capital Go</div>
         <table class="pv-table">
           <thead><tr><th>Parcela</th><th>Prazo</th><th>Troco</th></tr></thead>
           <tbody id="pv_tbody_nova"></tbody>
@@ -249,7 +286,7 @@ td { color: #111827 !important; }
         <div class="assin-sub" id="assin_sub"></div>
       </div>
       <div class="assin-right">
-        <div class="assin-empresa">Capital Go</div>
+        <div class="assin-empresa" data-marca="{nome}">Capital Go</div>
         <div class="assin-data" id="assin_data"></div>
       </div>
     </div>
@@ -1360,15 +1397,13 @@ function exportPDF(){
   let y=0;
 
   // topo
-  doc.setFillColor(108,43,217);doc.rect(0,0,70,5,'F');
-  doc.setFillColor(30,136,229);doc.rect(70,0,70,5,'F');
-  doc.setFillColor(233,30,99);doc.rect(140,0,70,5,'F');
+  var _m=window.marcaRgb();
+  doc.setFillColor(_m[0],_m[1],_m[2]);doc.rect(0,0,210,5,'F');
   y=14;
   doc.setFont('helvetica','bold');doc.setFontSize(16);
-  doc.setTextColor(108,43,217);doc.text('Capital',ml,y);
-  doc.setTextColor(30,136,229);doc.text('Go',ml+29,y);
+  doc.setTextColor(_m[0],_m[1],_m[2]);doc.text(window.marcaNome(),ml,y);
   doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(140,140,140);
-  doc.text('Crédito Consignado · Florianópolis/SC',ml,y+5);
+  doc.text('Crédito Consignado',ml,y+5);
   const num=document.getElementById('pv_num').textContent;
   const dt=new Date().toLocaleDateString('pt-BR');
   doc.text('Proposta nº '+num,W-mr,y,{align:'right'});
@@ -1492,7 +1527,7 @@ function exportPDF(){
   doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(40,40,40);doc.text(corNome,ml,y+4);
   doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(120,120,120);
   doc.text([corCargo,corWa||''].filter(Boolean).join(' · '),ml,y+8.5);
-  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(108,43,217);doc.text('Capital Go',W-mr,y+4,{align:'right'});
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(_m[0],_m[1],_m[2]);doc.text(window.marcaNome(),W-mr,y+4,{align:'right'});
   doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(140,140,140);doc.text(dt,W-mr,y+8.5,{align:'right'});
   y+=18;
 
@@ -2652,7 +2687,7 @@ async function salvarCotacao() {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Cotação Interna - Capital Go - Página ${i} de ${pageCount}`, 105, 285, { align: 'center' });
+      doc.text(`Cotação Interna - ${window.marcaNome()} - Página ${i} de ${pageCount}`, 105, 285, { align: 'center' });
     }
     
     // Salva o PDF
@@ -4039,7 +4074,7 @@ function renderTimelineHorizontalPDF(doc, eventos, y, pageWidth, margin) {
   const boxWidth = larguraDisponivel / eventos.length;
   const boxHeight = 22;
   
-  const roxo = [108, 43, 217];
+  const roxo = window.marcaRgb();
   const cinzaClaro = [220, 220, 220];
   const cinzaTexto = [80, 80, 80];
   
@@ -4291,7 +4326,7 @@ async function criarApresentacaoPDF(dados) {
   let y = margin;
   
   // Cores CAPITAL (aplicação profissional)
-  const roxo = [108, 43, 217];        // var(--brand) - Marca
+  const roxo = window.marcaRgb();     // cor do ambiente
   const azul = [30, 136, 229];        // #1E88E5 - Secundário  
   const verde = [0, 200, 83];         // #00C853 - Positivo
   const cinzaTexto = [60, 60, 67];    // Textos principais
