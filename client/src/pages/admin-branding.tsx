@@ -326,7 +326,7 @@ export default function AdminBrandingPage() {
         darkSidebarBg: data.darkSidebarBg,
         darkSidebarText: data.darkSidebarText,
         darkLoginBg: data.darkLoginBg,
-        pdfHeaderColor: data.pdfHeaderColor,
+        pdfHeaderColor: /^#[0-9a-fA-F]{6}$/.test(data.pdfHeaderColor.trim()) ? data.pdfHeaderColor.trim() : "",
         avisoLegalDocumentos: data.avisoLegalDocumentos,
         avisosLegaisAtivos: data.avisosLegaisAtivos,
         useSidebarGradient: data.useSidebarGradient,
@@ -1039,8 +1039,13 @@ export default function AdminBrandingPage() {
                   <Label htmlFor="pdfHeaderColor">Cor do Cabeçalho do PDF</Label>
                   <div className="flex gap-2">
                     <Input id="pdfHeaderColor" type="color" value={formData.pdfHeaderColor || "#1a1a2e"} onChange={(e) => setFormData({ ...formData, pdfHeaderColor: e.target.value })} className="w-12 h-10 p-1 cursor-pointer" data-testid="input-pdf-header-color" />
-                    <Input type="text" value={formData.pdfHeaderColor} onChange={(e) => setFormData({ ...formData, pdfHeaderColor: e.target.value })} className="flex-1" placeholder="vazio = padrão" />
+                    <Input type="text" value={formData.pdfHeaderColor} onChange={(e) => setFormData({ ...formData, pdfHeaderColor: e.target.value })} className="flex-1" placeholder="vazio = padrão" maxLength={7} />
                   </div>
+                  {formData.pdfHeaderColor && !/^#[0-9a-fA-F]{6}$/.test(formData.pdfHeaderColor.trim()) && (
+                    <p className="text-xs text-destructive">
+                      Isso não é uma cor. Use o formato #RRGGBB (ex.: #0a3d3b) ou deixe vazio.
+                    </p>
+                  )}
                 </div>
               </div>
 

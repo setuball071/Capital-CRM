@@ -633,7 +633,10 @@ export default function SimuladorPortabilidadePage() {
     // gestor em Branding. Sem definicao, usam a cor primaria do ambiente — nao um
     // azul-marinho fixo, que nao pertence a marca de ninguem. O texto e a logo
     // seguem a cor escolhida, para nunca sumirem num fundo claro.
-    const CABEC = (tenant?.theme as any)?.pdfHeaderColor || corMarcaEscura();
+    const corCabecConfig = (tenant?.theme as any)?.pdfHeaderColor;
+    const CABEC = /^#[0-9a-fA-F]{6}$/.test(String(corCabecConfig || "").trim())
+      ? String(corCabecConfig).trim()
+      : corMarcaEscura();
     const CABEC_TXT = corTextoSobre(CABEC);
     const CABEC_LOGO = CABEC_TXT === "#ffffff" ? "brightness(0) invert(1)" : "brightness(0)";
     const _html = `<!DOCTYPE html><html lang="pt-BR"><head>
