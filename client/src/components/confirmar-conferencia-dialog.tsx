@@ -57,7 +57,7 @@ export function ConfirmarConferenciaDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setMarcado(false); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg z-[10050]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5" />
