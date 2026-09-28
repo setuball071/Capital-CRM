@@ -125,3 +125,43 @@ export async function renderPdfFirstPageToBlob(file: File, maxPx = 2800): Promis
     )
   );
 }
+
+/**
+ * Renderiza as primeiras páginas do PDF em imagens.
+ *
+ * O brandbook raramente traz a paleta na página 1 (costuma vir depois da capa),
+ * então a leitura por IA precisa de mais de uma página. Falha em uma página não
+ * derruba as outras: devolve o que conseguiu.
+ */
+export async function renderPdfPagesToBlobs(
+  file: File,
+  maxPaginas = 4,
+  maxPx = 1600,
+): Promise<Blob[]> {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const total = Math.min(pdf.numPages, maxPaginas);
+  const blobs: Blob[] = [];
+  for (let n = 1; n <= total; n++) {
+    try {
+      const page = await pdf.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      const scale = Math.min(4, maxPx / Math.max(base.width, base.height)) || 1;
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvas, viewport } as any).promise;
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.9),
+      );
+      if (blob) blobs.push(blob);
+    } catch {
+      // página problemática: segue para a próxima
+    }
+  }
+  return blobs;
+}

@@ -11,10 +11,11 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useTenant } from "@/components/tenant-theme-provider";
 import { useAuth } from "@/lib/auth";
-import { Loader2, Upload, Palette, Type, Image, Save, Eye, RotateCcw, Monitor, Tablet, Smartphone, AlertCircle, Sun, Moon } from "lucide-react";
+import { Loader2, Upload, Palette, Type, Image, Save, Eye, RotateCcw, Monitor, Tablet, Smartphone, AlertCircle, Sun, Moon, Sparkles } from "lucide-react";
 import type { Tenant, TenantTheme } from "@shared/schema";
 import { GradientEditor, GradientConfig, generateGradientCSS, parseGradientCSS, DEFAULT_GRADIENT_CONFIG } from "@/components/gradient-editor";
 import { LogoCropperDialog } from "@/components/logo-cropper-dialog";
+import { BrandbookReaderDialog, type PaletaLida } from "@/components/brandbook-reader-dialog";
 
 const FONT_OPTIONS = [
   { value: "Inter", label: "Inter" },
@@ -481,6 +482,25 @@ export default function AdminBrandingPage() {
     setFormData({ ...formData, primaryColor: primary, ...paleta });
   };
 
+  // Leitor de brandbook: a IA devolve as cores, aqui elas so entram no formulario.
+  const [brandbookOpen, setBrandbookOpen] = useState(false);
+  const aplicarPaletaLida = (p: PaletaLida) => {
+    const fonteConhecida = FONT_OPTIONS.find(
+      (f) => f.value.toLowerCase() === (p.fontFamily || "").toLowerCase(),
+    );
+    setFormData((atual) => ({
+      ...atual,
+      ...p.cores,
+      ...(fonteConhecida ? { fontFamily: fonteConhecida.value } : {}),
+    }));
+    toast({
+      title: "Paleta aplicada",
+      description: p.fontFamily && !fonteConhecida
+        ? `A fonte ${p.fontFamily} nao esta na lista: escolha "Fonte Externa" se quiser usar.`
+        : "Confira os campos e clique em salvar.",
+    });
+  };
+
   // Avisos de contraste WCAG (razão mínima 4.5:1 para texto normal)
   const avisosContraste: string[] = [];
   const cSidebar = razaoContraste(formData.sidebarFontColor, formData.sidebarBgColor);
@@ -808,6 +828,15 @@ export default function AdminBrandingPage() {
               >
                 <Palette className="h-4 w-4 mr-2" />
                 Gerar paleta da cor primária
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setBrandbookOpen(true)}
+                data-testid="button-ler-brandbook-abrir"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Ler do brandbook
               </Button>
             </div>
 
@@ -1220,6 +1249,14 @@ export default function AdminBrandingPage() {
           </Button>
         </div>
       </div>
+
+      <BrandbookReaderDialog
+        open={brandbookOpen}
+        onOpenChange={setBrandbookOpen}
+        onAplicar={aplicarPaletaLida}
+        // A logo escolhida cai no mesmo cropper usado pelo upload manual.
+        onUsarLogo={(file) => { setBrandbookOpen(false); openCropper("sidebar", file); }}
+      />
 
       {/* Editor de logo estilo WhatsApp — abre quando um arquivo de imagem (não-SVG) é selecionado */}
       <LogoCropperDialog

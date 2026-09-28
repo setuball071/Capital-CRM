@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import https from "https";
 import { randomBytes } from "crypto";
+import { extrairPaleta } from "./branding-ia";
 
 // ─── Gerador de HTML do Contracheque SIAPE ───────────────────────────────────
 function _brl(value: any): string {
@@ -1740,6 +1741,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro ao buscar tenant" });
     }
   });
+
+  // Le a paleta de um brandbook (arquivo ou texto colado) e devolve sugestao.
+  // NAO salva nada: a tela preenche os campos e o gestor revisa antes de gravar.
+  app.post(
+    "/api/tenant/branding/extrair",
+    requireAuth,
+    requireMaster,
+    async (req: any, res) => {
+      try {
+        const { imagensBase64, texto } = req.body || {};
+        const resultado = await extrairPaleta({ imagensBase64, texto });
+        res.json(resultado);
+      } catch (error: any) {
+        console.error("[BRANDING-IA] falhou:", error?.message || error);
+        res
+          .status(400)
+          .json({ message: error?.message || "Nao consegui ler esse material." });
+      }
+    },
+  );
 
   // Update tenant branding (Master only)
   app.put(
