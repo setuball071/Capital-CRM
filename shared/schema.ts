@@ -165,6 +165,9 @@ export const tenantThemeSchema = z.object({
   // Aviso legal no rodape das propostas e PDFs. Vazio = texto padrao da
   // plataforma (shared/avisos-legais.ts).
   avisoLegalDocumentos: z.string().optional(),
+  // Liga/desliga os avisos legais e a confirmacao antes de gerar documento.
+  // Sem valor, segue o padrao: ligado em ambiente vendido, desligado no interno.
+  avisosLegaisAtivos: z.boolean().optional(),
   sidebarColor: z.string().optional(),
   loginBgColor: z.string().optional(), // Cor de fundo da tela de login
   loginBgImage: z.string().optional(), // Imagem de fundo do login (URL)

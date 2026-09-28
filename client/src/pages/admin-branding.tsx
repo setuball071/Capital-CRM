@@ -202,6 +202,7 @@ export default function AdminBrandingPage() {
     darkLoginBg: "",
     pdfHeaderColor: "",
     avisoLegalDocumentos: "",
+    avisosLegaisAtivos: true,
     sidebarGradientConfig: { ...DEFAULT_GRADIENT_CONFIG } as GradientConfig,
     loginGradientConfig: { ...DEFAULT_GRADIENT_CONFIG } as GradientConfig,
   });
@@ -280,6 +281,10 @@ export default function AdminBrandingPage() {
         darkLoginBg: theme?.darkLoginBg || "",
         pdfHeaderColor: (theme as any)?.pdfHeaderColor || "",
         avisoLegalDocumentos: (theme as any)?.avisoLegalDocumentos || "",
+        // Sem valor salvo, segue o padrao: ligado em ambiente vendido, desligado no interno.
+        avisosLegaisAtivos: typeof (theme as any)?.avisosLegaisAtivos === "boolean"
+          ? (theme as any).avisosLegaisAtivos
+          : (tenantData as any)?.interno !== true,
         useSidebarGradient: theme?.useSidebarGradient === true,
         useLoginGradient: theme?.useLoginGradient === true,
         sidebarGradientConfig: theme?.sidebarGradientConfig || 
@@ -323,6 +328,7 @@ export default function AdminBrandingPage() {
         darkLoginBg: data.darkLoginBg,
         pdfHeaderColor: data.pdfHeaderColor,
         avisoLegalDocumentos: data.avisoLegalDocumentos,
+        avisosLegaisAtivos: data.avisosLegaisAtivos,
         useSidebarGradient: data.useSidebarGradient,
         useLoginGradient: data.useLoginGradient,
         sidebarGradientConfig: data.sidebarGradientConfig,
@@ -453,6 +459,7 @@ export default function AdminBrandingPage() {
       darkLoginBg: "",
       pdfHeaderColor: "",
       avisoLegalDocumentos: "",
+      avisosLegaisAtivos: true,
       useSidebarGradient: false,
       useLoginGradient: false,
       sidebarGradientConfig: { ...DEFAULT_GRADIENT_CONFIG },
@@ -995,6 +1002,25 @@ export default function AdminBrandingPage() {
                 Vazio = uma versão escurecida da sua cor primária.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="md:col-span-3 flex items-start gap-3 rounded-md border p-3">
+                  <Checkbox
+                    id="avisosLegaisAtivos"
+                    checked={formData.avisosLegaisAtivos}
+                    onCheckedChange={(v) => setFormData({ ...formData, avisosLegaisAtivos: v === true })}
+                    className="mt-0.5"
+                    data-testid="checkbox-avisos-legais"
+                  />
+                  <div>
+                    <Label htmlFor="avisosLegaisAtivos" className="cursor-pointer">
+                      Exibir avisos legais e exigir confirmação antes de gerar documentos
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Desligue em ambientes da própria casa. Mantenha ligado em ambientes de
+                      assinantes, onde o aviso protege as duas pontas.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="avisoLegalDocumentos">Aviso legal no rodapé dos documentos</Label>
                   <Input

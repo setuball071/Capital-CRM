@@ -30,3 +30,16 @@ export function avisoDocumento(theme: any): string {
   const proprio = theme?.avisoLegalDocumentos;
   return typeof proprio === "string" && proprio.trim() ? proprio.trim() : AVISO_DOCUMENTO;
 }
+
+/**
+ * Se este ambiente deve exibir os avisos legais e exigir a confirmacao.
+ *
+ * O padrao vem de `interno`: ambiente interno e a operacao propria da casa, que
+ * responde por si; ambiente vendido e um assinante, e ai o aviso protege as duas
+ * pontas. O gestor pode contrariar esse padrao pelo campo do Branding.
+ */
+export function avisosAtivos(tenant: any): boolean {
+  const escolha = tenant?.theme?.avisosLegaisAtivos;
+  if (typeof escolha === "boolean") return escolha;
+  return tenant?.interno !== true;
+}

@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { corMarcaHex, corMarcaRgba, corTextoSobre, corMarcaEscura } from "@/lib/marca";
 import { ConfirmarConferenciaDialog } from "@/components/confirmar-conferencia-dialog";
 import { AvisoSimulacao } from "@/components/aviso-simulacao";
-import { avisoDocumento, AVISO_SIMULADOR } from "@shared/avisos-legais";
+import { avisoDocumento, avisosAtivos } from "@shared/avisos-legais";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
 import { useProposta } from "@/contexts/proposta-context";
@@ -379,6 +379,8 @@ export default function SimuladorPortabilidadePage() {
   const [showPdfDialog, setShowPdfDialog] = useState(false);
   // Confirmacao de conferencia exigida antes de o documento ser gerado.
   const [confirmarAberto, setConfirmarAberto] = useState(false);
+  // Ambiente interno (operacao propria) nao exibe aviso nem exige confirmacao.
+  const exigeAviso = avisosAtivos(tenant);
   const [pdfClientName, setPdfClientName] = useState("");
   const [pdfClientCpf, setPdfClientCpf] = useState("");
   const [pdfClientConvenio, setPdfClientConvenio] = useState("");
@@ -757,7 +759,7 @@ export default function SimuladorPortabilidadePage() {
       : `* Cálculos de amortização de parcela são diários e sofrem alteração.<br>`}
     * Proposta válida até ${amanha}, sujeita a alteração sem aviso prévio.<br>
     * A taxa de juros final e a redução do valor da parcela poderão sofrer oscilações a critério das instituições bancárias.<br>
-    <span style="display:block;margin-top:8px;color:#64748b">${escHtml(avisoDocumento(tenant?.theme))}</span>
+    ${exigeAviso ? `<span style="display:block;margin-top:8px;color:#64748b">${escHtml(avisoDocumento(tenant?.theme))}</span>` : ""}
   </div>
   <script>setTimeout(()=>{window.print();},400);<\/script>
 </body></html>`;
@@ -1529,12 +1531,12 @@ export default function SimuladorPortabilidadePage() {
                   data-testid="input-pdf-convenio"
                 />
               </div>
-              <AvisoSimulacao className="mt-3" />
+              {exigeAviso && <AvisoSimulacao className="mt-3" />}
               <div className="pdf-dialog-actions">
                 <button className="btn-cancel" onClick={() => setShowPdfDialog(false)} data-testid="button-pdf-cancelar">
                   Cancelar
                 </button>
-                <button className="btn-sim btn-sim-left" onClick={() => setConfirmarAberto(true)} data-testid="button-pdf-confirmar">
+                <button className="btn-sim btn-sim-left" onClick={() => (exigeAviso ? setConfirmarAberto(true) : doExportPDF())} data-testid="button-pdf-confirmar">
                   Exportar PDF
                 </button>
               </div>
