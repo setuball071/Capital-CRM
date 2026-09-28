@@ -1689,7 +1689,8 @@ export default function AdminTenantsPage() {
                   <div>
                     <p className="text-muted-foreground text-xs">Senha temporária</p>
                     <p className="font-mono" data-testid="text-provision-senha">
-                      {provisionResult.senhaTemporaria}
+                      {/* Vazio = a conta já existia e foi vinculada; a senha dela não muda */}
+                      {provisionResult.senhaTemporaria || "— conta já existia, senha atual mantida"}
                     </p>
                   </div>
                   <Button

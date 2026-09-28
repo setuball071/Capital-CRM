@@ -34,6 +34,9 @@ export interface ProvisionResult {
   warnings: string[];
 }
 
+/** Sinaliza "não há senha nova para enviar" (conta já existia), não é erro. */
+class SemSenhaNova extends Error {}
+
 function gerarSenhaTemporaria(): string {
   // 12 chars legíveis (sem ambíguos tipo 0/O, 1/l)
   const alfabeto = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -52,8 +55,12 @@ export async function provisionTenant(input: ProvisionInput): Promise<ProvisionR
   // Key e e-mail únicos
   const existingTenant = await db.execute(sql`SELECT id FROM tenants WHERE key = ${key}`);
   if (existingTenant.rows.length > 0) throw new Error(`Já existe um ambiente com a key "${key}"`);
-  const existingUser = await db.execute(sql`SELECT id FROM users WHERE email = ${input.adminEmail}`);
-  if (existingUser.rows.length > 0) throw new Error(`Já existe um usuário com o e-mail ${input.adminEmail}`);
+  // E-mail já cadastrado NÃO é erro: o mesmo login atende vários ambientes (o dono usa
+  // o e-mail dele em todos os seus). Reaproveita a conta e dá acesso ao ambiente novo,
+  // sem tocar na senha. Só acontece quando o master digita um e-mail que já existe.
+  const [usuarioExistente] = (await db.execute(
+    sql`SELECT id FROM users WHERE email = ${input.adminEmail}`,
+  )).rows as any[];
 
   // 1) Tenant (cliente: interno=false, status ativo)
   const [tenant] = (await db.execute(sql`
@@ -83,17 +90,27 @@ export async function provisionTenant(input: ProvisionInput): Promise<ProvisionR
   }
 
   // 3) Usuário admin do cliente (role master, isMaster=false)
-  const senhaTemporaria = gerarSenhaTemporaria();
-  const passwordHash = await bcrypt.hash(senhaTemporaria, 10);
-  const [admin] = (await db.execute(sql`
-    INSERT INTO users (name, email, password_hash, role, is_active, is_master)
-    VALUES (${input.adminNome}, ${input.adminEmail}, ${passwordHash}, 'master', true, false)
-    RETURNING id
-  `)).rows as any[];
-  const adminUserId = Number(admin.id);
+  let adminUserId: number;
+  let senhaTemporaria = ""; // vazio = conta já existia, a senha atual continua valendo
+  if (usuarioExistente) {
+    adminUserId = Number(usuarioExistente.id);
+    warnings.push(
+      `O e-mail ${input.adminEmail} já tinha conta: ela foi vinculada a este ambiente e a senha continua a mesma.`,
+    );
+  } else {
+    senhaTemporaria = gerarSenhaTemporaria();
+    const passwordHash = await bcrypt.hash(senhaTemporaria, 10);
+    const [admin] = (await db.execute(sql`
+      INSERT INTO users (name, email, password_hash, role, is_active, is_master)
+      VALUES (${input.adminNome}, ${input.adminEmail}, ${passwordHash}, 'master', true, false)
+      RETURNING id
+    `)).rows as any[];
+    adminUserId = Number(admin.id);
+  }
   await db.execute(sql`
     INSERT INTO user_tenants (user_id, tenant_id, role_in_tenant)
     VALUES (${adminUserId}, ${tenantId}, 'master')
+    ON CONFLICT DO NOTHING
   `);
 
   // 4) Módulos do plano (catálogo módulos×plano): procura um plano cadastrado com o
@@ -117,23 +134,29 @@ export async function provisionTenant(input: ProvisionInput): Promise<ProvisionR
   // montado por permissão e o provisionamento nunca criava nenhuma (a ConsigOne nasceu
   // com zero). Se o plano definiu módulos, vale o catálogo; senão, libera todos e o
   // admin distribui para a equipe dele. O painel SaaS continua fora: é isMaster.
-  const modRows = (await db.execute(
-    sql`SELECT modulo_key FROM tenant_modulos WHERE tenant_id = ${tenantId} AND ativo = true`,
-  )).rows as any[];
-  const modulosDoAdmin = modRows.length
-    ? modRows.map((r) => String(r.modulo_key))
-    : [...MODULE_LIST];
-  for (const modulo of modulosDoAdmin) {
-    await db.execute(sql`
-      INSERT INTO user_permissions (user_id, module, can_view, can_edit, can_delegate)
-      VALUES (${adminUserId}, ${modulo}, true, true, true)
-      ON CONFLICT DO NOTHING
-    `);
-  }
-  if (!modRows.length) {
-    warnings.push(
-      `Admin do cliente recebeu os ${modulosDoAdmin.length} módulos (catálogo do plano vazio). Ajuste em Usuários se quiser restringir.`,
-    );
+  // Conta reaproveitada já tem as permissões dela: não mexe no que o usuário já usa
+  const jaTemPermissao = (await db.execute(
+    sql`SELECT 1 FROM user_permissions WHERE user_id = ${adminUserId} LIMIT 1`,
+  )).rows.length > 0;
+  if (!jaTemPermissao) {
+    const modRows = (await db.execute(
+      sql`SELECT modulo_key FROM tenant_modulos WHERE tenant_id = ${tenantId} AND ativo = true`,
+    )).rows as any[];
+    const modulosDoAdmin = modRows.length
+      ? modRows.map((r) => String(r.modulo_key))
+      : [...MODULE_LIST];
+    for (const modulo of modulosDoAdmin) {
+      await db.execute(sql`
+        INSERT INTO user_permissions (user_id, module, can_view, can_edit, can_delegate)
+        VALUES (${adminUserId}, ${modulo}, true, true, true)
+        ON CONFLICT DO NOTHING
+      `);
+    }
+    if (!modRows.length) {
+      warnings.push(
+        `Admin do cliente recebeu os ${modulosDoAdmin.length} módulos (catálogo do plano vazio). Ajuste em Usuários se quiser restringir.`,
+      );
+    }
   }
 
   // 5) Assinatura
@@ -230,9 +253,11 @@ export async function provisionTenant(input: ProvisionInput): Promise<ProvisionR
     }
   }
 
-  // 7) E-mail de credenciais (best-effort; a senha sempre volta na resposta)
+  // 7) E-mail de credenciais (best-effort; a senha sempre volta na resposta).
+  // Conta reaproveitada não recebe e-mail: não há senha nova para mandar.
   let emailEnviado = false;
   try {
+    if (!senhaTemporaria) throw new SemSenhaNova();
     const { sendMailTo } = await import("./email-service");
     const loginUrl = dominio ? `https://${dominio}` : "https://www.sistemacapital.com.br";
     emailEnviado = await sendMailTo(
@@ -247,7 +272,10 @@ export async function provisionTenant(input: ProvisionInput): Promise<ProvisionR
       input.nome,
     );
   } catch (e) {
-    console.error("[PROVISIONING] envio de credenciais falhou:", e);
+    // Conta reaproveitada não é falha: não existe senha nova para enviar
+    if (!(e instanceof SemSenhaNova)) {
+      console.error("[PROVISIONING] envio de credenciais falhou:", e);
+    }
   }
 
   return { tenantId, adminUserId, senhaTemporaria, dominio, cnameAlvo, emailEnviado, warnings };
