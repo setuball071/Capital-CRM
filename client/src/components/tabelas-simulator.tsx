@@ -319,7 +319,7 @@ INSS Pan 84x,INSS,Pan,contrato_novo,84,0.023100,2.8000`;
     <div className="space-y-6" data-testid="tabelas-simulator">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <Calculator className="h-5 w-5" style={{ color: "#6C2BD9" }} />
+          <Calculator className="h-5 w-5" style={{ color: "hsl(var(--primary))" }} />
           <h3 className="text-base font-semibold" data-testid="text-simulator-title">
             Simulador de Tabelas
           </h3>
@@ -419,7 +419,7 @@ INSS Pan 84x,INSS,Pan,contrato_novo,84,0.023100,2.8000`;
                 name="modoCalc"
                 checked={modoCalc === "parcela"}
                 onChange={() => { setModoCalc("parcela"); setValorInput(""); setResults(null); }}
-                className="accent-[#6C2BD9]"
+                className="accent-[hsl(var(--primary))]"
               />
               <span className="text-xs font-medium">Informar Parcela</span>
             </label>
@@ -429,7 +429,7 @@ INSS Pan 84x,INSS,Pan,contrato_novo,84,0.023100,2.8000`;
                 name="modoCalc"
                 checked={modoCalc === "contrato"}
                 onChange={() => { setModoCalc("contrato"); setValorInput(""); setResults(null); }}
-                className="accent-[#6C2BD9]"
+                className="accent-[hsl(var(--primary))]"
               />
               <span className="text-xs font-medium">Informar Valor do Contrato</span>
             </label>
@@ -452,7 +452,7 @@ INSS Pan 84x,INSS,Pan,contrato_novo,84,0.023100,2.8000`;
             <Button
               disabled={!canSimulate || simLoading}
               onClick={handleSimular}
-              style={{ background: canSimulate ? "#6C2BD9" : undefined }}
+              style={{ background: canSimulate ? "hsl(var(--primary))" : undefined }}
               data-testid="button-simular"
             >
               {simLoading ? (
@@ -496,9 +496,9 @@ INSS Pan 84x,INSS,Pan,contrato_novo,84,0.023100,2.8000`;
                     <div className="flex items-center gap-3">
                       <div
                         className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: "rgba(108,43,217,0.08)" }}
+                        style={{ backgroundColor: "hsl(var(--primary)/0.08)" }}
                       >
-                        <Building2 className="h-4 w-4" style={{ color: "#6C2BD9" }} />
+                        <Building2 className="h-4 w-4" style={{ color: "hsl(var(--primary))" }} />
                       </div>
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -562,7 +562,7 @@ INSS Pan 84x,INSS,Pan,contrato_novo,84,0.023100,2.8000`;
                     <p className="text-xs text-muted-foreground">Valor do Contrato Liberado</p>
                     <p
                       className="text-xl font-bold"
-                      style={{ color: "#6C2BD9" }}
+                      style={{ color: "hsl(var(--primary))" }}
                       data-testid={`valor-contrato-${r.id}`}
                     >
                       {formatBRL(r.valorContratoLibera)}

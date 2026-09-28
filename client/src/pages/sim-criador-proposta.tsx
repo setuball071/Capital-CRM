@@ -416,7 +416,7 @@ export default function SimCriadorProposta() {
 
         {/* ── Dados do cliente ── */}
         <section>
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#6C2BD9] mb-3.5">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[hsl(var(--primary))] mb-3.5">
             Dados do cliente
           </p>
           <div className="rounded-xl border border-border bg-card p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -461,7 +461,7 @@ export default function SimCriadorProposta() {
 
         {/* ── Contratos atuais ── */}
         <section>
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#6C2BD9] mb-3.5">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[hsl(var(--primary))] mb-3.5">
             Contratos atuais do cliente
           </p>
           <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -524,7 +524,7 @@ export default function SimCriadorProposta() {
 
         {/* ── Nova proposta ── */}
         <section>
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#6C2BD9] mb-3.5">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[hsl(var(--primary))] mb-3.5">
             Nova proposta
           </p>
           <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -590,7 +590,7 @@ export default function SimCriadorProposta() {
 
         {/* ── Corretor ── */}
         <section>
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[#6C2BD9] mb-3.5">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.05em] text-[hsl(var(--primary))] mb-3.5">
             Corretor
           </p>
           <div className="rounded-xl border border-border bg-card p-4 space-y-3">
@@ -675,12 +675,12 @@ function PropostaVisual({
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden shadow-md mt-2">
       {/* barra de gradiente */}
-      <div className="h-1 bg-gradient-to-r from-violet-600 via-blue-500 to-pink-500" />
+      <div className="h-1 bg-gradient-to-r from-primary via-blue-500 to-pink-500" />
 
       {/* cabeçalho */}
       <div className="flex justify-between items-start px-6 py-4 border-b border-border">
         <div>
-          <div className="text-lg font-bold bg-gradient-to-r from-violet-600 via-blue-500 to-pink-500 bg-clip-text text-transparent">
+          <div className="text-lg font-bold bg-gradient-to-r from-primary via-blue-500 to-pink-500 bg-clip-text text-transparent">
             Capital Go
           </div>
           <div className="text-[10px] text-muted-foreground mt-0.5">Crédito Consignado</div>
@@ -739,7 +739,7 @@ function PropostaVisual({
 
         {/* Nova proposta */}
         <div className="rounded-lg border border-border overflow-hidden">
-          <div className="text-[9px] font-semibold uppercase tracking-widest text-violet-600 dark:text-violet-400 px-4 py-2 bg-gradient-to-r from-violet-50 to-blue-50 dark:from-violet-900/20 dark:to-blue-900/20 border-b border-border">
+          <div className="text-[9px] font-semibold uppercase tracking-widest text-primary dark:text-primary px-4 py-2 bg-gradient-to-r from-primary to-blue-50 dark:from-primary/20 dark:to-blue-900/20 border-b border-border">
             Nova proposta · Capital Go
           </div>
           <table className="w-full text-[13px]">
@@ -753,15 +753,15 @@ function PropostaVisual({
             <tbody>
               {proposta.novas.map((n, i) => (
                 <tr key={i} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-2 font-semibold text-violet-600 dark:text-violet-400">{parseFloat(n.parcela) ? fmtR(parseFloat(n.parcela)) : "—"}</td>
+                  <td className="px-4 py-2 font-semibold text-primary dark:text-primary">{parseFloat(n.parcela) ? fmtR(parseFloat(n.parcela)) : "—"}</td>
                   <td className="px-4 py-2 text-muted-foreground">{n.prazo ? n.prazo + " meses" : "—"}</td>
                   <td className="px-4 py-2 text-blue-600 dark:text-blue-400 text-[11px]">{parseFloat(n.troco) > 0 ? fmtR(parseFloat(n.troco)) : "—"}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="bg-gradient-to-r from-violet-50/50 to-blue-50/50 dark:from-violet-900/10 dark:to-blue-900/10">
-                <td className="px-4 py-2 font-semibold text-violet-600 dark:text-violet-400 text-[12px]">{totalNv ? fmtR(totalNv) : "—"}</td>
+              <tr className="bg-gradient-to-r from-primary/50 to-blue-50/50 dark:from-primary/10 dark:to-blue-900/10">
+                <td className="px-4 py-2 font-semibold text-primary dark:text-primary text-[12px]">{totalNv ? fmtR(totalNv) : "—"}</td>
                 <td />
                 <td className="px-4 py-2 text-blue-600 dark:text-blue-400 text-[11px]">{totalTroco > 0 ? fmtR(totalTroco) : ""}</td>
               </tr>
@@ -824,7 +824,7 @@ function PropostaVisual({
           </div>
         </div>
         <div className="ml-auto text-right">
-          <div className="text-[11px] font-semibold bg-gradient-to-r from-violet-600 to-blue-500 bg-clip-text text-transparent">Capital Go</div>
+          <div className="text-[11px] font-semibold bg-gradient-to-r from-primary to-blue-500 bg-clip-text text-transparent">Capital Go</div>
           <div className="text-[10px] text-muted-foreground">{proposta.data}</div>
         </div>
       </div>

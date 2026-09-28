@@ -219,7 +219,7 @@ export default function DividirCsvPage() {
       case "processando":
         return <Badge variant="default" className="bg-blue-600"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Processando</Badge>;
       case "convertendo":
-        return <Badge variant="default" className="bg-purple-600"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Convertendo XLSX</Badge>;
+        return <Badge variant="default" className="bg-primary"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Convertendo XLSX</Badge>;
       case "pendente":
         return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" /> Pendente</Badge>;
       case "erro":

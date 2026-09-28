@@ -74,8 +74,8 @@ export function UpdatesPopup() {
           <DialogHeader className="flex-shrink-0">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100">
-                  <Megaphone className="h-4 w-4 text-purple-700" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+                  <Megaphone className="h-4 w-4 text-primary" />
                 </div>
                 <DialogTitle className="text-base font-semibold">Novidade no sistema</DialogTitle>
               </div>
@@ -150,7 +150,7 @@ export function UpdatesPopup() {
             {isLast ? (
               <Button
                 className="w-full font-semibold"
-                style={{ backgroundColor: "#6C2BD9", color: "#fff" }}
+                style={{ backgroundColor: "hsl(var(--primary))", color: "#fff" }}
                 onClick={handleConfirm}
                 disabled={readMutation.isPending}
                 data-testid="button-confirm-update"
@@ -161,7 +161,7 @@ export function UpdatesPopup() {
               <div className="flex gap-2">
                 <Button
                   className="flex-1 font-semibold"
-                  style={{ backgroundColor: "#6C2BD9", color: "#fff" }}
+                  style={{ backgroundColor: "hsl(var(--primary))", color: "#fff" }}
                   onClick={handleConfirm}
                   disabled={readMutation.isPending}
                   data-testid="button-confirm-update"

@@ -127,7 +127,7 @@ export default function SimEvolucaoDivida() {
   };
 
   const inputCls =
-    "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500/40";
+    "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40";
   const labelCls = "block text-xs font-semibold mb-1.5";
 
   return (
@@ -152,14 +152,14 @@ export default function SimEvolucaoDivida() {
           <label className={labelCls}>
             Taxa (% a.m.)
             {taxaEstimada && taxa > 0 && (
-              <span className="ml-1.5 text-[10px] font-medium text-violet-600" title="Taxa estimada a partir do saldo informado">
+              <span className="ml-1.5 text-[10px] font-medium text-primary" title="Taxa estimada a partir do saldo informado">
                 estimada
               </span>
             )}
           </label>
           <input
             className={inputCls}
-            style={taxaEstimada ? { color: "#6C2BD9" } : undefined}
+            style={taxaEstimada ? { color: "hsl(var(--primary))" } : undefined}
             value={ancora === "saldo" ? (taxa > 0 ? fmtN(taxa, 2) : "") : taxaStr}
             onChange={e => { setTaxaStr(e.target.value); setAncora("taxa"); }}
             placeholder="1,88"
@@ -169,14 +169,14 @@ export default function SimEvolucaoDivida() {
           <label className={labelCls}>
             Saldo devedor (R$)
             {!taxaEstimada && saldo > 0 && (
-              <span className="ml-1.5 text-[10px] font-medium text-violet-600" title="Saldo calculado a partir da taxa informada">
+              <span className="ml-1.5 text-[10px] font-medium text-primary" title="Saldo calculado a partir da taxa informada">
                 calculado
               </span>
             )}
           </label>
           <input
             className={inputCls}
-            style={!taxaEstimada ? { color: "#6C2BD9" } : undefined}
+            style={!taxaEstimada ? { color: "hsl(var(--primary))" } : undefined}
             value={ancora === "taxa" ? (saldo > 0 ? fmtN(saldo, 2) : "") : saldoStr}
             onChange={e => { setSaldoStr(e.target.value); setAncora("saldo"); }}
             placeholder="204.090,91"
@@ -247,7 +247,7 @@ export default function SimEvolucaoDivida() {
             </div>
             <button
               onClick={exportarCSV}
-              className="rounded-md bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-4 py-2"
+              className="rounded-md bg-primary hover:bg-primary/90 text-white text-xs font-semibold px-4 py-2"
             >
               Exportar CSV
             </button>
@@ -275,7 +275,7 @@ export default function SimEvolucaoDivida() {
                       <td className="px-4 py-1.5 text-right font-medium">{fmtR(l.parcela)}</td>
                       <td className="px-4 py-1.5 text-right text-red-500">{fmtR(l.juros)}</td>
                       <td className="px-4 py-1.5 text-right text-green-600 dark:text-green-400">{fmtR(l.amortizacao)}</td>
-                      <td className="px-4 py-1.5 text-right font-medium text-violet-700 dark:text-violet-400">{fmtR(l.saldoDevedor)}</td>
+                      <td className="px-4 py-1.5 text-right font-medium text-primary dark:text-primary">{fmtR(l.saldoDevedor)}</td>
                     </tr>
                   );
                 })}

@@ -225,7 +225,7 @@ export default function SimAmortizacaoAnual() {
     };
   }, [valor, financiado, nFatias, grat, taxa, prazo]);
 
-  const inputCls = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500/40";
+  const inputCls = "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40";
   const labelCls = "block text-xs font-semibold mb-1.5";
   const card = (label: string, valor: string, cor = "text-foreground", sub?: string) => (
     <div className="rounded-xl border border-border bg-card p-4">
@@ -246,7 +246,7 @@ export default function SimAmortizacaoAnual() {
       </p>
 
       {/* Cliente + salvar */}
-      <div className="rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/60 dark:bg-violet-950/20 p-3 mb-5">
+      <div className="rounded-lg border border-primary/30 dark:border-primary bg-primary/10/60 dark:bg-primary/20/20 p-3 mb-5">
         <div className="flex flex-wrap items-end gap-3">
           <div style={{ width: 150 }}>
             <label className={labelCls}>CPF do cliente</label>
@@ -262,21 +262,21 @@ export default function SimAmortizacaoAnual() {
             <input className={inputCls} value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Ex: 9 fatias com 13º de 25 mil" />
           </div>
           <button onClick={salvarSimulacao} disabled={salvando}
-            className="rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-xs font-semibold px-4 h-[38px] whitespace-nowrap">
+            className="rounded-md bg-primary hover:bg-primary/90 disabled:opacity-60 text-white text-xs font-semibold px-4 h-[38px] whitespace-nowrap">
             {salvando ? "Salvando…" : "Salvar simulação"}
           </button>
           {statusSalvar && <span className="text-[12px] text-muted-foreground">{statusSalvar}</span>}
         </div>
 
         {salvas.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-violet-200 dark:border-violet-900">
-            <div className="text-[11px] font-bold text-violet-700 dark:text-violet-400 mb-1.5">Simulações salvas deste CPF</div>
+          <div className="mt-3 pt-3 border-t border-primary/30 dark:border-primary">
+            <div className="text-[11px] font-bold text-primary dark:text-primary mb-1.5">Simulações salvas deste CPF</div>
             <div className="flex flex-col gap-1">
               {salvas.map((c: any) => (
-                <div key={c.id} className="flex items-center gap-2 text-[12px] py-1 border-b border-violet-100 dark:border-violet-950 last:border-0">
+                <div key={c.id} className="flex items-center gap-2 text-[12px] py-1 border-b border-primary/30 dark:border-primary last:border-0">
                   <span className="font-semibold">{new Date(c.criadoEm).toLocaleDateString("pt-BR")}</span>
                   {c.descricao && <span className="text-muted-foreground flex-1 truncate">— {c.descricao}</span>}
-                  <button onClick={() => retomar(c.id)} className="rounded bg-violet-600 text-white px-2.5 py-1 text-[11px] font-bold">▶ Retomar</button>
+                  <button onClick={() => retomar(c.id)} className="rounded bg-primary text-white px-2.5 py-1 text-[11px] font-bold">▶ Retomar</button>
                   <button onClick={() => excluir(c.id)} className="rounded bg-red-100 text-red-700 px-2 py-1 text-[11px]">✕</button>
                 </div>
               ))}
@@ -297,7 +297,7 @@ export default function SimAmortizacaoAnual() {
       {res && (
         <>
           {/* Resumo da estrutura */}
-          <div className="rounded-lg border border-violet-200 bg-violet-50 dark:bg-violet-950/30 dark:border-violet-900 px-4 py-2.5 text-[13px] mb-5">
+          <div className="rounded-lg border border-primary/30 bg-primary/10 dark:bg-primary/20/30 dark:border-primary px-4 py-2.5 text-[13px] mb-5">
             Cliente recebe <strong>{fmtR(valor)}</strong> em <strong>{nFatias} contratos</strong> · parcela de {fmtR(res.parcelaFatia)} cada ·{" "}
             parcela total inicial <strong>{fmtR(res.parcelaInicial)}</strong> · {prazo} meses a {fmtN(taxa)}% a.m.
             <span className="text-muted-foreground"> · IOF/encargos de {fmtN(iofPerc)}% já embutidos</span>
@@ -305,7 +305,7 @@ export default function SimAmortizacaoAnual() {
 
           {/* Cards */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            {card("Quita tudo em", `${res.mesesTotal} meses`, "text-violet-700 dark:text-violet-400",
+            {card("Quita tudo em", `${res.mesesTotal} meses`, "text-primary dark:text-primary",
               res.mesesTotal < prazo ? `${(prazo - res.mesesTotal)} meses antes do prazo (${prazo})` : "só termina no prazo normal")}
             {card("Custo com a estratégia", fmtR(res.custoEstrategia), "text-foreground",
               `parcelas ${fmtR(res.pagoParcelas)} + quitações ${fmtR(res.pagoQuitacoes)}`)}
@@ -316,7 +316,7 @@ export default function SimAmortizacaoAnual() {
               res.economia >= 0 ? "juros que o cliente deixa de pagar" : "")}
             {card("Taxa equivalente",
               res.taxaEquivalente != null ? `${fmtN(res.taxaEquivalente)}% a.m.` : "—",
-              "text-violet-700 dark:text-violet-400",
+              "text-primary dark:text-primary",
               res.taxaEquivalente != null ? `no prazo padrão, pro mesmo custo (contrato: ${fmtN(taxa)}%)` : "")}
           </div>
 
@@ -351,7 +351,7 @@ export default function SimAmortizacaoAnual() {
                     <td className="px-3 py-2 text-center">{l.ativasAntes}</td>
                     <td className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <div className="h-2 rounded bg-violet-200 dark:bg-violet-900" style={{ width: `${Math.max(4, (l.parcelaAntes / maxParcela) * 90)}px` }} />
+                        <div className="h-2 rounded bg-primary dark:bg-primary/20" style={{ width: `${Math.max(4, (l.parcelaAntes / maxParcela) * 90)}px` }} />
                         <span className="font-semibold">{fmtR(l.parcelaAntes)}</span>
                       </div>
                     </td>
@@ -365,13 +365,13 @@ export default function SimAmortizacaoAnual() {
                     </td>
                     <td className="px-3 py-2 text-right">{l.custoQuitacao > 0 ? fmtR(l.custoQuitacao) : "—"}</td>
                     <td className="px-3 py-2 text-right text-muted-foreground">{l.encerrouNoPrazo ? "—" : fmtR(l.sobra)}</td>
-                    <td className="px-3 py-2 text-right font-bold text-violet-700 dark:text-violet-400">{fmtR(l.parcelaDepois)}</td>
+                    <td className="px-3 py-2 text-right font-bold text-primary dark:text-primary">{fmtR(l.parcelaDepois)}</td>
                     <td className="px-3 py-2 text-right">{fmtR(l.pagoNoAno)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-violet-600 bg-muted/30 font-bold">
+                <tr className="border-t-2 border-primary bg-muted/30 font-bold">
                   <td className="px-3 py-2" colSpan={5}>TOTAL</td>
                   <td className="px-3 py-2 text-right">{fmtR(res.pagoQuitacoes)}</td>
                   <td></td><td></td>

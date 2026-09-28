@@ -32,7 +32,7 @@ const CIP_BADGE: Record<CipState, string> = {
 const BADGE_COLORS: Record<string, string> = {
   zinc:   "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   blue:   "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  violet: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+  violet: "bg-primary/10 text-primary dark:bg-primary/20/40 dark:text-primary",
   orange: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
   red:    "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
   yellow: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
@@ -825,7 +825,7 @@ export default function ContratosDetalhePage() {
 
       {/* Banner: parcela absorvida numa unificação */}
       {proposal.unificadaEmId && (
-        <div className="rounded-md border border-purple-200 bg-purple-50 dark:border-purple-900/40 dark:bg-purple-950/20 p-3 text-sm text-purple-700 dark:text-purple-300">
+        <div className="rounded-md border border-primary/30 bg-primary/10 dark:border-primary/40 dark:bg-primary/20/20 p-3 text-sm text-primary dark:text-primary">
           Esta parcela foi <strong>unificada na proposta #{proposal.unificadaEmId}</strong> e não conta na produção.{" "}
           <button className="underline" onClick={() => setLocation(`/contratos/${proposal.unificadaEmId}`)}>Abrir a acumuladora</button>
         </div>

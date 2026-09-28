@@ -627,7 +627,7 @@ export default function SimuladorPortabilidadePage() {
     .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.5);font-weight:600}
     .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
     .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,#6C2BD9 0%,#1E88E5 100%);flex:0 0 auto;min-width:280px;min-height:110px;box-shadow:6px 0 20px rgba(108,43,217,0.18);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,hsl(var(--primary)) 0%,#1E88E5 100%);flex:0 0 auto;min-width:280px;min-height:110px;box-shadow:6px 0 20px hsl(var(--primary)/0.18);-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto{position:absolute;bottom:0;left:0;height:110px;width:auto;object-fit:contain;object-position:bottom left;display:block;z-index:1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto-ini{position:absolute;bottom:14px;left:14px;width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;z-index:2;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-info{position:relative;z-index:2;margin-left:120px;text-shadow:0 1px 6px rgba(0,0,0,0.5)}
@@ -637,7 +637,7 @@ export default function SimuladorPortabilidadePage() {
     .cliente-side{display:flex;align-items:center;gap:0;padding:0 40px;flex:1;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .cli-item{display:flex;flex-direction:column;gap:5px;padding:0 36px 0 0;border-right:1px solid #ddd6f7}
     .cli-item:last-child{border-right:none;padding-right:0}
-    .cli-label{font-size:8px;color:#6C2BD9;text-transform:uppercase;letter-spacing:1.5px;font-weight:800}
+    .cli-label{font-size:8px;color:hsl(var(--primary));text-transform:uppercase;letter-spacing:1.5px;font-weight:800}
     .cli-val{font-size:17px;font-weight:800;color:#1a1a2e;letter-spacing:-0.3px}
     .corpo{padding:24px 40px 0}
     .resumo{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
@@ -646,8 +646,8 @@ export default function SimuladorPortabilidadePage() {
     .resumo-item:first-child{background:linear-gradient(135deg,#f5f0ff,#fff);-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .resumo-item label{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;display:block;margin-bottom:6px;font-weight:700}
     .resumo-item .val{font-size:16px;font-weight:800;color:#1a1a2e}
-    .resumo-item:first-child .val{color:#6C2BD9}
-    .section-label{font-size:11px;font-weight:800;color:#1a1a2e;margin-bottom:14px;padding-bottom:7px;border-bottom:2px solid #6C2BD9;display:inline-block;text-transform:uppercase;letter-spacing:0.5px}
+    .resumo-item:first-child .val{color:hsl(var(--primary))}
+    .section-label{font-size:11px;font-weight:800;color:#1a1a2e;margin-bottom:14px;padding-bottom:7px;border-bottom:2px solid hsl(var(--primary));display:inline-block;text-transform:uppercase;letter-spacing:0.5px}
     table{width:100%;border-collapse:separate;border-spacing:0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
     thead th{background:#1a1a2e;color:#fff;padding:10px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     tbody td{padding:8px 14px;color:#475569;font-size:11px;border-bottom:1px solid #f1f5f9}
@@ -656,7 +656,7 @@ export default function SimuladorPortabilidadePage() {
     td.mes{color:#94a3b8;font-weight:700;font-size:10px}
     td.parcela{color:#1a1a2e;font-weight:600}
     td.prazos{color:#94a3b8;font-size:10px}
-    td.total{color:#6C2BD9;font-weight:800;font-size:12px}
+    td.total{color:hsl(var(--primary));font-weight:800;font-size:12px}
     .rodape{margin:20px 40px 28px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:8px;color:#94a3b8;line-height:2;letter-spacing:0.1px}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:0}}
   </style>
@@ -757,43 +757,43 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .panel:last-child { border-right: none; }
         .sim-wrap .panel-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: hsl(var(--muted-foreground)); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
         .sim-wrap .sim-badge { padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
-        .sim-wrap .badge-left { background: rgba(108,43,217,.1); color: #6C2BD9; border: 1px solid rgba(108,43,217,.25); }
+        .sim-wrap .badge-left { background: hsl(var(--primary)/.1); color: hsl(var(--primary)); border: 1px solid hsl(var(--primary)/.25); }
         .sim-wrap .badge-right { background: rgba(30,136,229,.1); color: #1E88E5; border: 1px solid rgba(30,136,229,.25); }
         .sim-wrap .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
         .sim-wrap .form-row.single { grid-template-columns: 1fr; }
         .sim-wrap .fg { display: flex; flex-direction: column; gap: 5px; }
         .sim-wrap label { font-size: 11px; font-weight: 500; color: hsl(var(--muted-foreground)); }
         .sim-wrap input, .sim-wrap select { background: hsl(var(--muted)); border: 1.5px solid hsl(var(--border)); border-radius: 8px; color: hsl(var(--foreground)); font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; padding: 9px 12px; width: 100%; outline: none; transition: border-color .15s, box-shadow .15s; }
-        .sim-wrap input:focus, .sim-wrap select:focus { border-color: #6C2BD9; box-shadow: 0 0 0 3px rgba(108,43,217,.1); }
+        .sim-wrap input:focus, .sim-wrap select:focus { border-color: hsl(var(--primary)); box-shadow: 0 0 0 3px hsl(var(--primary)/.1); }
         .sim-wrap input[readonly] { opacity: .55; cursor: not-allowed; background: hsl(var(--background)); border-style: dashed; }
         .sim-wrap .results { background: hsl(var(--muted)); border: 1.5px solid hsl(var(--border)); border-radius: 12px; padding: 16px; margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
         .sim-wrap .ri label { font-size: 10px; color: hsl(var(--muted-foreground)); text-transform: uppercase; letter-spacing: .05em; }
-        .sim-wrap .ri .v { font-size: 15px; font-weight: 700; color: #6C2BD9; margin-top: 3px; }
+        .sim-wrap .ri .v { font-size: 15px; font-weight: 700; color: hsl(var(--primary)); margin-top: 3px; }
         .sim-wrap .panel-right .ri .v { color: #1E88E5; }
         .sim-wrap .ri .v.destaque { font-size: 20px; }
         .sim-wrap .btn-sim { width: 100%; margin-top: 14px; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: .04em; transition: opacity .15s, transform .1s, box-shadow .15s; }
-        .sim-wrap .btn-sim:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(108,43,217,.12); }
-        .sim-wrap .btn-sim-left { background: linear-gradient(90deg, #6C2BD9 0%, #1E88E5 100%); color: #fff; }
+        .sim-wrap .btn-sim:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 4px 12px hsl(var(--primary)/.12); }
+        .sim-wrap .btn-sim-left { background: linear-gradient(90deg, hsl(var(--primary)) 0%, #1E88E5 100%); color: #fff; }
         .sim-wrap .btn-sim-right { background: linear-gradient(90deg, #1E88E5 0%, #0d47a1 100%); color: #fff; }
         .sim-wrap .sim-section { border-top: 1px solid hsl(var(--border)); padding: 24px 28px; background: hsl(var(--muted)); }
         .sim-wrap .section-title { font-size: 16px; font-weight: 700; color: hsl(var(--foreground)); margin-bottom: 16px; }
         .sim-wrap .prazos-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
         .sim-wrap .prazos-col-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
-        .sim-wrap .col-left-label { color: #6C2BD9; }
+        .sim-wrap .col-left-label { color: hsl(var(--primary)); }
         .sim-wrap .col-right-label { color: #1E88E5; }
         .sim-wrap .prazos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px,1fr)); gap: 10px; }
         .sim-wrap .pc { background: hsl(var(--card)); border: 1.5px solid hsl(var(--border)); border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: all .15s; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
-        .sim-wrap .pc:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(108,43,217,.12); border-color: #6C2BD9; }
-        .sim-wrap .pc.al { border-color: #6C2BD9; background: rgba(108,43,217,.06); box-shadow: 0 0 0 3px rgba(108,43,217,.12); }
+        .sim-wrap .pc:hover { transform: translateY(-2px); box-shadow: 0 4px 12px hsl(var(--primary)/.12); border-color: hsl(var(--primary)); }
+        .sim-wrap .pc.al { border-color: hsl(var(--primary)); background: hsl(var(--primary)/.06); box-shadow: 0 0 0 3px hsl(var(--primary)/.12); }
         .sim-wrap .pc.ar { border-color: #1E88E5; background: rgba(30,136,229,.06); box-shadow: 0 0 0 3px rgba(30,136,229,.12); }
         .sim-wrap .pc-meses { font-size: 20px; font-weight: 800; color: hsl(var(--foreground)); }
         .sim-wrap .pc-meses small { font-size: 11px; font-weight: 400; color: hsl(var(--muted-foreground)); margin-left: 3px; }
-        .sim-wrap .pc-parc { font-size: 12px; font-weight: 600; color: #6C2BD9; margin-top: 5px; }
+        .sim-wrap .pc-parc { font-size: 12px; font-weight: 600; color: hsl(var(--primary)); margin-top: 5px; }
         .sim-wrap .pc.ar .pc-parc { color: #1E88E5; }
         .sim-wrap .pc-taxa { font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 2px; }
         .sim-wrap .estrat-modo { display:inline-flex; margin: 0 0 10px; border:1px solid hsl(var(--border)); border-radius:8px; overflow:hidden; }
         .sim-wrap .estrat-modo button { background: transparent; border: 0; padding: 5px 12px; font-size: 12px; cursor: pointer; color: inherit; }
-        .sim-wrap .estrat-modo button.on { background: #6C2BD9; color: #fff; font-weight: 600; }
+        .sim-wrap .estrat-modo button.on { background: hsl(var(--primary)); color: #fff; font-weight: 600; }
         .sim-wrap .pc-anos { font-size: 20px; font-weight: 700; }
         .sim-wrap .tab-anual { width:100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
         .sim-wrap .tab-anual th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.4px; padding:6px 8px; color: hsl(var(--muted-foreground)); }
@@ -802,28 +802,28 @@ export default function SimuladorPortabilidadePage() {
         .sim-wrap .pc:hover .pc-x { opacity: 1; }
         .sim-wrap .faixa-prazos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; margin: -4px 0 12px; color: hsl(var(--muted-foreground)); }
         .sim-wrap .faixa-prazos input { width: 56px; padding: 3px 6px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--background)); color: hsl(var(--foreground)); font-size: 12px; }
-        .sim-wrap .faixa-prazos button { background: none; border: 0; color: #6C2BD9; text-decoration: underline; cursor: pointer; font-size: 12px; }
+        .sim-wrap .faixa-prazos button { background: none; border: 0; color: hsl(var(--primary)); text-decoration: underline; cursor: pointer; font-size: 12px; }
         .sim-wrap .pc-tag { position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 700; letter-spacing: .05em; padding: 2px 7px; border-radius: 20px; text-transform: uppercase; display: none; }
-        .sim-wrap .pc.al .pc-tag { display: block; background: #6C2BD9; color: #fff; }
+        .sim-wrap .pc.al .pc-tag { display: block; background: hsl(var(--primary)); color: #fff; }
         .sim-wrap .pc.ar .pc-tag { display: block; background: #1E88E5; color: #fff; }
         .sim-wrap .table-section { border-top: 1px solid hsl(var(--border)); padding: 24px 28px; background: hsl(var(--card)); }
         .sim-wrap .table-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
         .sim-wrap .table-title { font-size: 15px; font-weight: 700; color: hsl(var(--foreground)); }
         .sim-wrap .table-meta { font-size: 11px; color: hsl(var(--muted-foreground)); margin-top: 3px; }
-        .sim-wrap .btn-pdf { background: linear-gradient(90deg, #6C2BD9 0%, #1E88E5 100%); color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer; white-space: nowrap; transition: opacity .15s, box-shadow .15s; box-shadow: 0 4px 12px rgba(108,43,217,.12); }
-        .sim-wrap .btn-pdf:hover { opacity: .88; box-shadow: 0 6px 18px rgba(108,43,217,.25); }
+        .sim-wrap .btn-pdf { background: linear-gradient(90deg, hsl(var(--primary)) 0%, #1E88E5 100%); color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer; white-space: nowrap; transition: opacity .15s, box-shadow .15s; box-shadow: 0 4px 12px hsl(var(--primary)/.12); }
+        .sim-wrap .btn-pdf:hover { opacity: .88; box-shadow: 0 6px 18px hsl(var(--primary)/.25); }
         .sim-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .sim-wrap thead th { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing: .07em; padding: 10px 12px; text-align: left; border-bottom: 2px solid hsl(var(--border)); }
         .sim-wrap tbody tr { border-bottom: 1px solid hsl(var(--border)); transition: background .1s; }
-        .sim-wrap tbody tr:hover { background: rgba(108,43,217,.04); }
+        .sim-wrap tbody tr:hover { background: hsl(var(--primary)/.04); }
         .sim-wrap td { padding: 8px 12px; color: hsl(var(--foreground)); }
         .sim-wrap .tm { color: hsl(var(--muted-foreground)); font-weight: 500; }
-        .sim-wrap .ta { color: #6C2BD9; font-weight: 700; }
+        .sim-wrap .ta { color: hsl(var(--primary)); font-weight: 700; }
         .sim-wrap .ta2 { color: hsl(var(--foreground)); font-weight: 500; }
         .sim-wrap .empty-sim { text-align: center; padding: 48px; color: hsl(var(--muted-foreground)); font-size: 13px; }
         .sim-wrap .mode-toggle { display: flex; gap: 0; margin-bottom: 16px; border-radius: 8px; overflow: hidden; border: 1.5px solid hsl(var(--border)); }
         .sim-wrap .mode-btn { flex: 1; padding: 8px 12px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .03em; border: none; cursor: pointer; transition: all .15s; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
-        .sim-wrap .mode-btn.active { background: linear-gradient(90deg, #6C2BD9 0%, #1E88E5 100%); color: #fff; }
+        .sim-wrap .mode-btn.active { background: linear-gradient(90deg, hsl(var(--primary)) 0%, #1E88E5 100%); color: #fff; }
         .sim-wrap .mode-btn:first-child { border-right: 1px solid hsl(var(--border)); }
         .sim-wrap .pdf-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
         .sim-wrap .pdf-dialog { background: hsl(var(--card)); border-radius: 12px; padding: 28px; width: 420px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
@@ -939,7 +939,7 @@ export default function SimuladorPortabilidadePage() {
             <input type="number" ref={rContratoSemIofRef} style={{ display: "none" }} aria-hidden="true" />
             <div className="form-row">
               <div className="fg">
-                <label>Contrato + IOF (herdado){lAnt && lAnt.k > 0 && <span style={{ fontWeight: 400, color: "#6C2BD9" }}> · já com amortização</span>}</label>
+                <label>Contrato + IOF (herdado){lAnt && lAnt.k > 0 && <span style={{ fontWeight: 400, color: "hsl(var(--primary))" }}> · já com amortização</span>}</label>
                 <input type="number" ref={rContratoRef} placeholder="Calculado pelo lado esquerdo" step="0.01" readOnly data-testid="input-right-contrato" />
               </div>
               <div className="fg">
@@ -999,7 +999,7 @@ export default function SimuladorPortabilidadePage() {
 
               {/* o que o cliente quer ouvir primeiro: ficar livre antes */}
               <div style={{ fontSize: 13, color: "#6B7280", letterSpacing: ".04em", fontWeight: 700 }}>VOCÊ SE LIVRA DO CONTRATO</div>
-              <div style={{ fontSize: 34, fontWeight: 800, color: "#6C2BD9", lineHeight: 1.15 }} data-testid="apres-tempo">
+              <div style={{ fontSize: 34, fontWeight: 800, color: "hsl(var(--primary))", lineHeight: 1.15 }} data-testid="apres-tempo">
                 {emAnos(ganhoMeses)} antes
               </div>
               <div style={{ fontSize: 15, marginTop: 4 }}>
@@ -1052,7 +1052,7 @@ export default function SimuladorPortabilidadePage() {
                 </div>
                 <div style={{ fontSize: 11.5, color: "#6B7280", marginTop: 10 }}>Com os aportes · {anualAberto.meses} meses</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-                  <div style={{ height: 22, width: `${Math.max(6, (anualAberto.totalPago / maior) * 100)}%`, background: "#6C2BD9", borderRadius: 6 }} />
+                  <div style={{ height: 22, width: `${Math.max(6, (anualAberto.totalPago / maior) * 100)}%`, background: "hsl(var(--primary))", borderRadius: 6 }} />
                   <b style={{ fontSize: 13 }}>{fmtR(anualAberto.totalPago)}</b>
                 </div>
               </div>
@@ -1111,7 +1111,7 @@ export default function SimuladorPortabilidadePage() {
                       return (
                         <tr key={c.anos} onClick={() => setAnualEscolhido({ side: ladoAnual, anos: c.anos })}
                           data-testid={`linha-anual-${ladoAnual}-${c.anos}`}
-                          style={{ cursor: "pointer", background: aberta ? "rgba(108,43,217,.10)" : undefined, fontWeight: aberta ? 700 : undefined }}>
+                          style={{ cursor: "pointer", background: aberta ? "hsl(var(--primary)/.10)" : undefined, fontWeight: aberta ? 700 : undefined }}>
                           <td>{c.anos} {c.anos === 1 ? "ano" : "anos"}</td>
                           <td>{fmtR(c.aporte)}</td>
                           <td>{c.meses} meses</td>
@@ -1176,7 +1176,7 @@ export default function SimuladorPortabilidadePage() {
                   </div>
                   <button
                     onClick={() => setApresentando(true)}
-                    style={{ marginTop: 10, padding: "8px 14px", borderRadius: 8, border: 0, background: "#6C2BD9", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                    style={{ marginTop: 10, padding: "8px 14px", borderRadius: 8, border: 0, background: "hsl(var(--primary))", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
                     data-testid="btn-apresentar"
                   >Apresentar ao cliente</button>
                 </div>
@@ -1268,7 +1268,7 @@ export default function SimuladorPortabilidadePage() {
                     }}
                     style={{
                       height: 32, padding: "0 14px", borderRadius: 8, border: "none",
-                      background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
+                      background: "linear-gradient(135deg, hsl(var(--primary)) 0%, #EC4899 100%)",
                       color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer",
                       display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
                       boxShadow: "0 2px 10px rgba(124,58,237,.3)", fontFamily: "inherit",
@@ -1382,7 +1382,7 @@ export default function SimuladorPortabilidadePage() {
 
               {/* ── Seção Consultor ── */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#6C2BD9" }}>📌 Dados do Consultor</span>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "hsl(var(--primary))" }}>📌 Dados do Consultor</span>
                 <span style={{
                   fontSize: 10, fontWeight: 600, color: "#16a34a",
                   opacity: consultorDadosSalvos ? 1 : 0,
@@ -1422,15 +1422,15 @@ export default function SimuladorPortabilidadePage() {
                 />
               </div>
               {/* Foto do consultor no PDF */}
-              <div style={{ padding: "12px", background: "rgba(108,43,217,0.06)", borderRadius: 10, border: "1px solid rgba(108,43,217,0.15)" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, color: "#6C2BD9", textTransform: "uppercase", letterSpacing: "0.06em" }}>Foto no PDF</div>
+              <div style={{ padding: "12px", background: "hsl(var(--primary)/0.06)", borderRadius: 10, border: "1px solid hsl(var(--primary)/0.15)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10, color: "hsl(var(--primary))", textTransform: "uppercase", letterSpacing: "0.06em" }}>Foto no PDF</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   {/* Preview circular */}
                   <div style={{ position: "relative", flexShrink: 0 }}>
                     {pdfIncluirFoto
                       ? (fotoAtiva
                           ? <img src={fotoAtiva} style={{ height: 56, width: "auto", maxWidth: 68, objectFit: "contain", display: "block", borderRadius: 4 }} alt="Foto" />
-                          : <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,#6C2BD9,#1E88E5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 18, border: "2.5px solid #6C2BD9" }}>
+                          : <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg,hsl(var(--primary)),#1E88E5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 18, border: "2.5px solid hsl(var(--primary))" }}>
                               {(pdfConsultorNome || user?.name || "?").split(" ").filter(Boolean).map((n: string) => n[0].toUpperCase()).slice(0, 2).join("")}
                             </div>)
                       : <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#f1f5f9", border: "2px dashed #cbd5e1", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🚫</div>
@@ -1442,7 +1442,7 @@ export default function SimuladorPortabilidadePage() {
                       <button
                         type="button"
                         onClick={() => fotoInputRef.current?.click()}
-                        style={{ flex: 1, padding: "6px 10px", borderRadius: 7, border: "1.5px solid #6C2BD9", background: "hsl(var(--card))", color: "#6C2BD9", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                        style={{ flex: 1, padding: "6px 10px", borderRadius: 7, border: "1.5px solid hsl(var(--primary))", background: "hsl(var(--card))", color: "hsl(var(--primary))", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
                       >
                         {fotoAtiva ? "Trocar foto" : "Escolher foto"}
                       </button>
@@ -1459,7 +1459,7 @@ export default function SimuladorPortabilidadePage() {
                     <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: "hsl(var(--muted-foreground))", userSelect: "none" }}>
                       <div style={{ position: "relative", width: 32, height: 18, flexShrink: 0 }}>
                         <input type="checkbox" checked={pdfIncluirFoto} onChange={e => setPdfIncluirFoto(e.target.checked)} style={{ opacity: 0, width: 0, height: 0, position: "absolute" }} />
-                        <span style={{ position: "absolute", inset: 0, borderRadius: 18, background: pdfIncluirFoto ? "#6C2BD9" : "hsl(var(--border))", transition: "background .2s", display: "block" }} />
+                        <span style={{ position: "absolute", inset: 0, borderRadius: 18, background: pdfIncluirFoto ? "hsl(var(--primary))" : "hsl(var(--border))", transition: "background .2s", display: "block" }} />
                         <span style={{ position: "absolute", top: 3, left: pdfIncluirFoto ? 17 : 3, width: 12, height: 12, borderRadius: "50%", background: "#fff", transition: "left .2s", display: "block" }} />
                       </div>
                       Exibir foto no PDF
@@ -1557,7 +1557,7 @@ export default function SimuladorPortabilidadePage() {
                 <input
                   type="range" min={100} max={300} value={Math.round(cropZoom * 100)}
                   onChange={e => setCropZoom(Number(e.target.value) / 100)}
-                  style={{ width: "100%", accentColor: "#6C2BD9", cursor: "pointer" }}
+                  style={{ width: "100%", accentColor: "hsl(var(--primary))", cursor: "pointer" }}
                 />
               </div>
 
@@ -1571,7 +1571,7 @@ export default function SimuladorPortabilidadePage() {
                 <button
                   type="button"
                   onClick={confirmCrop}
-                  style={{ flex: 1, padding: "9px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#6C2BD9,#1E88E5)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                  style={{ flex: 1, padding: "9px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,hsl(var(--primary)),#1E88E5)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                 >Usar esta foto</button>
               </div>
             </div>

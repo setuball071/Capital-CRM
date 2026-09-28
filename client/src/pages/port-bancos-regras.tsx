@@ -17,7 +17,7 @@ interface BancoApi {
   excecoes: { id: number; tipo: string; parametros: any; motivo: string | null; criado_em: string }[];
 }
 
-const inputCls = "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500/40";
+const inputCls = "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/40";
 const labelCls = "block text-[11px] font-semibold text-muted-foreground mb-1";
 const cardCls = "rounded-xl border border-border bg-card p-4";
 
@@ -74,7 +74,7 @@ function PainelBancos({ bancos, convenio, aoMudar }: { bancos: BancoApi[]; conve
 
   return (
     <div className="mt-5 space-y-4">
-      {msg && <div className="rounded-md bg-violet-50 dark:bg-violet-950/40 px-3 py-2 text-[12px] text-violet-800 dark:text-violet-200">{msg}</div>}
+      {msg && <div className="rounded-md bg-primary/10 dark:bg-primary/20/40 px-3 py-2 text-[12px] text-primary dark:text-primary">{msg}</div>}
 
       <div className={cardCls}>
         <div className="text-sm font-bold mb-1">Importar infográfico</div>
@@ -88,7 +88,7 @@ function PainelBancos({ bancos, convenio, aoMudar }: { bancos: BancoApi[]; conve
             <button onClick={() => executar(async () => {
               const j = await chamar("/api/port/importar-modelo", "POST", { modeloId: m.id });
               return `${m.banco}: ${j.regraNova ? "nova versão de regras gravada" : "regras idênticas às vigentes, nada mudou"}; ${j.excecoesCriadas} exceção(ões) criada(s).`;
-            })} className="rounded-md bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1.5 whitespace-nowrap">Importar</button>
+            })} className="rounded-md bg-primary hover:bg-primary/90 text-white text-xs font-semibold px-3 py-1.5 whitespace-nowrap">Importar</button>
           </div>
         ))}
       </div>
@@ -134,7 +134,7 @@ function PainelBancos({ bancos, convenio, aoMudar }: { bancos: BancoApi[]; conve
                     ? <>Regras {convenio}: {b.regraVigente.fonteDescricao || "cadastro manual"} · vigentes desde {new Date(b.regraVigente.vigenciaInicio).toLocaleString("pt-BR")} · #{b.regraVigente.id}</>
                     : <>Sem regras para {convenio}.</>}
                 </div>
-                <button className="text-[11px] font-semibold text-violet-700 dark:text-violet-300" onClick={async () => {
+                <button className="text-[11px] font-semibold text-primary dark:text-primary" onClick={async () => {
                   if (historico[b.id]) { setHistorico(h => { const n = { ...h }; delete n[b.id]; return n; }); return; }
                   const r = await fetch(`/api/port/bancos/${b.id}/regras`, { credentials: "include" });
                   setHistorico(h => ({ ...h, [b.id]: r.ok ? [] : [] }));
@@ -196,7 +196,7 @@ function PainelBancos({ bancos, convenio, aoMudar }: { bancos: BancoApi[]; conve
                       setFormExc(s => ({ ...s, [b.id]: { origem: "", porta: true, pagasMin: "0", motivo: "" } }));
                       return "Exceção criada.";
                     })}
-                    className="rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2">+ exceção</button>
+                    className="rounded-md bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2">+ exceção</button>
                 </div>
               </div>
             </div>

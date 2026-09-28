@@ -47,7 +47,7 @@ const CATEGORIES = [
 
 const TYPE_CONFIG: Record<string, { icon: typeof FileText; bg: string; label: string }> = {
   pdf: { icon: FileText, bg: "rgba(239,68,68,0.1)", label: "PDF" },
-  video: { icon: Video, bg: "rgba(108,43,217,0.1)", label: "Video" },
+  video: { icon: Video, bg: "hsl(var(--primary)/0.1)", label: "Video" },
   image: { icon: ImageIcon, bg: "rgba(30,136,229,0.1)", label: "Imagem" },
   link: { icon: Link2, bg: "rgba(107,114,128,0.1)", label: "Link" },
 };
@@ -256,7 +256,7 @@ export default function MaterialApoioPage() {
                   <Button
                     size="sm"
                     className="flex-1"
-                    style={{ background: "linear-gradient(90deg, #6C2BD9, #1E88E5)" }}
+                    style={{ background: "linear-gradient(90deg, hsl(var(--primary)), #1E88E5)" }}
                     onClick={() => window.open((mat as any).storageKey ? `/api/materials/${mat.id}/file` : mat.url || "", "_blank")}
                     data-testid={`button-open-${mat.id}`}
                   >

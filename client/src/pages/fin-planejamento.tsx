@@ -273,7 +273,7 @@ export default function FinPlanejamento() {
                 <div className="h-2 rounded-full bg-muted overflow-hidden">
                   <div className="h-full rounded-full transition-all" style={{
                     width: `${Math.min(100, e.pct)}%`,
-                    background: e.pct >= 100 ? "#dc2626" : e.pct >= 80 ? "#d97706" : (e.cor || "#7c3aed"),
+                    background: e.pct >= 100 ? "#dc2626" : e.pct >= 80 ? "#d97706" : (e.cor || "hsl(var(--primary))"),
                   }} />
                 </div>
               </div>

@@ -46,7 +46,7 @@ const COR_MAP: Record<number, string> = {
   2: "bg-green-500",
   3: "bg-yellow-500",
   4: "bg-orange-500",
-  5: "bg-purple-500",
+  5: "bg-primary",
 };
 
 export default function AcademiaFundamentos() {
@@ -158,7 +158,7 @@ export default function AcademiaFundamentos() {
               </p>
             </div>
             <div className="p-4 rounded-lg bg-muted">
-              <Brain className="h-6 w-6 mb-2 text-purple-500" />
+              <Brain className="h-6 w-6 mb-2 text-primary" />
               <h3 className="font-semibold mb-1">Estratégico</h3>
               <p className="text-sm text-muted-foreground">
                 Analisar cenário completo, comparar bancos, encontrar a melhor solução estruturada.

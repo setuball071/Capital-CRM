@@ -91,7 +91,7 @@ const CONTRACT_TYPES = [
     label: "Contrato Novo",
     description: "Empréstimo consignado novo",
     Icon: Sparkles,
-    iconColor: "text-violet-600 dark:text-violet-400",
+    iconColor: "text-primary dark:text-primary",
     product: "NOVO",
   },
   {
@@ -706,7 +706,7 @@ export default function ContratosPropostaPage() {
     <div className={wide ? "sm:col-span-2" : ""}>
       <label className="text-xs text-muted-foreground">{label}</label>
       <input
-        className="mt-0.5 w-full rounded-md border border-purple-300 dark:border-purple-800 bg-background px-2.5 py-1.5 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-400"
+        className="mt-0.5 w-full rounded-md border border-primary/30 dark:border-primary bg-background px-2.5 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         value={value ?? ""}
         onChange={(e) => setDocField(key, e.target.value)}
       />
@@ -2005,8 +2005,8 @@ export default function ContratosPropostaPage() {
           <div className="space-y-4">
             {/* Header da coluna */}
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center shrink-0">
-                <CreditCard className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="h-9 w-9 rounded-lg bg-primary/10 dark:bg-primary/20/50 flex items-center justify-center shrink-0">
+                <CreditCard className="h-5 w-5 text-primary dark:text-primary" />
               </div>
               <div>
                 <p className="font-semibold text-sm">Documento com Foto</p>
@@ -2058,8 +2058,8 @@ export default function ContratosPropostaPage() {
 
             {/* Preenchimento manual do documento (fallback do OCR) — inputs sempre editáveis */}
             {docPhotoData && docPhotoSource === "manual" && (
-              <div className="rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/10 p-3 space-y-3">
-                <p className="text-xs font-semibold text-purple-700 dark:text-purple-400">
+              <div className="rounded-lg border border-primary/30 dark:border-primary bg-primary/10/50 dark:bg-primary/20/10 p-3 space-y-3">
+                <p className="text-xs font-semibold text-primary dark:text-primary">
                   Preencha os dados do documento
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-2.5">
@@ -2078,9 +2078,9 @@ export default function ContratosPropostaPage() {
 
             {/* Dados do documento (OCR ou cache de proposta anterior) */}
             {docPhotoData && docPhotoSource !== "manual" && !isOcring && (
-              <div className="rounded-lg border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/20 p-3 space-y-2">
+              <div className="rounded-lg border border-primary/30 dark:border-primary bg-primary/10 dark:bg-primary/20/20 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-1">
+                  <p className="text-xs font-semibold text-primary dark:text-primary flex items-center gap-1">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento"}
                     {docPhotoSource === "cached" ? " — dados do cadastro anterior" : " lido"}
@@ -2088,7 +2088,7 @@ export default function ContratosPropostaPage() {
                   {docPhotoSource === "cached" && docFrenteFile && (
                     <button
                       type="button"
-                      className="text-xs text-purple-600 dark:text-purple-400 underline underline-offset-2 hover:opacity-70 shrink-0"
+                      className="text-xs text-primary dark:text-primary underline underline-offset-2 hover:opacity-70 shrink-0"
                       onClick={() => {
                         setDocPhotoSource("ocr");
                         runDocOcr(docFrenteFile, docVersoFile);
@@ -2452,9 +2452,9 @@ export default function ContratosPropostaPage() {
 
           {/* ── Dados do Documento com Foto (campos sempre editáveis) ── */}
           {docPhotoData && (
-            <Card id="doc-foto-card" className="border-purple-200 dark:border-purple-900">
+            <Card id="doc-foto-card" className="border-primary/30 dark:border-primary">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2 text-purple-700 dark:text-purple-400">
+                <CardTitle className="text-base flex items-center gap-2 text-primary dark:text-primary">
                   <CreditCard className="h-4 w-4" />
                   {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento com Foto"}
                   <span className="text-xs font-normal text-muted-foreground">(corrija se necessário)</span>
@@ -2834,15 +2834,15 @@ export default function ContratosPropostaPage() {
 
               {reusedDocs.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-purple-700 dark:text-purple-400">
+                  <p className="text-xs font-medium text-primary dark:text-primary">
                     Reaproveitados do cadastro anterior ({reusedDocs.length})
                   </p>
                   {reusedDocs.map((d) => (
                     <div
                       key={`reuse-${d.id}`}
-                      className="flex items-center gap-3 p-3 rounded-md border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/10"
+                      className="flex items-center gap-3 p-3 rounded-md border border-primary/30 dark:border-primary bg-primary/10/50 dark:bg-primary/20/10"
                     >
-                      <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                      <FileText className="h-4 w-4 text-primary dark:text-primary shrink-0" />
                       <span className="text-sm flex-1 truncate">{d.fileName}</span>
                       <a
                         href={`/api/contracts/documents/${d.id}/file`}
@@ -3839,7 +3839,7 @@ export default function ContratosPropostaPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Coins className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                <Coins className="h-4 w-4 text-primary dark:text-primary" />
                 Cotação do Simulador
                 <Badge variant="outline" className="text-xs ml-auto">JSON</Badge>
               </CardTitle>
@@ -4286,9 +4286,9 @@ export default function ContratosPropostaPage() {
 
         {/* Card: Documento com foto */}
         {docPhotoData && (
-          <Card className="border-purple-200 dark:border-purple-900">
+          <Card className="border-primary/30 dark:border-primary">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2 text-purple-700 dark:text-purple-400">
+              <CardTitle className="text-base flex items-center gap-2 text-primary dark:text-primary">
                 <CreditCard className="h-4 w-4" />
                 {docPhotoData.tipo === "CNH" ? "CNH" : docPhotoData.tipo === "RG" ? "RG" : "Documento com Foto"}
               </CardTitle>
@@ -4464,12 +4464,12 @@ export default function ContratosPropostaPage() {
             {/* Documentos reaproveitados do cadastro anterior */}
             {reusedDocs.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-medium text-purple-700 dark:text-purple-400">
+                <p className="text-xs font-medium text-primary dark:text-primary">
                   Reaproveitados do cadastro anterior ({reusedDocs.length})
                 </p>
                 {reusedDocs.map((d) => (
-                  <div key={`reuse-${d.id}`} className="flex items-center gap-3 p-2 rounded-md border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/10 text-sm">
-                    <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <div key={`reuse-${d.id}`} className="flex items-center gap-3 p-2 rounded-md border border-primary/30 dark:border-primary bg-primary/10/50 dark:bg-primary/20/10 text-sm">
+                    <FileText className="h-4 w-4 text-primary dark:text-primary shrink-0" />
                     <span className="flex-1 truncate">{d.fileName}</span>
                     <a
                       href={`/api/contracts/documents/${d.id}/file`}

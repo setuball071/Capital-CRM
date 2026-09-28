@@ -1043,7 +1043,7 @@ export default function ConsultaCliente() {
                   <DialogContent className="max-w-lg">
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2">
-                        <Info className="h-4 w-4" style={{ color: "#6C2BD9" }} />
+                        <Info className="h-4 w-4" style={{ color: "hsl(var(--primary))" }} />
                         Informações Complementares
                       </DialogTitle>
                     </DialogHeader>
@@ -1081,7 +1081,7 @@ export default function ConsultaCliente() {
                         data-testid="button-obs-info"
                         title="Ver informações complementares"
                       >
-                        <Info className="h-5 w-5" style={{ color: "#6C2BD9" }} />
+                        <Info className="h-5 w-5" style={{ color: "hsl(var(--primary))" }} />
                       </Button>
                     )}
                   </CardTitle>

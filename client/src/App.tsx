@@ -377,10 +377,7 @@ function Router() {
               ))}
               <button
                 onClick={() => navigate("/contratos/nova")}
-                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-sm font-semibold text-white transition-colors"
-                style={{ background: "#6C2BD9" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#4B1FA6"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#6C2BD9"; }}
+                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 data-testid="header-nova-proposta"
               >
                 <MatIcon name="add" size={17} />

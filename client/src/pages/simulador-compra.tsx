@@ -10,7 +10,7 @@ import { calcularCompra, type TabelaCompra } from "@shared/compra/calculo";
 
 interface TabelaApi extends TabelaCompra { id: number; ativo: boolean }
 
-const inputCls = "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500/40";
+const inputCls = "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/40";
 const labelCls = "block text-[11px] font-semibold text-muted-foreground mb-1";
 const cardCls = "rounded-xl border border-border bg-card p-4";
 
@@ -85,7 +85,7 @@ export default function SimuladorCompra() {
 
   const Th = ({ k, children, right = true }: { k?: Ordem; children: React.ReactNode; right?: boolean }) => (
     <th className={`px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground ${right ? "text-right" : "text-left"}`}>
-      {k ? <button onClick={() => setOrdem(ordem === k ? "padrao" : k)} className={`uppercase ${ordem === k ? "text-violet-600" : ""}`}>
+      {k ? <button onClick={() => setOrdem(ordem === k ? "padrao" : k)} className={`uppercase ${ordem === k ? "text-primary" : ""}`}>
         {children}{ordem === k ? " ↓" : ""}</button> : children}
     </th>
   );
@@ -120,7 +120,7 @@ export default function SimuladorCompra() {
           </span>
           <span>Margem usada: <b>{brl(res.margemUsada)}</b>{res.margemEhParcela && res.margemUsada > 0 && <span className="text-muted-foreground"> (a parcela)</span>}</span>
           {podeVerCom && <button onClick={() => { setOcultarCom(!ocultarCom); if (ordem === "comissao") setOrdem("padrao"); }}
-            className={`ml-auto rounded-md border px-2.5 py-1 text-xs font-semibold ${ocultarCom ? "border-violet-600 bg-violet-600 text-white" : "border-border hover:bg-muted"}`}>
+            className={`ml-auto rounded-md border px-2.5 py-1 text-xs font-semibold ${ocultarCom ? "border-primary bg-primary text-white" : "border-border hover:bg-muted"}`}>
             {ocultarCom ? "Mostrar comissão" : "Esconder comissão"}</button>}
           <button onClick={limpar} className={`${podeVerCom ? "" : "ml-auto "}text-xs text-muted-foreground hover:text-foreground underline`}>Limpar</button>
         </div>
@@ -133,7 +133,7 @@ export default function SimuladorCompra() {
           <span className="text-xs text-muted-foreground">Banco:</span>
           {["", ...bancos].map(b => (
             <button key={b || "todos"} onClick={() => setBancoFiltro(b)}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${bancoFiltro === b ? "border-violet-600 bg-violet-600 text-white" : "border-border hover:bg-muted"}`}>
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${bancoFiltro === b ? "border-primary bg-primary text-white" : "border-border hover:bg-muted"}`}>
               {b || "Todos"}</button>
           ))}
         </div>
@@ -236,7 +236,7 @@ function PainelTabelas({ aoMudar }: { aoMudar: () => void }) {
           {campo("coeficiente", "Coeficiente", "0,042824888")}{campo("percentual", "Percentual %", "28")}
           {campo("prazo", "Prazo (opcional)", "96")}
           <div className="flex gap-2">
-            <button onClick={salvar} className="rounded-md bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-2">{editando ? "Salvar" : "Adicionar"}</button>
+            <button onClick={salvar} className="rounded-md bg-primary hover:bg-primary/90 text-white text-xs font-semibold px-3 py-2">{editando ? "Salvar" : "Adicionar"}</button>
             {editando && <button onClick={() => { setEditando(null); setForm(VAZIA); }} className="text-xs underline">cancelar</button>}
           </div>
         </div>

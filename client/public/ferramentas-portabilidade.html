@@ -1,6 +1,44 @@
 <!DOCTYPE html>
 <html lang="pt-BR" data-theme="light">
 <head>
+<style id="cor-da-marca">
+/* Cor da marca do ambiente. O padrao e o roxo antigo; o script logo abaixo
+   troca pelo --primary do CRM quando esta pagina roda dentro do sistema. */
+:root { --brand: #6C2BD9; --brand-dark: #4B1FA6; --brand-90: rgba(108,43,217,0.9); }
+</style>
+<script>
+/* Esta pagina roda em iframe, e iframe nao herda as variaveis de CSS do pai.
+   Como e mesma origem, lemos o --primary que o CRM ja aplicou e repassamos.
+   Se falhar (pagina aberta sozinha), fica o padrao acima. */
+(function () {
+  var tentativas = 0;
+  function aplicar() {
+    tentativas++;
+    try {
+      var pai = window.parent;
+      if (!pai || pai === window) return true; // aberta sozinha: fica o padrao
+      var hsl = getComputedStyle(pai.document.documentElement)
+        .getPropertyValue('--primary').trim();
+      if (!hsl) return false; // o CRM ainda nao aplicou o tema
+      var r = document.documentElement;
+      r.style.setProperty('--brand', 'hsl(' + hsl + ')');
+      r.style.setProperty('--brand-dark', 'hsl(' + hsl + ')');
+      r.style.setProperty('--brand-90', 'hsl(' + hsl + ' / 0.9)');
+      return true;
+    } catch (e) {
+      return true; // origem diferente: nao adianta insistir
+    }
+  }
+  // O iframe costuma carregar ANTES de o CRM buscar o tema do ambiente,
+  // entao insistimos por ate 5 segundos.
+  if (!aplicar()) {
+    var t = setInterval(function () {
+      if (aplicar() || tentativas > 25) clearInterval(t);
+    }, 200);
+  }
+})();
+</script>
+
 <meta name="color-scheme" content="light only">
 <style id="force-light">
 /* NUCLEAR LIGHT FORCE — runs before any other CSS */
@@ -259,13 +297,13 @@ td { color: #111827 !important; }
   </div>
   <!-- BUSCA: cotações salvas por CPF (sem precisar anexar o extrato) -->
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:10px 16px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;flex-wrap:wrap;">
-    <span style="font-size:12px;font-weight:700;color:#6C2BD9;white-space:nowrap;">🔎 Buscar cotações salvas por CPF:</span>
+    <span style="font-size:12px;font-weight:700;color:var(--brand);white-space:nowrap;">🔎 Buscar cotações salvas por CPF:</span>
     <input id="buscaCpfCotacoes" placeholder="000.000.000-00" maxlength="14"
       style="width:150px;font-size:13px;padding:5px 8px;border:1px solid #DDD6FE;border-radius:5px;"
       oninput="this.value = _formatarCpf(this.value)"
       onkeydown="if(event.key==='Enter'){buscarCotacoesPorCpfManual();}">
     <button onclick="buscarCotacoesPorCpfManual()"
-      style="padding:5px 14px;background:#6C2BD9;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+      style="padding:5px 14px;background:var(--brand);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
       Buscar
     </button>
     <span id="buscaCpfStatus" style="font-size:12px;color:#6B7280;"></span>
@@ -290,10 +328,10 @@ td { color: #111827 !important; }
       ondragover="event.preventDefault();document.getElementById('dropZone').classList.add('dz-hover')"
       ondragleave="document.getElementById('dropZone').classList.remove('dz-hover')"
       ondrop="event.preventDefault();document.getElementById('dropZone').classList.remove('dz-hover');handleDropPDF(event)"
-      style="margin-bottom:16px;padding:24px 16px;border:2px dashed #7C3AED;border-radius:10px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface-2);">
+      style="margin-bottom:16px;padding:24px 16px;border:2px dashed var(--brand);border-radius:10px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface-2);">
 
       <div style="font-size:28px;margin-bottom:8px;line-height:1;">📄</div>
-      <div style="font-size:13px;font-weight:600;color:#7C3AED;margin-bottom:4px;">
+      <div style="font-size:13px;font-weight:600;color:var(--brand);margin-bottom:4px;">
         Arraste o PDF aqui ou clique para selecionar
       </div>
       <div style="font-size:11px;color:#9CA3AF;">
@@ -306,12 +344,12 @@ td { color: #111827 !important; }
     <style>
       #dropZone.dz-hover {
         background: #EDE9FE !important;
-        border-color: #6D28D9 !important;
+        border-color: var(--brand-dark) !important;
         transform: scale(1.01);
       }
       [data-theme="dark"] #dropZone {
         background: #1E1535 !important;
-        border-color: #7C3AED !important;
+        border-color: var(--brand) !important;
       }
       [data-theme="dark"] #dropZone.dz-hover {
         background: #2D1F5E !important;
@@ -336,11 +374,11 @@ td { color: #111827 !important; }
         Marque os contratos que deseja portar/renegociar
       </span>
       <div style="margin-left:auto;display:flex;gap:6px;align-items:center;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:6px;padding:5px 8px;">
-        <span style="font-size:12px;color:#6C2BD9;font-weight:600;white-space:nowrap;">Taxa p/ todos:</span>
+        <span style="font-size:12px;color:var(--brand);font-weight:600;white-space:nowrap;">Taxa p/ todos:</span>
         <input id="taxaTodos" placeholder="1,80" style="width:64px;text-align:center;font-size:12px;padding:4px 6px;border:1px solid #DDD6FE;border-radius:4px;"
           title="Aplica esta taxa a todos os contratos de uma vez"
           onkeydown="if(event.key==='Enter'){aplicarTaxaTodos();}">
-        <button onclick="aplicarTaxaTodos()" style="padding:5px 12px;background:#6C2BD9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
+        <button onclick="aplicarTaxaTodos()" style="padding:5px 12px;background:var(--brand);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;">
           Aplicar
         </button>
       </div>
@@ -394,7 +432,7 @@ td { color: #111827 !important; }
       </div>
     </div>
     
-    <button onclick="addContrato()" style="margin-top:10px;background:#7C3AED;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Adicionar Contrato</button>
+    <button onclick="addContrato()" style="margin-top:10px;background:var(--brand);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Adicionar Contrato</button>
   </div>
 
   <!-- ANÁLISE POR BANCO (multibanco) ─────────────────────────────────────────
@@ -405,7 +443,7 @@ td { color: #111827 !important; }
     #mbPainel .mb-topo { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     #mbPainel .mb-estado { font-size:11px; color:var(--text-muted); margin-left:auto; }
     #mbPainel .mb-estado.analisando::before { content:""; display:inline-block; width:7px; height:7px; border-radius:50%;
-      background:#7C3AED; margin-right:6px; animation: mbPulso 1s infinite; vertical-align:middle; }
+      background:var(--brand); margin-right:6px; animation: mbPulso 1s infinite; vertical-align:middle; }
     @keyframes mbPulso { 0%,100% { opacity:.25 } 50% { opacity:1 } }
     #mbPainel .mb-chip { display:inline-block; white-space:nowrap; border-radius:999px; padding:2px 9px; font-size:11px; font-weight:600; }
     #mbPainel .mb-ELEGIVEL { background:#D1FAE5; color:#065F46 }
@@ -417,8 +455,8 @@ td { color: #111827 !important; }
     #mbPainel .mb-abas { display:flex; gap:2px; flex-wrap:wrap; border-bottom:1px solid var(--border); margin:14px 0 12px; }
     #mbPainel .mb-aba { background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px; padding:8px 12px;
       font:600 12.5px var(--font); color:var(--text-secondary); cursor:pointer; box-shadow:none; }
-    #mbPainel .mb-aba.on { color:#6C2BD9; border-bottom-color:#6C2BD9; }
-    #mbPainel .mb-aba:hover { transform:none; box-shadow:none; color:#6C2BD9; }
+    #mbPainel .mb-aba.on { color:var(--brand); border-bottom-color:var(--brand); }
+    #mbPainel .mb-aba:hover { transform:none; box-shadow:none; color:var(--brand); }
     #mbPainel table.mb-t { width:100%; border-collapse:collapse; font-size:12px; }
     #mbPainel table.mb-t th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.4px; padding:6px 8px; }
     #mbPainel table.mb-t td { padding:7px 8px; border-top:1px solid var(--border-soft); vertical-align:top; }
@@ -428,7 +466,7 @@ td { color: #111827 !important; }
     #mbPainel .mb-op-modos button { border:1px solid var(--border-soft); background:transparent; color:inherit; padding:4px 10px; font-size:12px; cursor:pointer; margin-right:-1px; }
     #mbPainel .mb-op-modos button:first-child { border-radius:6px 0 0 6px; }
     #mbPainel .mb-op-modos button:last-child { border-radius:0 6px 6px 0; }
-    #mbPainel .mb-op-modos button.on { background:#6C2BD9; border-color:#6C2BD9; color:#fff; font-weight:600; }
+    #mbPainel .mb-op-modos button.on { background:var(--brand); border-color:var(--brand); color:#fff; font-weight:600; }
     #mbPainel .mb-kpis { display:flex; flex-wrap:wrap; gap:8px 22px; margin-top:10px; }
     #mbPainel .mb-kpis span { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-muted); }
     #mbPainel .mb-kpis b { font-size:15px; }
@@ -444,13 +482,13 @@ td { color: #111827 !important; }
     #mbPainel .mb-banner.manual { background:#F0F9FF; border:1px solid #BAE6FD; color:#075985; }
     #mbPainel .mb-banner.erro { background:#FEF2F2; border:1px solid #FECACA; color:#991B1B; }
     #mbPainel .mb-btn { font:600 12px var(--font); border-radius:6px; padding:6px 12px; cursor:pointer; border:none;
-      background:#7C3AED; color:#fff; box-shadow:none; }
-    #mbPainel .mb-btn.sec { background:#fff; color:#7C3AED; border:1px solid #C4B5FD; }
+      background:var(--brand); color:#fff; box-shadow:none; }
+    #mbPainel .mb-btn.sec { background:#fff; color:var(--brand); border:1px solid #C4B5FD; }
     #mbPainel .mb-btn:hover { transform:none; box-shadow:none; opacity:.92; }
-    #mbPainel .mb-link { background:none; border:none; color:#7C3AED; font:600 12px var(--font); cursor:pointer; padding:0; box-shadow:none; text-decoration:underline; }
+    #mbPainel .mb-link { background:none; border:none; color:var(--brand); font:600 12px var(--font); cursor:pointer; padding:0; box-shadow:none; text-decoration:underline; }
     #mbPainel .mb-link:hover { transform:none; box-shadow:none; }
     #mbPainel .mb-sub { font-size:11px; color:var(--text-muted); }
-    #mbPainel .mb-exc { display:inline-block; font-size:10px; font-weight:700; color:#6D28D9; background:#EDE9FE; border-radius:4px; padding:1px 5px; }
+    #mbPainel .mb-exc { display:inline-block; font-size:10px; font-weight:700; color:var(--brand-dark); background:#EDE9FE; border-radius:4px; padding:1px 5px; }
     #mbPainel .mb-grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
     #mbPainel .mb-kpi-t { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); }
     #mbPainel .mb-vazio { text-align:center; color:var(--text-muted); font-size:12.5px; padding:22px 10px; }
@@ -497,7 +535,7 @@ td { color: #111827 !important; }
       </thead>
       <tbody id="tbMargens"></tbody>
     </table>
-    <button onclick="addMargem()" style="margin-top:10px;background:#7C3AED;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Adicionar Margem</button>
+    <button onclick="addMargem()" style="margin-top:10px;background:var(--brand);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">+ Adicionar Margem</button>
   </div>
 
   <!-- CENÁRIO DE PORTABILIDADE -->
@@ -507,7 +545,7 @@ td { color: #111827 !important; }
     <!-- TIPO DE PORTABILIDADE -->
     <div style="display:flex;gap:0;margin-bottom:20px;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;">
       <button id="btnTipoSimples" onclick="setTipoPort('simples')"
-        style="flex:1;padding:12px;border:none;cursor:pointer;font-weight:600;font-size:14px;background:#7C3AED;color:#fff;transition:all 0.2s;">
+        style="flex:1;padding:12px;border:none;cursor:pointer;font-weight:600;font-size:14px;background:var(--brand);color:#fff;transition:all 0.2s;">
         📉 Portabilidade Simples
       </button>
       <button id="btnTipoRefim" onclick="setTipoPort('refim')"
@@ -570,8 +608,8 @@ td { color: #111827 !important; }
           <div id="wrapSimpFinanciado" style="display:none;"><span style="font-size:12px;color:#B45309;">Valor Financiado <span id="simpSeguroPerc" style="font-size:10px;">(c/ seguro)</span></span><br><strong id="simpFinanciado" style="font-size:18px;color:#B45309;">-</strong></div>
           <div><span style="font-size:12px;color:#6B7280;">Parcela Total Atual</span><br><strong id="simpParcelaAtual" style="font-size:18px;color:#EF4444;">-</strong></div>
           <div><span style="font-size:12px;color:#6B7280;">Parcela Total Nova</span><br><strong id="simpParcelaNova" style="font-size:18px;color:#16A34A;">-</strong></div>
-          <div><span style="font-size:12px;color:#6B7280;">Economia Mensal</span><br><strong id="simpEconomia" style="font-size:18px;color:#6C2BD9;">-</strong></div>
-          <div id="wrapSimpConsolidada" style="display:none;"><span style="font-size:12px;color:#6B7280;">Parcela Única (Junto)</span><br><strong id="simpParcelaConsolidada" style="font-size:18px;color:#6C2BD9;">-</strong></div>
+          <div><span style="font-size:12px;color:#6B7280;">Economia Mensal</span><br><strong id="simpEconomia" style="font-size:18px;color:var(--brand);">-</strong></div>
+          <div id="wrapSimpConsolidada" style="display:none;"><span style="font-size:12px;color:#6B7280;">Parcela Única (Junto)</span><br><strong id="simpParcelaConsolidada" style="font-size:18px;color:var(--brand);">-</strong></div>
         </div>
       </div>
 
@@ -595,7 +633,7 @@ td { color: #111827 !important; }
           </select>
         </div>
         <div id="refimRegraInfo" style="display:none;">
-          <div style="padding:10px 16px;background:#EDE9FE;border-radius:8px;font-size:12px;color:#4B1FA6;">
+          <div style="padding:10px 16px;background:#EDE9FE;border-radius:8px;font-size:12px;color:var(--brand-dark);">
             <div style="font-weight:700;display:flex;flex-wrap:wrap;gap:14px;">
               <span>📋 Entrada mín: <b><span id="refimEntradaMin">-</span>%</b></span>
               <span>Taxa Refim: <b><span id="refimTaxaRefim">-</span>% a.m.</b></span>
@@ -674,7 +712,7 @@ td { color: #111827 !important; }
           </div>
         </div>
         <div style="margin-top:10px;text-align:right;">
-          <button onclick="atualizarSimuladorRefim()" style="padding:7px 18px;background:#EDE9FE;border:1px solid #DDD6FE;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:#6C2BD9;font-family:inherit;">
+          <button onclick="atualizarSimuladorRefim()" style="padding:7px 18px;background:#EDE9FE;border:1px solid #DDD6FE;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:var(--brand);font-family:inherit;">
             🔄 Recalcular
           </button>
         </div>
@@ -682,8 +720,8 @@ td { color: #111827 !important; }
 
       <!-- RESULTADO DO REFIM -->
       <!-- RESULTADO UNIFICADO -->
-      <div id="refimResultado" style="display:none;margin-top:16px;padding:20px;background:#fff;border:2px solid #6C2BD9;border-radius:10px;">
-        <h3 style="font-size:15px;margin:0 0 14px 0;color:#6C2BD9;">📊 Resultado do Refinanciamento</h3>
+      <div id="refimResultado" style="display:none;margin-top:16px;padding:20px;background:#fff;border:2px solid var(--brand);border-radius:10px;">
+        <h3 style="font-size:15px;margin:0 0 14px 0;color:var(--brand);">📊 Resultado do Refinanciamento</h3>
         <!-- Métricas principais -->
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px;">
           <div style="background:#F8F7FF;padding:12px;border-radius:8px;">
@@ -692,7 +730,7 @@ td { color: #111827 !important; }
           </div>
           <div style="background:#EDE9FE;padding:12px;border-radius:8px;">
             <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Parcela Nova</div>
-            <div style="font-size:22px;font-weight:800;color:#6C2BD9;" id="rParcelaTotal">-</div>
+            <div style="font-size:22px;font-weight:800;color:var(--brand);" id="rParcelaTotal">-</div>
           </div>
           <div style="background:#F0FDF4;padding:12px;border-radius:8px;">
             <div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Dif. Parcela / mês</div>
@@ -727,7 +765,7 @@ td { color: #111827 !important; }
       <!-- RESULTADO SEPARADO POR CONTRATO -->
       <div id="refimResultadoSeparado" style="display:none;margin-top:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px 0;">
-          <h3 style="font-size:15px;margin:0;color:#6C2BD9;">📊 Resultado por Contrato</h3>
+          <h3 style="font-size:15px;margin:0;color:var(--brand);">📊 Resultado por Contrato</h3>
           <div style="display:flex;gap:8px;align-items:center;">
             <button onclick="maximizarTrocos(false)" style="padding:6px 14px;background:#16A34A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;"
               title="Troco máximo de cada contrato: parcela nova = parcela atual. Libera o maior valor possível (não reserva redução para cobrir margem negativa).">
@@ -746,7 +784,7 @@ td { color: #111827 !important; }
         <div style="overflow-x:auto;">
           <table style="width:100%;border-collapse:collapse;font-size:12px;">
             <thead>
-              <tr style="background:#EDE9FE;color:#4B1FA6;">
+              <tr style="background:#EDE9FE;color:var(--brand-dark);">
                 <th style="padding:8px;text-align:left;">Banco Origem</th>
                 <th style="padding:8px;text-align:right;">Saldo</th>
                 <th style="padding:8px;text-align:center;">Prazo</th>
@@ -771,11 +809,11 @@ td { color: #111827 !important; }
 
     <!-- BOTÕES FINAIS -->
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;">
-      <button onclick="simularEEnviar()" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,#7C3AED 0%,#EC4899 100%);border:none;color:white;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(124,58,237,.3);display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;letter-spacing:.01em;">
+      <button onclick="simularEEnviar()" style="width:100%;padding:14px;font-size:14px;background:linear-gradient(135deg,var(--brand) 0%,#EC4899 100%);border:none;color:white;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(124,58,237,.3);display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;letter-spacing:.01em;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Enviar para Criador de Proposta
       </button>
-      <button onclick="salvarParaDigitacao()" style="width:100%;padding:12px;font-size:13px;background:#fff;border:2px solid #6C2BD9;color:#6C2BD9;border-radius:8px;cursor:pointer;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;">
+      <button onclick="salvarParaDigitacao()" style="width:100%;padding:12px;font-size:13px;background:#fff;border:2px solid var(--brand);color:var(--brand);border-radius:8px;cursor:pointer;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         Salvar para Digitação
       </button>
@@ -790,7 +828,7 @@ td { color: #111827 !important; }
   <div id="modalRegras" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:16px;padding:28px;width:min(98vw,1320px);max-height:94vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h3 style="margin:0;color:#6C2BD9;">⚙️ Regras dos Bancos — Portabilidade com Refim</h3>
+        <h3 style="margin:0;color:var(--brand);">⚙️ Regras dos Bancos — Portabilidade com Refim</h3>
         <button onclick="fecharModalRegras()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6B7280;">✕</button>
       </div>
       <!-- Legenda -->
@@ -813,8 +851,8 @@ td { color: #111827 !important; }
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;">Taxa<br><span style="font-weight:400;color:#6B7280;">Refim (%)</span></th>
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;">Saldo<br><span style="font-weight:400;color:#6B7280;">Mín (R$)</span></th>
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;">Troco<br><span style="font-weight:400;color:#6B7280;">Mín (R$)</span></th>
-            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#EDE9FE;" title="Nº mínimo de parcelas PAGAS para portar (0 = aceita qualquer)">Pagas p/<br><span style="font-weight:400;color:#6C2BD9;">Portar</span></th>
-            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#EDE9FE;" title="Nº mínimo de parcelas PAGAS para o banco remunerar (0 = remunera sempre)">Pagas p/<br><span style="font-weight:400;color:#6C2BD9;">Remunerar</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#EDE9FE;" title="Nº mínimo de parcelas PAGAS para portar (0 = aceita qualquer)">Pagas p/<br><span style="font-weight:400;color:var(--brand);">Portar</span></th>
+            <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#EDE9FE;" title="Nº mínimo de parcelas PAGAS para o banco remunerar (0 = remunera sempre)">Pagas p/<br><span style="font-weight:400;color:var(--brand);">Remunerar</span></th>
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;" title="Une saldos negativos de vários contratos para cobrir margem">Une<br><span style="font-weight:400;color:#6B7280;">Neg.</span></th>
             <th style="text-align:center;padding:8px 6px;font-size:12px;border-bottom:2px solid #E5E7EB;background:#FEF3C7;" title="Seguro prestamista: % somado ao valor financiado (saldo + troco) antes de calcular a parcela. 0 = banco não cobra">Seguro<br><span style="font-weight:400;color:#B45309;">(%)</span></th>
             <th style="width:60px;border-bottom:2px solid #E5E7EB;"></th>
@@ -837,10 +875,10 @@ td { color: #111827 !important; }
           <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Taxa Refim (%)</label><input id="novoRegRefim" placeholder="1,65" style="width:100%;"></div>
           <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Saldo Mín (R$)</label><input id="novoRegSaldoMin" placeholder="0" style="width:100%;"></div>
           <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;">Troco Mín (R$)</label><input id="novoRegMinTroco" placeholder="250" style="width:100%;"></div>
-          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;color:#6C2BD9;">Pagas p/ Portar</label><input id="novoRegPagasPortar" placeholder="0" style="width:100%;" type="number" min="0"></div>
-          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;color:#6C2BD9;">Pagas p/ Remunerar</label><input id="novoRegPagasRem" placeholder="12" style="width:100%;" type="number" min="0"></div>
+          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;color:var(--brand);">Pagas p/ Portar</label><input id="novoRegPagasPortar" placeholder="0" style="width:100%;" type="number" min="0"></div>
+          <div><label style="font-size:11px;font-weight:600;display:block;margin-bottom:4px;color:var(--brand);">Pagas p/ Remunerar</label><input id="novoRegPagasRem" placeholder="12" style="width:100%;" type="number" min="0"></div>
           <div style="display:flex;align-items:center;gap:6px;padding-bottom:2px;"><input id="novoRegUneNeg" type="checkbox"><label style="font-size:11px;font-weight:600;cursor:pointer;" onclick="document.getElementById('novoRegUneNeg').click()">Une Neg.?</label></div>
-          <div style="padding-bottom:2px;"><button onclick="addRegra()" style="width:100%;padding:9px;background:#6C2BD9;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">Adicionar</button></div>
+          <div style="padding-bottom:2px;"><button onclick="addRegra()" style="width:100%;padding:9px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">Adicionar</button></div>
         </div>
       </div>
     </div>
@@ -857,7 +895,7 @@ td { color: #111827 !important; }
 
       <!-- DADOS DO CLIENTE -->
       <div style="margin-bottom:16px;">
-        <div style="font-size:11px;font-weight:700;color:#6C2BD9;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">👤 Dados do Cliente</div>
+        <div style="font-size:11px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">👤 Dados do Cliente</div>
 
         <div class="field">
           <label>Nome do Cliente</label>
@@ -877,7 +915,7 @@ td { color: #111827 !important; }
 
       <!-- DADOS DO CORRETOR -->
       <div style="border-top:1px solid #E5E7EB;padding-top:16px;margin-bottom:4px;">
-        <div style="font-size:11px;font-weight:700;color:#6C2BD9;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">🧑‍💼 Dados do Consultor</div>
+        <div style="font-size:11px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">🧑‍💼 Dados do Consultor</div>
         <div class="field">
           <label>Seu Nome</label>
           <input id="consultorNome" placeholder="Ex: Arthur Oliveira">
@@ -896,7 +934,7 @@ td { color: #111827 !important; }
 
       <div style="display:flex;gap:12px;margin-top:24px;">
         <button onclick="fecharModalProposta()" style="flex:1;padding:10px;background:#E5E7EB;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
-        <button onclick="confirmarEGerarProposta()" style="flex:1;padding:10px;background:#6C2BD9;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;">✅ Gerar Apresentação</button>
+        <button onclick="confirmarEGerarProposta()" style="flex:1;padding:10px;background:var(--brand);color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;">✅ Gerar Apresentação</button>
       </div>
     </div>
   </div>
@@ -952,7 +990,7 @@ td { color: #111827 !important; }
 <!-- BRIDGE -->
 <!-- BRIDGE → PROPOSTA (fora do #resultado para funcionar mesmo com ele oculto) -->
 <div id="bridgeBtnWrap" style="display:none;margin-top:20px;text-align:center;padding-bottom:24px;">
-  <button onclick="enviarParaProposta()" style="background:#7C3AED;padding:11px 28px;font-size:13px;font-weight:600;border-radius:8px;border:none;color:#fff;cursor:pointer;box-shadow:0 2px 12px rgba(124,58,237,.3);font-family:inherit;">
+  <button onclick="enviarParaProposta()" style="background:var(--brand);padding:11px 28px;font-size:13px;font-weight:600;border-radius:8px;border:none;color:#fff;cursor:pointer;box-shadow:0 2px 12px rgba(124,58,237,.3);font-family:inherit;">
     📄 Enviar para o Criador de Proposta
   </button>
   <div style="font-size:11px;color:#6B7280;margin-top:6px;">Os dados serão preenchidos automaticamente na aba Criador de Proposta</div>
@@ -1016,7 +1054,7 @@ const LIGHT_TO_DARK_BG = {
 const LIGHT_TO_DARK_COLOR = {
   '#121212': '#F1F1F8', '#111827': '#F1F1F8', '#1f2937': '#E5E7EB',
   '#374151': '#D1D5DB', '#4b5563': '#9CA3AF', '#6b7280': '#9CA3AF',
-  '#6B7280': '#9CA3AF', '#4b1fa6': '#C4B5FD',
+  '#6B7280': '#9CA3AF', 'var(--brand-dark)': '#C4B5FD',
 };
 
 function normHex(c) {
@@ -1590,7 +1628,7 @@ function renderizarLogo() {
       `;
     } else {
       loginLogo.innerHTML = `
-        <div style="font-size:48px;font-weight:700;background:linear-gradient(135deg, #6C2BD9 0%, #1E88E5 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">capital go</div>
+        <div style="font-size:48px;font-weight:700;background:linear-gradient(135deg, var(--brand) 0%, #1E88E5 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">capital go</div>
         <div style="font-size:14px;color:#6B7280">Soluções Financeiras</div>
       `;
     }
@@ -1606,7 +1644,7 @@ function renderizarLogo() {
       `;
     } else {
       headerLogo.innerHTML = `
-        <div style="font-size:36px;font-weight:700;background:linear-gradient(135deg, #6C2BD9 0%, #1E88E5 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">capital go</div>
+        <div style="font-size:36px;font-weight:700;background:linear-gradient(135deg, var(--brand) 0%, #1E88E5 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">capital go</div>
         <div style="font-size:14px;color:#6B7280;border-left:2px solid #E5E7EB;padding-left:16px">Soluções Financeiras</div>
       `;
     }
@@ -2314,7 +2352,7 @@ function updateContratoCalc(id) {
       if (c.saldoManual) {
         if (c.taxa > 0) {
           taxaEl.value = fmtPct(c.taxa);
-          taxaEl.style.color = '#6C2BD9';
+          taxaEl.style.color = 'var(--brand)';
           taxaEl.title = 'Taxa estimada a partir do saldo informado';
         } else {
           taxaEl.value = '';
@@ -2409,7 +2447,7 @@ async function salvarCotacao() {
   // Mostra loading
   const loadingDiv = document.createElement('div');
   loadingDiv.id = 'loadingCotacao';
-  loadingDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(108,43,217,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;color:white;';
+  loadingDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:var(--brand-90);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;color:white;';
   loadingDiv.innerHTML = '<div style="font-size:48px;margin-bottom:16px;">📄</div><div style="font-size:24px;font-weight:700;">Salvando cotação...</div>';
   document.body.appendChild(loadingDiv);
   
@@ -2708,7 +2746,7 @@ function aplicarTaxaTodos() {
   let msg = `✅ Taxa ${fmtPct(taxa)}% aplicada a ${aplicados} contrato(s)`;
   if (preservados) msg += ` — ${preservados} com saldo digitado mantiveram a taxa deduzida`;
   const feedback = document.createElement('div');
-  feedback.style.cssText = 'position:fixed;top:20px;right:20px;background:#6C2BD9;color:white;padding:12px 20px;border-radius:8px;font-weight:600;z-index:9999;box-shadow:0 4px 6px rgba(0,0,0,0.1);max-width:380px;font-size:13px;';
+  feedback.style.cssText = 'position:fixed;top:20px;right:20px;background:var(--brand);color:white;padding:12px 20px;border-radius:8px;font-weight:600;z-index:9999;box-shadow:0 4px 6px rgba(0,0,0,0.1);max-width:380px;font-size:13px;';
   feedback.textContent = msg;
   document.body.appendChild(feedback);
   setTimeout(() => {
@@ -2743,7 +2781,7 @@ function renderContratos() {
           <span style="color:#9CA3AF;font-size:11px;">/</span>
           <input data-id="${c.id}" data-k="prazo_total" type="number" value="${c.prazo_total || ''}" placeholder="tot." style="width:52px;" title="Prazo total de origem">
         </div>
-        ${(c.prazo_total > 0) ? `<small style="color:#6C2BD9;font-size:10px;">${c.prazo_total - (c.prazo||0)} pagas</small>` : '<small style="color:#9CA3AF;font-size:10px;">informe o total</small>'}
+        ${(c.prazo_total > 0) ? `<small style="color:var(--brand);font-size:10px;">${c.prazo_total - (c.prazo||0)} pagas</small>` : '<small style="color:#9CA3AF;font-size:10px;">informe o total</small>'}
       </td>
       <td><input data-id="${c.id}" data-k="taxa" value="${c.taxa ? fmtPct(c.taxa) : ''}" placeholder="1,80"></td>
       <td><input data-id="${c.id}" data-k="saldo" data-field="saldo" value="${c.saldo ? fmt(c.saldo) : ''}" placeholder="0,00" style="text-align:right;" title="Informe o saldo para descobrir a taxa automaticamente"></td>
@@ -2836,7 +2874,7 @@ function renderContratos() {
               const small = td.querySelector('small');
               if (small) {
                 if (cont.prazo_total > 0) {
-                  small.style.color = '#6C2BD9';
+                  small.style.color = 'var(--brand)';
                   small.textContent = `${cont.prazo_total - (cont.prazo||0)} pagas`;
                 } else {
                   small.style.color = '#9CA3AF';
@@ -3622,7 +3660,7 @@ function simular() {
     <div style="margin-top:32px;background:#F9FAFB;padding:24px;border-radius:12px;border:1px solid #E5E7EB;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <h3 style="font-size:18px;font-weight:700;color:#1F2937;margin:0;">Linha do Tempo da Operação</h3>
-        <button onclick="salvarCotacao()" style="padding:10px 20px;background:#6C2BD9;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">
+        <button onclick="salvarCotacao()" style="padding:10px 20px;background:var(--brand);color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">
           💾 Salvar Cotação
         </button>
       </div>
@@ -3640,7 +3678,7 @@ function simular() {
         </div>
         <div style="flex:1;">
           <div style="font-weight:700;font-size:14px;color:#1F2937;margin-bottom:4px;">${ev.titulo}</div>
-          <div style="font-weight:600;font-size:15px;color:#6C2BD9;margin-bottom:${ev.detalhes && ev.detalhes.length > 0 ? '8px' : '0'};">${ev.valor}</div>
+          <div style="font-weight:600;font-size:15px;color:var(--brand);margin-bottom:${ev.detalhes && ev.detalhes.length > 0 ? '8px' : '0'};">${ev.valor}</div>
           ${ev.detalhes && ev.detalhes.length > 0 ? `
             <div style="font-size:12px;color:#6B7280;line-height:1.6;">
               ${ev.detalhes.map(d => `• ${d}`).join('<br>')}
@@ -3873,7 +3911,7 @@ function construirTimelineSimples(contratos, margens, modo) {
   // 6. RESULTADO FINAL
   etapas.push({
     icon: '▶',
-    iconColor: '#6C2BD9',
+    iconColor: 'var(--brand)',
     titulo: 'Resultado Final',
     valor: `Parcela: ${fmt(parcelaNovaTotal)}`,
     detalhes: economiaMensal > 0 ? [`Economia: ${fmt(economiaMensal)}/mês`] : []
@@ -4086,7 +4124,7 @@ async function gerarProposta() {
   // Cria overlay de loading
   const loadingDiv = document.createElement('div');
   loadingDiv.id = 'loadingProposta';
-  loadingDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(108,43,217,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;color:white;';
+  loadingDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:var(--brand-90);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;color:white;';
   loadingDiv.innerHTML = '<div style="font-size:48px;margin-bottom:16px;">⏳</div><div style="font-size:24px;font-weight:700;">Gerando sua proposta...</div><div style="font-size:14px;margin-top:8px;opacity:0.9;">Aguarde alguns segundos</div>';
   document.body.appendChild(loadingDiv);
   
@@ -4252,7 +4290,7 @@ async function criarApresentacaoPDF(dados) {
   let y = margin;
   
   // Cores CAPITAL (aplicação profissional)
-  const roxo = [108, 43, 217];        // #6C2BD9 - Marca
+  const roxo = [108, 43, 217];        // var(--brand) - Marca
   const azul = [30, 136, 229];        // #1E88E5 - Secundário  
   const verde = [0, 200, 83];         // #00C853 - Positivo
   const cinzaTexto = [60, 60, 67];    // Textos principais
@@ -4749,9 +4787,9 @@ function setTipoPort(tipo) {
   tipoPort = tipo;
   document.getElementById('secaoSimples').style.display = tipo === 'simples' ? '' : 'none';
   document.getElementById('secaoRefim').style.display   = tipo === 'refim'   ? '' : 'none';
-  document.getElementById('btnTipoSimples').style.background = tipo === 'simples' ? '#6C2BD9' : '#F3F4F6';
+  document.getElementById('btnTipoSimples').style.background = tipo === 'simples' ? 'var(--brand)' : '#F3F4F6';
   document.getElementById('btnTipoSimples').style.color      = tipo === 'simples' ? '#fff'    : '#6B7280';
-  document.getElementById('btnTipoRefim').style.background   = tipo === 'refim'   ? '#6C2BD9' : '#F3F4F6';
+  document.getElementById('btnTipoRefim').style.background   = tipo === 'refim'   ? 'var(--brand)' : '#F3F4F6';
   document.getElementById('btnTipoRefim').style.color        = tipo === 'refim'   ? '#fff'    : '#6B7280';
   if (tipo === 'simples') calcSimples();
   if (tipo === 'refim')   { popularSelectBancos(); renderRefimContratos(); }
@@ -4880,13 +4918,13 @@ function calcSimples() {
     const parcelaConsolidada = taxa > 0 ? calcParcela(totalSaldo * fatorSeguro, taxa, prazo) : 0;
     const economiaConsol = totalParcelaAtual - parcelaConsolidada;
     tb.innerHTML = `<tr style="background:#F5F3FF;">
-      <td style="font-weight:700;color:#6C2BD9;">${marcados.length} contrato(s) — parcela unificada</td>
+      <td style="font-weight:700;color:var(--brand);">${marcados.length} contrato(s) — parcela unificada</td>
       <td class="text-right" style="font-weight:700;">${fmtBRL(totalSaldo)}</td>
       <td>-</td>
       <td>${fmtBRL(totalParcelaAtual)}</td>
       <td style="text-align:center;color:#6B7280;font-size:12px;">${prazo}m</td>
       <td class="text-right" style="color:#16A34A;font-weight:800;font-size:14px;">${taxa > 0 ? fmtBRL(parcelaConsolidada) : '-'}</td>
-      <td class="text-right" style="color:${economiaConsol > 0 ? '#6C2BD9' : '#EF4444'};font-weight:700;">${taxa > 0 ? fmtBRL(economiaConsol) : '-'}</td>
+      <td class="text-right" style="color:${economiaConsol > 0 ? 'var(--brand)' : '#EF4444'};font-weight:700;">${taxa > 0 ? fmtBRL(economiaConsol) : '-'}</td>
     </tr>`;
   } else {
     // Modo separado: linha por contrato com prazo editável individual
@@ -4945,19 +4983,19 @@ function calcSimples() {
         <td>${fmtBRL(parcelaAtual)}</td>
         <td style="text-align:center;">
           <input type="number" value="${prazoInd}" min="1" max="360"
-            style="width:56px;text-align:center;border:1px solid #DDD6FE;border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;color:#6C2BD9;"
+            style="width:56px;text-align:center;border:1px solid #DDD6FE;border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;color:var(--brand);"
             onchange="prazosSimpSeparado[${idx}]=parseInt(this.value)||prazo;calcSimples()">
         </td>
         <td style="text-align:center;">
           <select onchange="setBancoDestino(${c.id}, this.value)"
-            style="width:120px;font-size:11px;padding:3px 4px;border:1px solid ${c.bancoDestino ? '#6C2BD9' : '#E5E7EB'};border-radius:4px;font-weight:${c.bancoDestino ? '700' : '400'};color:${c.bancoDestino ? '#6C2BD9' : '#6B7280'};">
+            style="width:120px;font-size:11px;padding:3px 4px;border:1px solid ${c.bancoDestino ? 'var(--brand)' : '#E5E7EB'};border-radius:4px;font-weight:${c.bancoDestino ? '700' : '400'};color:${c.bancoDestino ? 'var(--brand)' : '#6B7280'};">
             <option value="">Taxa do topo</option>
             ${regrasBancos.map(r => `<option value="${r.banco}" ${c.bancoDestino === r.banco ? 'selected' : ''}>${r.banco}</option>`).join('')}
           </select>
-          ${c.bancoDestino ? `<div style="font-size:9px;color:#6C2BD9;margin-top:1px;">${fmtPct(taxaC)}%${fsC > 1 ? ' · seg ' + fmtPct((fsC-1)*100) + '%' : ''}</div>` : ''}
+          ${c.bancoDestino ? `<div style="font-size:9px;color:var(--brand);margin-top:1px;">${fmtPct(taxaC)}%${fsC > 1 ? ' · seg ' + fmtPct((fsC-1)*100) + '%' : ''}</div>` : ''}
         </td>
         <td class="text-right" style="color:#16A34A;font-weight:600;">${taxaC > 0 ? fmtBRL(parcelaNova) : '-'}</td>
-        <td class="text-right" style="color:${economia > 0 ? '#6C2BD9' : '#EF4444'};font-weight:600;">${taxaC > 0 ? fmtBRL(economia) : '-'}${economiaExtra}</td>
+        <td class="text-right" style="color:${economia > 0 ? 'var(--brand)' : '#EF4444'};font-weight:600;">${taxaC > 0 ? fmtBRL(economia) : '-'}${economiaExtra}</td>
       </tr>`;
     }).join('');
     // Atualiza totalParcelaNova para os totais abaixo
@@ -5189,7 +5227,7 @@ function pintarRefimContratos() {
       <td style="text-align:center;font-size:12px;color:#6B7280;">${pagasStr}</td>
       <td style="text-align:center;">
         <select onchange="setBancoDestino(${c.id}, this.value)"
-          style="width:130px;font-size:11px;padding:3px 4px;border:1px solid ${c.bancoDestino ? '#6C2BD9' : '#E5E7EB'};border-radius:4px;font-weight:${c.bancoDestino ? '700' : '400'};color:${c.bancoDestino ? '#6C2BD9' : '#6B7280'};">
+          style="width:130px;font-size:11px;padding:3px 4px;border:1px solid ${c.bancoDestino ? 'var(--brand)' : '#E5E7EB'};border-radius:4px;font-weight:${c.bancoDestino ? '700' : '400'};color:${c.bancoDestino ? 'var(--brand)' : '#6B7280'};">
           <option value="">Padrão${nome ? ' (' + nome + ')' : ''}</option>
           ${regrasBancos.map(r => `<option value="${r.banco}" ${c.bancoDestino === r.banco ? 'selected' : ''}>${r.banco}</option>`).join('')}
         </select>
@@ -5287,7 +5325,7 @@ function renderTaxasLivres() {
       <input type="number" step="0.01" placeholder="Ex: 1,40"
         value="${taxasLivres[r.banco] != null ? taxasLivres[r.banco] : ''}"
         onchange="setTaxaLivre('${r.banco.replace(/'/g, "\\'")}', this.value)"
-        style="border:2px solid ${taxasLivres[r.banco] > 0 ? '#6C2BD9' : '#F59E0B'};font-weight:700;">
+        style="border:2px solid ${taxasLivres[r.banco] > 0 ? 'var(--brand)' : '#F59E0B'};font-weight:700;">
     </div>`).join('');
 
   wrap.innerHTML = `
@@ -5331,7 +5369,7 @@ function mostrarCoberturaMargem(margemNeg, somaParcelasOrig, parcelaTotal, eleme
     <div style="font-weight:700;margin-bottom:6px;color:#92400E;">⚠️ Margem Negativa Detectada</div>
     <div style="display:flex;flex-wrap:wrap;gap:12px;">
       <span>Valor do negativo: <strong style="color:#DC2626;">${fmtBRL(margemNeg)}</strong></span>
-      ${coberto ? `<span>Margem líquida após o refin: <strong style="color:#6C2BD9;">${fmtBRL(margemLiq)}</strong></span>` : ''}
+      ${coberto ? `<span>Margem líquida após o refin: <strong style="color:var(--brand);">${fmtBRL(margemLiq)}</strong></span>` : ''}
       <span>Status: ${coberto
         ? '<strong style="color:#16A34A;">✅ Coberto — refim elimina o negativo</strong>'
         : '<strong style="color:#DC2626;">❌ Não coberto — economia insuficiente para cobrir o negativo</strong>'}</span>
@@ -5356,7 +5394,7 @@ function mostrarCoberturaMargem_sep(margemNeg, linhas, elementId) {
       <div style="font-weight:700;margin-bottom:6px;color:#92400E;">⚠️ Margem Negativa Detectada</div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
         <span>Valor do negativo: <strong style="color:#DC2626;">${fmtBRL(margemNeg)}</strong></span>
-        <span>Margem líquida após o refin: <strong style="color:#6C2BD9;">${fmtBRL(margemLiq)}</strong></span>
+        <span>Margem líquida após o refin: <strong style="color:var(--brand);">${fmtBRL(margemLiq)}</strong></span>
         <span>Status: <strong style="color:#16A34A;">✅ Coberto — ${plural ? 'contratos' : 'contrato'} ${nomesBancos}</strong></span>
       </div>
       <div style="margin-top:6px;font-size:12px;color:#D97706;font-weight:600;">⭐ ${plural
@@ -5372,7 +5410,7 @@ function mostrarCoberturaMargem_sep(margemNeg, linhas, elementId) {
       <div style="font-weight:700;margin-bottom:6px;color:#92400E;">⚠️ Margem Negativa Detectada</div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;">
         <span>Valor do negativo: <strong style="color:#DC2626;">${fmtBRL(margemNeg)}</strong></span>
-        <span>Maior redução individual: <strong style="color:#6C2BD9;">${fmtBRL(melhorDiff)}</strong></span>
+        <span>Maior redução individual: <strong style="color:var(--brand);">${fmtBRL(melhorDiff)}</strong></span>
         <span>Status: <strong style="color:#DC2626;">❌ Não coberto — nenhum contrato cobre individualmente o negativo</strong></span>
       </div>`;
   }
@@ -5561,7 +5599,7 @@ function resetarTrocos() {
     nomes.push(`${g.regra.banco} ${fmtBRL(minTroco)}`);
   });
   calcRefim();
-  _toastRefim(`↺ Trocos redefinidos para o mínimo — ${nomes.join(' · ')}`, '#6C2BD9');
+  _toastRefim(`↺ Trocos redefinidos para o mínimo — ${nomes.join(' · ')}`, 'var(--brand)');
 }
 
 function _toastRefim(msg, cor) {
@@ -5858,7 +5896,7 @@ function calcRefim() {
         <td style="padding:7px 8px;text-align:right;">${fmtBRL(l.saldo)}</td>
         <td style="padding:7px 8px;text-align:center;font-weight:600;color:#6B7280;">${l.prazo}m</td>
         <td style="padding:7px 8px;text-align:right;color:#6B7280;">${fmtBRL(l.parcelaOriginal)}</td>
-        <td style="padding:7px 8px;text-align:right;font-weight:700;color:#6C2BD9;">${fmtBRL(l.parcelaTotal)}</td>
+        <td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--brand);">${fmtBRL(l.parcelaTotal)}</td>
         <td style="padding:7px 8px;text-align:right;font-weight:700;color:${diffColor};">${diffLabel}</td>
         <td style="display:none;">${fmtBRL(l.trocoBruto)}</td>
         <td style="padding:7px 8px;text-align:right;color:#EA580C;">${fmtBRL(l.iof)}</td>
@@ -5884,9 +5922,9 @@ function calcRefim() {
       const subDiff = b.linhas.reduce((a, l) => a + (l.parcelaOriginal - l.parcelaTotal), 0);
       return `
       <tr style="background:#EDE9FE;">
-        <td colspan="10" style="padding:6px 8px;font-size:11px;font-weight:800;color:#4B1FA6;letter-spacing:.3px;">
+        <td colspan="10" style="padding:6px 8px;font-size:11px;font-weight:800;color:var(--brand-dark);letter-spacing:.3px;">
           ➜ ${b.banco}
-          <span style="font-weight:500;color:#6C2BD9;"> · taxa ${fmtPct(b.taxa * 100)}% a.m.${b.seguroPerc > 0 ? ' · seguro ' + fmtPct(b.seguroPerc) + '%' : ''} · ${b.linhas.length} contrato(s)</span>
+          <span style="font-weight:500;color:var(--brand);"> · taxa ${fmtPct(b.taxa * 100)}% a.m.${b.seguroPerc > 0 ? ' · seguro ' + fmtPct(b.seguroPerc) + '%' : ''} · ${b.linhas.length} contrato(s)</span>
         </td>
       </tr>
       ${b.linhas.map(renderLinha).join('')}
@@ -5895,7 +5933,7 @@ function calcRefim() {
         <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;">${fmtBRL(b.subSaldo)}</td>
         <td></td>
         <td style="padding:5px 8px;text-align:right;font-size:11px;color:#6B7280;">${fmtBRL(b.linhas.reduce((a,l)=>a+l.parcelaOriginal,0))}</td>
-        <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:#6C2BD9;">${fmtBRL(b.subParcela)}</td>
+        <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:var(--brand);">${fmtBRL(b.subParcela)}</td>
         <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:${subDiff >= 0 ? '#16A34A' : '#EF4444'};">${(subDiff >= 0 ? '▼ ' : '▲ ') + fmtBRL(Math.abs(subDiff))}</td>
         <td style="display:none;"></td>
         <td style="padding:5px 8px;text-align:right;font-size:11px;color:#EA580C;">${fmtBRL(b.subIOF)}</td>
@@ -5911,12 +5949,12 @@ function calcRefim() {
     const totalDiffColor = totalDiff >= 0 ? '#16A34A' : '#EF4444';
     const totalDiffLabel = (totalDiff >= 0 ? '▼ ' : '▲ ') + fmtBRL(Math.abs(totalDiff));
     document.getElementById('tfRefimSeparado').innerHTML = `
-      <tr style="border-top:2px solid #6C2BD9;">
-        <td style="padding:8px;font-weight:700;">TOTAL${multiBanco ? ` <span style="font-weight:500;font-size:11px;color:#6C2BD9;">(${blocos.length} bancos)</span>` : ''}</td>
+      <tr style="border-top:2px solid var(--brand);">
+        <td style="padding:8px;font-weight:700;">TOTAL${multiBanco ? ` <span style="font-weight:500;font-size:11px;color:var(--brand);">(${blocos.length} bancos)</span>` : ''}</td>
         <td style="padding:8px;text-align:right;font-weight:700;">${fmtBRL(totalSaldo)}</td>
         <td></td>
         <td style="padding:8px;text-align:right;font-weight:700;color:#6B7280;">${fmtBRL(totalParcelaOriginal)}</td>
-        <td style="padding:8px;text-align:right;font-weight:800;color:#6C2BD9;">${fmtBRL(totalParcela)}</td>
+        <td style="padding:8px;text-align:right;font-weight:800;color:var(--brand);">${fmtBRL(totalParcela)}</td>
         <td style="padding:8px;text-align:right;font-weight:800;color:${totalDiffColor};">${totalDiffLabel}</td>
         <td style="display:none;">${fmtBRL(totalTrocoBruto)}</td>
         <td style="padding:8px;text-align:right;font-weight:700;color:#EA580C;">${fmtBRL(totalIOF)}</td>
@@ -6181,15 +6219,15 @@ async function buscarCotacoesPorCpf(cpf) {
     if (!lista.length) { panel.innerHTML = ''; return 0; }
     panel.innerHTML = `
       <div style="margin-bottom:12px;padding:12px 16px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;">
-        <div style="font-size:12px;font-weight:700;color:#6C2BD9;margin-bottom:8px;">📂 Cotações salvas para este cliente</div>
+        <div style="font-size:12px;font-weight:700;color:var(--brand);margin-bottom:8px;">📂 Cotações salvas para este cliente</div>
         ${lista.map(c => `
           <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #EDE9FE;flex-wrap:wrap;">
             <div style="flex:1;min-width:0;font-size:12px;">
               <span style="font-weight:600;">${new Date(c.criadoEm).toLocaleDateString('pt-BR')}</span>
               ${c.descricao ? `<span style="color:#6B7280;"> — ${c.descricao}</span>` : ''}
-              ${c.refimBanco ? `<span style="color:#7C3AED;font-weight:600;"> | ${c.refimBanco}</span>` : ''}
+              ${c.refimBanco ? `<span style="color:var(--brand);font-weight:600;"> | ${c.refimBanco}</span>` : ''}
             </div>
-            <button onclick="carregarCotacao(${c.id},'${cpf}')" style="padding:4px 10px;background:#6C2BD9;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;">▶ Retomar</button>
+            <button onclick="carregarCotacao(${c.id},'${cpf}')" style="padding:4px 10px;background:var(--brand);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;">▶ Retomar</button>
             <button onclick="excluirCotacao(${c.id},'${cpf}')" style="padding:4px 8px;background:#FEE2E2;color:#DC2626;border:none;border-radius:5px;cursor:pointer;font-size:11px;">✕</button>
           </div>`).join('')}
       </div>`;
@@ -6304,9 +6342,9 @@ function renderTbRegras() {
           <div style="font-size:11px;color:#6B7280;margin-bottom:6px;">Banco de origem = banco de onde o contrato vem (ex: Nubank, C6, PicPay...)</div>
           <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
             <div><label style="font-size:10px;display:block;">Banco Origem</label><input id="excBanco-${i}" placeholder="Ex: Nubank" style="width:110px;font-size:11px;"></div>
-            <div><label style="font-size:10px;display:block;color:#6C2BD9;font-weight:600;">Pagas p/ Portar</label><input id="excPortar-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
-            <div><label style="font-size:10px;display:block;color:#6C2BD9;font-weight:600;">Pagas p/ Remunerar</label><input id="excRem-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
-            <button onclick="adicionarExcecao(${i})" style="padding:4px 10px;background:#6C2BD9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">+ Adicionar</button>
+            <div><label style="font-size:10px;display:block;color:var(--brand);font-weight:600;">Pagas p/ Portar</label><input id="excPortar-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
+            <div><label style="font-size:10px;display:block;color:var(--brand);font-weight:600;">Pagas p/ Remunerar</label><input id="excRem-${i}" type="number" min="0" placeholder="0" style="width:65px;font-size:11px;"></div>
+            <button onclick="adicionarExcecao(${i})" style="padding:4px 10px;background:var(--brand);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;">+ Adicionar</button>
             <button onclick="document.getElementById('exc-add-${i}').style.display='none'" style="padding:4px 8px;background:#E5E7EB;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Cancelar</button>
           </div>
           ${outrosBancos.length ? `
@@ -6353,7 +6391,7 @@ function renderTbRegras() {
           onchange="regrasBancos[${i}].seguro=parseBR(this.value);salvarRegras();atualizarSimuladorRefim();">
       </td>
       <td style="padding:6px;white-space:nowrap;">
-        <button onclick="toggleExcForm(${i})" style="background:#EDE9FE;color:#6C2BD9;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;" title="Gerenciar exceções por banco de origem">⚙</button>
+        <button onclick="toggleExcForm(${i})" style="background:#EDE9FE;color:var(--brand);border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;" title="Gerenciar exceções por banco de origem">⚙</button>
         <button onclick="removerRegra(${i})" style="background:#FEE2E2;color:#DC2626;border:none;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:11px;">✕</button>
       </td>
     </tr>
@@ -7301,7 +7339,7 @@ function mbMotivoContrato(c, b) {
 
 function mbAcaoBanco(b) {
   const escolhido = MB.escolha && MB.escolha.bankId === b.bankId;
-  if (escolhido) return `<span class="mb-sub" style="font-weight:700;color:#6C2BD9">✓ ${MB.escolha.modo === 'analise_manual' ? 'encaminhado' : 'escolhido'}</span>`;
+  if (escolhido) return `<span class="mb-sub" style="font-weight:700;color:var(--brand)">✓ ${MB.escolha.modo === 'analise_manual' ? 'encaminhado' : 'escolhido'}</span>`;
   if (b.status === 'ELEGIVEL') return `<button class="mb-btn" onclick="mbEscolher(${b.bankId}, 'escolhido')">Escolher este banco</button>`;
   if (b.status === 'ANALISE_MANUAL') return `<button class="mb-btn sec" onclick="mbEscolher(${b.bankId}, 'analise_manual')">Encaminhar para análise</button>`;
   const porque = { PENDENTE_INFO: 'complete os dados pendentes', REGRA_NAO_CADASTRADA: 'sem regra cadastrada — análise manual', NAO_ELEGIVEL: 'não atende as regras' };

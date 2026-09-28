@@ -23,7 +23,7 @@ const TYPE_COLORS: Record<string, string> = {
   carteira: "bg-blue-500",
   demanda: "bg-amber-500",
   tarefa: "bg-green-500",
-  agendamento: "bg-purple-500",
+  agendamento: "bg-primary",
 };
 
 function timeAgo(dateStr: string): string {

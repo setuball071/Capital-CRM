@@ -358,8 +358,8 @@ export default function GestaoComercialImportarPage() {
                 <Card className="border">
                   <CardContent className="p-4 text-center">
                     <div className="flex items-center justify-center gap-1">
-                      <CreditCard className="h-4 w-4 text-purple-600" />
-                      <p className="text-2xl font-bold text-purple-600" data-testid="text-total-valor-cartao">{formatCurrency(resumo.totalValorCartao)}</p>
+                      <CreditCard className="h-4 w-4 text-primary" />
+                      <p className="text-2xl font-bold text-primary" data-testid="text-total-valor-cartao">{formatCurrency(resumo.totalValorCartao)}</p>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">Valor Cartão</p>
                   </CardContent>
@@ -504,7 +504,7 @@ export default function GestaoComercialImportarPage() {
                           <td className="p-2 text-right font-medium whitespace-nowrap">{formatCurrency(c.comissaoRepasseValor)}</td>
                           <td className="p-2 text-center">
                             {c.isCartao ? (
-                              <CreditCard className="h-4 w-4 text-purple-600 mx-auto" />
+                              <CreditCard className="h-4 w-4 text-primary mx-auto" />
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}

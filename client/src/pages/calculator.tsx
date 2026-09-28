@@ -350,7 +350,7 @@ export default function CalculatorPage() {
         const tenantSlogan = slogan || "Crédito Consignado";
 
         // === Faixa roxa (cor primária) ===
-        pdf.setFillColor(124, 58, 237); // #7C3AED
+        pdf.setFillColor(124, 58, 237); // hsl(var(--primary))
         pdf.rect(0, 0, pageWidth, 4, 'F');
         y = 16;
 
@@ -1121,18 +1121,18 @@ export default function CalculatorPage() {
                       </div>
 
                       {/* DESTAQUE PRINCIPAL: muda conforme o modo */}
-                      <Card className="mb-4 overflow-hidden border-0 shadow-xl rounded-[14px]" style={{ background: "linear-gradient(135deg, #6C2BD9 0%, #1E88E5 100%)" }}>
+                      <Card className="mb-4 overflow-hidden border-0 shadow-xl rounded-[14px]" style={{ background: "linear-gradient(135deg, hsl(var(--primary)) 0%, #1E88E5 100%)" }}>
                         <CardContent className="p-6 text-center text-white">
                           {isModoReducao ? (
                             <>
-                              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-purple-200 mb-2 flex items-center justify-center gap-1.5">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary mb-2 flex items-center justify-center gap-1.5">
                                 <TrendingDown className="h-3.5 w-3.5" />
                                 Nova parcela mensal
                               </p>
                               <p className="text-5xl font-black tracking-tight mb-1" data-testid="text-nova-parcela-destaque" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
                                 {temResultado ? formatCurrency(novaParcela) : "R$ 0,00"}
                               </p>
-                              <p className="text-xs text-purple-200">
+                              <p className="text-xs text-primary">
                                 {parcelaReduziu
                                   ? `Você economiza ${formatCurrency(diffParcela)} por mês`
                                   : temResultado
@@ -1142,14 +1142,14 @@ export default function CalculatorPage() {
                             </>
                           ) : (
                             <>
-                              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-purple-200 mb-2 flex items-center justify-center gap-1.5">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary mb-2 flex items-center justify-center gap-1.5">
                                 <Wallet className="h-3.5 w-3.5" />
                                 Dinheiro na sua conta
                               </p>
                               <p className="text-5xl font-black tracking-tight mb-1" data-testid="text-client-refund" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
                                 {temResultado ? formatCurrency(troco) : "R$ 0,00"}
                               </p>
-                              <p className="text-xs text-purple-200">
+                              <p className="text-xs text-primary">
                                 {trocoPositivo ? "Liberado em até 5 dias úteis" : temResultado ? "Operação sem troco" : "Preencha os dados acima"}
                               </p>
                             </>
@@ -1271,7 +1271,7 @@ export default function CalculatorPage() {
                     });
                   }}
                   className="w-full h-10 rounded-lg font-semibold text-[13px] text-white flex items-center justify-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)", boxShadow: "0 4px 14px rgba(124,58,237,.28)" }}
+                  style={{ background: "linear-gradient(135deg, hsl(var(--primary)) 0%, #EC4899 100%)", boxShadow: "0 4px 14px rgba(124,58,237,.28)" }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>

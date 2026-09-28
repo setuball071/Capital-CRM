@@ -64,7 +64,7 @@ interface PipelineLead {
 const MARKER_COLORS: Record<LeadMarker, string> = {
   NOVO: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   EM_ATENDIMENTO: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  INTERESSADO: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+  INTERESSADO: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary",
   AGUARDANDO_RETORNO: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
   PROPOSTA_ENVIADA: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
   VENDIDO: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",

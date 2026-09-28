@@ -47,7 +47,7 @@ const CORES_SECAO: Record<string, { icone: string; barra: string; fundo: string 
   "Vendas":            { icone: "text-emerald-600 dark:text-emerald-400", barra: "bg-emerald-500", fundo: "bg-emerald-500/10" },
   "Referências":       { icone: "text-cyan-600 dark:text-cyan-400",       barra: "bg-cyan-500",    fundo: "bg-cyan-500/10" },
   "Desenvolvimento":   { icone: "text-slate-500 dark:text-slate-400",     barra: "bg-slate-500",   fundo: "bg-slate-500/10" },
-  "Academia Avançada": { icone: "text-violet-600 dark:text-violet-400",   barra: "bg-violet-500",  fundo: "bg-violet-500/10" },
+  "Academia Avançada": { icone: "text-primary dark:text-primary",   barra: "bg-primary",  fundo: "bg-primary/10" },
   "Base de Clientes":  { icone: "text-indigo-600 dark:text-indigo-400",   barra: "bg-indigo-500",  fundo: "bg-indigo-500/10" },
   "Administração":     { icone: "text-amber-600 dark:text-amber-400",     barra: "bg-amber-500",   fundo: "bg-amber-500/10" },
   "Gestão Comercial":  { icone: "text-rose-600 dark:text-rose-400",       barra: "bg-rose-500",    fundo: "bg-rose-500/10" },

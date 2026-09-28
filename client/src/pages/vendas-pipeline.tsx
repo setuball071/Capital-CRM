@@ -90,7 +90,7 @@ interface LeadInteractionHistory {
 const MARKER_COLORS: Record<LeadMarker, string> = {
   NOVO: "bg-[#E8F1FD] text-[#1E5FB5] dark:bg-[rgba(30,136,229,0.16)] dark:text-[#60A5FA]",
   EM_ATENDIMENTO: "bg-[#FEF6E0] text-[#9a6a00] dark:bg-[rgba(249,168,37,0.14)] dark:text-[#FBBF24]",
-  INTERESSADO: "bg-[#F2EBFC] text-[#6C2BD9] dark:bg-[rgba(108,43,217,0.28)] dark:text-[#C79CF7]",
+  INTERESSADO: "bg-[#F2EBFC] text-[hsl(var(--primary))] dark:bg-[hsl(var(--primary)/0.28)] dark:text-[#C79CF7]",
   AGUARDANDO_RETORNO: "bg-[#FDEEE0] text-[#C2660A] dark:bg-[rgba(194,102,10,0.16)] dark:text-[#FBBF24]",
   PROPOSTA_ENVIADA: "bg-[#E8F1FD] text-[#1E5FB5] dark:bg-[rgba(30,136,229,0.16)] dark:text-[#60A5FA]",
   VENDIDO: "bg-[#E7F9EE] text-[#0F8A46] dark:bg-[rgba(0,200,83,0.14)] dark:text-[#4ADE80]",
@@ -99,7 +99,7 @@ const MARKER_COLORS: Record<LeadMarker, string> = {
   ENGANO: "bg-[#FDECEC] text-[#C62828] dark:bg-[rgba(229,57,53,0.16)] dark:text-[#F87171]",
   SEM_INTERESSE: "bg-[#F9FAFB] text-[#6B7280] dark:bg-white/5 dark:text-[#9C97AE]",
   RETORNAR_DEPOIS: "bg-[#FEF6E0] text-[#9a6a00] dark:bg-[rgba(249,168,37,0.14)] dark:text-[#FBBF24]",
-  TRANSFERIR: "bg-[#F2EBFC] text-[#6C2BD9] dark:bg-[rgba(108,43,217,0.28)] dark:text-[#C79CF7]",
+  TRANSFERIR: "bg-[#F2EBFC] text-[hsl(var(--primary))] dark:bg-[hsl(var(--primary)/0.28)] dark:text-[#C79CF7]",
   RECUSADO: "bg-[#FDECEC] text-[#C62828] dark:bg-[rgba(229,57,53,0.16)] dark:text-[#F87171]",
 };
 
@@ -748,7 +748,7 @@ export default function VendasPipeline() {
   };
 
   const PRODUCT_BADGE_CLASS: Record<string, string> = {
-    CARTAO: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800",
+    CARTAO: "bg-primary/10 text-primary border-primary/30 dark:bg-primary/20/30 dark:text-primary dark:border-primary",
     CONSIGNADO: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800",
     NOVO: "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800",
     PORTABILIDADE: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800",
@@ -1053,7 +1053,7 @@ export default function VendasPipeline() {
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className="truncate" title={clientName || "—"}>{clientName || <span className="text-muted-foreground">—</span>}</span>
                             {entry.is_recorrente && (
-                              <Badge variant="outline" className="text-[10px] shrink-0 px-1 py-0 h-auto text-violet-600 border-violet-400 dark:text-violet-400 dark:border-violet-500 flex items-center gap-0.5" data-testid={`badge-recorrente-${entry.id}`}>
+                              <Badge variant="outline" className="text-[10px] shrink-0 px-1 py-0 h-auto text-primary border-primary dark:text-primary dark:border-primary flex items-center gap-0.5" data-testid={`badge-recorrente-${entry.id}`}>
                                 <RefreshCw className="h-2.5 w-2.5" />
                                 Recorrente
                               </Badge>
@@ -1203,7 +1203,7 @@ export default function VendasPipeline() {
                       <Users className="h-3.5 w-3.5" />
                       Total de clientes
                     </div>
-                    <span className="text-3xl font-bold leading-none" style={{ color: "#6C2BD9" }} data-testid="text-dash-total">{total}</span>
+                    <span className="text-3xl font-bold leading-none" style={{ color: "hsl(var(--primary))" }} data-testid="text-dash-total">{total}</span>
                   </div>
                   <div className="rounded-md border bg-card p-4 flex flex-col gap-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1233,7 +1233,7 @@ export default function VendasPipeline() {
                   <h3 className="text-sm font-semibold flex items-center gap-1.5">
                     <RefreshCw className="h-4 w-4 text-muted-foreground" />
                     Clientes Recorrentes
-                    <Badge variant="outline" className="ml-1 text-violet-600 border-violet-400 dark:text-violet-400 dark:border-violet-500 text-xs">
+                    <Badge variant="outline" className="ml-1 text-primary border-primary dark:text-primary dark:border-primary text-xs">
                       {portfolioEntries.filter(e => e.is_recorrente).length}
                     </Badge>
                   </h3>
@@ -1255,10 +1255,10 @@ export default function VendasPipeline() {
                               <span className="text-muted-foreground font-mono">{maskCpfDash(entry.cpf)}</span>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                              <Badge variant="outline" className="text-xs text-violet-600 border-violet-400 dark:text-violet-400 dark:border-violet-500">
+                              <Badge variant="outline" className="text-xs text-primary border-primary dark:text-primary dark:border-primary">
                                 {PRODUCT_LABELS[entry.product_type] || entry.product_type}
                               </Badge>
-                              <span className="font-medium tabular-nums whitespace-nowrap text-violet-600 dark:text-violet-400">
+                              <span className="font-medium tabular-nums whitespace-nowrap text-primary dark:text-primary">
                                 {entry.total_deals} contratos
                               </span>
                             </div>
@@ -1272,7 +1272,7 @@ export default function VendasPipeline() {
                 {/* Por Produto — Donut Chart */}
                 {(() => {
                   const PRODUCT_COLORS: Record<string, string> = {
-                    CARTAO: "#6C2BD9",
+                    CARTAO: "hsl(var(--primary))",
                     CONSIGNADO: "#1E88E5",
                     NOVO: "#10B981",
                     PORTABILIDADE: "#F59E0B",
@@ -1392,7 +1392,7 @@ export default function VendasPipeline() {
                             formatter={(value: number) => [value, "Clientes"]}
                             contentStyle={{ fontSize: 12, borderRadius: 6 }}
                           />
-                          <Bar dataKey="value" fill="#6C2BD9" radius={[3, 3, 0, 0]} />
+                          <Bar dataKey="value" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     )}

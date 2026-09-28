@@ -19,7 +19,7 @@ const PALETTE = {
     subtleBg: "#F9FAFB",
     trackBg: "#E5E7EB",
     badgeBrandBg: "#F2EBFC",
-    badgeBrandText: "#6C2BD9",
+    badgeBrandText: "hsl(var(--primary))",
     chartGrid: "#EDEDF2",
     chartCursor: "#F6F2FE",
     chartHoje: "#E3D9FB",
@@ -34,16 +34,16 @@ const PALETTE = {
     textMuted: "#9C97AE",
     subtleBg: "rgba(255,255,255,0.04)",
     trackBg: "rgba(255,255,255,0.10)",
-    badgeBrandBg: "rgba(108,43,217,0.28)",
+    badgeBrandBg: "hsl(var(--primary)/0.28)",
     badgeBrandText: "#C79CF7",
     chartGrid: "rgba(255,255,255,0.08)",
-    chartCursor: "rgba(108,43,217,0.12)",
-    chartHoje: "rgba(108,43,217,0.25)",
+    chartCursor: "hsl(var(--primary)/0.12)",
+    chartHoje: "hsl(var(--primary)/0.25)",
   },
 };
 type Palette = typeof PALETTE.light;
 
-const PURPLE = "#6C2BD9";
+const PURPLE = "hsl(var(--primary))";
 const BLUE = "#1E88E5";
 const GRAY = "#9CA3AF";
 const GREEN = "#00C853";
@@ -51,7 +51,7 @@ const AMBER = "#F9A825";
 const DANGER = "#E53935";
 const PINK = "#E91E63";
 const LILAS = "#C9B8F0";
-const GRAD_CTA = "linear-gradient(90deg,#6C2BD9 0%,#1E88E5 100%)";
+const GRAD_CTA = "linear-gradient(90deg,hsl(var(--primary)) 0%,#1E88E5 100%)";
 const GRAD_GO = "linear-gradient(90deg,#A855F7 0%,#E91E63 100%)";
 const FONT = "'Inter', system-ui, sans-serif";
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];

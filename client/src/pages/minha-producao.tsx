@@ -221,7 +221,7 @@ export default function MinhaProducaoPage() {
   const cards = [
     { titulo: "Vendido no mês", valor: BRL(r?.valorVendido || 0), nota: `${r?.vendas || 0} venda(s)`, Icon: TrendingUp, cor: "text-emerald-600 dark:text-emerald-400" },
     { titulo: "Comissão prevista", valor: BRL(r?.comissaoPrevista || 0), nota: `a receber ${BRL(r?.comissaoAReceber || 0)}`, Icon: Wallet, cor: "text-blue-600 dark:text-blue-400" },
-    { titulo: "Comissão recebida", valor: BRL(r?.comissaoRecebida || 0), nota: "confirmada por você", Icon: CheckCircle2, cor: "text-violet-600 dark:text-violet-400" },
+    { titulo: "Comissão recebida", valor: BRL(r?.comissaoRecebida || 0), nota: "confirmada por você", Icon: CheckCircle2, cor: "text-primary dark:text-primary" },
     { titulo: "Atrasada", valor: BRL(r?.comissaoAtrasada || 0), nota: "passou da data prevista", Icon: Clock, cor: "text-amber-600 dark:text-amber-400" },
     { titulo: "Cancelado", valor: BRL(r?.valorCancelado || 0), nota: `${r?.canceladas || 0} registro(s)`, Icon: XCircle, cor: "text-rose-600 dark:text-rose-400" },
   ];

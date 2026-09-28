@@ -146,10 +146,10 @@ export default function SimuladoresHub() {
                   fontFamily: "Inter, -apple-system, sans-serif",
                   fontSize: 13.5,
                   fontWeight: 600,
-                  color: isActive ? "#6C2BD9" : "hsl(var(--muted-foreground))",
+                  color: isActive ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
                   background: "none",
                   border: "none",
-                  borderBottom: isActive ? "2px solid #6C2BD9" : "2px solid transparent",
+                  borderBottom: isActive ? "2px solid hsl(var(--primary))" : "2px solid transparent",
                   padding: "10px 16px",
                   cursor: "pointer",
                   display: "flex",
@@ -159,7 +159,7 @@ export default function SimuladoresHub() {
                   transition: "color .15s, border-color .15s",
                 }}
                 onMouseEnter={(e) => {
-                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = "#6C2BD9";
+                  if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = "hsl(var(--primary))";
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = "";

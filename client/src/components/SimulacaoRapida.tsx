@@ -173,7 +173,7 @@ export function SimulacaoRapida({ convenio, saldo35, saldo5cartao, saldo5benefic
               <SimCard
                 title="Margem 5% — Cartão de Crédito"
                 icon={<CreditCard className="h-4 w-4" />}
-                accentColor="#6C2BD9"
+                accentColor="hsl(var(--primary))"
                 saldo={saldo5cartao}
                 coefDefault={data?.cartao_credito}
                 isLoading={isLoading}

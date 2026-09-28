@@ -78,7 +78,7 @@ function parcelaExibida(p: any): { value: any; original: boolean } {
 const BADGE_COLORS: Record<string, string> = {
   zinc:   "bg-[#F9FAFB] text-[#6B7280] dark:bg-white/5 dark:text-[#9C97AE]",
   blue:   "bg-[#E8F1FD] text-[#1E5FB5] dark:bg-[rgba(30,136,229,0.16)] dark:text-[#60A5FA]",
-  violet: "bg-[#F2EBFC] text-[#6C2BD9] dark:bg-[rgba(108,43,217,0.28)] dark:text-[#C79CF7]",
+  violet: "bg-[#F2EBFC] text-[hsl(var(--primary))] dark:bg-[hsl(var(--primary)/0.28)] dark:text-[#C79CF7]",
   orange: "bg-[#FEF6E0] text-[#9a6a00] dark:bg-[rgba(249,168,37,0.14)] dark:text-[#FBBF24]",
   red:    "bg-[#FDECEC] text-[#C62828] dark:bg-[rgba(229,57,53,0.16)] dark:text-[#F87171]",
   yellow: "bg-[#FEF6E0] text-[#9a6a00] dark:bg-[rgba(249,168,37,0.14)] dark:text-[#FBBF24]",
@@ -102,9 +102,9 @@ const PHASE_COLORS: Record<string, {
     count: "text-[#1E5FB5] dark:text-[#60A5FA]", label: "text-[#1E5FB5] dark:text-[#60A5FA]", swatch: "bg-blue-500",
   },
   violet: {
-    box:       "bg-[#F2EBFC] border-[#E3D2FA] dark:bg-[rgba(108,43,217,0.28)] dark:border-[rgba(108,43,217,0.45)]",
-    activeBox: "bg-[#F2EBFC] border-[#E3D2FA] dark:bg-[rgba(108,43,217,0.28)] dark:border-[rgba(108,43,217,0.45)] ring-2 ring-current",
-    count: "text-[#6C2BD9] dark:text-[#C79CF7]", label: "text-[#6C2BD9] dark:text-[#C79CF7]", swatch: "bg-violet-500",
+    box:       "bg-[#F2EBFC] border-[#E3D2FA] dark:bg-[hsl(var(--primary)/0.28)] dark:border-[hsl(var(--primary)/0.45)]",
+    activeBox: "bg-[#F2EBFC] border-[#E3D2FA] dark:bg-[hsl(var(--primary)/0.28)] dark:border-[hsl(var(--primary)/0.45)] ring-2 ring-current",
+    count: "text-[hsl(var(--primary))] dark:text-[#C79CF7]", label: "text-[hsl(var(--primary))] dark:text-[#C79CF7]", swatch: "bg-primary",
   },
   orange: {
     box:       "bg-[#FEF6E0] border-[#F5E1A4] dark:bg-[rgba(249,168,37,0.14)] dark:border-[rgba(249,168,37,0.30)]",
@@ -1679,7 +1679,7 @@ export default function ContratosListaPage() {
                         </span>
                       )}
                       {p.unificadaEmId && (
-                        <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title={`Unificada na proposta #${p.unificadaEmId}`}>Unificada</span>
+                        <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium bg-primary/10 text-primary dark:bg-primary/20/40 dark:text-primary" title={`Unificada na proposta #${p.unificadaEmId}`}>Unificada</span>
                       )}
                       {p.clientMeta?.cancelamentoSolicitado && (
                         <span

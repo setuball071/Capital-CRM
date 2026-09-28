@@ -108,24 +108,24 @@ function MetaCard({ label, icon: Icon, produzido, meta, percentual, variant }: {
 }) {
   const isCartao = variant === "cartao";
   return (
-    <Card className={`flex-1 min-w-0 ${isCartao ? "bg-[#1a1a2e] dark:bg-[#111122] border-purple-500/20" : "border-primary/20"}`}>
+    <Card className={`flex-1 min-w-0 ${isCartao ? "bg-[#1a1a2e] dark:bg-[#111122] border-primary/20" : "border-primary/20"}`}>
       <CardContent className="p-5">
         <div className="flex items-center gap-2 mb-3">
-          <Icon size={16} className={isCartao ? "text-purple-400" : "text-primary"} />
-          <h3 className={`font-bold text-sm uppercase tracking-wider ${isCartao ? "text-purple-300" : "text-primary"}`}>{label}</h3>
+          <Icon size={16} className={isCartao ? "text-primary" : "text-primary"} />
+          <h3 className={`font-bold text-sm uppercase tracking-wider ${isCartao ? "text-primary" : "text-primary"}`}>{label}</h3>
         </div>
         <div className="flex items-end justify-between gap-3 mb-4">
           <div className="min-w-0">
-            <div className={`text-2xl sm:text-3xl font-bold tracking-tight ${isCartao ? "text-purple-400" : ""}`}>{formatBRL(produzido)}</div>
+            <div className={`text-2xl sm:text-3xl font-bold tracking-tight ${isCartao ? "text-primary" : ""}`}>{formatBRL(produzido)}</div>
             <div className={`text-sm ${isCartao ? "text-gray-500" : "text-muted-foreground"}`}>Meta: {formatBRL(meta)}</div>
           </div>
-          <div className={`shrink-0 px-3 py-1.5 rounded-md border ${isCartao ? "bg-purple-500/20 border-purple-500/30" : "bg-primary/10 border-primary/20"}`}>
-            <span className={`text-xl font-bold ${isCartao ? "text-purple-400" : "text-primary"}`}>{percentual}%</span>
+          <div className={`shrink-0 px-3 py-1.5 rounded-md border ${isCartao ? "bg-primary/20 border-primary/30" : "bg-primary/10 border-primary/20"}`}>
+            <span className={`text-xl font-bold ${isCartao ? "text-primary" : "text-primary"}`}>{percentual}%</span>
           </div>
         </div>
         <div className={`w-full h-2.5 rounded-full overflow-hidden ${isCartao ? "bg-gray-700" : "bg-muted"}`}>
           <div
-            className={`h-full rounded-full transition-all duration-1000 ${isCartao ? "bg-gradient-to-r from-purple-600 to-purple-400" : "bg-gradient-to-r from-primary to-chart-2"}`}
+            className={`h-full rounded-full transition-all duration-1000 ${isCartao ? "bg-gradient-to-r from-primary to-primary" : "bg-gradient-to-r from-primary to-chart-2"}`}
             style={{ width: `${Math.min(percentual, 100)}%` }}
           />
         </div>
@@ -145,7 +145,7 @@ function RankingTableCompact({ title, icon: Icon, data, type }: {
     <Card className="flex flex-col" data-testid={`card-rel-ranking-${type}`}>
       <CardContent className="p-0 flex flex-col flex-1">
         <div className="flex items-center gap-2 p-4 pb-3 border-b shrink-0">
-          <Icon size={18} className={isCartao ? "text-purple-400" : "text-primary"} />
+          <Icon size={18} className={isCartao ? "text-primary" : "text-primary"} />
           <h3 className="font-bold text-base">{title}</h3>
           <Badge variant="outline" className="ml-auto">{data.length} corretores</Badge>
         </div>
@@ -256,18 +256,18 @@ function CorretorCard({ v }: { v: VendedorRanking }) {
         {v.metaCartao > 0 && (
           <div className="space-y-1.5 pt-1 border-t border-dashed">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-purple-400">Cartão</span>
-              <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${v.percentualMetaCartao >= 100 ? "bg-green-500/20 text-green-600 dark:text-green-400" : "bg-purple-500/10 text-purple-400"}`}>
+              <span className="text-xs font-semibold uppercase tracking-wide text-primary">Cartão</span>
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${v.percentualMetaCartao >= 100 ? "bg-green-500/20 text-green-600 dark:text-green-400" : "bg-primary/10 text-primary"}`}>
                 {v.percentualMetaCartao}%
               </span>
             </div>
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-base font-bold text-purple-400">{formatBRL(v.producaoCartao)}</span>
+              <span className="text-base font-bold text-primary">{formatBRL(v.producaoCartao)}</span>
               <span className="text-xs text-muted-foreground whitespace-nowrap">meta {formatBRL(v.metaCartao)}</span>
             </div>
             <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-700 ${v.percentualMetaCartao >= 100 ? "bg-green-500" : "bg-gradient-to-r from-purple-600 to-purple-400"}`}
+                className={`h-full rounded-full transition-all duration-700 ${v.percentualMetaCartao >= 100 ? "bg-green-500" : "bg-gradient-to-r from-primary to-primary"}`}
                 style={{ width: `${pctCartao}%` }}
               />
             </div>

@@ -136,7 +136,7 @@ export default function GestaoComercialHistoricoPage() {
               </Card>
               <Card className="border">
                 <CardContent className="p-3 text-center">
-                  <p className="text-xl font-bold text-purple-600">{formatCurrency(imp.totalValorCartao)}</p>
+                  <p className="text-xl font-bold text-primary">{formatCurrency(imp.totalValorCartao)}</p>
                   <p className="text-xs text-muted-foreground">Valor Cartão</p>
                 </CardContent>
               </Card>
@@ -206,7 +206,7 @@ export default function GestaoComercialHistoricoPage() {
                         <td className="p-2 text-right font-medium whitespace-nowrap">{formatCurrency(c.comissaoRepasseValor)}</td>
                         <td className="p-2 text-center">
                           {c.isCartao ? (
-                            <CreditCard className="h-4 w-4 text-purple-600 mx-auto" />
+                            <CreditCard className="h-4 w-4 text-primary mx-auto" />
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}
@@ -293,7 +293,7 @@ export default function GestaoComercialHistoricoPage() {
                           <DollarSign className="h-3 w-3" /> {formatCurrency(imp.totalValorGeral)}
                         </span>
                         {parseFloat(imp.totalValorCartao || "0") > 0 && (
-                          <span className="flex items-center gap-1 text-purple-600">
+                          <span className="flex items-center gap-1 text-primary">
                             <CreditCard className="h-3 w-3" /> {formatCurrency(imp.totalValorCartao)}
                           </span>
                         )}

@@ -1,6 +1,44 @@
 <!DOCTYPE html>
 <html lang="pt-BR" data-theme="light">
 <head>
+<style id="cor-da-marca">
+/* Cor da marca do ambiente. O padrao e o roxo antigo; o script logo abaixo
+   troca pelo --primary do CRM quando esta pagina roda dentro do sistema. */
+:root { --brand: #6C2BD9; --brand-dark: #4B1FA6; --brand-90: rgba(108,43,217,0.9); }
+</style>
+<script>
+/* Esta pagina roda em iframe, e iframe nao herda as variaveis de CSS do pai.
+   Como e mesma origem, lemos o --primary que o CRM ja aplicou e repassamos.
+   Se falhar (pagina aberta sozinha), fica o padrao acima. */
+(function () {
+  var tentativas = 0;
+  function aplicar() {
+    tentativas++;
+    try {
+      var pai = window.parent;
+      if (!pai || pai === window) return true; // aberta sozinha: fica o padrao
+      var hsl = getComputedStyle(pai.document.documentElement)
+        .getPropertyValue('--primary').trim();
+      if (!hsl) return false; // o CRM ainda nao aplicou o tema
+      var r = document.documentElement;
+      r.style.setProperty('--brand', 'hsl(' + hsl + ')');
+      r.style.setProperty('--brand-dark', 'hsl(' + hsl + ')');
+      r.style.setProperty('--brand-90', 'hsl(' + hsl + ' / 0.9)');
+      return true;
+    } catch (e) {
+      return true; // origem diferente: nao adianta insistir
+    }
+  }
+  // O iframe costuma carregar ANTES de o CRM buscar o tema do ambiente,
+  // entao insistimos por ate 5 segundos.
+  if (!aplicar()) {
+    var t = setInterval(function () {
+      if (aplicar() || tentativas > 25) clearInterval(t);
+    }, 200);
+  }
+})();
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light only">
@@ -224,9 +262,9 @@ td{color:#111827!important}
       ondragover="event.preventDefault();this.classList.add('dz-hover')"
       ondragleave="this.classList.remove('dz-hover')"
       ondrop="event.preventDefault();this.classList.remove('dz-hover');handleDropPDF(event)"
-      style="margin:14px 0 16px;padding:24px 16px;border:2px dashed #7C3AED;border-radius:10px;text-align:center;cursor:pointer;background:var(--surface-2);">
+      style="margin:14px 0 16px;padding:24px 16px;border:2px dashed var(--brand);border-radius:10px;text-align:center;cursor:pointer;background:var(--surface-2);">
       <div style="font-size:28px;margin-bottom:8px;line-height:1;">📄</div>
-      <div style="font-size:13px;font-weight:600;color:#7C3AED;margin-bottom:4px;">
+      <div style="font-size:13px;font-weight:600;color:var(--brand);margin-bottom:4px;">
         Arraste o extrato aqui ou clique para selecionar
       </div>
       <div style="font-size:11px;color:#9CA3AF;">

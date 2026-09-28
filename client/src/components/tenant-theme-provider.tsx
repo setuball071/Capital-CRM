@@ -126,32 +126,50 @@ function parseColor(value: string | undefined): string | null {
   return null;
 }
 
-const BRAND_VARS: Record<string, keyof TenantTheme> = {
-  "--primary": "primary",
-  "--primary-foreground": "primaryForeground",
-  "--ring": "primary",
+// Cada variavel de CSS aceita MAIS DE UM nome de chave no tema salvo.
+//
+// Motivo: a tela de Branding grava "primaryColor", "borderColor", "textColor"...
+// enquanto o CSS sempre leu "primary", "border", "foreground". Temas antigos
+// (Capital Go) tem as duas familias de chave e funcionavam por acaso; qualquer
+// ambiente novo so tem a familia *Color, entao --primary nunca era definido e o
+// sistema inteiro ficava no roxo padrao por mais que o gestor trocasse a cor.
+// A ordem importa: vale a primeira chave presente.
+const BRAND_VARS: Record<string, string[]> = {
+  "--primary": ["primary", "primaryColor"],
+  "--primary-foreground": ["primaryForeground"],
+  "--ring": ["primary", "primaryColor"],
 };
 
-const THEME_SENSITIVE_VARS: Record<string, keyof TenantTheme> = {
-  "--accent": "accent",
-  "--accent-foreground": "accentForeground",
-  "--background": "background",
-  "--foreground": "foreground",
-  "--muted": "muted",
-  "--muted-foreground": "mutedForeground",
-  "--border": "border",
-  "--card": "card",
-  "--card-foreground": "cardForeground",
-  "--sidebar": "sidebar",
-  "--sidebar-foreground": "sidebarForeground",
+const THEME_SENSITIVE_VARS: Record<string, string[]> = {
+  "--accent": ["accent", "secondaryColor"],
+  "--accent-foreground": ["accentForeground"],
+  "--background": ["background"],
+  "--foreground": ["foreground", "textColor"],
+  "--muted": ["muted"],
+  "--muted-foreground": ["mutedForeground"],
+  "--border": ["border", "borderColor"],
+  "--card": ["card"],
+  "--card-foreground": ["cardForeground", "textColor"],
+  "--sidebar": ["sidebar", "sidebarBgColor"],
+  "--sidebar-foreground": ["sidebarForeground", "sidebarFontColor"],
+  "--destructive": ["destructive", "errorColor"],
 };
+
+// Primeiro valor valido entre as chaves candidatas.
+function corDoTema(theme: any, chaves: string[]): string | null {
+  for (const chave of chaves) {
+    const valor = parseColor(theme?.[chave]);
+    if (valor) return valor;
+  }
+  return null;
+}
 
 function applyThemeVariables(theme: TenantTheme, isDark: boolean) {
   const root = document.documentElement;
 
   // Brand vars — always apply (tenant identity, consistent in both modes)
-  Object.entries(BRAND_VARS).forEach(([cssVar, themeKey]) => {
-    const value = parseColor(theme[themeKey]);
+  Object.entries(BRAND_VARS).forEach(([cssVar, chaves]) => {
+    const value = corDoTema(theme, chaves);
     if (value) {
       root.style.setProperty(cssVar, value);
     }
@@ -177,8 +195,8 @@ function applyThemeVariables(theme: TenantTheme, isDark: boolean) {
     }
   } else {
     // Light mode: apply all theme-sensitive vars from tenant config
-    Object.entries(THEME_SENSITIVE_VARS).forEach(([cssVar, themeKey]) => {
-      const value = parseColor(theme[themeKey]);
+    Object.entries(THEME_SENSITIVE_VARS).forEach(([cssVar, chaves]) => {
+      const value = corDoTema(theme, chaves);
       if (value) {
         root.style.setProperty(cssVar, value);
       }

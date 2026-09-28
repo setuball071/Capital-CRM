@@ -271,7 +271,7 @@ export function CriativosGallery() {
               <div className="p-3 flex flex-col gap-2 flex-1">
                 <div className="flex items-start justify-between gap-1">
                   <h4 className="text-xs font-semibold truncate flex-1">{c.title}</h4>
-                  <Badge variant={c.tipo === "personalizavel" ? "default" : "secondary"} className="text-[10px] flex-shrink-0" style={c.tipo === "personalizavel" ? { background: "#6C2BD9" } : {}}>
+                  <Badge variant={c.tipo === "personalizavel" ? "default" : "secondary"} className="text-[10px] flex-shrink-0" style={c.tipo === "personalizavel" ? { background: "hsl(var(--primary))" } : {}}>
                     {c.tipo === "personalizavel" ? "Personalizável" : "Avulso"}
                   </Badge>
                 </div>

@@ -59,7 +59,7 @@ const COLOR_PRESETS = [
   { value: "#f97316", label: "Laranja" },
   { value: "#ec4899", label: "Rosa" },
   { value: "#14b8a6", label: "Teal" },
-  { value: "#8b5cf6", label: "Violeta" },
+  { value: "hsl(var(--primary))", label: "Violeta" },
 ];
 
 function getIconComponent(iconName: string | null) {

@@ -1,6 +1,44 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<style id="cor-da-marca">
+/* Cor da marca do ambiente. O padrao e o roxo antigo; o script logo abaixo
+   troca pelo --primary do CRM quando esta pagina roda dentro do sistema. */
+:root { --brand: #6C2BD9; --brand-dark: #4B1FA6; --brand-90: rgba(108,43,217,0.9); }
+</style>
+<script>
+/* Esta pagina roda em iframe, e iframe nao herda as variaveis de CSS do pai.
+   Como e mesma origem, lemos o --primary que o CRM ja aplicou e repassamos.
+   Se falhar (pagina aberta sozinha), fica o padrao acima. */
+(function () {
+  var tentativas = 0;
+  function aplicar() {
+    tentativas++;
+    try {
+      var pai = window.parent;
+      if (!pai || pai === window) return true; // aberta sozinha: fica o padrao
+      var hsl = getComputedStyle(pai.document.documentElement)
+        .getPropertyValue('--primary').trim();
+      if (!hsl) return false; // o CRM ainda nao aplicou o tema
+      var r = document.documentElement;
+      r.style.setProperty('--brand', 'hsl(' + hsl + ')');
+      r.style.setProperty('--brand-dark', 'hsl(' + hsl + ')');
+      r.style.setProperty('--brand-90', 'hsl(' + hsl + ' / 0.9)');
+      return true;
+    } catch (e) {
+      return true; // origem diferente: nao adianta insistir
+    }
+  }
+  // O iframe costuma carregar ANTES de o CRM buscar o tema do ambiente,
+  // entao insistimos por ate 5 segundos.
+  if (!aplicar()) {
+    var t = setInterval(function () {
+      if (aplicar() || tentativas > 25) clearInterval(t);
+    }, 200);
+  }
+})();
+</script>
+
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Capital CRM — Comissões</title>
@@ -10,7 +48,7 @@
 /* Dark theme (default) — matches CRM .dark vars */
 :root,[data-theme="dark"]{
   --bg:#111116;--surface:#1a1a24;--surface2:#21212e;--border:#2e2e3d;
-  --accent:#8b5cf6;--accent-rgb:139,92,246;
+  --accent:var(--brand);--accent-rgb:139,92,246;
   --green:#22c55e;--yellow:#f59e0b;--red:#ef4444;--blue:#4fc3f7;
   --text:#f2f2f2;--muted:#8c8c8c;--radius:8px;
   --shadow:0 1px 4px rgba(0,0,0,.4);
@@ -18,7 +56,7 @@
 /* Light theme — matches CRM :root vars (accent = roxo Capital Go) */
 [data-theme="light"]{
   --bg:#fafafa;--surface:#ffffff;--surface2:#f1f4f9;--border:#e2e5ec;
-  --accent:#7c3aed;--accent-rgb:124,58,237;
+  --accent:var(--brand);--accent-rgb:124,58,237;
   --green:#16a34a;--yellow:#d97706;--red:#dc2626;--blue:#0284c7;
   --text:#050c1a;--muted:#6b7280;--radius:8px;
   --shadow:0 1px 3px rgba(0,0,0,.08);
@@ -4370,7 +4408,7 @@ function imprimirReciboPag(){
   const html=document.getElementById('recibo-pag-body').innerHTML;
   // Resolve as variáveis do tema atual para a janela de impressão (sempre em fundo claro)
   const cs=getComputedStyle(document.documentElement);
-  const accent=(cs.getPropertyValue('--accent')||'').trim()||'#7c3aed';
+  const accent=(cs.getPropertyValue('--accent')||'').trim()||'var(--brand)';
   const accentRgb=(cs.getPropertyValue('--accent-rgb')||'').trim()||'124,58,237';
   const w=window.open('','_blank','width=800,height=900');
   w.document.write(`<html><head><title>Recibo de Pagamento</title><style>

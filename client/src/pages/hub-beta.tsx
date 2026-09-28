@@ -121,7 +121,7 @@ const ALL_MODULES: HubModule[] = [
     description: "Procedimentos e consulta por banco",
     icon: Map,
     module: "modulo_roteiros",
-    color: "#8b5cf6",
+    color: "hsl(var(--primary))",
     subItems: [
       { id: "roteiros-page", title: "Roteiros", description: "Procedimentos por banco", icon: Map, route: "/roteiros" },
       { id: "convenios", title: "Convênios", description: "Convênios cadastrados", icon: Landmark, route: "/agreements" },

@@ -276,8 +276,8 @@ function MetaCartaoCard({ totalCartao, mesNome, metaCartao, posicaoRanking }: {
     <div className="rounded-2xl bg-[#1a1a2e] dark:bg-[#111122] p-4 sm:p-5 flex flex-col justify-between min-w-0 flex-1 w-full" data-testid="card-meta-cartao">
       <div>
         <div className="flex items-center gap-2 mb-3">
-          <CreditCard size={14} className="text-purple-400" />
-          <h3 className="font-black italic text-xs sm:text-sm uppercase tracking-[0.15em] text-purple-300" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          <CreditCard size={14} className="text-primary" />
+          <h3 className="font-black italic text-xs sm:text-sm uppercase tracking-[0.15em] text-primary" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             Meta Cartão – {mesNome}
           </h3>
           {posicaoRanking && posicaoRanking > 0 && (
@@ -290,7 +290,7 @@ function MetaCartaoCard({ totalCartao, mesNome, metaCartao, posicaoRanking }: {
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="min-w-0">
             <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-xl sm:text-2xl lg:text-3xl font-black text-purple-400 tracking-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-meta-cartao-produzido">
+              <span className="text-xl sm:text-2xl lg:text-3xl font-black text-primary tracking-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }} data-testid="text-meta-cartao-produzido">
                 R$ {totalCartao.toLocaleString("pt-BR")}
               </span>
               <span className="text-sm sm:text-base font-bold text-gray-500">
@@ -298,8 +298,8 @@ function MetaCartaoCard({ totalCartao, mesNome, metaCartao, posicaoRanking }: {
               </span>
             </div>
           </div>
-          <div className="shrink-0 bg-purple-500/20 px-3 py-1.5 rounded-xl border border-purple-500/30">
-            <span className="text-base sm:text-lg font-black text-purple-400" data-testid="text-meta-cartao-percent">
+          <div className="shrink-0 bg-primary/20 px-3 py-1.5 rounded-xl border border-primary/30">
+            <span className="text-base sm:text-lg font-black text-primary" data-testid="text-meta-cartao-percent">
               {percentCartao}%
             </span>
           </div>
@@ -307,7 +307,7 @@ function MetaCartaoCard({ totalCartao, mesNome, metaCartao, posicaoRanking }: {
 
         <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden mb-3">
           <div
-            className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r from-purple-600 to-purple-400"
+            className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r from-primary to-primary"
             style={{ width: `${Math.min(percentCartao, 100)}%` }}
           />
         </div>
@@ -637,7 +637,7 @@ export default function DashboardVendedorPage() {
                       }}
                     />
                     <Bar dataKey="preenchimento" stackId="a" fill="hsl(var(--primary))" barSize={24} radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="vazio" stackId="a" fill="hsl(var(--primary) / 0.15)" barSize={24} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="vazio" stackId="a" fill="hsl(var(--primary)/0.15)" barSize={24} radius={[4, 4, 0, 0]} />
                     <Bar dataKey="excedente" stackId="a" fill="#A855F7" barSize={24} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

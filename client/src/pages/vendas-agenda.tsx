@@ -30,7 +30,7 @@ const KIND_COLORS: Record<string, string> = {
   client_followup: "text-blue-500 dark:text-blue-400",
   task: "text-green-500 dark:text-green-400",
   reminder: "text-amber-500 dark:text-amber-400",
-  pipeline_segment: "text-purple-500 dark:text-purple-400",
+  pipeline_segment: "text-primary dark:text-primary",
 };
 
 const STATUS_LABELS: Record<string, string> = {
