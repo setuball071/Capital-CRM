@@ -16,13 +16,14 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Loader2, Search, Users, Fingerprint } from "lucide-react";
 
 interface Resumo {
   dias: number;
   total: number;
   porDia: { dia: string; total: number; cpfs: number }[];
-  porUsuario: { user_id: number | null; usuario: string | null; total: number; cpfs: number }[];
+  porUsuario: { usuario: string; integracao: boolean; total: number; cpfs: number }[];
   porOrigem: { origem: string; total: number }[];
 }
 
@@ -141,7 +142,9 @@ export default function AdminConsultasBasePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Por usuário</CardTitle>
-                <CardDescription>quem mais consultou no período</CardDescription>
+                <CardDescription>
+                  pessoas e integrações que mais consultaram no período
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {data.porUsuario.length === 0 ? (
@@ -157,8 +160,15 @@ export default function AdminConsultasBasePage() {
                     </TableHeader>
                     <TableBody>
                       {data.porUsuario.map((u, i) => (
-                        <TableRow key={`${u.user_id}-${i}`}>
-                          <TableCell>{u.usuario || "— usuário removido —"}</TableCell>
+                        <TableRow key={`${u.usuario}-${i}`}>
+                          <TableCell className="flex items-center gap-2">
+                            {u.usuario}
+                            {u.integracao && (
+                              <Badge variant="secondary" className="font-normal">
+                                integração
+                              </Badge>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right font-medium">
                             {Number(u.total).toLocaleString("pt-BR")}
                           </TableCell>

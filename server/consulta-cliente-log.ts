@@ -29,7 +29,7 @@ export const ACOES_CONSULTA = ["consulta_cliente", "consulta_siape"];
  */
 export function registrarConsultaCliente(
   req: any,
-  dados: { cpf: unknown; origem: string; encontrado: boolean },
+  dados: { cpf: unknown; origem: string; encontrado: boolean; integracao?: string },
 ): void {
   const cpf = String(dados.cpf ?? "").replace(/\D/g, "").slice(0, 11);
   if (!cpf) return;
@@ -39,7 +39,11 @@ export function registrarConsultaCliente(
     action: "consulta_cliente",
     entityType: "cpf",
     entityId: cpf,
-    details: { origem: dados.origem, encontrado: dados.encontrado },
+    details: {
+      origem: dados.origem,
+      encontrado: dados.encontrado,
+      ...(dados.integracao ? { integracao: dados.integracao } : {}),
+    },
     ipAddress: getClientIp(req),
     userAgent: String(req?.headers?.["user-agent"] || ""),
   }).catch(() => {});
@@ -66,9 +70,21 @@ export function registerConsultaClienteRoutes(app: Express, requireAuth: any) {
         GROUP BY 1 ORDER BY 1 DESC
       `);
 
+      // Sem usuário pode ser DUAS coisas bem diferentes: uma integração por chave
+      // de API (nunca teve usuário) ou um usuário que foi apagado depois. O nome
+      // da chave, quando existe, resolve — os dois não podem virar a mesma linha.
       const porUsuario = await db.execute(sql`
-        SELECT a.user_id, u.name AS usuario, COUNT(*)::int AS total,
-               COUNT(DISTINCT a.entity_id)::int AS cpfs
+        SELECT
+          COALESCE(
+            u.name,
+            a.details->>'integracao',
+            CASE WHEN a.details->>'origem' = 'api-externa'
+                 THEN 'Integração externa (chave sem nome)' END,
+            '— usuário removido —'
+          ) AS usuario,
+          (a.details->>'origem' = 'api-externa') AS integracao,
+          COUNT(*)::int AS total,
+          COUNT(DISTINCT a.entity_id)::int AS cpfs
         FROM audit_log a
         LEFT JOIN users u ON u.id = a.user_id
         WHERE a.tenant_id = ${tenantId} AND a.action IN ${acoes} AND a.created_at >= ${desde}

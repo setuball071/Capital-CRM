@@ -9,6 +9,7 @@ declare global {
     interface Request {
       apiTenantId?: number;
       apiKeyId?: number;
+      apiKeyNome?: string;
       apiKeyEscopos?: string[];
     }
   }
@@ -70,6 +71,7 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
 
     req.apiTenantId = key.tenantId;
     req.apiKeyId = key.id;
+    req.apiKeyNome = key.nome;   // vai no registro de consultas: diz QUAL integração consultou
     req.apiKeyEscopos = Array.isArray(key.escopos) ? key.escopos : ["margens", "contratos"];
     next();
   } catch (err) {

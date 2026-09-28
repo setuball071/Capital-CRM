@@ -31853,7 +31853,11 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
       const pessoas = await storage.getClientesByCpf(rawCpf);
       registrarConsultaCliente(
         { tenantId: req.apiTenantId, headers: req.headers, socket: req.socket },
-        { cpf: rawCpf, origem: "api-externa", encontrado: pessoas.length > 0 },
+        {
+          cpf: rawCpf, origem: "api-externa", encontrado: pessoas.length > 0,
+          // quem consultou aqui é uma integração, não uma pessoa
+          integracao: req.apiKeyNome || `chave #${req.apiKeyId ?? "?"}`,
+        },
       );
       if (pessoas.length === 0) {
         return res.status(404).json({ error: "Cliente não encontrado." });
