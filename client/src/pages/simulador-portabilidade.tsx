@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
-import { corMarcaHex, corMarcaRgba } from "@/lib/marca";
+import { corMarcaHex, corMarcaRgba, corTextoSobre } from "@/lib/marca";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
 import { useProposta } from "@/contexts/proposta-context";
@@ -308,7 +308,7 @@ function buildPrazoCards(s: SimState): PrazoCard[] {
 
 export default function SimuladorPortabilidadePage() {
   const { user } = useAuth();
-  const { logoUrl } = useTenant();
+  const { logoUrl, tenant } = useTenant();
   const propostaCtx = useProposta();
   const [logoBase64, setLogoBase64] = useState<string>("");
 
@@ -622,18 +622,23 @@ export default function SimuladorPortabilidadePage() {
     const CM18 = corMarcaRgba(0.18);
     const CM25 = corMarcaRgba(0.25);
     const CM08 = corMarcaRgba(0.08);
+    // Faixa superior do documento: definida pelo gestor em Branding. O texto e a
+    // logo seguem a cor escolhida, para nunca sumirem num fundo claro.
+    const CABEC = (tenant?.theme as any)?.pdfHeaderColor || "#1a1a2e";
+    const CABEC_TXT = corTextoSobre(CABEC);
+    const CABEC_LOGO = CABEC_TXT === "#ffffff" ? "brightness(0) invert(1)" : "brightness(0)";
     const _html = `<!DOCTYPE html><html lang="pt-BR"><head>
   <meta charset="UTF-8"><title>Proposta de Amortização</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:'Inter',Arial,sans-serif;font-size:11px;color:#1a1a2e;background:#fff}
-    .header{display:flex;align-items:center;justify-content:space-between;padding:24px 40px 20px;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .header{display:flex;align-items:center;justify-content:space-between;padding:24px 40px 20px;background:${CABEC};color:${CABEC_TXT};-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .header-left{display:flex;align-items:center;gap:14px}
-    .header-left img{filter:brightness(0) invert(1)}
+    .header-left img{filter:${CABEC_LOGO}}
     .header-right{text-align:right}
-    .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.5);font-weight:600}
-    .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
+    .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:${CABEC_TXT};opacity:.6;font-weight:600}
+    .header-date{font-size:11px;color:${CABEC_TXT};opacity:.8;margin-top:2px}
     .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,${CM} 0%,${CM72} 100%);flex:0 0 auto;min-width:280px;min-height:110px;box-shadow:6px 0 20px ${CM18};-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto{position:absolute;bottom:0;left:0;height:110px;width:auto;object-fit:contain;object-position:bottom left;display:block;z-index:1;-webkit-print-color-adjust:exact;print-color-adjust:exact}

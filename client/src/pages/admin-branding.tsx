@@ -199,6 +199,7 @@ export default function AdminBrandingPage() {
     darkSidebarBg: "",
     darkSidebarText: "",
     darkLoginBg: "",
+    pdfHeaderColor: "",
     sidebarGradientConfig: { ...DEFAULT_GRADIENT_CONFIG } as GradientConfig,
     loginGradientConfig: { ...DEFAULT_GRADIENT_CONFIG } as GradientConfig,
   });
@@ -275,6 +276,7 @@ export default function AdminBrandingPage() {
         darkSidebarBg: theme?.darkSidebarBg || "",
         darkSidebarText: theme?.darkSidebarText || "",
         darkLoginBg: theme?.darkLoginBg || "",
+        pdfHeaderColor: (theme as any)?.pdfHeaderColor || "",
         useSidebarGradient: theme?.useSidebarGradient === true,
         useLoginGradient: theme?.useLoginGradient === true,
         sidebarGradientConfig: theme?.sidebarGradientConfig || 
@@ -316,6 +318,7 @@ export default function AdminBrandingPage() {
         darkSidebarBg: data.darkSidebarBg,
         darkSidebarText: data.darkSidebarText,
         darkLoginBg: data.darkLoginBg,
+        pdfHeaderColor: data.pdfHeaderColor,
         useSidebarGradient: data.useSidebarGradient,
         useLoginGradient: data.useLoginGradient,
         sidebarGradientConfig: data.sidebarGradientConfig,
@@ -444,6 +447,7 @@ export default function AdminBrandingPage() {
       darkSidebarBg: "",
       darkSidebarText: "",
       darkLoginBg: "",
+      pdfHeaderColor: "",
       useSidebarGradient: false,
       useLoginGradient: false,
       sidebarGradientConfig: { ...DEFAULT_GRADIENT_CONFIG },
@@ -979,6 +983,21 @@ export default function AdminBrandingPage() {
             </div>
 
             <div className="pt-4 border-t">
+              <h4 className="text-sm font-medium mb-1">Documentos Exportados</h4>
+              <p className="text-xs text-muted-foreground mb-4">
+                Faixa superior das propostas em PDF. A logo e os textos dessa faixa se ajustam
+                sozinhos para claro ou escuro, conforme a cor escolhida. Vazio = azul-escuro padrão.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="space-y-2">
+                  <Label htmlFor="pdfHeaderColor">Cor do Cabeçalho do PDF</Label>
+                  <div className="flex gap-2">
+                    <Input id="pdfHeaderColor" type="color" value={formData.pdfHeaderColor || "#1a1a2e"} onChange={(e) => setFormData({ ...formData, pdfHeaderColor: e.target.value })} className="w-12 h-10 p-1 cursor-pointer" data-testid="input-pdf-header-color" />
+                    <Input type="text" value={formData.pdfHeaderColor} onChange={(e) => setFormData({ ...formData, pdfHeaderColor: e.target.value })} className="flex-1" placeholder="vazio = padrão" />
+                  </div>
+                </div>
+              </div>
+
               <h4 className="text-sm font-medium mb-1">Tema Escuro (opcional)</h4>
               <p className="text-xs text-muted-foreground mb-4">
                 Cores aplicadas somente quando o usuário está no modo escuro. Deixe em branco para usar o padrão do sistema.

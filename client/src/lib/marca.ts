@@ -58,3 +58,25 @@ export function corMarcaRgba(alpha: number): string {
   const [r, g, b] = corMarcaRgb();
   return `rgba(${r},${g},${b},${alpha})`;
 }
+
+/** Luminancia relativa (WCAG) de um #RRGGBB. */
+function luminancia(hex: string): number {
+  const canal = (v: number) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  return (
+    0.2126 * canal(parseInt(hex.slice(1, 3), 16)) +
+    0.7152 * canal(parseInt(hex.slice(3, 5), 16)) +
+    0.0722 * canal(parseInt(hex.slice(5, 7), 16))
+  );
+}
+
+/**
+ * Cor de texto que le sobre um fundo. Serve para o cabecalho do PDF, cuja cor
+ * o gestor escolhe: se ele puser um tom claro, o texto branco sumiria.
+ */
+export function corTextoSobre(fundoHex: string): "#ffffff" | "#1a1a2e" {
+  if (!/^#[0-9a-fA-F]{6}$/.test(fundoHex)) return "#ffffff";
+  return luminancia(fundoHex) > 0.4 ? "#1a1a2e" : "#ffffff";
+}

@@ -159,6 +159,9 @@ export const tenantThemeSchema = z.object({
   errorColor: z.string().optional(), // Cor de status erro
   warningColor: z.string().optional(), // Cor de status alerta
   headerColor: z.string().optional(),
+  // Faixa superior das propostas exportadas (PDF/impressao). Vazio = azul-escuro
+  // padrao. Fica no ambiente para o gestor decidir, em vez de derivarmos sozinhos.
+  pdfHeaderColor: z.string().optional(),
   sidebarColor: z.string().optional(),
   loginBgColor: z.string().optional(), // Cor de fundo da tela de login
   loginBgImage: z.string().optional(), // Imagem de fundo do login (URL)
