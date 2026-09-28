@@ -40,3 +40,21 @@ export function corMarcaRgb(): [number, number, number] {
     return [108, 43, 217];
   }
 }
+
+/** Cor primaria em #RRGGBB. */
+export function corMarcaHex(): string {
+  const [r, g, b] = corMarcaRgb();
+  return "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Cor primaria em rgba() com a transparencia pedida.
+ *
+ * Existe para os documentos que o sistema gera como ARQUIVO SEPARADO (proposta
+ * em PDF, impressao): eles nao enxergam as variaveis de CSS do app, entao a cor
+ * precisa ir escrita por extenso no HTML, resolvida na hora da exportacao.
+ */
+export function corMarcaRgba(alpha: number): string {
+  const [r, g, b] = corMarcaRgb();
+  return `rgba(${r},${g},${b},${alpha})`;
+}

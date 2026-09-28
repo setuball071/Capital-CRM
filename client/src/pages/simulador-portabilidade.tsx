@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
+import { corMarcaHex, corMarcaRgba } from "@/lib/marca";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
 import { useProposta } from "@/contexts/proposta-context";
@@ -614,6 +615,13 @@ export default function SimuladorPortabilidadePage() {
     const logoHtml = logoBase64
       ? `<img src="${logoBase64}" alt="Logo" style="height:44px;width:auto;object-fit:contain;">`
       : `<div style="font-size:22px;font-weight:900;letter-spacing:-0.5px;">Proposta</div>`;
+    // Este documento e gerado como ARQUIVO SEPARADO: nele as variaveis de CSS do
+    // app nao existem. A cor do ambiente vai escrita por extenso, resolvida aqui.
+    const CM = corMarcaHex();
+    const CM72 = corMarcaRgba(0.72);
+    const CM18 = corMarcaRgba(0.18);
+    const CM25 = corMarcaRgba(0.25);
+    const CM08 = corMarcaRgba(0.08);
     const _html = `<!DOCTYPE html><html lang="pt-BR"><head>
   <meta charset="UTF-8"><title>Proposta de Amortização</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -627,7 +635,7 @@ export default function SimuladorPortabilidadePage() {
     .header-tag{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,0.5);font-weight:600}
     .header-date{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px}
     .info-bar{display:flex;align-items:stretch;background:#fff;border-bottom:2px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,hsl(var(--primary)) 0%,hsl(var(--primary)/0.72) 100%);flex:0 0 auto;min-width:280px;min-height:110px;box-shadow:6px 0 20px hsl(var(--primary)/0.18);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .consultor-side{position:relative;display:flex;align-items:center;padding:14px 28px 14px 16px;overflow:hidden;background:linear-gradient(135deg,${CM} 0%,${CM72} 100%);flex:0 0 auto;min-width:280px;min-height:110px;box-shadow:6px 0 20px ${CM18};-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto{position:absolute;bottom:0;left:0;height:110px;width:auto;object-fit:contain;object-position:bottom left;display:block;z-index:1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-foto-ini{position:absolute;bottom:14px;left:14px;width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.18);border:2.5px solid rgba(255,255,255,0.45);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px;z-index:2;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .consultor-info{position:relative;z-index:2;margin-left:120px;text-shadow:0 1px 6px rgba(0,0,0,0.5)}
@@ -635,19 +643,19 @@ export default function SimuladorPortabilidadePage() {
     .consultor-nome{font-size:17px;font-weight:300;color:#fff;letter-spacing:0.3px;font-style:italic;border-bottom:1px solid rgba(255,255,255,0.35);padding-bottom:5px;margin-bottom:5px}
     .consultor-tel{font-size:10px;color:rgba(255,255,255,0.75);letter-spacing:0.5px}
     .cliente-side{display:flex;align-items:center;gap:0;padding:0 40px;flex:1;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .cli-item{display:flex;flex-direction:column;gap:5px;padding:0 36px 0 0;border-right:1px solid #ddd6f7}
+    .cli-item{display:flex;flex-direction:column;gap:5px;padding:0 36px 0 0;border-right:1px solid ${CM25}}
     .cli-item:last-child{border-right:none;padding-right:0}
-    .cli-label{font-size:8px;color:hsl(var(--primary));text-transform:uppercase;letter-spacing:1.5px;font-weight:800}
+    .cli-label{font-size:8px;color:${CM};text-transform:uppercase;letter-spacing:1.5px;font-weight:800}
     .cli-val{font-size:17px;font-weight:800;color:#1a1a2e;letter-spacing:-0.3px}
     .corpo{padding:24px 40px 0}
     .resumo{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
     .resumo-item{padding:16px 18px;background:#fff;border-right:1px solid #e2e8f0}
     .resumo-item:last-child{border-right:none}
-    .resumo-item:first-child{background:linear-gradient(135deg,#f5f0ff,#fff);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .resumo-item:first-child{background:linear-gradient(135deg,${CM08},#fff);-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .resumo-item label{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.8px;display:block;margin-bottom:6px;font-weight:700}
     .resumo-item .val{font-size:16px;font-weight:800;color:#1a1a2e}
-    .resumo-item:first-child .val{color:hsl(var(--primary))}
-    .section-label{font-size:11px;font-weight:800;color:#1a1a2e;margin-bottom:14px;padding-bottom:7px;border-bottom:2px solid hsl(var(--primary));display:inline-block;text-transform:uppercase;letter-spacing:0.5px}
+    .resumo-item:first-child .val{color:${CM}}
+    .section-label{font-size:11px;font-weight:800;color:#1a1a2e;margin-bottom:14px;padding-bottom:7px;border-bottom:2px solid ${CM};display:inline-block;text-transform:uppercase;letter-spacing:0.5px}
     table{width:100%;border-collapse:separate;border-spacing:0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
     thead th{background:#1a1a2e;color:#fff;padding:10px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     tbody td{padding:8px 14px;color:#475569;font-size:11px;border-bottom:1px solid #f1f5f9}
@@ -656,7 +664,7 @@ export default function SimuladorPortabilidadePage() {
     td.mes{color:#94a3b8;font-weight:700;font-size:10px}
     td.parcela{color:#1a1a2e;font-weight:600}
     td.prazos{color:#94a3b8;font-size:10px}
-    td.total{color:hsl(var(--primary));font-weight:800;font-size:12px}
+    td.total{color:${CM};font-weight:800;font-size:12px}
     .rodape{margin:20px 40px 28px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:8px;color:#94a3b8;line-height:2;letter-spacing:0.1px}
     @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:0}}
   </style>
