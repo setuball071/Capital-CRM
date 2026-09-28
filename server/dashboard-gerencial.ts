@@ -248,7 +248,7 @@ export function registerDashboardGerencialRoutes(
               COALESCE(SUM(valor_base),0) AS total,
               COALESCE(SUM(CASE WHEN is_cartao = true THEN valor_base ELSE 0 END),0) AS cartao,
               COALESCE(SUM(CASE WHEN is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END),0) AS portabilidade,
-              COALESCE(SUM(CASE WHEN is_cartao = false AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END),0) AS novo,
+              COALESCE(SUM(CASE WHEN is_cartao = false AND LOWER(COALESCE(tipo_contrato,'')) NOT LIKE '%cart%' AND LOWER(COALESCE(tipo_contrato,'')) NOT LIKE '%port%' AND LOWER(COALESCE(tipo_contrato,'')) NOT LIKE '%refin%' THEN valor_base ELSE 0 END),0) AS novo,
               COUNT(*) AS qtd
             FROM producoes_contratos
             WHERE tenant_id = ${tenantId} AND confirmado = true AND comissao_repasse_valor > 0
@@ -259,7 +259,7 @@ export function registerDashboardGerencialRoutes(
               COALESCE(SUM(valor_contrato),0) AS total,
               COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%cart%' THEN valor_contrato ELSE 0 END),0) AS cartao,
               COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%cart%' AND LOWER(COALESCE(tipo_operacao,'')) LIKE '%port%' THEN valor_contrato ELSE 0 END),0) AS portabilidade,
-              COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%cart%' AND (LOWER(COALESCE(tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_operacao,'')) LIKE '%consig%') THEN valor_contrato ELSE 0 END),0) AS novo,
+              COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%cart%' AND LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%port%' AND LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%refin%' THEN valor_contrato ELSE 0 END),0) AS novo,
               COUNT(*) AS qtd
             FROM vendedor_contratos
             WHERE tenant_id = ${tenantId}
@@ -439,12 +439,12 @@ export function registerDashboardGerencialRoutes(
         // produto: proposals.product é enum; producoes/vendedor via tipo -> bucket
         const bucketProd = sql`CASE WHEN is_cartao = true THEN 'CARTAO'
           WHEN LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
-          WHEN LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%' THEN 'NOVO'
-          ELSE 'OUTRO' END`;
+          WHEN LOWER(COALESCE(tipo_contrato,'')) LIKE '%refin%' THEN 'OUTRO'
+          ELSE 'NOVO' END`;
         const bucketVend = sql`CASE WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%cart%' THEN 'CARTAO'
           WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
-          WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_operacao,'')) LIKE '%consig%' THEN 'NOVO'
-          ELSE 'OUTRO' END`;
+          WHEN LOWER(COALESCE(tipo_operacao,'')) LIKE '%refin%' THEN 'OUTRO'
+          ELSE 'NOVO' END`;
 
         const [produto, banco, convenio] = await Promise.all([
           dimUnificado(sql`p.product`, bucketProd, bucketVend),
@@ -876,12 +876,12 @@ export function registerDashboardGerencialRoutes(
           } else {
             prodKey = sql`CASE WHEN pc.is_cartao = true THEN 'CARTÃO'
               WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
-              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%consig%' THEN 'NOVO'
-              ELSE 'OUTRO' END`;
+              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%refin%' THEN 'OUTRO'
+              ELSE 'NOVO' END`;
             vendKey = sql`CASE WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%cart%' THEN 'CARTÃO'
               WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
-              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%consig%' THEN 'NOVO'
-              ELSE 'OUTRO' END`;
+              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%refin%' THEN 'OUTRO'
+              ELSE 'NOVO' END`;
           }
           const r = await db.execute(sql`
             WITH un AS (
@@ -1110,8 +1110,8 @@ export function registerDashboardGerencialRoutes(
             pc.mes_referencia AS mes,
             CASE WHEN pc.is_cartao = true THEN 'CARTÃO'
               WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%port%' THEN 'PORTABILIDADE'
-              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%consig%' THEN 'NOVO'
-              ELSE 'OUTRO' END AS produto,
+              WHEN LOWER(COALESCE(pc.tipo_contrato,'')) LIKE '%refin%' THEN 'OUTRO'
+              ELSE 'NOVO' END AS produto,
             COALESCE(NULLIF(btrim(pc.banco),''),'Não informado') AS banco,
             COALESCE(NULLIF(btrim(pc.convenio),''),'Não informado') AS convenio,
             lpad(regexp_replace(COALESCE(pc.cpf_cliente,''),'[^0-9]','','g'),11,'0') AS cpf
@@ -1125,8 +1125,8 @@ export function registerDashboardGerencialRoutes(
             to_char(vc.data_contrato,'YYYY-MM') AS mes,
             CASE WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%cart%' THEN 'CARTÃO'
               WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%port%' THEN 'PORTABILIDADE'
-              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%novo%' OR LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%consig%' THEN 'NOVO'
-              ELSE 'OUTRO' END AS produto,
+              WHEN LOWER(COALESCE(vc.tipo_operacao,'')) LIKE '%refin%' THEN 'OUTRO'
+              ELSE 'NOVO' END AS produto,
             COALESCE(NULLIF(btrim(vc.banco),''),'Não informado') AS banco,
             COALESCE(NULLIF(btrim(vc.convenio),''),'Não informado') AS convenio,
             lpad(regexp_replace(COALESCE(vc.cliente_cpf,''),'[^0-9]','','g'),11,'0') AS cpf

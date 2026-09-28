@@ -718,6 +718,9 @@ export default function ContratosPropostaPage() {
   // Modalidade do cartão: consignado (RMC) x benefício (RCC). Não é persistida —
   // serve para filtrar as tabelas, e o tipo real fica gravado na tabela escolhida.
   const [cardModality, setCardModality] = useState<"RMC" | "RCC">("RMC");
+  // Compra de Dívida: a dívida quitada pode ser de cartão. Sem isso a operação
+  // não entra em nenhum bloco da segmentação (novo/port/cartão) e some da produção.
+  const [dividaComprada, setDividaComprada] = useState<"EMPRESTIMO" | "RMC" | "RCC">("EMPRESTIMO");
   // Nem toda operação exige e-mail. Marcado, o campo deixa de ser obrigatório e o
   // cadastro guarda semEmail — que é diferente de vazio por esquecimento, e evita
   // o endereço falso que virava e-mail de verdade na hora de disparar.
@@ -1084,6 +1087,8 @@ export default function ContratosPropostaPage() {
           // Cartão: a modalidade escolhida (RMC = consignado, RCC = benefício) precisa ser
           // gravada — antes só filtrava a tabela e a ficha mostrava "CARTAO" sem distinguir
           ...(contractType === "CARTAO" ? { modalidadeCartao: cardModality } : {}),
+          // Compra de Dívida de cartão: mesma chave, é o que faz a produção contar em Cartão
+          ...(isCompra && dividaComprada !== "EMPRESTIMO" ? { modalidadeCartao: dividaComprada } : {}),
           // Referência à tabela do financeiro config (ID do JSONB, não FK do banco)
           ...(data.tableId ? { tabelaFinanceiroId: data.tableId, tabelaNome: selectedTabela?.nome } : {}),
           ...(data.clientSexo ? { sexo: data.clientSexo } : {}),
@@ -3412,6 +3417,21 @@ export default function ContratosPropostaPage() {
                       </FormItem>
                     )}
                   />
+                )}
+
+                {/* ── Compra de Dívida: a dívida quitada é de empréstimo ou de cartão? ── */}
+                {isCompra && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Dívida Comprada</label>
+                    <Select value={dividaComprada} onValueChange={(v) => setDividaComprada(v as "EMPRESTIMO" | "RMC" | "RCC")}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EMPRESTIMO">Empréstimo consignado</SelectItem>
+                        <SelectItem value="RMC">Cartão Consignado (RMC)</SelectItem>
+                        <SelectItem value="RCC">Cartão Benefício (RCC)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
 
                 {/* ── Modalidade do cartão: filtra as tabelas de RMC x RCC ── */}

@@ -148,6 +148,10 @@ const PRODUCT_LABEL: Record<string, string> = {
 function productLabel(p: { product?: string | null; clientMeta?: any }): string {
   const mod = p.clientMeta?.modalidadeCartao;
   if (p.product === "CARTAO" && mod) return mod === "RCC" ? "Cartão Benefício" : "Cartão Consignado";
+  // Compra de Dívida de cartão: a mesma chave marca a modalidade da dívida quitada
+  if (p.product === "COMPRA_DIVIDA" && (mod === "RMC" || mod === "RCC")) {
+    return mod === "RCC" ? "Compra de Dívida (Cartão Benefício)" : "Compra de Dívida (Cartão Consignado)";
+  }
   return PRODUCT_LABEL[p.product || ""] || p.product || "";
 }
 

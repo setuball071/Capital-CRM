@@ -23184,7 +23184,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       // Breakdown por tipo:
       //   Cartão        = is_cartao = true (independente de tipo_contrato)
       //   Portabilidade = NÃO cartão E tipo_contrato contém "port"
-      //   Novo          = NÃO cartão E tipo_contrato contém "novo" ou "consig"
+      //   Novo          = o resto (NÃO cartão, NÃO port), menos refin — refin não conta como produção
       // Meta Geral = total_valor - total_cartao
       const prodTotaisResult = await db.execute(sql`
         SELECT
@@ -23192,7 +23192,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           COALESCE(SUM(valor_base), 0)::numeric as total_valor,
           COALESCE(SUM(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN valor_base ELSE 0 END), 0)::numeric as total_cartao,
           COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as total_portabilidade,
-          COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as total_novo
+          COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND LOWER(COALESCE(tipo_contrato,'')) NOT LIKE '%port%' AND LOWER(COALESCE(tipo_contrato,'')) NOT LIKE '%refin%' THEN valor_base ELSE 0 END), 0)::numeric as total_novo
         FROM producoes_contratos
         WHERE vendedor_id = ${userId}
           AND tenant_id = ${tenantId}
@@ -23213,7 +23213,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           COALESCE(SUM(valor_contrato), 0)::numeric as total_valor,
           COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN valor_contrato ELSE 0 END), 0)::numeric as total_cartao,
           COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND LOWER(tipo_operacao) LIKE '%port%' THEN valor_contrato ELSE 0 END), 0)::numeric as total_portabilidade,
-          COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND (LOWER(tipo_operacao) LIKE '%novo%' OR LOWER(tipo_operacao) LIKE '%consig%') THEN valor_contrato ELSE 0 END), 0)::numeric as total_novo
+          COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%cart%' AND LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%port%' AND LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%refin%' THEN valor_contrato ELSE 0 END), 0)::numeric as total_novo
         FROM vendedor_contratos
         WHERE vendedor_id = ${userId}
           AND tenant_id = ${tenantId}
@@ -23531,14 +23531,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         // Breakdown por tipo (mesma lógica do /api/dashboard-vendedor):
         //   Cartão       = is_cartao=true OU tipo contém "cart"
         //   Portabilidade= NÃO cartão E tipo contém "port"
-        //   Novo         = NÃO cartão E tipo contém "novo" ou "consig"
+        //   Novo         = o resto (NÃO cartão, NÃO port), menos refin — refin não conta como produção
         //   prod_geral (Meta Geral) = prod_total - prod_cartao
         const prodResult = await db.execute(sql`
           SELECT
             COALESCE(SUM(valor_base), 0)::numeric as prod_total,
             COALESCE(SUM(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN valor_base ELSE 0 END), 0)::numeric as prod_cartao,
             COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as prod_portabilidade,
-            COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as prod_novo,
+            COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND LOWER(COALESCE(tipo_contrato,'')) NOT LIKE '%port%' AND LOWER(COALESCE(tipo_contrato,'')) NOT LIKE '%refin%' THEN valor_base ELSE 0 END), 0)::numeric as prod_novo,
             COUNT(*)::int as contratos_total,
             COUNT(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN 1 END)::int as contratos_cartao
           FROM producoes_contratos
@@ -23560,7 +23560,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             COALESCE(SUM(valor_contrato), 0)::numeric as prod_total,
             COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_cartao,
             COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND LOWER(tipo_operacao) LIKE '%port%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_portabilidade,
-            COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND (LOWER(tipo_operacao) LIKE '%novo%' OR LOWER(tipo_operacao) LIKE '%consig%') THEN valor_contrato ELSE 0 END), 0)::numeric as prod_novo,
+            COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%cart%' AND LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%port%' AND LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%refin%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_novo,
             COUNT(*)::int as contratos_total,
             COUNT(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN 1 END)::int as contratos_cartao
           FROM vendedor_contratos
@@ -23806,14 +23806,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         // Breakdown por tipo (mesma lógica do /api/dashboard-vendedor):
         //   Cartão       = is_cartao=true OU tipo contém "cart"
         //   Portabilidade= NÃO cartão E tipo contém "port"
-        //   Novo         = NÃO cartão E tipo contém "novo" ou "consig"
+        //   Novo         = o resto (NÃO cartão, NÃO port), menos refin — refin não conta como produção
         //   prod_geral (Meta Geral) = prod_total - prod_cartao
         const prodResult = await db.execute(sql`
           SELECT
             COALESCE(SUM(valor_base), 0)::numeric as prod_total,
             COALESCE(SUM(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN valor_base ELSE 0 END), 0)::numeric as prod_cartao,
             COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND LOWER(COALESCE(tipo_contrato,'')) LIKE '%port%' THEN valor_base ELSE 0 END), 0)::numeric as prod_portabilidade,
-            COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%novo%' OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%consig%') THEN valor_base ELSE 0 END), 0)::numeric as prod_novo,
+            COALESCE(SUM(CASE WHEN NOT (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') AND LOWER(COALESCE(tipo_contrato,'')) NOT LIKE '%port%' AND LOWER(COALESCE(tipo_contrato,'')) NOT LIKE '%refin%' THEN valor_base ELSE 0 END), 0)::numeric as prod_novo,
             COUNT(*)::int as contratos_total,
             COUNT(CASE WHEN (is_cartao = true OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%') THEN 1 END)::int as contratos_cartao
           FROM producoes_contratos
@@ -23835,7 +23835,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             COALESCE(SUM(valor_contrato), 0)::numeric as prod_total,
             COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_cartao,
             COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND LOWER(tipo_operacao) LIKE '%port%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_portabilidade,
-            COALESCE(SUM(CASE WHEN LOWER(tipo_operacao) NOT LIKE '%cart%' AND (LOWER(tipo_operacao) LIKE '%novo%' OR LOWER(tipo_operacao) LIKE '%consig%') THEN valor_contrato ELSE 0 END), 0)::numeric as prod_novo,
+            COALESCE(SUM(CASE WHEN LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%cart%' AND LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%port%' AND LOWER(COALESCE(tipo_operacao,'')) NOT LIKE '%refin%' THEN valor_contrato ELSE 0 END), 0)::numeric as prod_novo,
             COUNT(*)::int as contratos_total,
             COUNT(CASE WHEN LOWER(tipo_operacao) LIKE '%cartão%' OR LOWER(tipo_operacao) LIKE '%cartao%' THEN 1 END)::int as contratos_cartao
           FROM vendedor_contratos

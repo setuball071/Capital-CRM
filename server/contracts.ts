@@ -1103,7 +1103,10 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             banco: updated.bank, tipoContrato: updated.product, convenio: current.clientConvenio,
             // Meta e ranking somam cartão só por is_cartao; sem gravar aqui, cartão
             // digitado no CRM entrava como false e sumia do card (o import já seta).
-            isCartao: /cart|saque complementar/i.test(String(updated.product || "")),
+            // Compra de Dívida de cartão também é produção de cartão: a marca fica em
+            // clientMeta.modalidadeCartao (RMC/RCC), porque o product continua COMPRA_DIVIDA.
+            isCartao: /cart|saque complementar/i.test(String(updated.product || ""))
+              || ["RMC", "RCC"].includes(String((updated.clientMeta as any)?.modalidadeCartao || "")),
             prazo: updated.term ? String(updated.term) : null,
             vendedorId: updated.vendorId || null, vendedorNome,
             nomeCorretor: vendedorNome,
