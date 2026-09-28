@@ -1890,6 +1890,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Entrega a logo/favicon do ambiente. PUBLICA de proposito: a tela de login
+  // carrega antes de existir sessao. Sao arquivos de marca, nao ha dado sensivel.
+  const TIPOS_MIME_LOGO: Record<string, string> = {
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+  };
+  app.get("/api/branding/logo/:arquivo", async (req: any, res) => {
+    const arquivo = String(req.params.arquivo || "");
+    // So aceita o padrao que nos mesmos gravamos: nada de subir de diretorio.
+    if (!/^logo-[a-z-]+-\d+\.(png|svg|ico|jpg|jpeg|webp)$/i.test(arquivo)) {
+      return res.status(400).json({ message: "Nome de arquivo invalido" });
+    }
+    try {
+      const { buffer, contentType } = await getDocument(`branding/${arquivo}`);
+      const ext = arquivo.slice(arquivo.lastIndexOf(".")).toLowerCase();
+      res.setHeader("Content-Type", contentType || TIPOS_MIME_LOGO[ext] || "application/octet-stream");
+      // A URL gravada no banco ja leva ?t=<timestamp>, entao o cache longo e seguro.
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.send(buffer);
+    } catch {
+      res.status(404).json({ message: "Logo nao encontrada" });
+    }
+  });
+
   // Upload tenant logo (Master only)
   // Uses uploadLogo multer config that accepts PNG, SVG, ICO (max 2MB)
   app.post(
@@ -1937,50 +1965,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(eq(tenants.id, tenantId))
           .limit(1);
 
-        // Save file to uploads folder with tenant-specific naming
-        const fsModule = await import("fs");
+        // Nome semantico: logo-{type}-{tenantId}.{ext}
         const pathModule = await import("path");
-
-        const uploadsDir = pathModule.join(process.cwd(), "uploads", "logos");
-        if (!fsModule.existsSync(uploadsDir)) {
-          fsModule.mkdirSync(uploadsDir, { recursive: true });
-        }
-
-        // Use semantic naming: logo-{type}-{tenantId}.{ext}
         const ext =
           pathModule.extname(file.originalname).toLowerCase() || ".png";
         const filename = `logo-${type}-${tenantId}${ext}`;
-        const filepath = pathModule.join(uploadsDir, filename);
 
-        console.log(`[TENANT-LOGO-UPLOAD] Saving file to: ${filepath}`);
+        // O disco do Railway e descartavel: tudo que e gravado nele some no
+        // proximo deploy. As logos vao para o mesmo storage dos anexos de
+        // proposta (Supabase, com fallback em disco), e sao servidas pela rota
+        // publica /api/branding/logo abaixo.
+        await saveDocument(`branding/${filename}`, file.buffer, file.mimetype || "image/png");
 
-        // Delete any existing file with different extension for this tenant/type
-        const possibleExts = [".png", ".svg", ".ico"];
-        for (const existingExt of possibleExts) {
-          if (existingExt !== ext) {
-            const oldFilePath = pathModule.join(
-              uploadsDir,
-              `logo-${type}-${tenantId}${existingExt}`,
-            );
-            if (fsModule.existsSync(oldFilePath)) {
-              try {
-                fsModule.unlinkSync(oldFilePath);
-                console.log(
-                  `[TENANT-LOGO-UPLOAD] Deleted old file: ${oldFilePath}`,
-                );
-              } catch (e) {
-                console.warn(
-                  `[TENANT-LOGO-UPLOAD] Could not delete old logo file: ${oldFilePath}`,
-                );
-              }
-            }
-          }
-        }
-
-        fsModule.writeFileSync(filepath, file.buffer);
-
-        // Generate URL for the uploaded file with cache-busting timestamp
-        const logoUrl = `/uploads/logos/${filename}?t=${Date.now()}`;
+        const logoUrl = `/api/branding/logo/${filename}?t=${Date.now()}`;
 
         // Update tenant with new logo URL based on type
         const updateData: any = {
