@@ -419,6 +419,33 @@ app.use((req, res, next) => {
           console.error("Permission templates migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — Confirmacao de conferencia antes de gerar proposta.
+        // Guarda QUEM confirmou, QUANDO e qual versao do aviso estava no ar, para
+        // a empresa conseguir provar depois que o corretor foi alertado.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS confirmacoes_documento (
+              id            SERIAL PRIMARY KEY,
+              tenant_id     INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+              user_id       INTEGER REFERENCES users(id),
+              tipo          VARCHAR(60) NOT NULL,
+              versao_aviso  VARCHAR(40) NOT NULL,
+              referencia    VARCHAR(120),
+              ip            VARCHAR(60),
+              criado_em     TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE INDEX IF NOT EXISTS idx_confirmacoes_documento_tenant_data
+              ON confirmacoes_documento (tenant_id, criado_em DESC)
+          `);
+          log("Confirmacoes de documento migration OK");
+        } catch (migErr) {
+          console.error("Confirmacoes de documento migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — Contratos (status configuráveis, fases, ADE refin)
         try {
           const { db: migDb } = await import("./storage");

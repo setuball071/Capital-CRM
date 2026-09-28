@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth";
 import { Loader2, Upload, Palette, Type, Image, Save, Eye, RotateCcw, Monitor, Tablet, Smartphone, AlertCircle, Sun, Moon, Sparkles } from "lucide-react";
 import type { Tenant, TenantTheme } from "@shared/schema";
 import { GradientEditor, GradientConfig, generateGradientCSS, parseGradientCSS, DEFAULT_GRADIENT_CONFIG } from "@/components/gradient-editor";
+import { AVISO_DOCUMENTO } from "@shared/avisos-legais";
 import { LogoCropperDialog } from "@/components/logo-cropper-dialog";
 import { BrandbookReaderDialog, type PaletaLida } from "@/components/brandbook-reader-dialog";
 
@@ -200,6 +201,7 @@ export default function AdminBrandingPage() {
     darkSidebarText: "",
     darkLoginBg: "",
     pdfHeaderColor: "",
+    avisoLegalDocumentos: "",
     sidebarGradientConfig: { ...DEFAULT_GRADIENT_CONFIG } as GradientConfig,
     loginGradientConfig: { ...DEFAULT_GRADIENT_CONFIG } as GradientConfig,
   });
@@ -277,6 +279,7 @@ export default function AdminBrandingPage() {
         darkSidebarText: theme?.darkSidebarText || "",
         darkLoginBg: theme?.darkLoginBg || "",
         pdfHeaderColor: (theme as any)?.pdfHeaderColor || "",
+        avisoLegalDocumentos: (theme as any)?.avisoLegalDocumentos || "",
         useSidebarGradient: theme?.useSidebarGradient === true,
         useLoginGradient: theme?.useLoginGradient === true,
         sidebarGradientConfig: theme?.sidebarGradientConfig || 
@@ -319,6 +322,7 @@ export default function AdminBrandingPage() {
         darkSidebarText: data.darkSidebarText,
         darkLoginBg: data.darkLoginBg,
         pdfHeaderColor: data.pdfHeaderColor,
+        avisoLegalDocumentos: data.avisoLegalDocumentos,
         useSidebarGradient: data.useSidebarGradient,
         useLoginGradient: data.useLoginGradient,
         sidebarGradientConfig: data.sidebarGradientConfig,
@@ -448,6 +452,7 @@ export default function AdminBrandingPage() {
       darkSidebarText: "",
       darkLoginBg: "",
       pdfHeaderColor: "",
+      avisoLegalDocumentos: "",
       useSidebarGradient: false,
       useLoginGradient: false,
       sidebarGradientConfig: { ...DEFAULT_GRADIENT_CONFIG },
@@ -990,6 +995,20 @@ export default function AdminBrandingPage() {
                 Vazio = uma versão escurecida da sua cor primária.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="avisoLegalDocumentos">Aviso legal no rodapé dos documentos</Label>
+                  <Input
+                    id="avisoLegalDocumentos"
+                    value={formData.avisoLegalDocumentos}
+                    onChange={(e) => setFormData({ ...formData, avisoLegalDocumentos: e.target.value })}
+                    placeholder={AVISO_DOCUMENTO}
+                    data-testid="input-aviso-legal"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Sai no rodapé de toda proposta e PDF. Vazio = o texto padrão mostrado acima.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="pdfHeaderColor">Cor do Cabeçalho do PDF</Label>
                   <div className="flex gap-2">

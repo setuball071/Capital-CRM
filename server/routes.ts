@@ -1918,6 +1918,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Registra a confirmacao de conferencia feita antes de gerar uma proposta.
+  // E o que permite a empresa provar, depois, que o corretor foi alertado.
+  app.post("/api/documentos/confirmacao", requireAuth, async (req: any, res) => {
+    try {
+      const { tipo, versaoAviso, referencia } = req.body || {};
+      if (!tipo || !versaoAviso) {
+        return res.status(400).json({ message: "tipo e versaoAviso sao obrigatorios" });
+      }
+      const [linha] = (
+        await db.execute(sql`
+          INSERT INTO confirmacoes_documento (tenant_id, user_id, tipo, versao_aviso, referencia, ip)
+          VALUES (
+            ${req.tenantId || null},
+            ${req.user?.id || null},
+            ${String(tipo).slice(0, 60)},
+            ${String(versaoAviso).slice(0, 40)},
+            ${referencia ? String(referencia).slice(0, 120) : null},
+            ${req.ip || req.connection?.remoteAddress || null}
+          )
+          RETURNING id, criado_em
+        `)
+      ).rows as any[];
+      res.json({ id: linha?.id, criadoEm: linha?.criado_em });
+    } catch (error: any) {
+      console.error("[CONFIRMACAO-DOC] falhou:", error?.message || error);
+      res.status(500).json({ message: "Nao consegui registrar a confirmacao." });
+    }
+  });
+
   // Upload tenant logo (Master only)
   // Uses uploadLogo multer config that accepts PNG, SVG, ICO (max 2MB)
   app.post(

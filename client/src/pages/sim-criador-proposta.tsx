@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import jsPDF from "jspdf";
 import { useProposta } from "@/contexts/proposta-context";
 import { corMarcaRgb } from "@/lib/marca";
+import { ConfirmarConferenciaDialog } from "@/components/confirmar-conferencia-dialog";
+import { AvisoSimulacao } from "@/components/aviso-simulacao";
+import { avisoDocumento } from "@shared/avisos-legais";
 import { useTenant } from "@/components/tenant-theme-provider";
 import { useAuth } from "@/lib/auth";
 
@@ -405,6 +408,7 @@ export default function SimCriadorProposta() {
       "Cálculos de amortização de parcela são diários e sofrem alteração.",
       "Proposta válida até " + proposta.validade + ", sujeita a alteração sem aviso prévio.",
       "A taxa de juros final e a redução do valor da parcela poderão sofrer oscilações a critério das instituições bancárias.",
+      avisoDocumento(tenant?.theme),
     ];
     rodape.forEach((l) => {
       doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(160, 160, 160);
@@ -676,6 +680,8 @@ function PropostaVisual({
   onFechar: () => void;
 }) {
   const { tenant } = useTenant();
+  // Confirmacao de conferencia exigida antes de baixar o PDF.
+  const [confirmarAberto, setConfirmarAberto] = useState(false);
   const totalAt = proposta.contratos.reduce((s, c) => s + (parseFloat(c.parcela) || 0), 0);
   const totalNv = proposta.novas.reduce((s, n) => s + (parseFloat(n.parcela) || 0), 0);
   const totalTroco = proposta.novas.reduce((s, n) => s + (parseFloat(n.troco) || 0), 0);
@@ -847,17 +853,27 @@ function PropostaVisual({
           <li className="text-[9px] text-muted-foreground/70 before:content-['*'] before:mr-1">Cálculos de amortização de parcela são diários e sofrem alteração.</li>
           <li className="text-[9px] text-muted-foreground/70 before:content-['*'] before:mr-1">Proposta válida até {proposta.validade}, sujeita a alteração sem aviso prévio.</li>
           <li className="text-[9px] text-muted-foreground/70 before:content-['*'] before:mr-1">A taxa de juros final poderá sofrer oscilações a critério das instituições bancárias.</li>
+          <li className="text-[9px] text-muted-foreground/70 mt-1.5">{avisoDocumento(tenant?.theme)}</li>
         </ul>
       </div>
+
+      <div className="px-6 pb-1"><AvisoSimulacao /></div>
 
       {/* botões */}
       <div className="flex gap-3 px-6 py-3 border-t border-border">
         <button
-          onClick={onExportPDF}
+          onClick={() => setConfirmarAberto(true)}
           className="h-9 px-5 rounded-lg bg-primary text-primary-foreground font-semibold text-[13px] hover:bg-primary/90 transition-colors"
         >
           Exportar PDF
         </button>
+        <ConfirmarConferenciaDialog
+          open={confirmarAberto}
+          onOpenChange={setConfirmarAberto}
+          tipo="criador-proposta"
+          referencia={proposta.num}
+          onConfirmado={onExportPDF}
+        />
         <button
           onClick={onFechar}
           className="h-9 px-5 rounded-lg border border-border bg-background text-foreground font-medium text-[13px] hover:bg-muted/50 transition-colors"
