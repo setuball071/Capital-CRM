@@ -91,6 +91,7 @@ import NotFound from "@/pages/not-found";
 import PrivacidadePage from "@/pages/privacidade";
 import AdminAssinaturasPage from "@/pages/admin-assinaturas";
 import AdminPlanosPage from "@/pages/admin-planos";
+import AdminConsultasBasePage from "@/pages/admin-consultas-base";
 import MinhaAssinaturaPage from "@/pages/minha-assinatura";
 import HubBetaPage from "@/pages/hub-beta";
 import { Loader2, BarChart3, Settings } from "lucide-react";
@@ -517,6 +518,9 @@ function Router() {
               </Route>
               <Route path="/admin/planos">
                 {() => <MasterRoute component={AdminPlanosPage} />}
+              </Route>
+              <Route path="/admin/consultas-base">
+                {() => <MasterRoute component={AdminConsultasBasePage} />}
               </Route>
               <Route path="/assinatura">
                 {() => <ProtectedRoute component={MinhaAssinaturaPage} />}
