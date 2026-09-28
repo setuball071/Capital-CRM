@@ -64,10 +64,21 @@ const STATUS_LABEL: Record<string, string> = {
 
 const VAZIO = {
   clienteNome: "", clienteCpf: "", banco: "", convenio: "", tipoOperacao: "",
-  parceiroNome: "", valorContrato: "", comissaoPrevista: "",
+  // percentual não é gravado: é derivado do valor do contrato e da comissão.
+  // Serve para digitar de qualquer um dos dois lados.
+  parceiroNome: "", valorContrato: "", percentual: "", comissaoPrevista: "",
   dataContrato: hojeISO(), dataPrevistaPagamento: "",
   status: "vendida", observacoes: "",
 };
+
+/** Aceita vírgula ou ponto; devolve 0 quando não dá número */
+const n = (v: any): number => {
+  const x = parseFloat(String(v ?? "").replace(",", "."));
+  return Number.isFinite(x) ? x : 0;
+};
+const fmtDinheiro = (v: number) => (v > 0 ? v.toFixed(2) : "");
+/** Percentual sem zeros à toa: 7.1429 em vez de 7.142857 */
+const fmtPct = (v: number) => (v > 0 ? String(parseFloat(v.toFixed(4))) : "");
 
 export default function MinhaProducaoPage() {
   const { toast } = useToast();
@@ -161,6 +172,8 @@ export default function MinhaProducaoPage() {
       tipoOperacao: reg.tipoOperacao || "",
       parceiroNome: reg.parceiroNome || "",
       valorContrato: reg.valorContrato || "",
+      // % recalculado na abertura: ele não é gravado, sai do valor e da comissão
+      percentual: fmtPct(n(reg.valorContrato) > 0 ? (n(reg.comissaoPrevista) / n(reg.valorContrato)) * 100 : 0),
       comissaoPrevista: reg.comissaoPrevista || "",
       dataContrato: (reg.dataContrato || "").slice(0, 10),
       dataPrevistaPagamento: reg.dataPrevistaPagamento || "",
@@ -354,8 +367,66 @@ export default function MinhaProducaoPage() {
                 data-testid="input-parceiroNome"
               />
             </div>
-            {campo("valorContrato", "Valor do contrato *")}
-            {campo("comissaoPrevista", "Comissão prevista")}
+            {/* Os três andam juntos: mexeu num, os outros se ajustam.
+                Quem foi digitado por último manda; não há recálculo em cadeia. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="valorContrato" className="text-xs">Valor do contrato *</Label>
+              <Input
+                id="valorContrato"
+                value={form.valorContrato}
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  setForm((f) => {
+                    const v = n(valor);
+                    if (v > 0 && n(f.percentual) > 0) {
+                      return { ...f, valorContrato: valor, comissaoPrevista: fmtDinheiro((v * n(f.percentual)) / 100) };
+                    }
+                    if (v > 0 && n(f.comissaoPrevista) > 0) {
+                      return { ...f, valorContrato: valor, percentual: fmtPct((n(f.comissaoPrevista) / v) * 100) };
+                    }
+                    return { ...f, valorContrato: valor };
+                  });
+                }}
+                data-testid="input-valorContrato"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="percentual" className="text-xs">% da comissão</Label>
+              <Input
+                id="percentual"
+                value={form.percentual}
+                placeholder="ex: 7"
+                onChange={(e) => {
+                  const pct = e.target.value;
+                  setForm((f) => ({
+                    ...f,
+                    percentual: pct,
+                    comissaoPrevista: n(f.valorContrato) > 0 && n(pct) > 0
+                      ? fmtDinheiro((n(f.valorContrato) * n(pct)) / 100)
+                      : f.comissaoPrevista,
+                  }));
+                }}
+                data-testid="input-percentual"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="comissaoPrevista" className="text-xs">Comissão prevista</Label>
+              <Input
+                id="comissaoPrevista"
+                value={form.comissaoPrevista}
+                onChange={(e) => {
+                  const com = e.target.value;
+                  setForm((f) => ({
+                    ...f,
+                    comissaoPrevista: com,
+                    percentual: n(f.valorContrato) > 0 && n(com) > 0
+                      ? fmtPct((n(com) / n(f.valorContrato)) * 100)
+                      : f.percentual,
+                  }));
+                }}
+                data-testid="input-comissaoPrevista"
+              />
+            </div>
             {campo("dataContrato", "Data da venda", "date")}
             {campo("dataPrevistaPagamento", "Data que entra a comissão", "date")}
             <div className="space-y-1.5">
