@@ -314,6 +314,14 @@ app.use((req, res, next) => {
               ADD COLUMN IF NOT EXISTS lemit_data JSONB,
               ADD COLUMN IF NOT EXISTS lemit_consultado_em TIMESTAMP
           `);
+          // Controle individual de produção e comissões (módulo do vendedor individual)
+          await migDb.execute(migSql`
+            ALTER TABLE vendedor_contratos
+              ADD COLUMN IF NOT EXISTS comissao_prevista        NUMERIC(10,2),
+              ADD COLUMN IF NOT EXISTS comissao_recebida        NUMERIC(10,2),
+              ADD COLUMN IF NOT EXISTS data_prevista_pagamento  DATE,
+              ADD COLUMN IF NOT EXISTS data_recebimento         DATE
+          `);
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS lemit_jobs (
               id            SERIAL PRIMARY KEY,

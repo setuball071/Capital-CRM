@@ -273,6 +273,8 @@ export function AppSidebar() {
         { title: "Campanhas", url: "/vendas/campanhas", icon: Target, module: "modulo_alpha", subItem: "campanhas" },
         { title: "Gestão Pipeline", url: "/vendas/gestao-pipeline", icon: BarChart3, module: "modulo_alpha", subItem: "gestao_pipeline" },
         { title: "Minha Carteira", url: "/vendas/minha-carteira", icon: Upload, module: "modulo_alpha", subItem: "minha_carteira" },
+        // Só aparece para quem tem o módulo do vendedor individual liberado no plano
+        { title: "Minha Produção", url: "/minha-producao", icon: Wallet, module: "modulo_minha_producao", subItem: "registros" },
       ],
     },
     {

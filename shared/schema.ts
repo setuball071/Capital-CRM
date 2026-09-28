@@ -11,6 +11,7 @@ import {
   jsonb,
   uniqueIndex,
   time,
+  date,
   primaryKey,
   unique,
 } from "drizzle-orm/pg-core";
@@ -1831,6 +1832,7 @@ export const MODULE_LIST = [
   "modulo_alpha", // ALPHA (new - consolidates CRM features)
   "modulo_financeiro", // Financeiro
   "modulo_assistente", // Jarvis (Assistente IA)
+  "modulo_minha_producao", // Controle individual de produção e comissões (plano vendedor individual)
 ] as const;
 
 export type ModuleName = (typeof MODULE_LIST)[number];
@@ -1893,6 +1895,11 @@ export const MODULE_SUB_ITEMS = {
     { key: "chat", label: "Conversar com o Jarvis" },
     { key: "base_conhecimento", label: "Gerenciar Base de Conhecimento" },
   ],
+  // Controle simplificado do vendedor individual. NÃO dá acesso ao Financeiro oficial:
+  // vive em tabela própria (vendedor_contratos) e cada um vê só os próprios registros.
+  modulo_minha_producao: [
+    { key: "registros", label: "Minha Produção e Comissões" },
+  ],
 } as const;
 
 // Helper type for sub-item keys
@@ -1910,6 +1917,7 @@ export const MODULE_LABELS: Record<ModuleName, string> = {
   modulo_alpha: "ALPHA",
   modulo_financeiro: "Financeiro",
   modulo_assistente: "Jarvis (Assistente IA)",
+  modulo_minha_producao: "Minha Produção (vendedor individual)",
 };
 
 // Helper to get full permission key (module.subitem)
@@ -2792,6 +2800,12 @@ export const vendedorContratos = pgTable("vendedor_contratos", {
   }).notNull(),
   valorParcela: decimal("valor_parcela", { precision: 10, scale: 2 }),
   valorTroco: decimal("valor_troco", { precision: 10, scale: 2 }),
+  // Comissão do controle individual: DIGITADA pelo vendedor, nunca calculada pelo
+  // sistema. Não tem relação com as comissões do financeiro oficial.
+  comissaoPrevista: decimal("comissao_prevista", { precision: 10, scale: 2 }),
+  comissaoRecebida: decimal("comissao_recebida", { precision: 10, scale: 2 }),
+  dataPrevistaPagamento: date("data_prevista_pagamento"),
+  dataRecebimento: date("data_recebimento"),
   dataContrato: timestamp("data_contrato").notNull().defaultNow(),
   status: varchar("status", { length: 50 }).notNull().default("pendente"),
   observacoes: text("observacoes"),

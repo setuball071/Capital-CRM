@@ -550,6 +550,7 @@ import * as os from "os";
 import Papa from "papaparse";
 import { createNotification } from "./notification-service";
 import { registerContractRoutes } from "./contracts";
+import { registerMinhaProducaoRoutes } from "./minha-producao";
 import { registerFinEmpresaRoutes } from "./fin-empresa";
 import { registerPortMultibancoRoutes } from "./port-multibanco";
 import { registerSimuladorCompraRoutes } from "./simulador-compra";
@@ -30786,6 +30787,10 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
 
   // ===== MÓDULO DE CONTRATOS =====
   registerContractRoutes(app, requireAuth);
+
+  // ===== CONTROLE INDIVIDUAL DE PRODUÇÃO E COMISSÕES (vendedor individual) =====
+  // Liberado por módulo, como a base de clientes. Não toca o financeiro oficial.
+  registerMinhaProducaoRoutes(app, requireAuth, requireModuleAccess);
 
   // ===== FINANCEIRO EMPRESARIAL (caixa, contas a pagar, planejamento) =====
   registerFinEmpresaRoutes(app, requireAuth);

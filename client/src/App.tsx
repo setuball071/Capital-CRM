@@ -84,6 +84,7 @@ import ImportarObservacoesPage from "@/pages/importar-observacoes";
 import SiapeHistoricoPage from "@/pages/siape-historico";
 import ImportarDadosComplementaresPage from "@/pages/importar-dados-complementares";
 import MinhaCarteiraPage from "@/pages/minha-carteira";
+import MinhaProducaoPage from "@/pages/minha-producao";
 import BaseConhecimentoPage from "@/pages/base-conhecimento";
 import { UpdatesPopup } from "@/components/UpdatesPopup";
 import AssistenteWidget from "@/components/assistente/AssistenteWidget";
@@ -491,6 +492,9 @@ function Router() {
               </Route>
               <Route path="/vendas/atendimento">
                 {() => <ModuleRoute component={VendasAtendimentoPage} module="modulo_alpha" />}
+              </Route>
+              <Route path="/minha-producao">
+                {() => <ModuleRoute component={MinhaProducaoPage} module="modulo_minha_producao" />}
               </Route>
               <Route path="/vendas/minha-carteira">
                 {() => <ModuleRoute component={MinhaCarteiraPage} module="modulo_alpha" />}
