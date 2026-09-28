@@ -2825,6 +2825,10 @@ export const vendedorContratos = pgTable("vendedor_contratos", {
   comissaoPrevista: decimal("comissao_prevista", { precision: 10, scale: 2 }),
   comissaoRecebida: decimal("comissao_recebida", { precision: 10, scale: 2 }),
   parceiroNome: varchar("parceiro_nome", { length: 150 }),
+  // Data em que o BANCO pagou o contrato. Opcional: quando vazia, o contador de
+  // dias cai na data da venda. É dela que sai o tempo de casa do contrato, não
+  // da data em que a comissão foi marcada como recebida.
+  dataPagamentoContrato: date("data_pagamento_contrato"),
   dataPrevistaPagamento: date("data_prevista_pagamento"),
   dataRecebimento: date("data_recebimento"),
   dataContrato: timestamp("data_contrato").notNull().defaultNow(),

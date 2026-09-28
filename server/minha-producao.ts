@@ -63,6 +63,7 @@ function corpoValido(body: any): { erro?: string; dados?: any } {
       // que pergunta a data e o valor. Assim ninguém marca recebimento sem querer.
       comissaoPrevista: body?.comissaoPrevista ? String(num(body.comissaoPrevista)) : null,
       dataPrevistaPagamento: String(body?.dataPrevistaPagamento || "").trim() || null,
+      dataPagamentoContrato: String(body?.dataPagamentoContrato || "").trim() || null,
       dataContrato,
       status,
       observacoes: String(body?.observacoes || "").trim() || null,

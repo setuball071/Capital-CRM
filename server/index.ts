@@ -321,7 +321,8 @@ app.use((req, res, next) => {
               ADD COLUMN IF NOT EXISTS comissao_recebida        NUMERIC(10,2),
               ADD COLUMN IF NOT EXISTS data_prevista_pagamento  DATE,
               ADD COLUMN IF NOT EXISTS data_recebimento         DATE,
-              ADD COLUMN IF NOT EXISTS parceiro_nome            VARCHAR(150)
+              ADD COLUMN IF NOT EXISTS parceiro_nome            VARCHAR(150),
+              ADD COLUMN IF NOT EXISTS data_pagamento_contrato  DATE
           `);
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS minha_producao_parceiros (

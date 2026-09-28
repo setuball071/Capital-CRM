@@ -41,6 +41,7 @@ interface Registro {
   comissaoPrevista: string | null;
   comissaoRecebida: string | null;
   dataPrevistaPagamento: string | null;
+  dataPagamentoContrato: string | null;
   dataRecebimento: string | null;
   dataContrato: string;
   status: string;
@@ -67,7 +68,7 @@ const VAZIO = {
   // percentual não é gravado: é derivado do valor do contrato e da comissão.
   // Serve para digitar de qualquer um dos dois lados.
   parceiroNome: "", valorContrato: "", percentual: "", comissaoPrevista: "",
-  dataContrato: hojeISO(), dataPrevistaPagamento: "",
+  dataContrato: hojeISO(), dataPagamentoContrato: "", dataPrevistaPagamento: "",
   status: "vendida", observacoes: "",
 };
 
@@ -190,6 +191,7 @@ export default function MinhaProducaoPage() {
       percentual: fmtPct(n(reg.valorContrato) > 0 ? (n(reg.comissaoPrevista) / n(reg.valorContrato)) * 100 : 0),
       comissaoPrevista: reg.comissaoPrevista || "",
       dataContrato: (reg.dataContrato || "").slice(0, 10),
+      dataPagamentoContrato: reg.dataPagamentoContrato || "",
       dataPrevistaPagamento: reg.dataPrevistaPagamento || "",
       status: reg.status || "vendida",
       observacoes: reg.observacoes || "",
@@ -451,6 +453,7 @@ export default function MinhaProducaoPage() {
               />
             </div>
             {campo("dataContrato", "Data da venda", "date")}
+            {campo("dataPagamentoContrato", "Pagamento do contrato", "date")}
             {campo("dataPrevistaPagamento", "Data que entra a comissão", "date")}
             <div className="space-y-1.5">
               <Label className="text-xs">Status</Label>
@@ -487,22 +490,40 @@ export default function MinhaProducaoPage() {
 
           {vendo && (
             <div className="space-y-3 text-sm">
-              {vendo.dataRecebimento && (
-                <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
-                  <p className="text-emerald-800 dark:text-emerald-300 font-semibold">
-                    {diasDesde(vendo.dataRecebimento) === 0
-                      ? "Recebida hoje"
-                      : `Recebida há ${diasDesde(vendo.dataRecebimento)} dia(s)`}
-                  </p>
-                  <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                    Em {new Date(vendo.dataRecebimento + "T12:00:00").toLocaleDateString("pt-BR")}, no valor de {BRL(Number(vendo.comissaoRecebida || 0))}
-                  </p>
-                </div>
-              )}
+              {/* Conta desde a MAIS RECENTE entre a venda e o pagamento do contrato.
+                  Sem a data de pagamento, sobra a da venda, e o texto avisa. */}
+              {(() => {
+                const venda = (vendo.dataContrato || "").slice(0, 10);
+                const pago = vendo.dataPagamentoContrato || "";
+                const base = [venda, pago].filter(Boolean).sort().pop() || "";
+                if (!base) return null;
+                const dias = diasDesde(base);
+                const doPagamento = !!pago && base === pago;
+                return (
+                  <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+                    <p className="text-emerald-800 dark:text-emerald-300 font-semibold">
+                      {dias === 0 ? "Contrato pago hoje" : `${dias} dia(s) desde ${doPagamento ? "o pagamento do contrato" : "a venda"}`}
+                    </p>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                      {doPagamento
+                        ? `Contrato pago em ${new Date(base + "T12:00:00").toLocaleDateString("pt-BR")}`
+                        : "Sem a data de pagamento do contrato, o contador usa a data da venda"}
+                    </p>
+                    {vendo.dataRecebimento && (
+                      <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                        Comissão recebida em {new Date(vendo.dataRecebimento + "T12:00:00").toLocaleDateString("pt-BR")}, no valor de {BRL(Number(vendo.comissaoRecebida || 0))}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-2 gap-3">
                 {[
                   ["Data da venda", new Date(vendo.dataContrato).toLocaleDateString("pt-BR")],
+                  ["Pagamento do contrato", vendo.dataPagamentoContrato
+                    ? new Date(vendo.dataPagamentoContrato + "T12:00:00").toLocaleDateString("pt-BR")
+                    : "—"],
                   ["Banco", vendo.banco || "—"],
                   ["Convênio", vendo.convenio || "—"],
                   ["Operação", vendo.tipoOperacao || "—"],
