@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -1123,9 +1123,10 @@ export default function ContratosListaPage() {
     status: (p) => new Date(p.updatedAt || p.createdAt || 0).getTime(), // atualização mais recente
     consulta: (p) => new Date(p.ultimaConsulta || p.updatedAt || p.createdAt || 0).getTime(), // consulta mais antiga/recente
   };
-  // A caixa CIP mantém SEMPRE a ordem por data/urgência (ordenação por coluna não se
-  // aplica nela), para não embaralhar os dias de CIP com um sort herdado de outra caixa.
-  const sorted = (sortBy && SORT_GET[sortBy] && !isCipBox)
+  // A caixa CIP abre pela urgência (CIP mais antiga no topo), mas clicar numa coluna
+  // reordena também aqui — é como se vê quem está há mais tempo sem consulta. O risco
+  // que travava isso era herdar um sort de outra caixa; resolvido zerando na troca.
+  const sorted = (sortBy && SORT_GET[sortBy])
     ? [...displayed].sort((a, b) => {
         const va = SORT_GET[sortBy](a), vb = SORT_GET[sortBy](b);
         let cmp = 0;
@@ -1134,6 +1135,18 @@ export default function ContratosListaPage() {
         return sortDir === "desc" ? -cmp : cmp;
       })
     : displayed;
+  // Trocou de caixa, a ordenação volta ao padrão daquela caixa. Sem isso, um sort
+  // escolhido em outra caixa entraria na CIP e esconderia a urgência.
+  const caixaAtual = `${filterStatus}|${activePhase ?? ""}`;
+  const caixaAnterior = useRef(caixaAtual);
+  useEffect(() => {
+    if (caixaAnterior.current !== caixaAtual) {
+      caixaAnterior.current = caixaAtual;
+      setSortBy(null);
+      setSortDir("desc");
+    }
+  }, [caixaAtual]);
+
   function toggleSort(key: string) {
     if (sortBy === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
     else { setSortBy(key); setSortDir("desc"); }
@@ -1209,11 +1222,11 @@ export default function ContratosListaPage() {
   const sortHead = (key: string, label: string, cls = "") => (
     // Na caixa CIP a ordenação é fixa (por urgência) → cabeçalho não clicável
     <TableHead
-      className={`select-none text-[11px] font-bold tracking-[0.04em] uppercase ${isCipBox ? "" : "cursor-pointer hover:text-foreground"} ${cls}`}
-      onClick={isCipBox ? undefined : () => toggleSort(key)}
+      className={`select-none text-[11px] font-bold tracking-[0.04em] uppercase cursor-pointer hover:text-foreground ${cls}`}
+      onClick={() => toggleSort(key)}
     >
       <span className={`inline-flex items-center gap-0.5 ${cls.includes("text-right") ? "justify-end w-full" : ""}`}>
-        {label}{!isCipBox && sortBy === key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
+        {label}{sortBy === key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
       </span>
     </TableHead>
   );
