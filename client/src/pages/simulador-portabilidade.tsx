@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
-import { corMarcaHex, corMarcaRgba, corTextoSobre } from "@/lib/marca";
+import { corMarcaHex, corMarcaRgba, corTextoSobre, corMarcaEscura } from "@/lib/marca";
 import { useAuth } from "@/lib/auth";
 import { useTenant } from "@/components/tenant-theme-provider";
 import { useProposta } from "@/contexts/proposta-context";
@@ -622,9 +622,11 @@ export default function SimuladorPortabilidadePage() {
     const CM18 = corMarcaRgba(0.18);
     const CM25 = corMarcaRgba(0.25);
     const CM08 = corMarcaRgba(0.08);
-    // Faixa superior do documento: definida pelo gestor em Branding. O texto e a
-    // logo seguem a cor escolhida, para nunca sumirem num fundo claro.
-    const CABEC = (tenant?.theme as any)?.pdfHeaderColor || "#1a1a2e";
+    // Faixas escuras do documento (topo e cabecalho da tabela): definidas pelo
+    // gestor em Branding. Sem definicao, usam a cor primaria do ambiente — nao um
+    // azul-marinho fixo, que nao pertence a marca de ninguem. O texto e a logo
+    // seguem a cor escolhida, para nunca sumirem num fundo claro.
+    const CABEC = (tenant?.theme as any)?.pdfHeaderColor || corMarcaEscura();
     const CABEC_TXT = corTextoSobre(CABEC);
     const CABEC_LOGO = CABEC_TXT === "#ffffff" ? "brightness(0) invert(1)" : "brightness(0)";
     const _html = `<!DOCTYPE html><html lang="pt-BR"><head>
@@ -662,7 +664,7 @@ export default function SimuladorPortabilidadePage() {
     .resumo-item:first-child .val{color:${CM}}
     .section-label{font-size:11px;font-weight:800;color:#1a1a2e;margin-bottom:14px;padding-bottom:7px;border-bottom:2px solid ${CM};display:inline-block;text-transform:uppercase;letter-spacing:0.5px}
     table{width:100%;border-collapse:separate;border-spacing:0;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
-    thead th{background:#1a1a2e;color:#fff;padding:10px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    thead th{background:${CABEC};color:${CABEC_TXT};padding:10px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     tbody td{padding:8px 14px;color:#475569;font-size:11px;border-bottom:1px solid #f1f5f9}
     tbody tr:nth-child(even) td{background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     tbody tr:last-child td{border-bottom:none}

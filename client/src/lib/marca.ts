@@ -80,3 +80,26 @@ export function corTextoSobre(fundoHex: string): "#ffffff" | "#1a1a2e" {
   if (!/^#[0-9a-fA-F]{6}$/.test(fundoHex)) return "#ffffff";
   return luminancia(fundoHex) > 0.4 ? "#1a1a2e" : "#ffffff";
 }
+
+/**
+ * Versao escurecida da cor primaria, em #RRGGBB.
+ *
+ * Usada nas faixas escuras dos documentos exportados: se a faixa usasse a cor
+ * primaria pura, ela ficaria igual ao bloco do consultor logo abaixo e o
+ * documento perderia a separacao entre as areas.
+ */
+export function corMarcaEscura(luzMaxima = 14): string {
+  try {
+    const p = getComputedStyle(document.documentElement)
+      .getPropertyValue("--primary")
+      .trim()
+      .split(/\s+/);
+    if (p.length < 3) return "#1a1a2e";
+    const l = Math.min(parseFloat(p[2]) || 50, luzMaxima);
+    const rgb = hslParaRgb(`${p[0]} ${p[1]} ${l}%`);
+    if (!rgb) return "#1a1a2e";
+    return "#" + rgb.map((n) => n.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return "#1a1a2e";
+  }
+}

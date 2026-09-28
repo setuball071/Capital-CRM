@@ -985,8 +985,9 @@ export default function AdminBrandingPage() {
             <div className="pt-4 border-t">
               <h4 className="text-sm font-medium mb-1">Documentos Exportados</h4>
               <p className="text-xs text-muted-foreground mb-4">
-                Faixa superior das propostas em PDF. A logo e os textos dessa faixa se ajustam
-                sozinhos para claro ou escuro, conforme a cor escolhida. Vazio = azul-escuro padrão.
+                Faixa do topo e cabeçalho das tabelas nas propostas em PDF. A logo e os textos
+                se ajustam sozinhos para claro ou escuro, conforme a cor escolhida.
+                Vazio = uma versão escurecida da sua cor primária.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                 <div className="space-y-2">
