@@ -7068,7 +7068,12 @@ async function mbBuscarCrm(dig) {
     const cli = await r.json();
     if (dig !== MB.cpfDono) return;
     if (!cli) { MB.crmNascimento = { estado: 'nao-encontrado' }; mbRender(); return; }
-    if (cli.dataNascimento && !MB.dados.dataNascimento) MB.dados.dataNascimento = cli.dataNascimento;
+    // data impossível (hoje, futuro, 120 anos) é cadastro sujo, não cliente:
+    // preencher calado fazia a análise reprovar tudo sem ninguém entender
+    if (cli.dataNascimento && !MB.dados.dataNascimento
+        && !mbIdadeImplausivel(mbIdadeDe(cli.dataNascimento))) {
+      MB.dados.dataNascimento = cli.dataNascimento;
+    }
     // UPAG do cadastro: o nome ajuda a conferir, o código é o que a regra usa
     if (!MB.dados.upag && (cli.upag || cli.upagNome)) {
       MB.dados.upag = String(cli.upag || cli.upagNome);
@@ -7264,6 +7269,51 @@ function mbPendenciasAgrupadas() {
   return [...mapa.values()].sort((a, b) => (a.escopo === b.escopo ? 0 : a.escopo === 'cliente' ? -1 : 1));
 }
 
+/** Idade em anos completos, ou null quando a data não presta. */
+function mbIdadeDe(iso) {
+  if (!iso) return null;
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return null;
+  const h = new Date();
+  let a = h.getFullYear() - d.getFullYear();
+  const m = h.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && h.getDate() < d.getDate())) a--;
+  return a;
+}
+
+/** Idade que não existe em consignado: quase sempre é dado errado, não cliente. */
+const mbIdadeImplausivel = idade => idade !== null && (idade < 18 || idade > 110);
+
+/** Dados do cliente que JÁ estão preenchidos.
+ *
+ *  Sem este bloco eles sumiam da tela depois de preenchidos — só existiam
+ *  enquanto eram PENDÊNCIA —, e um valor errado não tinha mais como ser
+ *  corrigido. Foi o que aconteceu com uma data de nascimento que entrou como a
+ *  data de hoje: o cliente virou "0 anos" e reprovou em todos os bancos, sem
+ *  campo nenhum na tela para arrumar. */
+function mbDadosClienteHTML() {
+  const pendentes = new Set(mbPendenciasAgrupadas().filter(p => p.escopo === 'cliente').map(p => p.campo));
+  // a data de nascimento fica SEMPRE disponivel, mesmo vazia: sem isso, depois
+  // de limpar uma data errada o operador ficava sem onde digitar a certa
+  const linhas = ['dataNascimento', 'situacaoFuncional', 'upag', 'pensaoTipo']
+    .filter(c => !pendentes.has(c) && (MB.dados[c] || c === 'dataNascimento'))
+    .map(c => mbCampoPendenteHTML({ campo: c, escopo: 'cliente', bancos: [] }));
+  if (!linhas.length) return '';
+
+  const idade = mbIdadeDe(MB.dados.dataNascimento);
+  const alerta = mbIdadeImplausivel(idade)
+    ? `<div class="mb-banner erro" style="margin-top:6px">A data de nascimento dá <b>${idade} ano${idade === 1 ? '' : 's'}</b> — com isso nenhum banco aprova. Corrija acima ou
+       <button class="mb-link" onclick="mbSetDado('dataNascimento','')">limpe a data</button>.</div>`
+    : '';
+  const quantos = idade !== null && !mbIdadeImplausivel(idade)
+    ? ` <span class="mb-sub">(${idade} anos hoje)</span>` : '';
+
+  return `<div class="mb-pend" style="background:#F8FAFC;border-color:#E2E8F0;color:inherit">
+    <div style="font-weight:700;margin-bottom:4px">Dados do cliente${quantos}
+      <span class="mb-sub">— confira e corrija a qualquer momento</span></div>
+    ${linhas.join('')}${alerta}</div>`;
+}
+
 /** De onde veio (ou por que não veio) a data de nascimento do CRM. Sem isso a
  *  tela ficava muda e ninguém sabia se o CRM tinha sido consultado. */
 function mbOrigemNascimentoHTML() {
@@ -7281,7 +7331,9 @@ function mbOrigemNascimentoHTML() {
 }
 
 function mbCampoPendenteHTML(p) {
-  const quem = `<span class="mb-quem">pedido por: ${mbEsc(p.bancos.join(', '))}</span>`;
+  // sem banco na lista o campo nao e pendencia: e dado ja preenchido, em edicao
+  const quem = (p.bancos && p.bancos.length)
+    ? `<span class="mb-quem">pedido por: ${mbEsc(p.bancos.join(', '))}</span>` : '';
   const rot = p.escopo === 'contrato'
     ? `${MB_CAMPO_LABEL[p.campo] || p.campo} do contrato <b>${mbEsc(mbRotuloContrato(p.contratoId))}</b>`
     : `<b>${MB_CAMPO_LABEL[p.campo] || p.campo}</b>`;
@@ -7546,6 +7598,7 @@ function mbRender() {
 
   corpo.innerHTML = erroNovo + salva + mbBannerEscolha() +
     (pend.length ? `<div class="mb-pend"><div style="font-weight:700;color:#92400E;margin-bottom:4px">Para concluir a análise — nada foi reprovado por falta destes dados</div>${pend.map(mbCampoPendenteHTML).join('')}</div>` : '') +
+    mbDadosClienteHTML() +
     mbOrigemDesconhecidaHTML(bancos) + mbDesligadosHTML() + mbNascimentoDoCrmHTML() + mbFormalizacaoHTML() + mbOperacaoHTML() +
     `<div class="mb-abas"><button class="mb-aba ${MB.aba === 'comparativo' ? 'on' : ''}" onclick="MB.aba='comparativo';mbRender()">Comparativo</button>` +
     bancos.map(b => `<button class="mb-aba ${MB.aba === b.bankId ? 'on' : ''}" onclick="MB.aba=${b.bankId};mbRender()"><span class="mb-ponto" style="background:${MB_STATUS_COR[b.status]}"></span>${mbEsc(b.banco)}</button>`).join('') +
