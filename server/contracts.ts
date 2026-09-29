@@ -1225,6 +1225,25 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
         .where(and(eq(proposals.id, id), eq(proposals.tenantId, tenantId)))
         .returning();
 
+      // Mudou a modalidade (cartão x empréstimo) de um contrato já PAGO? A linha da
+      // produção já existe e não é reescrita pela edição — sem isto, corrigir o produto
+      // na ficha não movia o contrato de bloco na segmentação.
+      if (clientMetaPatch && "modalidadeCartao" in clientMetaPatch && updated.status === "PAGO") {
+        try {
+          const ehCartao = /cart|saque complementar/i.test(String(updated.product || ""))
+            || ["RMC", "RCC"].includes(String((updated.clientMeta as any)?.modalidadeCartao || ""));
+          const adeAtual = (updated.adeRefin || updated.ade) || null;
+          await db.execute(sql`
+            UPDATE producoes_contratos
+            SET is_cartao = ${ehCartao}
+            WHERE tenant_id = ${tenantId}
+              AND (proposal_id = ${id} ${adeAtual ? sql`OR contrato_id = ${adeAtual}` : sql``})
+          `);
+        } catch (syncErr) {
+          console.error("[CONTRACTS] sincronizar modalidade na produção (non-fatal):", syncErr);
+        }
+      }
+
       // Trocou o corretor? A produção já lançada precisa acompanhar.
       let producaoSincronizada = 0;
       if (vendorId !== undefined && current.vendorId !== updated.vendorId) {
