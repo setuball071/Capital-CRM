@@ -683,6 +683,23 @@ app.use((req, res, next) => {
               AND (LOWER(COALESCE(tipo_contrato,'')) LIKE '%cart%'
                    OR LOWER(COALESCE(tipo_contrato,'')) LIKE '%saque complementar%')
           `);
+          // Compra de Dívida de cartão é produção de CARTÃO. A linha da produção
+          // nasce antes de alguém marcar a modalidade, então recupera as já pagas:
+          // pela modalidade da proposta (RMC/RCC) ou pela tabela do Financeiro, que
+          // já diz "Cartão" no nome. Idempotente: só mexe em quem está false.
+          await migDb.execute(migSql`
+            UPDATE producoes_contratos pc
+            SET is_cartao = true
+            FROM proposals p
+            WHERE p.tenant_id = pc.tenant_id
+              AND (p.id = pc.proposal_id OR (p.ade IS NOT NULL AND p.ade = pc.contrato_id))
+              AND COALESCE(pc.is_cartao, false) = false
+              AND UPPER(COALESCE(p.product, '')) = 'COMPRA_DIVIDA'
+              AND (
+                (p.client_meta->>'modalidadeCartao') IN ('RMC', 'RCC')
+                OR LOWER(COALESCE(p.client_meta->>'tabelaNome', '')) LIKE '%cart%'
+              )
+          `);
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS fin_planejamento (
               id             SERIAL PRIMARY KEY,

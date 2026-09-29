@@ -1106,7 +1106,11 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
             // Compra de Dívida de cartão também é produção de cartão: a marca fica em
             // clientMeta.modalidadeCartao (RMC/RCC), porque o product continua COMPRA_DIVIDA.
             isCartao: /cart|saque complementar/i.test(String(updated.product || ""))
-              || ["RMC", "RCC"].includes(String((updated.clientMeta as any)?.modalidadeCartao || "")),
+              || ["RMC", "RCC"].includes(String((updated.clientMeta as any)?.modalidadeCartao || ""))
+              // Compra de Dívida digitada antes do campo existir: a tabela do Financeiro
+              // já diz que é cartão no nome, e isso basta para contar no bloco certo.
+              || (String(updated.product || "").toUpperCase() === "COMPRA_DIVIDA"
+                  && /cart/i.test(String((updated.clientMeta as any)?.tabelaNome || ""))),
             prazo: updated.term ? String(updated.term) : null,
             vendedorId: updated.vendorId || null, vendedorNome,
             nomeCorretor: vendedorNome,

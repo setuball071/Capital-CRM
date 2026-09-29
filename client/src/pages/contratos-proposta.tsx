@@ -928,6 +928,14 @@ export default function ContratosPropostaPage() {
   // ── Cálculo do repasse LÍQUIDO do corretor (sem expor pctEmpresa) ──────────
   const watchedTableId = form.watch("tableId");
   const selectedTabela = financeiroTabelas.find((t: any) => String(t.id) === String(watchedTableId));
+  // Compra de Dívida: cartão vem da escolha do usuário ou, se ele não marcou, do
+  // tipo da tabela do Financeiro ("Cartão Consignado (RMC)" / "Cartão Benefício (RCC)").
+  const tipoTabelaSel = String((selectedTabela as any)?.tipo || "");
+  const modalidadeCompra: "RMC" | "RCC" | null =
+    dividaComprada !== "EMPRESTIMO" ? dividaComprada
+    : /rcc|benef/i.test(tipoTabelaSel) ? "RCC"
+    : /cart/i.test(tipoTabelaSel) ? "RMC"
+    : null;
 
   // (Fica DEPOIS de selectedTabela de propósito: usar antes da declaração era
   //  ReferenceError e derrubava a tela inteira ao escolher Compra de Dívida.)
@@ -1087,8 +1095,9 @@ export default function ContratosPropostaPage() {
           // Cartão: a modalidade escolhida (RMC = consignado, RCC = benefício) precisa ser
           // gravada — antes só filtrava a tabela e a ficha mostrava "CARTAO" sem distinguir
           ...(contractType === "CARTAO" ? { modalidadeCartao: cardModality } : {}),
-          // Compra de Dívida de cartão: mesma chave, é o que faz a produção contar em Cartão
-          ...(isCompra && dividaComprada !== "EMPRESTIMO" ? { modalidadeCartao: dividaComprada } : {}),
+          // Compra de Dívida de cartão: mesma chave, é o que faz a produção contar em Cartão.
+          // Se não marcaram nada, a tabela escolhida decide — ela já diz "Cartão" no nome.
+          ...(isCompra && modalidadeCompra ? { modalidadeCartao: modalidadeCompra } : {}),
           // Referência à tabela do financeiro config (ID do JSONB, não FK do banco)
           ...(data.tableId ? { tabelaFinanceiroId: data.tableId, tabelaNome: selectedTabela?.nome } : {}),
           ...(data.clientSexo ? { sexo: data.clientSexo } : {}),
