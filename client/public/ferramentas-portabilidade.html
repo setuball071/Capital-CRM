@@ -7023,7 +7023,15 @@ async function mbAnalisar(entrada, chave) {
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entrada),
     });
     if (minhaVez !== MB.seq) return;         // chegou atrasada: descarta
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) {
+      // a mensagem do servidor vale mais que o numero: guarda as duas
+      const corpoErro = await r.text().catch(() => '');
+      let msg = '';
+      try { msg = (JSON.parse(corpoErro) || {}).message || ''; } catch (e) { msg = ''; }
+      const err = new Error(msg || ('HTTP ' + r.status));
+      err.status = r.status;
+      throw err;
+    }
     const j = await r.json();
     if (minhaVez !== MB.seq) return;
     MB.resultado = j.resultado || null;
@@ -7041,11 +7049,29 @@ async function mbAnalisar(entrada, chave) {
     // qualquer mudança nos dados (ou o botão) tenta de novo
     MB.ultimaChave = chave; MB.chaveAgendada = null;
     MB.estado = 'erro';
+    MB.erro = { status: e.status || 0, msg: String(e.message || '') };
+    console.warn('[multibanco] análise falhou:', MB.erro);
     mbRender();
   }
 }
 
 function mbTentarDeNovo() { MB.ultimaChave = null; MB.chaveAgendada = null; mbObservar(); }
+
+/** Por que a analise nao veio. Dizer "indisponivel" e nao dizer nada: sessao
+ *  caida, erro do servidor e queda de rede pedem providencias diferentes. */
+function mbMotivoDoErro() {
+  const e = MB.erro || {};
+  if (e.status === 401 || e.status === 403) {
+    return 'Sua sessão expirou (ou este usuário não tem acesso à análise). Recarregue a página e entre de novo.';
+  }
+  if (e.status >= 500) {
+    return `O servidor falhou ao analisar${e.msg ? ' — ' + mbEsc(e.msg) : ''}.`;
+  }
+  if (!e.status) {
+    return 'Não consegui falar com o servidor (conexão caiu ou o sistema está reiniciando).';
+  }
+  return `A análise por banco não respondeu (${mbEsc(String(e.status))}${e.msg ? ' — ' + mbEsc(e.msg) : ''}).`;
+}
 
 /** Troca de cliente (extrato novo, Limpar, outra cotação): os dados complementares
  *  eram do cliente anterior e não podem vazar para o próximo. */
@@ -7576,7 +7602,7 @@ function mbRender() {
     return;
   }
   if (MB.estado === 'erro' && !MB.resultado) {
-    corpo.innerHTML = `<div class="mb-banner erro">A análise por banco está indisponível agora. O simulador continua funcionando normalmente.
+    corpo.innerHTML = `<div class="mb-banner erro">${mbMotivoDoErro()} O simulador continua funcionando normalmente.
       <button class="mb-link" onclick="mbTentarDeNovo()">tentar de novo</button></div>`;
     return;
   }
