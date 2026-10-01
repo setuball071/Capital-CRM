@@ -2375,6 +2375,9 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           // sem ver percentual de empresa.
           comissao_empresa: proposals.companyCommissionValue,
           comissao_pct: proposals.commissionPercentage,
+          // Data em que o contrato foi pago: é ela que deve virar a data do
+          // fechamento no WhatsApp CRM (a de criação da proposta é outra coisa).
+          pago_em: proposals.paidAt,
         })
         .from(proposals)
         // O CPF é gravado só com dígitos, mas cadastro antigo pode ter pontuação.
