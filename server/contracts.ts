@@ -2369,6 +2369,12 @@ export function registerContractRoutes(app: Express, requireAuth: Function) {
           status: proposals.status,
           ade: proposals.ade,
           criada_em: proposals.createdAt,
+          // Comissão REAL da empresa: é ela que vira "retorno" no Painel de
+          // Leads do WhatsApp CRM, no lugar do percentual estimado por produto.
+          // Vai só nesta API (chave de servidor); a tela do corretor continua
+          // sem ver percentual de empresa.
+          comissao_empresa: proposals.companyCommissionValue,
+          comissao_pct: proposals.commissionPercentage,
         })
         .from(proposals)
         // O CPF é gravado só com dígitos, mas cadastro antigo pode ter pontuação.
