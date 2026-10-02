@@ -66,7 +66,7 @@ export default function SimuladorCompra() {
   const doConvenio = useMemo(() => tabelas.filter(t => t.ativo !== false && (t.convenio || "SIAPE") === convAtual), [tabelas, convAtual]);
 
   const res = useMemo(() => calcularCompra(
-    { parcela: num(parcela), fator: num(fator), saldoReal: num(saldo), margem: num(margem) },
+    { parcela: num(parcela), fator: num(fator), saldoReal: num(saldo), margemExtra: num(margem) },
     doConvenio,
   ), [parcela, fator, saldo, margem, doConvenio]);
 
@@ -109,8 +109,8 @@ export default function SimuladorCompra() {
             <input className={inputCls} inputMode="decimal" placeholder="3.442,06" value={saldo} onChange={e => setSaldo(e.target.value)} /></div>
           <div><label className={labelCls}>Fator p/ estimar o saldo</label>
             <input className={inputCls} inputMode="decimal" value={fator} disabled={num(saldo) > 0} onChange={e => setFator(e.target.value)} /></div>
-          <div><label className={labelCls}>Margem para a compra</label>
-            <input className={inputCls} inputMode="decimal" placeholder={parcela ? `igual à parcela (${parcela})` : "250,00"} value={margem} onChange={e => setMargem(e.target.value)} /></div>
+          <div><label className={labelCls}>Margem extra (soma à parcela)</label>
+            <input className={inputCls} inputMode="decimal" placeholder="250,00" value={margem} onChange={e => setMargem(e.target.value)} /></div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <span>Saldo usado: <b>{brl(res.saldo)}</b>{" "}
@@ -118,7 +118,10 @@ export default function SimuladorCompra() {
               ? <span className="ml-1 rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[11px] font-semibold">estimado: parcela × {fator || 0}</span>
               : <span className="ml-1 rounded bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[11px] font-semibold">saldo do banco</span>)}
           </span>
-          <span>Margem usada: <b>{brl(res.margemUsada)}</b>{res.margemEhParcela && res.margemUsada > 0 && <span className="text-muted-foreground"> (a parcela)</span>}</span>
+          <span>Margem usada: <b>{brl(res.margemUsada)}</b>
+            {res.margemUsada > 0 && (res.extraUsada > 0
+              ? <span className="text-muted-foreground"> ({brl(num(parcela))} da folha + {brl(res.extraUsada)} de extra)</span>
+              : <span className="text-muted-foreground"> (só a parcela da folha)</span>)}</span>
           {podeVerCom && <button onClick={() => { setOcultarCom(!ocultarCom); if (ordem === "comissao") setOrdem("padrao"); }}
             className={`ml-auto rounded-md border px-2.5 py-1 text-xs font-semibold ${ocultarCom ? "border-primary bg-primary text-white" : "border-border hover:bg-muted"}`}>
             {ocultarCom ? "Mostrar comissão" : "Esconder comissão"}</button>}

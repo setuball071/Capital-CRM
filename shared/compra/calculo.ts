@@ -6,8 +6,10 @@
 //   liberado = bruto − saldo            (o líquido do cliente)
 //   comissão = bruto × percentual       (sobre o BRUTO, não sobre o saldo)
 //
-// Parcela e margem são separadas de propósito: a parcela estima o saldo, a
-// margem é a que se usa na compra (pode ser igual à parcela ou maior).
+// Parcela e margem são separadas de propósito: a parcela estima o saldo, e a
+// margem da compra é a PARCELA MAIS a margem extra que o cliente tenha livre.
+// Somar é o certo: a parcela que ele já paga volta para a margem quando o
+// contrato é quitado, e a extra se junta a ela.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface TabelaCompra {
@@ -26,7 +28,8 @@ export interface EntradaCompra {
   parcela: number;      // parcela da folha
   fator: number;        // multiplicador do saldo estimado
   saldoReal: number;    // 0 = não informado
-  margem: number;       // 0 = usa a parcela
+  /** margem livre ALÉM da parcela da folha; 0 = compra só com a parcela */
+  margemExtra: number;
 }
 
 export interface LinhaCompra {
@@ -39,16 +42,18 @@ export interface LinhaCompra {
 export interface ResultadoCompra {
   saldo: number;
   saldoEstimado: boolean;
+  /** o que vai para a conta: parcela + extra */
   margemUsada: number;
-  margemEhParcela: boolean;
+  /** quanto veio da margem extra (0 = só a parcela) */
+  extraUsada: number;
   linhas: LinhaCompra[];
 }
 
 export function calcularCompra(e: EntradaCompra, tabelas: TabelaCompra[]): ResultadoCompra {
   const saldoEstimado = !(e.saldoReal > 0);
   const saldo = saldoEstimado ? Math.max(0, e.parcela) * Math.max(0, e.fator) : e.saldoReal;
-  const margemEhParcela = !(e.margem > 0);
-  const margemUsada = margemEhParcela ? Math.max(0, e.parcela) : e.margem;
+  const extraUsada = Math.max(0, e.margemExtra || 0);
+  const margemUsada = Math.max(0, e.parcela) + extraUsada;
 
   const linhas = margemUsada > 0
     ? tabelas.filter(t => t.coeficiente > 0).map(t => {
@@ -61,7 +66,7 @@ export function calcularCompra(e: EntradaCompra, tabelas: TabelaCompra[]): Resul
         };
       })
     : [];
-  return { saldo, saldoEstimado, margemUsada, margemEhParcela, linhas };
+  return { saldo, saldoEstimado, margemUsada, extraUsada, linhas };
 }
 
 /** As 15 tabelas da planilha do Fábio (22/09/2026). O coeficiente da 3ª Neo
