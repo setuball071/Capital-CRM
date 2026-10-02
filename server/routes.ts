@@ -23470,9 +23470,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         return res.status(403).json({ message: "Acesso negado" });
       }
 
+      // ?mes=AAAA-MM reabre um mês fechado (o dashboard tem seletor de período).
+      // Sem o parâmetro, é o mês corrente, como sempre foi.
+      const mesParam = typeof req.query.mes === "string" && /^\d{4}-\d{2}$/.test(req.query.mes)
+        ? req.query.mes as string
+        : null;
       const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
+      const year = mesParam ? parseInt(mesParam.slice(0, 4), 10) : now.getFullYear();
+      const month = mesParam ? parseInt(mesParam.slice(5, 7), 10) - 1 : now.getMonth();
       const mesRef = `${year}-${String(month + 1).padStart(2, "0")}`;
       const firstDayOfMonth = new Date(year, month, 1);
       const lastDayOfMonth = new Date(year, month + 1, 0);

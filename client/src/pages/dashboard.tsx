@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { Target, Clock, CheckCircle2, CalendarDays, Trophy, Info, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/components/theme-provider";
@@ -88,14 +89,9 @@ function fmtInt(v: number): string {
 function getInitials(name: string): string {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 }
-function periodoLabel(mesAno: string): string {
-  const [mm, yy] = (mesAno || "").split("/");
-  const idx = parseInt(mm, 10) - 1;
-  return `${MESES[idx] || ""} ${yy || ""}`.trim();
-}
 
 // ── Meta da equipe ────────────────────────────────────────────────────────────
-function MetaCard({ e, contratos, periodo, t }: { e: GestorDashboardData["equipe"]; contratos: number; periodo: string; t: Palette }) {
+function MetaCard({ e, contratos, mes, onMes, opcoesMes, t }: { e: GestorDashboardData["equipe"]; contratos: number; mes: string; onMes: (m: string) => void; opcoesMes: { valor: string; label: string }[]; t: Palette }) {
   const pctMeta = e.meta > 0 ? Math.round((e.efetivado / e.meta) * 100) : 0;
   const faltam = Math.max(0, e.meta - e.efetivado);
   const somaProd = e.novo + e.portabilidade + e.cartao;
@@ -119,8 +115,19 @@ function MetaCard({ e, contratos, periodo, t }: { e: GestorDashboardData["equipe
           <Target size={22} color={PURPLE} />
           <span style={{ fontSize: 17, fontWeight: 700, color: t.textStrong }}>Meta da equipe</span>
         </div>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 999, border: `1px solid ${t.borderStrong}`, fontSize: 13.5, fontWeight: 600, color: t.textBody }}>
-          <CalendarDays size={16} />{periodo}
+        {/* Período: dá para voltar e rever meses fechados */}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px 6px 16px", borderRadius: 999, border: `1px solid ${t.borderStrong}`, fontSize: 13.5, fontWeight: 600, color: t.textBody }}>
+          <CalendarDays size={16} />
+          <select
+            value={mes}
+            onChange={(ev) => onMes(ev.target.value)}
+            style={{ border: "none", background: "transparent", font: "inherit", color: "inherit", cursor: "pointer", outline: "none", padding: "2px 4px" }}
+            data-testid="select-periodo-dashboard"
+          >
+            {opcoesMes.map((o) => (
+              <option key={o.valor} value={o.valor}>{o.label}</option>
+            ))}
+          </select>
         </span>
       </div>
 
@@ -143,7 +150,11 @@ function MetaCard({ e, contratos, periodo, t }: { e: GestorDashboardData["equipe
         <div>
           <div style={kpiLabel}><Clock size={14} /> EM ANDAMENTO</div>
           <div style={{ ...kpiValue, fontSize: 26, color: AMBER, ...num }}>{fmtCent(e.emAndamento)}</div>
-          <div style={kpiHelper}>{e.propostasEmAberto} propostas em aberto, aguardando efetivação</div>
+          <div style={kpiHelper}>
+            {e.propostasEmAberto} propostas em aberto, aguardando efetivação
+            {/* O pipeline é sempre o de hoje; não existe "em aberto" de um mês fechado */}
+            {mes !== opcoesMes[0].valor && " (pipeline de hoje, não do mês selecionado)"}
+          </div>
         </div>
       </div>
 
@@ -249,11 +260,23 @@ function RankingCard({ data, t }: { data: GestorDashboardData; t: Palette }) {
   );
 }
 
+// Últimos 12 meses, do atual para trás — é o que o seletor de período oferece.
+function mesesRecentes(): { valor: string; label: string }[] {
+  const hoje = new Date();
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    const valor = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return { valor, label: `${MESES[d.getMonth()]} ${d.getFullYear()}` };
+  });
+}
+
 function GestorDashboard() {
   const { theme } = useTheme();
   const t = PALETTE[theme === "dark" ? "dark" : "light"];
+  const opcoesMes = useMemo(mesesRecentes, []);
+  const [mesSel, setMesSel] = useState(opcoesMes[0].valor);
   const { data, isLoading, error } = useQuery<GestorDashboardData>({
-    queryKey: ["/api/dashboard-gestor"],
+    queryKey: [`/api/dashboard-gestor?mes=${mesSel}`],
     retry: 3,
     retryDelay: 1000,
   });
@@ -271,12 +294,11 @@ function GestorDashboard() {
   }
   if (!data) return null;
 
-  const periodo = periodoLabel(data.mesAno);
 
   return (
     <div style={{ padding: "28px 32px 60px", background: t.page, minHeight: "100%", display: "flex", flexDirection: "column", gap: 20, fontFamily: FONT, color: t.textStrong }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');`}</style>
-      <MetaCard contratos={(data?.ranking || []).reduce((s, v) => s + (v.contratos || 0), 0)} e={data.equipe} periodo={periodo} t={t} />
+      <MetaCard contratos={(data?.ranking || []).reduce((s, v) => s + (v.contratos || 0), 0)} e={data.equipe} mes={mesSel} onMes={setMesSel} opcoesMes={opcoesMes} t={t} />
       <RankingCard data={data} t={t} />
     </div>
   );
