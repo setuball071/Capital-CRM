@@ -314,7 +314,7 @@ export function AppSidebar() {
         { title: "Nomenclaturas", url: "/nomenclaturas", icon: Tag, masterOnly: true },
         { title: "Filtros de Base", url: "/compra-lista", icon: ShoppingCart, module: "modulo_base_clientes", subItem: "compra_lista" },
         { title: "Consulta Cliente", url: "/consulta-cliente", icon: UserSearch, module: "modulo_base_clientes", subItem: "consulta" },
-        { title: "Enriquecer Base", url: "/enriquecer-base", icon: Sparkles, module: "modulo_base_clientes", subItem: "importacao" },
+        { title: "Enriquecer Base", url: "/enriquecer-base", icon: Sparkles, module: "modulo_base_clientes", subItem: "enriquecimento" },
         { title: "Importar Higienizados", url: "/vendas/importar-higienizados", icon: Sparkles, module: "modulo_alpha", subItem: "importacao_higienizados", rolesAllowed: ["master", "coordenacao"] },
         { title: "Dados Complementares", url: "/importar-dados-complementares", icon: FileSpreadsheet, rolesAllowed: ["master", "coordenacao"] },
         { title: "Observações por CPF", url: "/admin/importar-observacoes", icon: FileText, rolesAllowed: ["master", "coordenacao", "financeiro"] },

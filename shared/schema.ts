@@ -1867,6 +1867,9 @@ export const MODULE_SUB_ITEMS = {
   modulo_base_clientes: [
     { key: "consulta", label: "Consulta de Clientes" },
     { key: "importacao", label: "Importação de Bases" },
+    // Enriquecer é consulta em lote, não importação: o corretor pode precisar dela
+    // sem poder subir base nova. Antes as duas dividiam a chave "importacao".
+    { key: "enriquecimento", label: "Enriquecer Base" },
     { key: "compra_lista", label: "Compra de Lista" },
   ],
   modulo_config_usuarios: [
