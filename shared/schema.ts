@@ -1852,17 +1852,24 @@ export const MODULE_SUB_ITEMS = {
   modulo_meu_painel: [
     { key: "dashboard_vendedor", label: "Dashboard de Performance" },
   ],
+  // Uma chave por aba do hub de simuladores (client/src/pages/simuladores-hub.tsx).
+  // As quatro primeiras já existiam; as outras faltavam e as abas apareciam para todos.
   modulo_simulador: [
+    { key: "simulador_portabilidade", label: "Simulador de Portabilidade" },
     { key: "simulador_compra", label: "Simulador de Compra" },
     { key: "simulador_amortizacao", label: "Simulador de Amortização" },
-    { key: "simulador_portabilidade", label: "Simulador de Portabilidade" },
+    { key: "amortizacao_anual", label: "Amortização Anual" },
+    { key: "viabilidade_inter", label: "Viabilidade Inter" },
     { key: "calculadora_contracheque", label: "Cálculo de Contracheque" },
+    { key: "renda_fixa", label: "Renda Fixa" },
+    { key: "criador_proposta", label: "Criador de Proposta" },
   ],
   modulo_roteiros: [
     { key: "convenios", label: "Convênios" },
     { key: "bancos", label: "Bancos" },
     { key: "tabelas_coeficientes", label: "Tabelas de Coeficientes" },
     { key: "roteiros_bancarios", label: "Roteiros Bancários" },
+    { key: "solicitar_boleto", label: "Solicitar Boleto" },
   ],
   modulo_base_clientes: [
     { key: "consulta", label: "Consulta de Clientes" },
@@ -1878,6 +1885,8 @@ export const MODULE_SUB_ITEMS = {
     { key: "precos", label: "Configuração de Preços" },
   ],
   modulo_academia: [
+    { key: "onboarding", label: "Onboarding" },
+    { key: "entrantes", label: "Acompanhar Entrantes" },
     { key: "fundamentos", label: "Fundamentos" },
     { key: "quiz", label: "Quiz" },
     { key: "roleplay", label: "Role Play" },
@@ -1895,6 +1904,7 @@ export const MODULE_SUB_ITEMS = {
     { key: "agenda", label: "Agenda" },
     { key: "gestao_pipeline", label: "Gestão Pipeline" },
     { key: "minha_carteira", label: "Minha Carteira" },
+    { key: "importacao_higienizados", label: "Importar Higienizados" },
   ],
   modulo_financeiro: [
     { key: "contratos", label: "Pagamentos" },

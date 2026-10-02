@@ -48,15 +48,17 @@ function IframeThemeSync({
 }
 
 // Ícones Material Symbols do design (Simuladores.dc.html → TAB_DEFS)
+// perm = chave da permissão (MODULE_SUB_ITEMS.modulo_simulador). É o que permite
+// liberar simulador por simulador em vez de tudo ou nada.
 const TABS = [
-  { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt" },
-  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart" },
-  { id: "amortizacao", label: "Amortização", icon: "trending_down" },
-  { id: "amortizacao-anual", label: "Amortização Anual", icon: "event_repeat" },
-  { id: "viabilidade-inter", label: "Viabilidade Inter", icon: "fact_check" },
-  { id: "contracheque", label: "Contracheque", icon: "description" },
-  { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up" },
-  { id: "proposta", label: "Criador de Proposta", icon: "description" },
+  { id: "portabilidade", label: "Simulador de Portabilidade", icon: "sync_alt", perm: "simulador_portabilidade" },
+  { id: "compra", label: "Simulador de Compra", icon: "shopping_cart", perm: "simulador_compra" },
+  { id: "amortizacao", label: "Amortização", icon: "trending_down", perm: "simulador_amortizacao" },
+  { id: "amortizacao-anual", label: "Amortização Anual", icon: "event_repeat", perm: "amortizacao_anual" },
+  { id: "viabilidade-inter", label: "Viabilidade Inter", icon: "fact_check", perm: "viabilidade_inter" },
+  { id: "contracheque", label: "Contracheque", icon: "description", perm: "calculadora_contracheque" },
+  { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up", perm: "renda_fixa" },
+  { id: "proposta", label: "Criador de Proposta", icon: "description", perm: "criador_proposta" },
 ];
 
 export default function SimuladoresHub() {
@@ -67,7 +69,17 @@ export default function SimuladoresHub() {
     return tabParam && TABS.some((t) => t.id === tabParam) ? tabParam : "portabilidade";
   });
   const { theme } = useTheme();
-  const { user } = useAuth();
+  const { user, hasSubItemAccess } = useAuth();
+  // Só as abas liberadas para o usuário. Sem permissão gravada, herda do módulo
+  // (quem tem Simuladores continua vendo tudo), igual ao resto do sistema.
+  const tabsVisiveis = TABS.filter((t) => hasSubItemAccess("modulo_simulador", t.perm));
+  // Aba bloqueada (ou link direto com ?tab=) cai na primeira liberada; sem nenhuma
+  // liberada, nenhum painel aparece.
+  useEffect(() => {
+    if (!tabsVisiveis.some((t) => t.id === activeTab)) {
+      setActiveTab(tabsVisiveis[0]?.id ?? "");
+    }
+  }, [tabsVisiveis, activeTab]);
   const portabilidadeRef = useRef<HTMLIFrameElement>(null);
   const contrachequeRef = useRef<HTMLIFrameElement>(null);
   const viabilidadeRef = useRef<HTMLIFrameElement>(null);
@@ -136,7 +148,7 @@ export default function SimuladoresHub() {
             gap: 4,
           }}
         >
-          {TABS.map((tab) => {
+          {tabsVisiveis.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button

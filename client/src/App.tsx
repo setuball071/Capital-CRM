@@ -212,12 +212,15 @@ function RoleRoute({ component: Component, allowedRoles }: { component: React.Co
 // Protected route that checks module permissions
 import type { ModuleName } from "@shared/schema";
 
-function ModuleRoute({ component: Component, module, accessType = "view" }: { 
+function ModuleRoute({ component: Component, module, subItem, accessType = "view" }: { 
   component: React.ComponentType; 
   module: ModuleName;
+  // Quando informado, a rota exige a permissão DO ITEM, não só a do módulo —
+  // é o que impede abrir a tela digitando o endereço com o item desmarcado.
+  subItem?: string;
   accessType?: "view" | "edit" | "delegate";
 }) {
-  const { user, isLoading, hasModuleAccess } = useAuth();
+  const { user, isLoading, hasModuleAccess, hasSubItemAccess } = useAuth();
 
   if (isLoading) {
     return (
@@ -231,7 +234,10 @@ function ModuleRoute({ component: Component, module, accessType = "view" }: {
     return <Redirect to="/login" />;
   }
 
-  if (!hasModuleAccess(module, accessType)) {
+  const liberado = subItem
+    ? hasSubItemAccess(module, subItem, accessType)
+    : hasModuleAccess(module, accessType);
+  if (!liberado) {
     return <Redirect to="/" />;
   }
 
@@ -397,31 +403,31 @@ function Router() {
                 {() => <ProtectedRoute component={WelcomePage} />}
               </Route>
               <Route path="/simulador-compra">
-                {() => <ModuleRoute component={CalculatorPage} module="modulo_simulador" />}
+                {() => <ModuleRoute component={CalculatorPage} module="modulo_simulador" subItem="simulador_compra" />}
               </Route>
               <Route path="/profile">
                 {() => <ProtectedRoute component={ProfilePage} />}
               </Route>
               <Route path="/users">
-                {() => <ModuleRoute component={UsersPage} module="modulo_config_usuarios" />}
+                {() => <ModuleRoute component={UsersPage} module="modulo_config_usuarios" subItem="usuarios" />}
               </Route>
               <Route path="/agreements">
-                {() => <ModuleRoute component={AgreementsPage} module="modulo_roteiros" />}
+                {() => <ModuleRoute component={AgreementsPage} module="modulo_roteiros" subItem="convenios" />}
               </Route>
               <Route path="/banks">
-                {() => <ModuleRoute component={BanksPage} module="modulo_roteiros" />}
+                {() => <ModuleRoute component={BanksPage} module="modulo_roteiros" subItem="bancos" />}
               </Route>
               <Route path="/coefficient-tables">
-                {() => <ModuleRoute component={CoefficientTablesPage} module="modulo_roteiros" />}
+                {() => <ModuleRoute component={CoefficientTablesPage} module="modulo_roteiros" subItem="tabelas_coeficientes" />}
               </Route>
               <Route path="/solicitar-boleto">
                 {() => <ModuleRoute component={SolicitacoesBoletoPage} module="modulo_roteiros" />}
               </Route>
               <Route path="/roteiros">
-                {() => <ModuleRoute component={RoteirosPage} module="modulo_roteiros" />}
+                {() => <ModuleRoute component={RoteirosPage} module="modulo_roteiros" subItem="roteiros_bancarios" />}
               </Route>
               <Route path="/bases-clientes">
-                {() => <ModuleRoute component={BasesClientesPage} module="modulo_base_clientes" />}
+                {() => <ModuleRoute component={BasesClientesPage} module="modulo_base_clientes" subItem="importacao" />}
               </Route>
               <Route path="/nomenclaturas">
                 {() => <ModuleRoute component={NomenclaturasPage} module="modulo_base_clientes" />}
@@ -433,13 +439,13 @@ function Router() {
                 {() => <ModuleRoute component={DividirCsvPage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/compra-lista">
-                {() => <ModuleRoute component={CompraListaPage} module="modulo_base_clientes" />}
+                {() => <ModuleRoute component={CompraListaPage} module="modulo_base_clientes" subItem="compra_lista" />}
               </Route>
               <Route path="/consulta-cliente">
-                {() => <ModuleRoute component={ConsultaClientePage} module="modulo_base_clientes" />}
+                {() => <ModuleRoute component={ConsultaClientePage} module="modulo_base_clientes" subItem="consulta" />}
               </Route>
               <Route path="/enriquecer-base">
-                {() => <ModuleRoute component={EnriquecerBasePage} module="modulo_base_clientes" />}
+                {() => <ModuleRoute component={EnriquecerBasePage} module="modulo_base_clientes" subItem="enriquecimento" />}
               </Route>
               <Route path="/servicos-cobranca">
                 {() => <MasterRoute component={ServicosCobrancaPage} />}
@@ -463,46 +469,46 @@ function Router() {
                 {() => <RoleRoute component={OnboardingEntrantesGestaoPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/desenvolvimento/fundamentos">
-                {() => <ModuleRoute component={AcademiaFundamentosPage} module="modulo_academia" />}
+                {() => <ModuleRoute component={AcademiaFundamentosPage} module="modulo_academia" subItem="fundamentos" />}
               </Route>
               <Route path="/desenvolvimento/roleplay">
-                {() => <ModuleRoute component={AcademiaRoleplayPage} module="modulo_academia" />}
+                {() => <ModuleRoute component={AcademiaRoleplayPage} module="modulo_academia" subItem="roleplay" />}
               </Route>
               <Route path="/desenvolvimento/feedbacks">
-                {() => <ModuleRoute component={DesenvolvimentoFeedbacksPage} module="modulo_academia" />}
+                {() => <ModuleRoute component={DesenvolvimentoFeedbacksPage} module="modulo_academia" subItem="feedbacks" />}
               </Route>
               <Route path="/desenvolvimento/profiler">
-                {() => <ModuleRoute component={DesenvolvimentoProfilerPage} module="modulo_academia" />}
+                {() => <ModuleRoute component={DesenvolvimentoProfilerPage} module="modulo_academia" subItem="profiler" />}
               </Route>
               <Route path="/desenvolvimento/profiler-gestao">
                 {() => <RoleRoute component={DesenvolvimentoProfilerGestaoPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/vendas/campanhas">
-                {() => <ModuleRoute component={VendasCampanhasPage} module="modulo_alpha" />}
+                {() => <ModuleRoute component={VendasCampanhasPage} module="modulo_alpha" subItem="campanhas" />}
               </Route>
               <Route path="/vendas/importar-higienizados">
-                {() => <ModuleRoute component={VendasImportarHigienizadosPage} module="modulo_alpha" />}
+                {() => <ModuleRoute component={VendasImportarHigienizadosPage} module="modulo_alpha" subItem="importacao_higienizados" />}
               </Route>
               <Route path="/vendas/atendimento">
-                {() => <ModuleRoute component={VendasAtendimentoPage} module="modulo_alpha" />}
+                {() => <ModuleRoute component={VendasAtendimentoPage} module="modulo_alpha" subItem="atendimento" />}
               </Route>
               <Route path="/minha-producao">
-                {() => <ModuleRoute component={MinhaProducaoPage} module="modulo_minha_producao" />}
+                {() => <ModuleRoute component={MinhaProducaoPage} module="modulo_minha_producao" subItem="registros" />}
               </Route>
               <Route path="/vendas/minha-carteira">
-                {() => <ModuleRoute component={MinhaCarteiraPage} module="modulo_alpha" />}
+                {() => <ModuleRoute component={MinhaCarteiraPage} module="modulo_alpha" subItem="minha_carteira" />}
               </Route>
               <Route path="/vendas/agenda">
-                {() => <ModuleRoute component={VendasAgendaPage} module="modulo_alpha" />}
+                {() => <ModuleRoute component={VendasAgendaPage} module="modulo_alpha" subItem="agenda" />}
               </Route>
               <Route path="/vendas/pipeline">
-                {() => <ModuleRoute component={VendasPipelinePage} module="modulo_alpha" />}
+                {() => <ModuleRoute component={VendasPipelinePage} module="modulo_alpha" subItem="pipeline" />}
               </Route>
               <Route path="/vendas/gestao-pipeline">
-                {() => <ModuleRoute component={VendasGestaoPipelinePage} module="modulo_alpha" accessType="edit" />}
+                {() => <ModuleRoute component={VendasGestaoPipelinePage} module="modulo_alpha" subItem="gestao_pipeline" accessType="edit" />}
               </Route>
               <Route path="/vendas/consulta">
-                {() => <ModuleRoute component={VendasConsultaPage} module="modulo_alpha" />}
+                {() => <ModuleRoute component={VendasConsultaPage} module="modulo_alpha" subItem="consulta" />}
               </Route>
               <Route path="/admin/tenants">
                 {() => <MasterRoute component={AdminTenantsPage} />}
@@ -532,22 +538,22 @@ function Router() {
                 {() => <MasterRoute component={PortBancosRegras} />}
               </Route>
               <Route path="/simulador-portabilidade">
-                {() => <ModuleRoute component={SimuladorPortabilidadePage} module="modulo_simulador" />}
+                {() => <ModuleRoute component={SimuladorPortabilidadePage} module="modulo_simulador" subItem="simulador_portabilidade" />}
               </Route>
               <Route path="/calculadora-renda-fixa">
-                {() => <ModuleRoute component={CalculadoraRendaFixaPage} module="modulo_simulador" />}
+                {() => <ModuleRoute component={CalculadoraRendaFixaPage} module="modulo_simulador" subItem="renda_fixa" />}
               </Route>
               <Route path="/calculadora-contracheque">
-                {() => <ModuleRoute component={CalculadoraContracheque} module="modulo_simulador" />}
+                {() => <ModuleRoute component={CalculadoraContracheque} module="modulo_simulador" subItem="calculadora_contracheque" />}
               </Route>
               <Route path="/simuladores">
                 {() => <ModuleRoute component={SimuladoresHub} module="modulo_simulador" />}
               </Route>
               <Route path="/criador-proposta">
-                {() => <ModuleRoute component={CriadorPropostaPage} module="modulo_simulador" />}
+                {() => <ModuleRoute component={CriadorPropostaPage} module="modulo_simulador" subItem="criador_proposta" />}
               </Route>
               <Route path="/simulador-port-completo">
-                {() => <ModuleRoute component={SimuladorPortCompletoPage} module="modulo_simulador" />}
+                {() => <ModuleRoute component={SimuladorPortCompletoPage} module="modulo_simulador" subItem="simulador_portabilidade" />}
               </Route>
               <Route path="/equipes">
                 {() => <ModuleRoute component={EquipesPage} module="modulo_config_usuarios" />}
@@ -578,7 +584,7 @@ function Router() {
                 {() => <RoleRoute component={GestaoComercialRelatoriosPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/vendas/etiquetas">
-                {() => <ModuleRoute component={VendasEtiquetasPage} module="modulo_alpha" />}
+                {() => <ModuleRoute component={VendasEtiquetasPage} module="modulo_alpha" subItem="etiquetas" />}
               </Route>
               <Route path="/nota-promissoria">
                 {() => <RoleRoute component={NotaPromissoriaPage} allowedRoles={["master", "coordenacao"]} />}
@@ -599,16 +605,16 @@ function Router() {
                 {() => <RoleRoute component={ImportarDadosComplementaresPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/financeiro/contratos">
-                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
+                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" subItem="contratos" />}
               </Route>
               <Route path="/financeiro/producao">
-                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
+                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" subItem="producao" />}
               </Route>
               <Route path="/financeiro/tabelas">
-                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
+                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" subItem="tabelas" />}
               </Route>
               <Route path="/financeiro/proventos">
-                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
+                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" subItem="proventos" />}
               </Route>
               <Route path="/financeiro/caixa">
                 {() => <RoleRoute component={FinCaixaPage} allowedRoles={["master", "coordenacao"]} />}
@@ -623,7 +629,7 @@ function Router() {
                 {() => <RoleRoute component={FinRevisaoPage} allowedRoles={["master", "coordenacao"]} />}
               </Route>
               <Route path="/financeiro/configuracoes">
-                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" />}
+                {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" subItem="configuracoes" />}
               </Route>
               <Route path="/financeiro/comissoes">
                 {() => <Redirect to="/financeiro/contratos" />}
