@@ -1044,6 +1044,44 @@ app.use((req, res, next) => {
           log(`⚠ Migração IA interna falhou (non-fatal): ${e}`);
         }
 
+        // Permissões por item: telas que antes eram liberadas só por papel ganharam
+        // chave própria (Contratos, Gestão Comercial, Caixa/Contas a Pagar...). Sem
+        // isto, no primeiro deploy elas sumiriam de quem as usa hoje. Concede o que
+        // cada um já enxergava; daí em diante quem manda é o painel de permissões.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          const conceder = async (modulo: string, filtroPapel: string | null) => {
+            await migDb.execute(migSql`
+              INSERT INTO user_permissions (user_id, module, can_view, can_edit, can_delegate)
+              SELECT u.id, ${modulo}, true, true, false
+              FROM users u
+              WHERE u.is_active = true
+                ${filtroPapel ? migSql`AND u.role = ANY(${migSql.raw(filtroPapel)})` : migSql``}
+                AND NOT EXISTS (
+                  SELECT 1 FROM user_permissions up
+                  WHERE up.user_id = u.id AND up.module = ${modulo}
+                )
+            `);
+          };
+          const GESTAO = `ARRAY['master','coordenacao']`;
+          const BASE = `ARRAY['master','coordenacao','financeiro']`;
+          // Minhas Propostas e Material de Apoio eram abertos a todo mundo
+          await conceder("modulo_contratos", null);
+          await conceder("modulo_roteiros.material_apoio", null);
+          // Gestão Comercial e o financeiro da empresa eram de master/coordenação
+          await conceder("modulo_gestao_comercial", GESTAO);
+          for (const k of ["caixa", "contas_pagar", "planejamento", "revisao_custos"]) {
+            await conceder(`modulo_financeiro.${k}`, GESTAO);
+          }
+          for (const k of ["dados_complementares", "observacoes_cpf"]) {
+            await conceder(`modulo_base_clientes.${k}`, BASE);
+          }
+          log("✓ Migração de permissões por item (contratos/gestão comercial/financeiro) ok");
+        } catch (e) {
+          log(`⚠ Migração de permissões por item falhou (non-fatal): ${e}`);
+        }
+
         // ===== JARVIS — canal de avisos de contrato =====
         try {
           const { db: avDb } = await import("./storage");

@@ -187,8 +187,14 @@ function MasterRoute({ component: Component }: { component: React.ComponentType 
   return <Component />;
 }
 
-function RoleRoute({ component: Component, allowedRoles }: { component: React.ComponentType; allowedRoles: string[] }) {
-  const { user, isLoading } = useAuth();
+function RoleRoute({ component: Component, allowedRoles, module, subItem }: {
+  component: React.ComponentType;
+  allowedRoles: string[];
+  // Papel E permissão: o papel diz quem PODE ter a tela, a permissão diz quem TEM.
+  module?: ModuleName;
+  subItem?: string;
+}) {
+  const { user, isLoading, hasSubItemAccess } = useAuth();
 
   if (isLoading) {
     return (
@@ -203,6 +209,10 @@ function RoleRoute({ component: Component, allowedRoles }: { component: React.Co
   }
 
   if (!user.isMaster && !allowedRoles.includes(user.role)) {
+    return <Redirect to="/" />;
+  }
+
+  if (module && subItem && !user.isMaster && !hasSubItemAccess(module, subItem)) {
     return <Redirect to="/" />;
   }
 
@@ -463,10 +473,10 @@ function Router() {
                 {() => <ModuleRoute component={AcademiaAdminPage} module="modulo_academia" accessType="edit" />}
               </Route>
               <Route path="/onboarding">
-                {() => <ModuleRoute component={OnboardingEntrantePage} module="modulo_academia" />}
+                {() => <ModuleRoute component={OnboardingEntrantePage} module="modulo_academia" subItem="onboarding" />}
               </Route>
               <Route path="/onboarding/entrantes">
-                {() => <RoleRoute component={OnboardingEntrantesGestaoPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={OnboardingEntrantesGestaoPage} allowedRoles={["master", "coordenacao"]} module="modulo_academia" subItem="entrantes" />}
               </Route>
               <Route path="/desenvolvimento/fundamentos">
                 {() => <ModuleRoute component={AcademiaFundamentosPage} module="modulo_academia" subItem="fundamentos" />}
@@ -481,7 +491,7 @@ function Router() {
                 {() => <ModuleRoute component={DesenvolvimentoProfilerPage} module="modulo_academia" subItem="profiler" />}
               </Route>
               <Route path="/desenvolvimento/profiler-gestao">
-                {() => <RoleRoute component={DesenvolvimentoProfilerGestaoPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={DesenvolvimentoProfilerGestaoPage} allowedRoles={["master", "coordenacao"]} module="modulo_academia" subItem="profiler" />}
               </Route>
               <Route path="/vendas/campanhas">
                 {() => <ModuleRoute component={VendasCampanhasPage} module="modulo_alpha" subItem="campanhas" />}
@@ -556,53 +566,53 @@ function Router() {
                 {() => <ModuleRoute component={SimuladorPortCompletoPage} module="modulo_simulador" subItem="simulador_portabilidade" />}
               </Route>
               <Route path="/equipes">
-                {() => <ModuleRoute component={EquipesPage} module="modulo_config_usuarios" />}
+                {() => <ModuleRoute component={EquipesPage} module="modulo_gestao_comercial" subItem="equipes" />}
               </Route>
               <Route path="/dashboard-vendedor">
                 {() => <ModuleRoute component={DashboardVendedorPage} module="modulo_meu_painel" />}
               </Route>
               <Route path="/vendas/gestao-comercial/dashboard">
                 {/* Dashboard Gerencial: exclusivo Master. (coordenacao pode ser reativado no futuro.) */}
-                {() => <RoleRoute component={GestaoComercialDashboardPage} allowedRoles={["master"]} />}
+                {() => <RoleRoute component={GestaoComercialDashboardPage} allowedRoles={["master"]} module="modulo_gestao_comercial" subItem="dashboard_empresa" />}
               </Route>
               <Route path="/vendas/gestao-comercial/importar-producao">
-                {() => <RoleRoute component={GestaoComercialImportarPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={GestaoComercialImportarPage} allowedRoles={["master", "coordenacao"]} module="modulo_gestao_comercial" subItem="importar_producao" />}
               </Route>
               <Route path="/vendas/gestao-comercial/historico-importacoes">
-                {() => <RoleRoute component={GestaoComercialHistoricoPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={GestaoComercialHistoricoPage} allowedRoles={["master", "coordenacao"]} module="modulo_gestao_comercial" subItem="historico_importacoes" />}
               </Route>
               <Route path="/vendas/gestao-comercial/metas-mensais">
-                {() => <RoleRoute component={MetasMensaisPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={MetasMensaisPage} allowedRoles={["master", "coordenacao"]} module="modulo_gestao_comercial" subItem="metas_mensais" />}
               </Route>
               <Route path="/vendas/gestao-comercial/metas-niveis">
-                {() => <RoleRoute component={GestaoComercialMetasPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={GestaoComercialMetasPage} allowedRoles={["master", "coordenacao"]} module="modulo_gestao_comercial" subItem="metas_niveis" />}
               </Route>
               <Route path="/vendas/gestao-comercial/regulamento">
-                {() => <RoleRoute component={GestaoComercialRegulamentoPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={GestaoComercialRegulamentoPage} allowedRoles={["master", "coordenacao"]} module="modulo_gestao_comercial" subItem="regulamento" />}
               </Route>
               <Route path="/vendas/gestao-comercial/relatorios">
-                {() => <RoleRoute component={GestaoComercialRelatoriosPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={GestaoComercialRelatoriosPage} allowedRoles={["master", "coordenacao"]} module="modulo_gestao_comercial" subItem="relatorios" />}
               </Route>
               <Route path="/vendas/etiquetas">
                 {() => <ModuleRoute component={VendasEtiquetasPage} module="modulo_alpha" subItem="etiquetas" />}
               </Route>
               <Route path="/nota-promissoria">
-                {() => <RoleRoute component={NotaPromissoriaPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={NotaPromissoriaPage} allowedRoles={["master", "coordenacao"]} module="modulo_contratos" subItem="nota_promissoria" />}
               </Route>
               <Route path="/material-apoio">
-                {() => <ProtectedRoute component={MaterialApoioPage} />}
+                {() => <ModuleRoute component={MaterialApoioPage} module="modulo_roteiros" subItem="material_apoio" />}
               </Route>
               <Route path="/admin/atualizacoes">
                 {() => <MasterOnlyRoute component={SystemUpdatesPage} />}
               </Route>
               <Route path="/admin/importar-observacoes">
-                {() => <RoleRoute component={ImportarObservacoesPage} allowedRoles={["master", "coordenacao", "financeiro"]} />}
+                {() => <RoleRoute component={ImportarObservacoesPage} allowedRoles={["master", "coordenacao", "financeiro"]} module="modulo_base_clientes" subItem="observacoes_cpf" />}
               </Route>
               <Route path="/admin/siape-historico">
                 {() => <RoleRoute component={SiapeHistoricoPage} allowedRoles={["master", "coordenacao", "financeiro"]} />}
               </Route>
               <Route path="/importar-dados-complementares">
-                {() => <RoleRoute component={ImportarDadosComplementaresPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={ImportarDadosComplementaresPage} allowedRoles={["master", "coordenacao"]} module="modulo_base_clientes" subItem="dados_complementares" />}
               </Route>
               <Route path="/financeiro/contratos">
                 {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" subItem="contratos" />}
@@ -617,16 +627,16 @@ function Router() {
                 {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" subItem="proventos" />}
               </Route>
               <Route path="/financeiro/caixa">
-                {() => <RoleRoute component={FinCaixaPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={FinCaixaPage} allowedRoles={["master", "coordenacao"]} module="modulo_financeiro" subItem="caixa" />}
               </Route>
               <Route path="/financeiro/contas-pagar">
-                {() => <RoleRoute component={FinContasPagarPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={FinContasPagarPage} allowedRoles={["master", "coordenacao"]} module="modulo_financeiro" subItem="contas_pagar" />}
               </Route>
               <Route path="/financeiro/planejamento">
-                {() => <RoleRoute component={FinPlanejamentoPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={FinPlanejamentoPage} allowedRoles={["master", "coordenacao"]} module="modulo_financeiro" subItem="planejamento" />}
               </Route>
               <Route path="/financeiro/revisao">
-                {() => <RoleRoute component={FinRevisaoPage} allowedRoles={["master", "coordenacao"]} />}
+                {() => <RoleRoute component={FinRevisaoPage} allowedRoles={["master", "coordenacao"]} module="modulo_financeiro" subItem="revisao_custos" />}
               </Route>
               <Route path="/financeiro/configuracoes">
                 {() => <ModuleRoute component={FinanceiroComissoesPage} module="modulo_financeiro" subItem="configuracoes" />}
@@ -644,7 +654,7 @@ function Router() {
                 {() => <ProtectedRoute component={ContratosFluxosPage} />}
               </Route>
               <Route path="/contratos/configuracoes">
-                {() => <RoleRoute component={ContratosConfigPage} allowedRoles={["master", "operacional"]} />}
+                {() => <RoleRoute component={ContratosConfigPage} allowedRoles={["master", "operacional"]} module="modulo_contratos" subItem="configuracoes" />}
               </Route>
               <Route path="/base-conhecimento">
                 {() => <RoleRoute component={BaseConhecimentoPage} allowedRoles={["master", "operacional"]} />}
@@ -653,7 +663,7 @@ function Router() {
                 {() => <ProtectedRoute component={ContratosDetalhePage} />}
               </Route>
               <Route path="/contratos">
-                {() => <ProtectedRoute component={ContratosListaPage} />}
+                {() => <ModuleRoute component={ContratosListaPage} module="modulo_contratos" subItem="propostas" />}
               </Route>
               <Route path="/privacidade">
                 {() => <ProtectedRoute component={PrivacidadePage} />}

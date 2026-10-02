@@ -1842,6 +1842,8 @@ export const MODULE_LIST = [
   "modulo_financeiro", // Financeiro
   "modulo_assistente", // Jarvis (Assistente IA)
   "modulo_minha_producao", // Controle individual de produção e comissões (plano vendedor individual)
+  "modulo_contratos", // Operacional: propostas, nota promissória, configurações do fluxo
+  "modulo_gestao_comercial", // Gestão Comercial: metas, equipes, produção, relatórios
 ] as const;
 
 export type ModuleName = (typeof MODULE_LIST)[number];
@@ -1870,6 +1872,7 @@ export const MODULE_SUB_ITEMS = {
     { key: "tabelas_coeficientes", label: "Tabelas de Coeficientes" },
     { key: "roteiros_bancarios", label: "Roteiros Bancários" },
     { key: "solicitar_boleto", label: "Solicitar Boleto" },
+    { key: "material_apoio", label: "Material de Apoio" },
   ],
   modulo_base_clientes: [
     { key: "consulta", label: "Consulta de Clientes" },
@@ -1878,6 +1881,8 @@ export const MODULE_SUB_ITEMS = {
     // sem poder subir base nova. Antes as duas dividiam a chave "importacao".
     { key: "enriquecimento", label: "Enriquecer Base" },
     { key: "compra_lista", label: "Compra de Lista" },
+    { key: "dados_complementares", label: "Dados Complementares" },
+    { key: "observacoes_cpf", label: "Observações por CPF" },
   ],
   modulo_config_usuarios: [
     { key: "usuarios", label: "Gestão de Usuários" },
@@ -1907,6 +1912,10 @@ export const MODULE_SUB_ITEMS = {
     { key: "importacao_higienizados", label: "Importar Higienizados" },
   ],
   modulo_financeiro: [
+    { key: "caixa", label: "Caixa" },
+    { key: "contas_pagar", label: "Contas a Pagar" },
+    { key: "planejamento", label: "Planejamento" },
+    { key: "revisao_custos", label: "Revisão de Custos" },
     { key: "contratos", label: "Pagamentos" },
     { key: "producao", label: "Produção" },
     { key: "proventos", label: "Proventos e Descontos" },
@@ -1921,6 +1930,21 @@ export const MODULE_SUB_ITEMS = {
   // vive em tabela própria (vendedor_contratos) e cada um vê só os próprios registros.
   modulo_minha_producao: [
     { key: "registros", label: "Minha Produção e Comissões" },
+  ],
+  modulo_contratos: [
+    { key: "propostas", label: "Minhas Propostas" },
+    { key: "nota_promissoria", label: "Nota Promissória" },
+    { key: "configuracoes", label: "Configurações do Fluxo" },
+  ],
+  modulo_gestao_comercial: [
+    { key: "dashboard_empresa", label: "Dashboard da Empresa" },
+    { key: "equipes", label: "Equipes" },
+    { key: "metas_mensais", label: "Metas Mensais" },
+    { key: "importar_producao", label: "Importar Produção" },
+    { key: "historico_importacoes", label: "Histórico de Importações" },
+    { key: "metas_niveis", label: "Metas & Níveis" },
+    { key: "regulamento", label: "Regulamento" },
+    { key: "relatorios", label: "Relatórios" },
   ],
 } as const;
 
@@ -1940,6 +1964,8 @@ export const MODULE_LABELS: Record<ModuleName, string> = {
   modulo_financeiro: "Financeiro",
   modulo_assistente: "Jarvis (Assistente IA)",
   modulo_minha_producao: "Minha Produção (vendedor individual)",
+  modulo_contratos: "Contratos (Operacional)",
+  modulo_gestao_comercial: "Gestão Comercial",
 };
 
 // Helper to get full permission key (module.subitem)
