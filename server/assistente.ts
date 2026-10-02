@@ -22,6 +22,7 @@ import {
   buscarArtigoConflitante,
   buscarChunks,
   CORTE_SIMILARIDADE,
+  tenantInterno,
 } from "./assistente-rag";
 import { requireApiKey } from "./api-key-middleware";
 
@@ -101,6 +102,16 @@ REGRAS INEGOCIÁVEIS:
  *  o Jarvis precisa responder com eles, nao com o que um artigo antigo diz. */
 async function obterRegrasBancos(tenantId: number): Promise<string> {
   try {
+    // Ambiente sem regra cadastrada usa as do Capital Go (ambiente interno) como
+    // base — as próprias, quando existem, sempre mandam.
+    let donoRegras = tenantId;
+    const temLocal = await db.execute(sql`
+      SELECT 1 FROM portability_bank_rules WHERE tenant_id = ${tenantId} LIMIT 1
+    `);
+    if (!temLocal.rows.length) {
+      const interno = await tenantInterno();
+      if (interno && interno !== tenantId) donoRegras = interno;
+    }
     const r = await db.execute(sql`
       SELECT banco,
              entrada_min::float  AS "entradaMin",
@@ -115,7 +126,7 @@ async function obterRegrasBancos(tenantId: number): Promise<string> {
              excecoes_origem                     AS "excecoesOrigem",
              obs
       FROM portability_bank_rules
-      WHERE tenant_id = ${tenantId}
+      WHERE tenant_id = ${donoRegras}
       ORDER BY banco
     `);
     const linhas = (r.rows as any[]).map((b) => {

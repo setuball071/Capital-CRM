@@ -110,6 +110,28 @@ function extrairTermosBusca(q: string): string[] {
   return Array.from(new Set(termos)).slice(0, 6);
 }
 
+// O conhecimento do Jarvis é único: o ambiente interno (Capital Go) alimenta
+// todos. Cada ambiente lê a base dele MAIS a do interno; o que o cliente escreve
+// fica só nele e nunca sobe para o Capital Go.
+let cacheInterno: { id: number | null; em: number } = { id: null, em: 0 };
+export async function tenantInterno(): Promise<number | null> {
+  if (cacheInterno.em && Date.now() - cacheInterno.em < 5 * 60_000) return cacheInterno.id;
+  try {
+    const r = await db.execute(sql`SELECT id FROM tenants WHERE interno = true ORDER BY id LIMIT 1`);
+    const linha = (r.rows as any[])[0];
+    cacheInterno = { id: linha ? Number(linha.id) : null, em: Date.now() };
+  } catch {
+    cacheInterno = { id: null, em: Date.now() };
+  }
+  return cacheInterno.id;
+}
+
+// Ambientes que entram na busca: o próprio e, se for outro, o interno.
+export async function tenantsDaBusca(tenantId: number): Promise<number[]> {
+  const interno = await tenantInterno();
+  return interno && interno !== tenantId ? [tenantId, interno] : [tenantId];
+}
+
 export async function buscarChunks(
   tenantId: number,
   pergunta: string,
@@ -117,6 +139,8 @@ export async function buscarChunks(
 ): Promise<ChunkEncontrado[]> {
   const [emb] = await gerarEmbeddings([pergunta]);
   const vec = `[${emb.join(",")}]`;
+  const tenants = await tenantsDaBusca(tenantId);
+  const donos = sql.join(tenants.map((t) => sql`${t}`), sql`, `);
 
   const mapear = (r: any): ChunkEncontrado => ({
     chunkId: Number(r.chunk_id),
@@ -134,7 +158,7 @@ export async function buscarChunks(
            (1 - (kc.embedding <=> ${vec}::vector))::float AS similaridade
     FROM kb_chunks kc
     JOIN kb_artigos ka ON ka.id = kc.artigo_id
-    WHERE ka.status = 'publicado' AND ka.tenant_id = ${tenantId}
+    WHERE ka.status = 'publicado' AND ka.tenant_id IN (${donos})
     ORDER BY kc.embedding <=> ${vec}::vector
     LIMIT ${limite}
   `);
@@ -160,7 +184,7 @@ export async function buscarChunks(
                0.9::float AS similaridade
         FROM kb_chunks kc
         JOIN kb_artigos ka ON ka.id = kc.artigo_id
-        WHERE ka.status = 'publicado' AND ka.tenant_id = ${tenantId} AND (${orConds})
+        WHERE ka.status = 'publicado' AND ka.tenant_id IN (${donos}) AND (${orConds})
         ORDER BY (${scoreExpr}) DESC
         LIMIT 6
       `);
