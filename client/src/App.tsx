@@ -29,7 +29,6 @@ import SplitTxtCsvPage from "@/pages/split-txt-csv";
 import DividirCsvPage from "@/pages/dividir-csv";
 import CompraListaPage from "@/pages/compra-lista";
 import ConsultaClientePage from "@/pages/consulta-cliente";
-import BaseDashboardPage from "@/pages/base-dashboard";
 import EnriquecerBasePage from "@/pages/enriquecer-base";
 import ServicosCobrancaPage from "@/pages/servicos-cobranca";
 import AcademiaFundamentosPage from "@/pages/academia-fundamentos";
@@ -438,9 +437,6 @@ function Router() {
               </Route>
               <Route path="/consulta-cliente">
                 {() => <ModuleRoute component={ConsultaClientePage} module="modulo_base_clientes" />}
-              </Route>
-              <Route path="/base-dashboard">
-                {() => <ModuleRoute component={BaseDashboardPage} module="modulo_base_clientes" />}
               </Route>
               <Route path="/enriquecer-base">
                 {() => <ModuleRoute component={EnriquecerBasePage} module="modulo_base_clientes" />}

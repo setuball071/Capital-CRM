@@ -107,7 +107,6 @@ const ALL_MODULES: HubModule[] = [
     module: "modulo_base_clientes",
     color: "#10b981",
     subItems: [
-      { id: "base-dashboard", title: "Dashboard Base", description: "Visão geral da base", icon: LayoutDashboard, route: "/base-dashboard" },
       { id: "consulta-cliente", title: "Consulta de Cliente", description: "Busca na base própria", icon: UserSearch, route: "/consulta-cliente" },
       { id: "compra-lista", title: "Filtros de Base", description: "Filtrar base e solicitar exportações", icon: ShoppingCart, route: "/compra-lista" },
       { id: "dividir-csv", title: "Dividir CSV", description: "Fatiar arquivos grandes", icon: Scissors, route: "/dividir-csv" },

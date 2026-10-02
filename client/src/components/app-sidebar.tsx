@@ -87,7 +87,6 @@ const MS_ITEM: Record<string, string> = {
   "Onboarding": "rocket_launch",
   "Acompanhar Entrantes": "group_add",
   // Base de Clientes
-  "Dashboard": "monitoring",
   "Importar Base": "database",
   "Nomenclaturas": "sell",
   "Filtros de Base": "filter_alt",
@@ -145,7 +144,7 @@ interface MenuSection {
 const MODULE_URL_MAPPING: Record<string, string[]> = {
   modulo_simulador: ["/simuladores", "/calculator", "/simulador-compra", "/simulador-portabilidade", "/calculadora-contracheque", "/simulador-port-completo", "/criador-proposta"],
   modulo_roteiros: ["/roteiros"],
-  modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv", "/base-dashboard", "/enriquecer-base", "/importar-dados-complementares", "/admin/importar-observacoes"],
+  modulo_base_clientes: ["/bases-clientes", "/split-txt-csv", "/compra-lista", "/consulta-cliente", "/nomenclaturas", "/dividir-csv", "/enriquecer-base", "/importar-dados-complementares", "/admin/importar-observacoes"],
   modulo_config_usuarios: ["/users"],
   modulo_academia: ["/academia", "/academia/fundamentos", "/academia/quiz", "/academia/roleplay", "/academia/admin", "/onboarding", "/onboarding/entrantes", "/desenvolvimento/fundamentos", "/desenvolvimento/roleplay", "/desenvolvimento/feedbacks", "/desenvolvimento/profiler", "/desenvolvimento/profiler-gestao"],
   modulo_alpha: ["/vendas/campanhas", "/vendas/atendimento", "/vendas/agenda", "/vendas/pipeline", "/vendas/consulta", "/vendas/gestao-pipeline", "/vendas/etiquetas", "/vendas/importar-higienizados", "/vendas/minha-carteira"],
@@ -311,7 +310,6 @@ export function AppSidebar() {
       title: "Base de Clientes",
       icon: Database,
       items: [
-        { title: "Dashboard", url: "/base-dashboard", icon: BarChart3, module: "modulo_base_clientes", subItem: "consulta" },
         { title: "Importar Base", url: "/bases-clientes", icon: Database, module: "modulo_base_clientes", subItem: "importacao" },
         { title: "Nomenclaturas", url: "/nomenclaturas", icon: Tag, masterOnly: true },
         { title: "Filtros de Base", url: "/compra-lista", icon: ShoppingCart, module: "modulo_base_clientes", subItem: "compra_lista" },
