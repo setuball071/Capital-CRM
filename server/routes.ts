@@ -21148,6 +21148,45 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         `)).rows as any[];
         console.log(`[ASAAS-WEBHOOK] ${event} → cobranca ${payment.id} = ${novoStatus}`);
 
+        // Pagamento que o CRM NAO reconhece (link de pagamento criado direto no
+        // painel do Asaas, que e como as primeiras assinaturas sao vendidas).
+        // O UPDATE acima nao achou linha, entao sem este aviso o pagamento
+        // entraria em silencio e o prazo de 24h prometido ao cliente comecaria
+        // a correr sem ninguem saber. NAO provisiona nada: so avisa.
+        if (upd.length === 0 && novoStatus === "pago") {
+          let quem = "";
+          try {
+            if (payment.customer) {
+              const { asaasConfigured } = await import("./asaas");
+              if (asaasConfigured()) {
+                const base = process.env.ASAAS_BASE_URL || "https://sandbox.asaas.com/api/v3";
+                const r = await fetch(`${base}/customers/${payment.customer}`, {
+                  headers: { access_token: process.env.ASAAS_API_KEY as string },
+                });
+                const cli: any = await r.json().catch(() => ({}));
+                quem = [cli?.name, cli?.email, cli?.mobilePhone || cli?.phone]
+                  .filter(Boolean)
+                  .join(" · ");
+              }
+            }
+          } catch {
+            // Sem o nome o aviso ainda serve: o valor e o link ja identificam.
+          }
+          const valor = Number(payment.value ?? 0).toLocaleString("pt-BR", {
+            style: "currency",
+            currency: "BRL",
+          });
+          notificarDono({
+            title: "Jarvis · Pagamento recebido no Asaas",
+            message:
+              `${quem || "Pagador não identificado"} — ${valor}. ` +
+              `Não está vinculado a nenhum ambiente: crie o ambiente e avise o cliente. ` +
+              (payment.invoiceUrl ? `Fatura: ${payment.invoiceUrl}` : `Cobrança ${payment.id}`),
+            actionUrl: "/admin/tenants",
+          }).catch(() => {});
+          console.log(`[ASAAS-WEBHOOK] pagamento sem vinculo → avisado o dono (${payment.id})`);
+        }
+
         // Cobrança avulsa paga → libera o serviço e registra o adicional na assinatura
         if (novoStatus === "pago" && upd[0]?.tipo === "avulso") {
           const cob = upd[0];
