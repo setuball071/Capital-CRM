@@ -304,7 +304,7 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
 }
 
 function Router() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, hasSubItemAccess } = useAuth();
   const [location, navigate] = useLocation();
   const [modalAberto, setModalAberto] = useState(false);
   const [modalCategoria, setModalCategoria] = useState("");
@@ -372,12 +372,13 @@ function Router() {
             <HeaderCpfSearch />
             <div className="flex items-center gap-2">
               {[
-                { key: "tabelas", label: "Tabelas", icon: "table_chart", onClick: () => setTabelasModalAberto(true) },
-                { key: "criativos", label: "Criativos", icon: "palette", onClick: () => handleAtalho("criativos") },
-                { key: "tutoriais", label: "Tutoriais", icon: "school", onClick: () => handleAtalho("tutoriais") },
+                // Os atalhos do topo abrem as MESMAS telas do menu, então obedecem
+                // à mesma permissão. Antes passavam por fora e apareciam para todos.
+                { key: "tabelas", label: "Tabelas", icon: "table_chart", onClick: () => setTabelasModalAberto(true), visivel: user?.role !== "sdr" && hasSubItemAccess("modulo_financeiro", "tabelas") },
+                { key: "criativos", label: "Criativos", icon: "palette", onClick: () => handleAtalho("criativos"), visivel: hasSubItemAccess("modulo_roteiros", "material_apoio") },
+                { key: "tutoriais", label: "Tutoriais", icon: "school", onClick: () => handleAtalho("tutoriais"), visivel: hasSubItemAccess("modulo_roteiros", "material_apoio") },
               ]
-                // SDR não vê tabelas de comissão (esse atalho não passa pela permissão do menu)
-                .filter((s) => !(s.key === "tabelas" && user?.role === "sdr"))
+                .filter((s) => s.visivel)
                 .map((s) => (
                 <button
                   key={s.key}
@@ -390,14 +391,16 @@ function Router() {
                   {s.label}
                 </button>
               ))}
-              <button
-                onClick={() => navigate("/contratos/nova")}
-                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                data-testid="header-nova-proposta"
-              >
-                <MatIcon name="add" size={17} />
-                <span className="hidden sm:inline">Nova proposta</span>
-              </button>
+              {hasSubItemAccess("modulo_contratos", "propostas") && (
+                <button
+                  onClick={() => navigate("/contratos/nova")}
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  data-testid="header-nova-proposta"
+                >
+                  <MatIcon name="add" size={17} />
+                  <span className="hidden sm:inline">Nova proposta</span>
+                </button>
+              )}
               <NotificationBell />
             </div>
           </header>
@@ -648,7 +651,7 @@ function Router() {
                 {() => <Redirect to="/financeiro/producao" />}
               </Route>
               <Route path="/contratos/nova">
-                {() => <ProtectedRoute component={ContratosPropostaPage} />}
+                {() => <ModuleRoute component={ContratosPropostaPage} module="modulo_contratos" subItem="propostas" />}
               </Route>
               <Route path="/contratos/fluxos">
                 {() => <ProtectedRoute component={ContratosFluxosPage} />}
