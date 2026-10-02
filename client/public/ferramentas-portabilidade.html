@@ -6912,6 +6912,7 @@ const MB = {
   analiseSalva: null,       // análise que veio junto com a cotação reaberta
   ultimaChave: null, chaveAgendada: null, timer: null, seq: 0, ctrl: null,
   estado: 'ocioso', aba: 'comparativo', intervalo: null,
+  verComparativo: false,        // a tabela banco a banco abre no clique
   comissaoVisivel: false,   // só o servidor liga (master); corretor NUNCA vê a comissão da empresa
 };
 
@@ -7519,6 +7520,13 @@ function mbComparativoHTML(bancos) {
       ${cartaoCli}
       ${cartaoCom}
     </div>
+    <div style="margin:8px 0 4px">
+      <button class="mb-link" onclick="MB.verComparativo=!MB.verComparativo;mbRender()"
+        aria-expanded="${MB.verComparativo ? 'true' : 'false'}">
+        ${MB.verComparativo ? '▾ ocultar o detalhe' : '▸ ver banco a banco (' + bancos.length + ')'}
+      </button>
+      ${MB.verComparativo ? '' : '<span class="mb-sub"> — situação, motivo da recusa, bruto, troco' + (verCom ? ' e comissão' : '') + ' de cada banco</span>'}
+    </div>` + (!MB.verComparativo ? '' : `
     <div class="mb-sub" style="margin:6px 0">Ordem: situação da análise; empate, quantos contratos o banco aceita.</div>
     <table class="mb-t"><thead><tr><th>Banco</th><th>Situação</th><th>Contratos aceitos</th><th>Por que recusa</th><th>Bruto da operação</th><th>Troco líquido</th>${verCom ? '<th>Comissão</th>' : ''}<th></th></tr></thead><tbody>` +
     ord.map(b => {
@@ -7531,7 +7539,7 @@ function mbComparativoHTML(bancos) {
         <td>${b.refin && b.refin.contratos ? `<b>${mbBRL(b.refin.trocoLiquido)}</b><div class="mb-sub">${b.refin.prazo}x a ${mbTaxaTxt(b.refin.taxa)}</div>` : '—'}</td>
         ${verCom ? `<td class="mb-sub">${comissao(b)}</td>` : ''}
         <td style="text-align:right">${mbAcaoBanco(b)}</td></tr>`;
-    }).join('') + `</tbody></table>`;
+    }).join('') + `</tbody></table>`);
 }
 
 function mbBancoHTML(b) {
