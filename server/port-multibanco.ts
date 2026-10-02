@@ -50,34 +50,117 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
   };
 
   /** Bancos ativos + regra vigente do convênio + exceções ativas: o que o motor consome. */
+  /** Encaixa a comissão DO AMBIENTE nas regras do catálogo, e só ela. */
+  function aplicarComissaoDoAmbiente(regras: RegrasBanco, cfg: any): RegrasBanco {
+    const faixasCfg: any[] = Array.isArray(cfg?.comissao_faixas) ? cfg.comissao_faixas : [];
+    const faixas = (regras as any).faixasRefin;
+    return {
+      ...regras,
+      comissao: cfg?.comissao_ambiente ?? null,
+      ...(Array.isArray(faixas) ? {
+        faixasRefin: faixas.map((f: any) => {
+          const achada = faixasCfg.find(x => Number(x?.minValor) === Number(f?.minValor));
+          return { ...f, comissaoPercentual: achada ? (achada.percentual ?? null) : null };
+        }),
+      } : {}),
+    } as RegrasBanco;
+  }
+
+  /** Onde este ambiente grava: NULL = catálogo global; número = só para ele. */
+  async function destinoDaEscrita(tenantId: number) {
+    return (await ehDonoDoCatalogo(tenantId)) ? null : tenantId;
+  }
+
+  /** Comissão nunca mora no catálogo: sai das regras e vai para a config do
+   *  ambiente que gravou. Devolve as regras limpas. */
+  async function guardarComissao(tenantId: number, bankId: number, convenio: string,
+                                 regras: any, userId: number | null) {
+    const comissao = regras?.comissao ?? null;
+    const faixas = Array.isArray(regras?.faixasRefin)
+      ? regras.faixasRefin
+          .filter((f: any) => f?.comissaoPercentual != null)
+          .map((f: any) => ({ minValor: f.minValor, percentual: f.comissaoPercentual }))
+      : [];
+    if (comissao != null || faixas.length) {
+      await db.execute(sql`
+        INSERT INTO port_bank_config (tenant_id, bank_id, convenio, comissao, comissao_faixas, atualizado_por, atualizado_em)
+        VALUES (${tenantId}, ${bankId}, ${convenio}, ${comissao ? JSON.stringify(comissao) : null}::jsonb,
+                ${faixas.length ? JSON.stringify(faixas) : null}::jsonb, ${userId}, NOW())
+        ON CONFLICT (tenant_id, bank_id, convenio) DO UPDATE SET
+          comissao = COALESCE(EXCLUDED.comissao, port_bank_config.comissao),
+          comissao_faixas = COALESCE(EXCLUDED.comissao_faixas, port_bank_config.comissao_faixas),
+          atualizado_por = EXCLUDED.atualizado_por, atualizado_em = NOW()
+      `);
+    }
+    const limpas = { ...regras, comissao: null };
+    if (Array.isArray(limpas.faixasRefin)) {
+      limpas.faixasRefin = limpas.faixasRefin.map((f: any) => ({ ...f, comissaoPercentual: null }));
+    }
+    return limpas;
+  }
+
+  /** O ambiente que mantém o catálogo global (a Capital Go). Os demais leem. */
+  async function ehDonoDoCatalogo(tenantId: number) {
+    const r = await db.execute(sql`SELECT catalogo_portabilidade FROM tenants WHERE id = ${tenantId}`);
+    return Boolean((r.rows[0] as any)?.catalogo_portabilidade);
+  }
+
+  /**
+   * Banco, regra e exceção vêm do CATÁLOGO GLOBAL (tenant_id NULL) e valem para
+   * todos os ambientes. De cada ambiente são:
+   *   • a COMISSÃO — nunca herdada de ninguém; sem cadastro, fica em branco;
+   *   • o liga/desliga;
+   *   • uma regra PRÓPRIA, quando existir: ela vence a global (decisão do Fábio).
+   */
   async function carregarParaAnalise(tenantId: number, convenio: string, soAtivos = true) {
-    const bancos = (await db.execute(sql`
-      SELECT id, nome, codigo, ativo, ordem, inativo_motivo, inativo_em FROM port_banks
-      WHERE tenant_id = ${tenantId} ${soAtivos ? sql`AND ativo = TRUE` : sql``}
-      ORDER BY ordem, nome
+    const todos = (await db.execute(sql`
+      SELECT b.id, b.nome, b.codigo, b.ordem, (b.tenant_id IS NULL) AS global,
+             COALESCE(c.ativo, b.ativo)                   AS ativo,
+             COALESCE(c.inativo_motivo, b.inativo_motivo) AS inativo_motivo,
+             COALESCE(c.inativo_em, b.inativo_em)         AS inativo_em,
+             c.comissao                                   AS comissao_ambiente,
+             c.comissao_faixas                            AS comissao_faixas
+        FROM port_banks b
+        LEFT JOIN port_bank_config c
+          ON c.bank_id = b.id AND c.tenant_id = ${tenantId} AND c.convenio = ${convenio}
+       WHERE b.tenant_id = ${tenantId} OR b.tenant_id IS NULL
+       ORDER BY b.ordem, b.nome
     `)).rows as any[];
+
+    // mesmo nome nos dois lugares: o do ambiente vence o global
+    const porNome = new Map<string, any>();
+    for (const b of todos) {
+      const k = String(b.nome).trim().toLowerCase();
+      const atual = porNome.get(k);
+      if (!atual || (atual.global && !b.global)) porNome.set(k, b);
+    }
+    const bancos = Array.from(porNome.values()).filter(b => (soAtivos ? b.ativo : true));
     if (!bancos.length) return { bancos, paraMotor: [] as BancoParaAnalise[] };
 
     const ids = bancos.map(b => b.id);
+    const dentro = sql.join(ids.map(i => sql`${i}`), sql`, `);
     const regras = (await db.execute(sql`
-      SELECT id, bank_id, regras, hash, fonte_descricao, vigencia_inicio
+      SELECT id, bank_id, tenant_id, regras, hash, fonte_descricao, vigencia_inicio
       FROM port_rule_sets
-      WHERE tenant_id = ${tenantId} AND convenio = ${convenio} AND vigencia_fim IS NULL
-        AND bank_id IN (${sql.join(ids.map(i => sql`${i}`), sql`, `)})
+      WHERE (tenant_id = ${tenantId} OR tenant_id IS NULL)
+        AND convenio = ${convenio} AND vigencia_fim IS NULL AND bank_id IN (${dentro})
     `)).rows as any[];
     const excecoes = (await db.execute(sql`
       SELECT id, bank_id, tipo, parametros, motivo, criado_em
       FROM port_rule_exceptions
-      WHERE tenant_id = ${tenantId} AND convenio = ${convenio} AND ativo = TRUE
-        AND bank_id IN (${sql.join(ids.map(i => sql`${i}`), sql`, `)})
+      WHERE (tenant_id = ${tenantId} OR tenant_id IS NULL)
+        AND convenio = ${convenio} AND ativo = TRUE AND bank_id IN (${dentro})
       ORDER BY id
     `)).rows as any[];
 
     const paraMotor: BancoParaAnalise[] = bancos.map(b => {
       const rs = regras.find(r => r.bank_id === b.id);
+      // A comissão vem SEMPRE da config do ambiente; a do catálogo nunca vaza.
+      // Vale para o campo `comissao` E para o percentual de cada faixa (Safra).
+      const comRegras = rs ? aplicarComissaoDoAmbiente(rs.regras as RegrasBanco, b) : null;
       return {
         bankId: b.id, nome: b.nome,
-        ruleSet: rs ? { id: rs.id, hash: rs.hash, vigenciaInicio: new Date(rs.vigencia_inicio).toISOString(), regras: rs.regras as RegrasBanco } : null,
+        ruleSet: rs ? { id: rs.id, hash: rs.hash, vigenciaInicio: new Date(rs.vigencia_inicio).toISOString(), regras: comRegras as RegrasBanco } : null,
         excecoes: excecoes.filter(e => e.bank_id === b.id)
           .map(e => ({ id: e.id, tipo: e.tipo, parametros: e.parametros, motivo: e.motivo }) as Excecao),
       };
@@ -93,11 +176,19 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       const tenantId = tenantDe(req, res); if (!tenantId) return;
       const convenio = String(req.query.convenio || "SIAPE");
       const { bancos, regras = [], excecoes = [] } = await carregarParaAnalise(tenantId, convenio, false);
+      const dono = await ehDonoDoCatalogo(tenantId);
       res.json(bancos.map(b => {
         const rs = (regras as any[]).find(r => r.bank_id === b.id);
         return {
           ...b,
-          regraVigente: rs ? { id: rs.id, hash: rs.hash, fonteDescricao: rs.fonte_descricao, vigenciaInicio: rs.vigencia_inicio, regras: rs.regras } : null,
+          donoDoCatalogo: dono,
+          // a comissão NÃO sai da regra: é a do próprio ambiente
+          comissao: b.comissao_ambiente ?? null,
+          regraVigente: rs ? {
+            id: rs.id, hash: rs.hash, fonteDescricao: rs.fonte_descricao, vigenciaInicio: rs.vigencia_inicio,
+            global: rs.tenant_id == null,
+            regras: { ...rs.regras, comissao: b.comissao_ambiente ?? null },
+          } : null,
           excecoes: (excecoes as any[]).filter(e => e.bank_id === b.id),
         };
       }));
@@ -120,7 +211,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
         SELECT rs.id, rs.convenio, rs.hash, rs.fonte_descricao, rs.vigencia_inicio, rs.vigencia_fim,
                rs.criado_em, rs.regras, u.name AS criado_por_nome
         FROM port_rule_sets rs LEFT JOIN users u ON u.id = rs.criado_por
-        WHERE rs.tenant_id = ${tenantId} AND rs.bank_id = ${Number(req.params.id)}
+        WHERE (rs.tenant_id = ${tenantId} OR rs.tenant_id IS NULL) AND rs.bank_id = ${Number(req.params.id)}
         ORDER BY rs.vigencia_inicio DESC, rs.id DESC
       `);
       res.json(r.rows);
@@ -284,7 +375,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       if (!nome) return res.status(400).json({ message: "Informe o nome do banco" });
       const r = await db.execute(sql`
         INSERT INTO port_banks (tenant_id, nome, codigo, ativo, ordem)
-        VALUES (${tenantId}, ${nome}, ${req.body?.codigo || null}, TRUE, ${Number(req.body?.ordem) || 0})
+        VALUES (${await destinoDaEscrita(tenantId)}, ${nome}, ${req.body?.codigo || null}, TRUE, ${Number(req.body?.ordem) || 0})
         RETURNING *
       `);
       res.json(r.rows[0]);
@@ -302,6 +393,27 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       // desligar guarda o porquê e a data; religar limpa os dois
       const mexeAtivo = typeof b.ativo === "boolean";
       const motivo = mexeAtivo && !b.ativo ? (String(b.motivo || "").trim() || null) : null;
+      const bankId = Number(req.params.id);
+      const alvo = (await db.execute(sql`
+        SELECT id, tenant_id FROM port_banks
+        WHERE id = ${bankId} AND (tenant_id = ${tenantId} OR tenant_id IS NULL)
+      `)).rows[0] as any;
+      if (!alvo) return res.status(404).json({ message: "Banco não encontrado" });
+
+      // Banco do CATÁLOGO: ligar e desligar é de cada ambiente, não do catálogo.
+      // Um assinante pode não trabalhar com um banco sem tirá-lo de todo mundo.
+      if (alvo.tenant_id == null && mexeAtivo) {
+        await db.execute(sql`
+          INSERT INTO port_bank_config (tenant_id, bank_id, convenio, ativo, inativo_motivo, inativo_em, atualizado_por, atualizado_em)
+          VALUES (${tenantId}, ${bankId}, ${String(req.body?.convenio || "SIAPE")}, ${!!b.ativo}, ${motivo},
+                  ${b.ativo ? null : sql`NOW()`}, ${req.user?.id ?? null}, NOW())
+          ON CONFLICT (tenant_id, bank_id, convenio) DO UPDATE SET
+            ativo = EXCLUDED.ativo, inativo_motivo = EXCLUDED.inativo_motivo,
+            inativo_em = EXCLUDED.inativo_em, atualizado_por = EXCLUDED.atualizado_por, atualizado_em = NOW()
+        `);
+        return res.json({ id: bankId, ativo: !!b.ativo, global: true });
+      }
+
       const r = await db.execute(sql`
         UPDATE port_banks SET
           inativo_motivo = CASE WHEN ${mexeAtivo} THEN ${motivo} ELSE inativo_motivo END,
@@ -309,7 +421,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
           ativo = COALESCE(${mexeAtivo ? b.ativo : null}, ativo),
           ordem = COALESCE(${Number.isFinite(b.ordem) ? b.ordem : null}, ordem),
           codigo = COALESCE(${b.codigo ?? null}, codigo)
-        WHERE id = ${Number(req.params.id)} AND tenant_id = ${tenantId}
+        WHERE id = ${bankId} AND (tenant_id = ${tenantId} OR (tenant_id IS NULL AND ${await ehDonoDoCatalogo(tenantId)}))
         RETURNING *
       `);
       if (!r.rows.length) return res.status(404).json({ message: "Banco não encontrado" });
@@ -320,23 +432,63 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
     }
   });
 
+  /** Comissão é SEMPRE do ambiente, nunca do catálogo. Sem cadastro, fica em
+   *  branco — nenhum ambiente herda a comissão de outro. */
+  app.put("/api/port/bancos/:id/comissao", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const bankId = Number(req.params.id);
+      const convenio = String(req.body?.convenio || "SIAPE");
+      const existe = (await db.execute(sql`
+        SELECT 1 FROM port_banks WHERE id = ${bankId} AND (tenant_id = ${tenantId} OR tenant_id IS NULL)
+      `)).rows.length;
+      if (!existe) return res.status(404).json({ message: "Banco não encontrado" });
+
+      const pct = req.body?.percentual;
+      const comissao = pct == null || pct === "" ? null
+        : { percentual: Number(String(pct).replace(",", ".")), base: "saldo" as const };
+      if (comissao && (!Number.isFinite(comissao.percentual) || comissao.percentual < 0 || comissao.percentual > 100)) {
+        return res.status(400).json({ message: "Percentual inválido (ex.: 0,75)" });
+      }
+      const faixas = Array.isArray(req.body?.faixas)
+        ? req.body.faixas
+            .map((f: any) => ({ minValor: Number(f?.minValor), percentual: f?.percentual == null || f?.percentual === "" ? null : Number(String(f.percentual).replace(",", ".")) }))
+            .filter((f: any) => Number.isFinite(f.minValor))
+        : null;
+
+      await db.execute(sql`
+        INSERT INTO port_bank_config (tenant_id, bank_id, convenio, comissao, comissao_faixas, atualizado_por, atualizado_em)
+        VALUES (${tenantId}, ${bankId}, ${convenio}, ${comissao ? JSON.stringify(comissao) : null}::jsonb,
+                ${faixas && faixas.length ? JSON.stringify(faixas) : null}::jsonb, ${req.user?.id ?? null}, NOW())
+        ON CONFLICT (tenant_id, bank_id, convenio) DO UPDATE SET
+          comissao = EXCLUDED.comissao, comissao_faixas = EXCLUDED.comissao_faixas,
+          atualizado_por = EXCLUDED.atualizado_por, atualizado_em = NOW()
+      `);
+      res.json({ ok: true, comissao, faixas });
+    } catch (err: any) {
+      console.error("[PORT] PUT comissao:", err);
+      res.status(500).json({ message: "Erro ao gravar a comissão" });
+    }
+  });
+
   /** Nova versão das regras do infográfico. Fecha a vigente; nunca edita. */
-  async function gravarRegras(tenantId: number, bankId: number, convenio: string, regras: RegrasBanco,
+  async function gravarRegras(destino: number | null, bankId: number, convenio: string, regras: RegrasBanco,
                               fonteDescricao: string | null, modeloId: string | null, userId: number | null) {
     const hash = hashRegras(regras);
+    const mesmoDono = destino == null ? sql`tenant_id IS NULL` : sql`tenant_id = ${destino}`;
     const atual = (await db.execute(sql`
       SELECT id, hash FROM port_rule_sets
-      WHERE tenant_id = ${tenantId} AND bank_id = ${bankId} AND convenio = ${convenio} AND vigencia_fim IS NULL
+      WHERE ${mesmoDono} AND bank_id = ${bankId} AND convenio = ${convenio} AND vigencia_fim IS NULL
     `)).rows as any[];
     if (atual.length === 1 && atual[0].hash === hash) return { id: atual[0].id, novo: false };
 
     await db.execute(sql`
       UPDATE port_rule_sets SET vigencia_fim = NOW()
-      WHERE tenant_id = ${tenantId} AND bank_id = ${bankId} AND convenio = ${convenio} AND vigencia_fim IS NULL
+      WHERE ${mesmoDono} AND bank_id = ${bankId} AND convenio = ${convenio} AND vigencia_fim IS NULL
     `);
     const r = await db.execute(sql`
       INSERT INTO port_rule_sets (tenant_id, bank_id, convenio, regras, hash, fonte_descricao, modelo_id, vigencia_inicio, criado_por)
-      VALUES (${tenantId}, ${bankId}, ${convenio}, ${JSON.stringify(regras)}::jsonb, ${hash},
+      VALUES (${destino}, ${bankId}, ${convenio}, ${JSON.stringify(regras)}::jsonb, ${hash},
               ${fonteDescricao}, ${modeloId}, NOW(), ${userId})
       RETURNING id
     `);
@@ -350,7 +502,10 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       if (!convenio || !regras || typeof regras !== "object") return res.status(400).json({ message: "Informe convênio e regras" });
       const soltos = (regras.origens?.lista || []).map((o: any) => o.origem).filter((n: string) => !normalizarOrigem(n));
       if (soltos.length) return res.status(400).json({ message: `Banco de origem não reconhecido: ${soltos.join(", ")}` });
-      const r = await gravarRegras(tenantId, Number(req.params.id), String(convenio), regras, fonteDescricao || null, null, req.user?.id ?? null);
+      const bankId = Number(req.params.id);
+      const limpas = await guardarComissao(tenantId, bankId, String(convenio), regras, req.user?.id ?? null);
+      const r = await gravarRegras(await destinoDaEscrita(tenantId), bankId, String(convenio), limpas,
+                                   fonteDescricao || null, null, req.user?.id ?? null);
       res.json(r);
     } catch (err: any) {
       console.error("[PORT] POST regras:", err);
@@ -371,7 +526,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       const p = { origem: nomeOrigem(chave), porta: Boolean(parametros.porta), pagasMin: parametros.porta ? (Number(parametros.pagasMin) || 0) : null };
       const r = await db.execute(sql`
         INSERT INTO port_rule_exceptions (tenant_id, bank_id, convenio, tipo, parametros, motivo, ativo, criado_por)
-        VALUES (${tenantId}, ${Number(req.params.id)}, ${String(convenio)}, 'origem_pagas',
+        VALUES (${await destinoDaEscrita(tenantId)}, ${Number(req.params.id)}, ${String(convenio)}, 'origem_pagas',
                 ${JSON.stringify(p)}::jsonb, ${String(motivo).trim()}, TRUE, ${req.user?.id ?? null})
         RETURNING *
       `);
@@ -387,7 +542,8 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
       const r = await db.execute(sql`
         UPDATE port_rule_exceptions SET ativo = FALSE, desativado_em = NOW(), desativado_por = ${req.user?.id ?? null}
-        WHERE id = ${Number(req.params.id)} AND tenant_id = ${tenantId} AND ativo = TRUE
+        WHERE id = ${Number(req.params.id)} AND ativo = TRUE
+          AND (tenant_id = ${tenantId} OR (tenant_id IS NULL AND ${await ehDonoDoCatalogo(tenantId)}))
         RETURNING id
       `);
       if (!r.rows.length) return res.status(404).json({ message: "Exceção não encontrada ou já desativada" });
@@ -406,20 +562,27 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       if (!modelo) return res.status(404).json({ message: "Modelo não encontrado" });
       const userId = req.user?.id ?? null;
 
+      const destino = await destinoDaEscrita(tenantId);
+      // o banco pode já existir no catálogo global ou no próprio ambiente
       let banco = (await db.execute(sql`
-        SELECT id FROM port_banks WHERE tenant_id = ${tenantId} AND lower(nome) = lower(${modelo.banco})
+        SELECT id FROM port_banks
+        WHERE (tenant_id = ${tenantId} OR tenant_id IS NULL) AND lower(nome) = lower(${modelo.banco})
+        ORDER BY tenant_id NULLS LAST LIMIT 1
       `)).rows[0] as any;
       if (!banco) {
         banco = (await db.execute(sql`
-          INSERT INTO port_banks (tenant_id, nome, ativo, ordem) VALUES (${tenantId}, ${modelo.banco}, TRUE, 0) RETURNING id
+          INSERT INTO port_banks (tenant_id, nome, ativo, ordem) VALUES (${destino}, ${modelo.banco}, TRUE, 0) RETURNING id
         `)).rows[0];
       }
-      const regra = await gravarRegras(tenantId, banco.id, modelo.convenio, modelo.regras, modelo.fonteDescricao, modelo.id, userId);
+      // a comissão do modelo é DESTE ambiente; as regras vão limpas para o catálogo
+      const limpas = await guardarComissao(tenantId, banco.id, modelo.convenio, modelo.regras, userId);
+      const regra = await gravarRegras(destino, banco.id, modelo.convenio, limpas, modelo.fonteDescricao, modelo.id, userId);
 
       // exceções: só cria as que ainda não existem ativas para a mesma origem
       const ativas = (await db.execute(sql`
         SELECT parametros FROM port_rule_exceptions
-        WHERE tenant_id = ${tenantId} AND bank_id = ${banco.id} AND convenio = ${modelo.convenio} AND ativo = TRUE
+        WHERE (tenant_id = ${tenantId} OR tenant_id IS NULL)
+          AND bank_id = ${banco.id} AND convenio = ${modelo.convenio} AND ativo = TRUE
       `)).rows as any[];
       const jaTem = new Set(ativas.map(a => normalizarOrigem(a.parametros?.origem)));
       let criadas = 0;
@@ -428,7 +591,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
         if (!chave || jaTem.has(chave)) continue;
         await db.execute(sql`
           INSERT INTO port_rule_exceptions (tenant_id, bank_id, convenio, tipo, parametros, motivo, ativo, criado_por)
-          VALUES (${tenantId}, ${banco.id}, ${modelo.convenio}, 'origem_pagas',
+          VALUES (${destino}, ${banco.id}, ${modelo.convenio}, 'origem_pagas',
                   ${JSON.stringify({ ...e.parametros, origem: nomeOrigem(chave) })}::jsonb, ${e.motivo}, TRUE, ${userId})
         `);
         criadas++;
@@ -451,13 +614,12 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
       const contratos = (req.body?.contratos || []) as ContratoEntrada[];
       if (!cliente?.convenio) return res.status(400).json({ message: "Informe o convênio do cliente" });
 
-      const { paraMotor } = await carregarParaAnalise(tenantId, cliente.convenio);
-      const desligados = (await db.execute(sql`
-        SELECT nome, inativo_motivo, inativo_em FROM port_banks
-        WHERE tenant_id = ${tenantId} AND ativo = FALSE ORDER BY nome
-      `)).rows as any[];
+      // carrega TODOS e separa aqui: assim o desligado respeita a config do ambiente
+      const { bancos, paraMotor } = await carregarParaAnalise(tenantId, cliente.convenio, false);
+      const ativos = paraMotor.filter((_, i) => bancos[i].ativo);
+      const desligados = bancos.filter(b => !b.ativo);
       const resp = {
-        ...respostaSimulacao(paraMotor, cliente, contratos, new Date(), normalizarOperacao(req.body?.operacao)),
+        ...respostaSimulacao(ativos, cliente, contratos, new Date(), normalizarOperacao(req.body?.operacao)),
         bancosDesligados: desligados.map(d => ({ banco: d.nome, motivo: d.inativo_motivo, desde: d.inativo_em })),
       };
       // corretor NUNCA vê a comissão da empresa: sai daqui, não só da tela

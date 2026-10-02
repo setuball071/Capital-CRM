@@ -923,6 +923,82 @@ app.use((req, res, next) => {
           `);
           await simMigDb.execute(simMigSql`CREATE INDEX IF NOT EXISTS idx_port_analyses_cpf ON port_analyses(tenant_id, cpf)`);
 
+          // ── CATALOGO GLOBAL (Fabio, 02/10/2026) ───────────────────────────
+          // Regra de banco cadastrada na Capital Go vale para todos os ambientes.
+          // tenant_id NULL = global. O ambiente so tem de seu: a comissao, o
+          // liga/desliga e, se quiser, uma regra propria (que vence a global).
+          for (const t of ["port_banks", "port_rule_sets", "port_rule_exceptions"]) {
+            await simMigDb.execute(simMigSql`
+              ALTER TABLE ${simMigSql.raw(t)} ALTER COLUMN tenant_id DROP NOT NULL
+            `);
+          }
+          // nome unico tambem entre os globais (o indice antigo ignora NULL)
+          await simMigDb.execute(simMigSql`
+            CREATE UNIQUE INDEX IF NOT EXISTS port_banks_global_nome
+              ON port_banks(lower(nome)) WHERE tenant_id IS NULL
+          `);
+          await simMigDb.execute(simMigSql`
+            CREATE TABLE IF NOT EXISTS port_bank_config (
+              id             SERIAL PRIMARY KEY,
+              tenant_id      INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              bank_id        INTEGER NOT NULL REFERENCES port_banks(id) ON DELETE CASCADE,
+              convenio       VARCHAR(50) NOT NULL DEFAULT 'SIAPE',
+              ativo          BOOLEAN,          -- NULL = segue o catalogo
+              inativo_motivo TEXT,
+              inativo_em     TIMESTAMP,
+              comissao       JSONB,            -- NULL = nao cadastrada (NUNCA herda a de outro)
+              comissao_faixas JSONB,          -- [{minValor, percentual}] p/ bancos com faixa (Safra)
+              atualizado_por INTEGER,
+              atualizado_em  TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE (tenant_id, bank_id, convenio)
+            )
+          `);
+          // quem edita o catalogo global
+          await simMigDb.execute(simMigSql`
+            ALTER TABLE tenants ADD COLUMN IF NOT EXISTS catalogo_portabilidade BOOLEAN NOT NULL DEFAULT FALSE
+          `);
+
+          // Promocao unica: se SO UM ambiente tem bancos cadastrados, ele e o
+          // dono do catalogo e as regras dele viram globais. Com mais de um,
+          // nao adivinha nada — fica tudo como esta e avisa no log.
+          const donos = (await simMigDb.execute(simMigSql`
+            SELECT DISTINCT tenant_id FROM port_banks WHERE tenant_id IS NOT NULL
+          `)).rows as any[];
+          const jaTemGlobal = (await simMigDb.execute(simMigSql`
+            SELECT 1 FROM port_banks WHERE tenant_id IS NULL LIMIT 1
+          `)).rows.length > 0;
+
+          if (!jaTemGlobal && donos.length === 1) {
+            const dono = Number(donos[0].tenant_id);
+            // a comissao sai de dentro das regras e vira config DESTE ambiente
+            await simMigDb.execute(simMigSql`
+              INSERT INTO port_bank_config (tenant_id, bank_id, convenio, ativo, inativo_motivo, inativo_em, comissao, comissao_faixas)
+              SELECT ${dono}, b.id, rs.convenio, b.ativo, b.inativo_motivo, b.inativo_em, rs.regras->'comissao',
+                     (SELECT jsonb_agg(jsonb_build_object('minValor', f->'minValor', 'percentual', f->'comissaoPercentual'))
+                        FROM jsonb_array_elements(COALESCE(rs.regras->'faixasRefin', '[]'::jsonb)) f
+                       WHERE f->'comissaoPercentual' IS NOT NULL)
+                FROM port_banks b
+                JOIN port_rule_sets rs ON rs.bank_id = b.id AND rs.vigencia_fim IS NULL
+               WHERE b.tenant_id = ${dono}
+              ON CONFLICT (tenant_id, bank_id, convenio) DO NOTHING
+            `);
+            // bancos sem regra ainda: so o liga/desliga
+            await simMigDb.execute(simMigSql`
+              INSERT INTO port_bank_config (tenant_id, bank_id, convenio, ativo, inativo_motivo, inativo_em)
+              SELECT ${dono}, b.id, 'SIAPE', b.ativo, b.inativo_motivo, b.inativo_em
+                FROM port_banks b WHERE b.tenant_id = ${dono}
+              ON CONFLICT (tenant_id, bank_id, convenio) DO NOTHING
+            `);
+            await simMigDb.execute(simMigSql`UPDATE port_rule_exceptions SET tenant_id = NULL WHERE tenant_id = ${dono}`);
+            await simMigDb.execute(simMigSql`UPDATE port_rule_sets SET tenant_id = NULL WHERE tenant_id = ${dono}`);
+            await simMigDb.execute(simMigSql`UPDATE port_banks SET tenant_id = NULL WHERE tenant_id = ${dono}`);
+            await simMigDb.execute(simMigSql`UPDATE tenants SET catalogo_portabilidade = TRUE WHERE id = ${dono}`);
+            log(`catalogo de portabilidade: regras do tenant ${dono} promovidas a globais`);
+          } else if (!jaTemGlobal && donos.length > 1) {
+            console.warn("[PORT] catalogo global NAO promovido: " + donos.length +
+              " ambientes tem bancos cadastrados. Defina catalogo_portabilidade a mao.");
+          }
+
           // Simulador de Compra: tabelas próprias (separadas do Financeiro). Só o master cadastra.
           await simMigDb.execute(simMigSql`
             CREATE TABLE IF NOT EXISTS compra_tabelas (

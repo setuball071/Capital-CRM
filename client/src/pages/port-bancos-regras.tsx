@@ -13,7 +13,13 @@ import { ORIGENS } from "@shared/portability/engine";
 interface BancoApi {
   id: number; nome: string; codigo: string | null; ativo: boolean; ordem: number;
   inativo_motivo?: string | null; inativo_em?: string | null;
-  regraVigente: { id: number; hash: string; fonteDescricao: string | null; vigenciaInicio: string; regras: any } | null;
+  /** o banco veio do catálogo (vale para todos os ambientes)? */
+  global?: boolean;
+  /** este ambiente é o que mantém o catálogo (a Capital Go)? */
+  donoDoCatalogo?: boolean;
+  /** comissão DESTE ambiente — nunca herdada de outro */
+  comissao?: { percentual?: number | null; base?: string | null } | null;
+  regraVigente: { id: number; hash: string; fonteDescricao: string | null; vigenciaInicio: string; global?: boolean; regras: any } | null;
   excecoes: { id: number; tipo: string; parametros: any; motivo: string | null; criado_em: string }[];
 }
 
@@ -44,12 +50,54 @@ export default function PortBancosRegras() {
       <p className="text-[13px] text-muted-foreground mt-1">
         O que é cadastrado aqui alimenta sozinho a análise por banco do Simulador de Portabilidade.
       </p>
+      <p className="text-[12px] text-muted-foreground mt-2 rounded-md border border-border bg-muted/40 px-3 py-2">
+        <b>Banco e regra valem para todos os ambientes.</b> De cada ambiente são: a <b>comissão</b> —
+        que ninguém herda de ninguém —, o <b>liga/desliga</b> e, se cadastrar, uma <b>regra própria</b>,
+        que vence a do catálogo.
+      </p>
       <PainelBancos bancos={bancos} convenio={convenio} aoMudar={carregar} />
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+
+/** A comissão é do ambiente, não do catálogo: cada assinante cadastra a sua,
+ *  e quem não cadastrar fica sem — nunca enxerga a de outro. */
+function ComissaoDoAmbiente({ banco, convenio, chamar, aoMudar, setMsg }: {
+  banco: BancoApi; convenio: string; chamar: (u: string, m: string, c?: any) => Promise<any>;
+  aoMudar: () => void; setMsg: (s: string) => void;
+}) {
+  const atual = banco.comissao?.percentual ?? null;
+  const [valor, setValor] = useState(atual == null ? "" : String(atual).replace(".", ","));
+  const [salvando, setSalvando] = useState(false);
+  useEffect(() => { setValor(atual == null ? "" : String(atual).replace(".", ",")); }, [atual]);
+
+  const mudou = (valor.trim() === "" ? null : valor.trim().replace(",", ".")) !== (atual == null ? null : String(atual));
+  return (
+    <div className="mt-1 ml-2 flex items-center gap-2 text-[12px]">
+      <span className="text-muted-foreground">Comissão deste ambiente:</span>
+      <input
+        className="w-24 rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+        value={valor} onChange={e => setValor(e.target.value)} placeholder="0,75"
+        data-testid={`comissao-${banco.id}`} />
+      <span className="text-muted-foreground">% do saldo devedor</span>
+      {mudou && (
+        <button disabled={salvando} className="rounded-md bg-primary hover:bg-primary/90 text-white text-[11px] font-semibold px-2.5 py-1 disabled:opacity-50"
+          onClick={async () => {
+            setSalvando(true);
+            try {
+              await chamar(`/api/port/bancos/${banco.id}/comissao`, "PUT", { convenio, percentual: valor.trim() || null });
+              setMsg(`Comissão do ${banco.nome} gravada para este ambiente.`);
+              aoMudar();
+            } catch (e: any) { setMsg("Erro: " + e.message); }
+            setSalvando(false);
+          }}>salvar</button>
+      )}
+      {atual == null && !mudou && <span className="text-amber-600">não cadastrada — a análise não mostra comissão</span>}
+    </div>
+  );
+}
 
 function PainelBancos({ bancos, convenio, aoMudar }: { bancos: BancoApi[]; convenio: string; aoMudar: () => void }) {
   const [modelos, setModelos] = useState<any[]>([]);
@@ -111,6 +159,11 @@ function PainelBancos({ bancos, convenio, aoMudar }: { bancos: BancoApi[]; conve
             <div key={b.id} className="border-t border-border py-3">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="text-sm font-bold">{b.nome}</div>
+                {b.global
+                  ? <span className="text-[10px] rounded bg-muted px-1.5 py-0.5 text-muted-foreground">
+                      catálogo · {b.donoDoCatalogo ? "você edita" : "regra de todos"}
+                    </span>
+                  : <span className="text-[10px] rounded bg-primary/10 px-1.5 py-0.5 text-primary">só deste ambiente</span>}
                 <label className="flex items-center gap-1.5 text-[12px] cursor-pointer">
                   <input type="checkbox" checked={b.ativo} onChange={e => {
                     const ligar = e.target.checked;
@@ -141,6 +194,8 @@ function PainelBancos({ bancos, convenio, aoMudar }: { bancos: BancoApi[]; conve
                   if (r.ok) { const j = await r.json(); setHistorico(h => ({ ...h, [b.id]: j })); }
                 }}>{historico[b.id] ? "ocultar versões" : "versões"}</button>
               </div>
+
+              <ComissaoDoAmbiente banco={b} convenio={convenio} chamar={chamar} aoMudar={aoMudar} setMsg={setMsg} />
 
               {historico[b.id] && (
                 <div className="mt-2 ml-2 text-[11px] space-y-0.5">
