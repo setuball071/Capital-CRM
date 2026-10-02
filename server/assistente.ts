@@ -24,6 +24,7 @@ import {
   CORTE_SIMILARIDADE,
   tenantInterno,
 } from "./assistente-rag";
+import { calcularDaPergunta } from "./assistente-calculo";
 import { requireApiKey } from "./api-key-middleware";
 
 const uploadKb = multer({
@@ -588,8 +589,12 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
     try {
       const chunks = await buscarChunks(req.tenantId, texto, 12);
       const relevantes = chunks.filter((c) => c.similaridade >= CORTE_SIMILARIDADE);
+      // Conta de consignado é resolvida em código, não pelo modelo: taxa exige
+      // iteração, e sem isso ele devolvia a fórmula em LaTeX no lugar do número.
+      // Tendo cálculo, responde mesmo sem artigo na base.
+      const calculo = calcularDaPergunta(texto);
 
-      if (!relevantes.length) {
+      if (!relevantes.length && !calculo) {
         const naoSei = respostaNaoSei();
         const [msg] = await db
           .insert(assistenteMensagens)
@@ -630,7 +635,11 @@ export function registerAssistenteRoutes(app: Express, requireAuth: RequestHandl
         .join("\n\n---\n\n");
       const persona = await obterPersona();
       const regrasBancos = await obterRegrasBancos(req.tenantId);
-      const system = `${persona}\n\n===== TRECHOS DA BASE DE CONHECIMENTO =====\n${trechos}${regrasBancos}`;
+      const blocoCalculo = calculo
+        ? `\n\n===== CALCULO JA FEITO PELO SISTEMA (use ESTES numeros) =====\n${calculo.texto}\n` +
+          `Responda com o numero pronto, em reais e em % ao mes. NUNCA escreva formula, LaTeX nem codigo — a conta ja esta feita acima.`
+        : "";
+      const system = `${persona}\n\n===== TRECHOS DA BASE DE CONHECIMENTO =====\n${trechos}${regrasBancos}${blocoCalculo}`;
 
       let resposta = "";
       const timer = setTimeout(() => ac.abort(), 45_000); // teto duro de 45s (upstream travado)
