@@ -11550,6 +11550,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
         const statusInicial = isMaster ? "aprovado" : "pendente";
 
         const pedido = await storage.createPedidoLista({
+          tenantId: (req as any).tenantId ?? null,
           coordenadorId: req.user!.id,
           filtrosUsados: filtros,
           quantidadeRegistros: quantidadeEfetiva,
@@ -11608,8 +11609,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     requireModuleAccess("modulo_base_clientes"),
     async (req, res) => {
       try {
-        // Master sees all
-        const pedidos = await storage.getAllPedidosLista();
+        // Cada ambiente ve apenas os proprios pedidos. Antes a rota devolvia os
+        // pedidos de TODOS os clientes, com filtros usados, volume e valor pago.
+        const pedidos = req.user?.isMaster
+          ? await storage.getAllPedidosLista()
+          : await storage.getPedidosListaByTenant((req as any).tenantId ?? -1);
 
         return res.json(pedidos);
       } catch (error) {
@@ -11625,6 +11629,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
   app.get(
     "/api/pedidos-lista/admin",
     requireAuth,
+    requireMaster,
     requireModuleAccess("modulo_base_clientes"),
     async (req, res) => {
       try {
@@ -11661,6 +11666,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
   app.post(
     "/api/pedidos-lista/:id/aprovar",
     requireAuth,
+    requireMaster,
     requireModuleAccess("modulo_base_clientes"),
     async (req, res) => {
       try {
@@ -11708,6 +11714,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
   app.post(
     "/api/pedidos-lista/:id/reprocessar",
     requireAuth,
+    requireMaster,
     requireModuleAccess("modulo_base_clientes"),
     async (req, res) => {
       try {
@@ -11756,6 +11763,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
   app.post(
     "/api/pedidos-lista/:id/cancelar",
     requireAuth,
+    requireMaster,
     requireModuleAccess("modulo_base_clientes"),
     async (req, res) => {
       try {
@@ -12183,6 +12191,14 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           return res.status(404).json({ message: "Pedido não encontrado" });
         }
 
+        // O arquivo e a lista de leads em si. Sem esta checagem, bastava adivinhar
+        // o numero do pedido para baixar a base trabalhada de outro cliente.
+        // 404 em vez de 403 de proposito: nao confirma que o pedido existe.
+        const tenantDaSessao = (req as any).tenantId ?? null;
+        if (!req.user?.isMaster && pedido.tenantId !== tenantDaSessao) {
+          return res.status(404).json({ message: "Pedido não encontrado" });
+        }
+
         // Check if file is ready
         if (pedido.status !== "processado") {
           return res.status(400).json({
@@ -12231,6 +12247,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
   app.post(
     "/api/pedidos-lista/:id/rejeitar",
     requireAuth,
+    requireMaster,
     requireModuleAccess("modulo_base_clientes"),
     async (req, res) => {
       try {

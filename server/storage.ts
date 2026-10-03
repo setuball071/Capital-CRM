@@ -336,6 +336,7 @@ export interface IStorage {
   // Pedidos Lista
   getAllPedidosLista(): Promise<PedidoLista[]>;
   getPedidosListaByUser(userId: number): Promise<PedidoLista[]>;
+  getPedidosListaByTenant(tenantId: number): Promise<PedidoLista[]>;
   getPedidoLista(id: number): Promise<PedidoLista | undefined>;
   createPedidoLista(data: InsertPedidoLista): Promise<PedidoLista>;
   updatePedidoLista(id: number, data: Partial<InsertPedidoLista>): Promise<PedidoLista | undefined>;
@@ -2439,6 +2440,14 @@ export class DbStorage implements IStorage {
       .orderBy(sql`${pedidosLista.criadoEm} DESC`);
   }
 
+  // Pedidos de um ambiente. Pedido antigo sem ambiente preenchido NAO aparece
+  // para ninguem alem do master — melhor sumir do que vazar para o cliente errado.
+  async getPedidosListaByTenant(tenantId: number): Promise<PedidoLista[]> {
+    return await db.select().from(pedidosLista)
+      .where(eq(pedidosLista.tenantId, tenantId))
+      .orderBy(sql`${pedidosLista.criadoEm} DESC`);
+  }
+
   async getPedidoLista(id: number): Promise<PedidoLista | undefined> {
     const [pedido] = await db.select().from(pedidosLista).where(eq(pedidosLista.id, id));
     return pedido;
@@ -2461,6 +2470,7 @@ export class DbStorage implements IStorage {
     const result = await db
       .select({
         id: pedidosLista.id,
+        tenantId: pedidosLista.tenantId,
         coordenadorId: pedidosLista.coordenadorId,
         filtrosUsados: pedidosLista.filtrosUsados,
         quantidadeRegistros: pedidosLista.quantidadeRegistros,

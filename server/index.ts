@@ -419,6 +419,32 @@ app.use((req, res, next) => {
           console.error("Permission templates migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — pedidos_lista nasceu SEM ambiente: a tela de Filtros de
+        // Base mostrava os pedidos de todos os clientes para qualquer um, com os
+        // filtros usados, o volume e o valor pago. Coluna nova + preenchimento dos
+        // antigos pelo ambiente de quem pediu.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            ALTER TABLE pedidos_lista ADD COLUMN IF NOT EXISTS tenant_id INTEGER REFERENCES tenants(id)
+          `);
+          await migDb.execute(migSql`
+            UPDATE pedidos_lista p SET tenant_id = sub.tenant_id
+            FROM (
+              SELECT ut.user_id, MIN(ut.tenant_id) AS tenant_id
+              FROM user_tenants ut GROUP BY ut.user_id
+            ) sub
+            WHERE p.tenant_id IS NULL AND sub.user_id = p.coordenador_id
+          `);
+          await migDb.execute(migSql`
+            CREATE INDEX IF NOT EXISTS idx_pedidos_lista_tenant ON pedidos_lista (tenant_id, criado_em DESC)
+          `);
+          log("Pedidos lista tenant_id migration OK");
+        } catch (migErr) {
+          console.error("Pedidos lista tenant_id migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — Confirmacao de conferencia antes de gerar proposta.
         // Guarda QUEM confirmou, QUANDO e qual versao do aviso estava no ar, para
         // a empresa conseguir provar depois que o corretor foi alertado.

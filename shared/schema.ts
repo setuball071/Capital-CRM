@@ -1056,6 +1056,9 @@ export const basesImportadas = pgTable("bases_importadas", {
 // 5) pedidos_lista - Pedidos de exportação de lista
 export const pedidosLista = pgTable("pedidos_lista", {
   id: serial("id").primaryKey(),
+  // Ambiente dono do pedido. Sem ele, a tela de Filtros de Base mostrava os
+  // pedidos de todos os clientes para qualquer um.
+  tenantId: integer("tenant_id").references(() => tenants.id),
   coordenadorId: integer("coordenador_id").references(() => users.id, {
     onDelete: "set null",
   }),
