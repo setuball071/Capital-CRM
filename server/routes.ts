@@ -23414,7 +23414,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           + COALESCE((SELECT SUM(vc.valor_contrato) FROM vendedor_contratos vc WHERE vc.vendedor_id = u.id AND vc.tenant_id = ${tenantId} AND vc.data_contrato >= ${firstDayOfMonth.toISOString()} AND vc.data_contrato <= ${lastDayOfMonth.toISOString()} AND (LOWER(vc.tipo_operacao) LIKE '%cartão%' OR LOWER(vc.tipo_operacao) LIKE '%cartao%')), 0)::numeric as prod_cartao
         FROM users u
         INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
-        WHERE u.role = 'vendedor' AND u.is_active = true AND (u.is_demo IS NOT TRUE) ${rankScopeSql}
+        WHERE COALESCE(ut.role_in_tenant, u.role) = 'vendedor' AND u.is_active = true AND (u.is_demo IS NOT TRUE) ${rankScopeSql}
         ORDER BY prod_geral DESC
       `);
 
@@ -23564,7 +23564,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const allVendedores = await db.execute(sql`
           SELECT u.id FROM users u
           INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
-          WHERE u.role = 'vendedor' AND u.is_active = true AND (u.is_demo IS NOT TRUE)
+          WHERE COALESCE(ut.role_in_tenant, u.role) = 'vendedor' AND u.is_active = true AND (u.is_demo IS NOT TRUE)
         `);
         teamMemberIds = allVendedores.rows.map((r: any) => parseInt(r.id));
       }
@@ -23839,7 +23839,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const allVendedores = await db.execute(sql`
           SELECT u.id FROM users u
           INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
-          WHERE u.role = 'vendedor' AND u.is_active = true AND (u.is_demo IS NOT TRUE)
+          WHERE COALESCE(ut.role_in_tenant, u.role) = 'vendedor' AND u.is_active = true AND (u.is_demo IS NOT TRUE)
         `);
         teamMemberIds = allVendedores.rows.map((r: any) => parseInt(r.id));
       }
@@ -24035,7 +24035,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const allVendedores = await db.execute(sql`
           SELECT u.id FROM users u
           INNER JOIN user_tenants ut ON ut.user_id = u.id AND ut.tenant_id = ${tenantId}
-          WHERE u.role = 'vendedor' AND u.is_active = true AND (u.is_demo IS NOT TRUE)
+          WHERE COALESCE(ut.role_in_tenant, u.role) = 'vendedor' AND u.is_active = true AND (u.is_demo IS NOT TRUE)
         `);
         teamMemberIds = allVendedores.rows.map((r: any) => parseInt(r.id));
       }

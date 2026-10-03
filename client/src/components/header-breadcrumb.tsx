@@ -1,7 +1,8 @@
 import { useLocation } from "wouter";
 import { ChevronRight } from "lucide-react";
+import { useTenant } from "@/components/tenant-theme-provider";
 
-// Rota → [Seção, Página] no padrão do design Capital Go ("Financeiro › Tabelas").
+// Rota → [Seção, Página] no padrão "Financeiro › Tabelas".
 const MAP: Record<string, [string, string]> = {
   "/": ["Geral", "Home"],
   "/dashboard": ["Vendas", "Visão geral"],
@@ -32,9 +33,12 @@ function prettify(seg: string): string {
 
 export function HeaderBreadcrumb() {
   const [location] = useLocation();
+  // Rota fora do mapa caia num "Capital Go" fixo, que aparecia dentro de
+  // qualquer ambiente de cliente. Usa o nome do ambiente.
+  const { tenant } = useTenant();
   const entry = MAP[location];
   const segs = location.split("/").filter(Boolean);
-  const secao = entry ? entry[0] : (segs.length > 1 ? prettify(segs[0]) : "Capital Go");
+  const secao = entry ? entry[0] : (segs.length > 1 ? prettify(segs[0]) : (tenant?.name || "Sistema"));
   const pagina = entry ? entry[1] : prettify(segs[segs.length - 1] || "Home");
 
   return (
