@@ -419,6 +419,20 @@ app.use((req, res, next) => {
           console.error("Permission templates migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — sessao ativa do usuario no BANCO. Antes vivia so num
+        // Map em memoria, que morre a cada deploy: ate ser repovoado, varias
+        // sessoes simultaneas voltavam a passar.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS active_session_id VARCHAR(255)
+          `);
+          log("Sessao ativa persistida migration OK");
+        } catch (migErr) {
+          console.error("Sessao ativa migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — meta por PRODUCAO ou por RENTABILIDADE.
         // Nasce sempre 'producao' para que toda meta ja existente continue
         // significando exatamente o que significava antes.

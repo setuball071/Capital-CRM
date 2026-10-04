@@ -312,6 +312,10 @@ function buildPrazoCards(s: SimState): PrazoCard[] {
 export default function SimuladorPortabilidadePage() {
   const { user } = useAuth();
   const { logoUrl, tenant } = useTenant();
+  // Em ambiente de assinante o PDF sai no nome de quem esta logado: nome e foto
+  // livres tiravam todo o atrito de varias pessoas dividirem um unico acesso.
+  // Na operacao propria (interno) segue livre.
+  const identidadeTravada = tenant?.interno !== true;
   const propostaCtx = useProposta();
   const [logoBase64, setLogoBase64] = useState<string>("");
 
@@ -436,7 +440,10 @@ export default function SimuladorPortabilidadePage() {
   }, [(user as any)?.avatarUrl]);
 
   // Foto final que entra no PDF: override manual > avatar do perfil
-  const fotoAtiva = consultorFotoOverride || avatarBase64;
+  // Travado: so a foto do perfil. Solto: a escolhida manualmente ganha.
+  const fotoAtiva = identidadeTravada
+    ? avatarBase64
+    : (consultorFotoOverride || avatarBase64);
 
   // Seleção de foto
   const handleFotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -602,7 +609,9 @@ export default function SimuladorPortabilidadePage() {
     const { fluxo, s, meses, parcMedia, taxaImpl } = cronograma;
     const isPrazoMaximo = fluxo.every(l => l.amortsCols.length === 0);
     const corretor = {
-      nome: pdfConsultorNome.trim() || user?.name || "Consultor",
+      nome: identidadeTravada
+        ? (user?.name || "Consultor")
+        : (pdfConsultorNome.trim() || user?.name || "Consultor"),
       tel: pdfConsultorTel.trim(),
     };
     // Foto do consultor: base64 se disponível e toggle ativo, senão iniciais
@@ -1421,11 +1430,19 @@ export default function SimuladorPortabilidadePage() {
                 <label>Seu Nome</label>
                 <input
                   type="text"
-                  value={pdfConsultorNome}
+                  value={identidadeTravada ? (user?.name || "") : pdfConsultorNome}
                   onChange={(e) => setPdfConsultorNome(e.target.value)}
+                  readOnly={identidadeTravada}
+                  title={identidadeTravada ? "O nome vem do seu acesso e não pode ser alterado" : undefined}
+                  style={identidadeTravada ? { background: "hsl(var(--muted))", cursor: "not-allowed" } : undefined}
                   placeholder="Ex: Maria Oliveira"
                   data-testid="input-pdf-consultor-nome"
                 />
+                {identidadeTravada && (
+                  <small style={{ fontSize: 10.5, color: "hsl(var(--muted-foreground))" }}>
+                    O nome vem do seu acesso. Para emitir no nome de outra pessoa, ela precisa do próprio usuário.
+                  </small>
+                )}
               </div>
               <div className="fg">
                 <label>Seu Título / Cargo</label>
@@ -1465,14 +1482,14 @@ export default function SimuladorPortabilidadePage() {
                   {/* Controles */}
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button
+                      {!identidadeTravada && <button
                         type="button"
                         onClick={() => fotoInputRef.current?.click()}
                         style={{ flex: 1, padding: "6px 10px", borderRadius: 7, border: "1.5px solid hsl(var(--primary))", background: "hsl(var(--card))", color: "hsl(var(--primary))", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
                       >
                         {fotoAtiva ? "Trocar foto" : "Escolher foto"}
-                      </button>
-                      {consultorFotoOverride && (
+                      </button>}
+                      {!identidadeTravada && consultorFotoOverride && (
                         <button
                           type="button"
                           onClick={() => setConsultorFotoOverride("")}

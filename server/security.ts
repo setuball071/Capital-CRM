@@ -373,30 +373,59 @@ export async function resetLoginAttempts(userId: number): Promise<void> {
 // Se uma requisição chegar com sessionId diferente do registrado, o antigo
 // é invalidado e o novo assume.
 
-// userId -> sessionId ativo
+// userId -> sessionId ativo. É só CACHE: a fonte é users.active_session_id,
+// porque este mapa morre a cada deploy e, até ser repovoado, varias sessoes
+// simultaneas voltavam a passar — justamente a janela que um assinante usaria
+// para compartilhar a conta.
 const activeSessionByUser = new Map<number, string>();
+
+async function lerSessaoAtiva(userId: number): Promise<string | null> {
+  const emMemoria = activeSessionByUser.get(userId);
+  if (emMemoria) return emMemoria;
+  try {
+    const r = await db.execute(
+      sql`SELECT active_session_id FROM users WHERE id = ${userId}`,
+    );
+    const gravado = (r.rows[0] as any)?.active_session_id as string | null;
+    if (gravado) activeSessionByUser.set(userId, gravado);
+    return gravado || null;
+  } catch {
+    return null; // banco fora: nao e motivo para barrar o acesso
+  }
+}
+
+async function gravarSessaoAtiva(userId: number, sessionId: string | null): Promise<void> {
+  if (sessionId) activeSessionByUser.set(userId, sessionId);
+  else activeSessionByUser.delete(userId);
+  try {
+    await db.execute(
+      sql`UPDATE users SET active_session_id = ${sessionId} WHERE id = ${userId}`,
+    );
+  } catch {
+    // Falha de escrita nao pode derrubar o login; o cache em memoria segura.
+  }
+}
 
 /**
  * Registra o sessionId ativo do usuário (chamado no login).
  * Se já havia outro sessionId, ele é derrubado — o novo assume.
  */
-export function registerSession(userId: number, sessionId: string): void {
-  const previous = activeSessionByUser.get(userId);
+export async function registerSession(userId: number, sessionId: string): Promise<void> {
+  const previous = await lerSessaoAtiva(userId);
   if (previous && previous !== sessionId) {
     console.warn(
       `[SECURITY] userId ${userId} logou em novo navegador — sessão anterior derrubada.`
     );
   }
-  activeSessionByUser.set(userId, sessionId);
+  await gravarSessaoAtiva(userId, sessionId);
 }
 
 /**
  * Remove o registro de sessão ao fazer logout.
  */
-export function unregisterSession(userId: number, sessionId: string): void {
-  if (activeSessionByUser.get(userId) === sessionId) {
-    activeSessionByUser.delete(userId);
-  }
+export async function unregisterSession(userId: number, sessionId: string): Promise<void> {
+  const atual = await lerSessaoAtiva(userId);
+  if (atual === sessionId) await gravarSessaoAtiva(userId, null);
 }
 
 /**
@@ -404,18 +433,13 @@ export function unregisterSession(userId: number, sessionId: string): void {
  *
  * Retorna TRUE se a sessão deve ser bloqueada (outro navegador assumiu).
  * Retorna FALSE se a sessão é válida (mesmas abas ou primeiro acesso).
- *
- * Lógica:
- * - Tabs do mesmo navegador compartilham o mesmo cookie → mesmo sessionId → FALSE ✅
- * - Outro navegador (ou celular) gera sessionId diferente → TRUE, derruba ✅
- * - Restart do servidor limpa o mapa → primeira requisição registra e retorna FALSE ✅
  */
-export function isSessionDisplaced(userId: number, sessionId: string): boolean {
-  const activeId = activeSessionByUser.get(userId);
+export async function isSessionDisplaced(userId: number, sessionId: string): Promise<boolean> {
+  const activeId = await lerSessaoAtiva(userId);
 
-  // Sem registro ainda (restart do servidor) → registra e deixa passar
+  // Nunca registrado (usuario novo ou base limpa) → registra e deixa passar
   if (!activeId) {
-    activeSessionByUser.set(userId, sessionId);
+    await gravarSessaoAtiva(userId, sessionId);
     return false;
   }
 

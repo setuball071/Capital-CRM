@@ -873,7 +873,7 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   // Outro navegador gera sessionId diferente → sessão antiga é derrubada
   if (process.env.NODE_ENV === "production") {
     const { isSessionDisplaced } = await import("./security");
-    if (isSessionDisplaced(user.id, req.session.id)) {
+    if (await isSessionDisplaced(user.id, req.session.id)) {
       req.session.destroy(() => {});
       return res.status(401).json({
         message: "Sessão encerrada — sua conta foi acessada em outro navegador.",
@@ -2491,7 +2491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Registra sessão para controle de simultâneas
-        registerSession(user.id, req.session.id);
+        registerSession(user.id, req.session.id).catch(() => {});
 
         // Ficha do ambiente: marca o último acesso do tenant (fire-and-forget)
         if (sessionTenantId) {
@@ -2550,7 +2550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const ip = getClientIp(req);
 
     if (userId && sessionId) {
-      unregisterSession(userId, sessionId);
+      unregisterSession(userId, sessionId).catch(() => {});
       logAudit({
         userId,
         action: "logout",
