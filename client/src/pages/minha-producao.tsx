@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, Pencil, Trash2, TrendingUp, Wallet, Clock, XCircle, CheckCircle2, Eye, Undo2 } from "lucide-react";
+import { Plus, Pencil, Trash2, TrendingUp, Wallet, Clock, XCircle, CheckCircle2, Eye, Undo2, Target } from "lucide-react";
 
 interface Registro {
   id: number;
@@ -106,6 +106,22 @@ export default function MinhaProducaoPage() {
       if (!res.ok) throw new Error(`Erro ao carregar (HTTP ${res.status})`);
       return res.json();
     },
+  });
+
+  // Meta pessoal: so aparece quando o gestor NAO definiu meta para o mes.
+  const { data: meta } = useQuery<{ metaPessoal: number; metaDoGestor: number | null }>({
+    queryKey: ["/api/minha-meta"],
+  });
+  const [metaAberta, setMetaAberta] = useState(false);
+  const [metaTexto, setMetaTexto] = useState("");
+  const salvarMeta = useMutation({
+    mutationFn: async (valor: number) => apiRequest("PUT", "/api/minha-meta", { metaPessoal: valor }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/minha-meta"] });
+      setMetaAberta(false);
+      toast({ title: "Meta salva", description: "Ela aparece no seu painel inicial." });
+    },
+    onError: () => toast({ title: "Não consegui salvar a meta", variant: "destructive" }),
   });
 
   const { data: parceiros = [] } = useQuery<{ id: number; nome: string }[]>({
@@ -236,6 +252,16 @@ export default function MinhaProducaoPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {meta && meta.metaDoGestor === null && (
+            <Button
+              variant="outline"
+              onClick={() => { setMetaTexto(String(meta.metaPessoal || "")); setMetaAberta(true); }}
+              data-testid="button-minha-meta"
+            >
+              <Target className="h-4 w-4 mr-1.5" />
+              {meta.metaPessoal > 0 ? `Meta: ${BRL(meta.metaPessoal)}` : "Definir minha meta"}
+            </Button>
+          )}
           <Input type="month" value={mes} onChange={(e) => setMes(e.target.value || mesAtual())} className="w-40" data-testid="input-mes" />
           <Button onClick={abrirNovo} data-testid="button-novo-registro">
             <Plus className="h-4 w-4 mr-1.5" /> Novo registro
@@ -361,6 +387,39 @@ export default function MinhaProducaoPage() {
       </Card>
 
       {/* Cadastro */}
+      <Dialog open={metaAberta} onOpenChange={setMetaAberta}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Minha meta do mês</DialogTitle>
+            <DialogDescription>
+              Quanto você quer vender neste mês. Ela aparece no seu painel inicial e só você a define.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="meta-pessoal">Valor (R$)</Label>
+            <Input
+              id="meta-pessoal"
+              inputMode="decimal"
+              placeholder="Ex: 150000"
+              value={metaTexto}
+              onChange={(e) => setMetaTexto(e.target.value.replace(/[^0-9.,]/g, ""))}
+              data-testid="input-meta-pessoal"
+            />
+            <p className="text-xs text-muted-foreground">Deixe 0 para não exibir meta no painel.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMetaAberta(false)}>Cancelar</Button>
+            <Button
+              onClick={() => salvarMeta.mutate(Number(metaTexto.replace(/\./g, "").replace(",", ".")) || 0)}
+              disabled={salvarMeta.isPending}
+              data-testid="button-salvar-meta"
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={aberto} onOpenChange={setAberto}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>

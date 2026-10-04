@@ -11623,6 +11623,47 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     },
   );
 
+  // Meta pessoal do corretor. Grava em users.meta_mensal, que o painel ja usa
+  // como segunda opcao: existindo meta do gestor em metas_individuais, ela
+  // continua mandando e esta aqui e ignorada.
+  app.get("/api/minha-meta", requireAuth, async (req: any, res) => {
+    try {
+      const [linha] = (await db.execute(
+        sql`SELECT meta_mensal FROM users WHERE id = ${req.user.id}`,
+      )).rows as any[];
+      const [doGestor] = (await db.execute(sql`
+        SELECT meta_geral FROM metas_individuais
+        WHERE usuario_id = ${req.user.id} AND tenant_id = ${req.tenantId ?? -1}
+          AND mes_referencia = ${new Date().toISOString().slice(0, 7)}
+        LIMIT 1
+      `)).rows as any[];
+      res.json({
+        metaPessoal: Number(linha?.meta_mensal ?? 0),
+        // A tela usa isto para avisar que a meta do gestor esta valendo.
+        metaDoGestor: doGestor ? Number(doGestor.meta_geral) : null,
+      });
+    } catch (error) {
+      console.error("Get minha meta error:", error);
+      res.status(500).json({ message: "Erro ao buscar a meta" });
+    }
+  });
+
+  app.put("/api/minha-meta", requireAuth, async (req: any, res) => {
+    try {
+      const valor = Number(req.body?.metaPessoal);
+      if (!Number.isFinite(valor) || valor < 0 || valor > 99999999) {
+        return res.status(400).json({ message: "Valor de meta invalido" });
+      }
+      await db.execute(
+        sql`UPDATE users SET meta_mensal = ${valor.toFixed(2)} WHERE id = ${req.user.id}`,
+      );
+      res.json({ metaPessoal: valor });
+    } catch (error) {
+      console.error("Put minha meta error:", error);
+      res.status(500).json({ message: "Erro ao salvar a meta" });
+    }
+  });
+
   // ===== ADMIN PEDIDOS LISTA - MASTER ONLY =====
 
   // GET /api/pedidos-lista/admin - Lista todos os pedidos com info do coordenador - MASTER ONLY
