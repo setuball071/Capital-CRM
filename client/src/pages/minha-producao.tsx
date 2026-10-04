@@ -109,13 +109,15 @@ export default function MinhaProducaoPage() {
   });
 
   // Meta pessoal: so aparece quando o gestor NAO definiu meta para o mes.
-  const { data: meta } = useQuery<{ metaPessoal: number; metaDoGestor: number | null }>({
+  const { data: meta } = useQuery<{ metaPessoal: number; metaTipo: string; metaDoGestor: number | null }>({
     queryKey: ["/api/minha-meta"],
   });
   const [metaAberta, setMetaAberta] = useState(false);
   const [metaTexto, setMetaTexto] = useState("");
+  const [metaTipo, setMetaTipo] = useState<"producao" | "rentabilidade">("producao");
   const salvarMeta = useMutation({
-    mutationFn: async (valor: number) => apiRequest("PUT", "/api/minha-meta", { metaPessoal: valor }),
+    mutationFn: async (valor: number) =>
+      apiRequest("PUT", "/api/minha-meta", { metaPessoal: valor, metaTipo }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/minha-meta"] });
       setMetaAberta(false);
@@ -255,7 +257,11 @@ export default function MinhaProducaoPage() {
           {meta && meta.metaDoGestor === null && (
             <Button
               variant="outline"
-              onClick={() => { setMetaTexto(String(meta.metaPessoal || "")); setMetaAberta(true); }}
+              onClick={() => {
+                setMetaTexto(String(meta.metaPessoal || ""));
+                setMetaTipo(meta.metaTipo === "rentabilidade" ? "rentabilidade" : "producao");
+                setMetaAberta(true);
+              }}
               data-testid="button-minha-meta"
             >
               <Target className="h-4 w-4 mr-1.5" />
@@ -395,7 +401,29 @@ export default function MinhaProducaoPage() {
               Quanto você quer vender neste mês. Ela aparece no seu painel inicial e só você a define.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>O que você quer medir</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ["producao", "Produção", "quanto você vende"],
+                  ["rentabilidade", "Ganho", "quanto você recebe"],
+                ] as const).map(([valor, titulo, nota]) => (
+                  <button
+                    key={valor}
+                    type="button"
+                    onClick={() => setMetaTipo(valor)}
+                    className={`rounded-md border p-2.5 text-left transition-colors ${
+                      metaTipo === valor ? "border-primary bg-primary/10" : "hover:bg-muted/50"
+                    }`}
+                    data-testid={`button-tipo-meta-${valor}`}
+                  >
+                    <span className="block text-sm font-medium">{titulo}</span>
+                    <span className="block text-[11px] text-muted-foreground">{nota}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <Label htmlFor="meta-pessoal">Valor (R$)</Label>
             <Input
               id="meta-pessoal"

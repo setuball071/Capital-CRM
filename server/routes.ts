@@ -11629,7 +11629,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
   app.get("/api/minha-meta", requireAuth, async (req: any, res) => {
     try {
       const [linha] = (await db.execute(
-        sql`SELECT meta_mensal FROM users WHERE id = ${req.user.id}`,
+        sql`SELECT meta_mensal, meta_tipo FROM users WHERE id = ${req.user.id}`,
       )).rows as any[];
       const [doGestor] = (await db.execute(sql`
         SELECT meta_geral FROM metas_individuais
@@ -11639,6 +11639,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
       `)).rows as any[];
       res.json({
         metaPessoal: Number(linha?.meta_mensal ?? 0),
+        metaTipo: (linha?.meta_tipo as string) || "producao",
         // A tela usa isto para avisar que a meta do gestor esta valendo.
         metaDoGestor: doGestor ? Number(doGestor.meta_geral) : null,
       });
@@ -11654,10 +11655,11 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
       if (!Number.isFinite(valor) || valor < 0 || valor > 99999999) {
         return res.status(400).json({ message: "Valor de meta invalido" });
       }
+      const tipo = req.body?.metaTipo === "rentabilidade" ? "rentabilidade" : "producao";
       await db.execute(
-        sql`UPDATE users SET meta_mensal = ${valor.toFixed(2)} WHERE id = ${req.user.id}`,
+        sql`UPDATE users SET meta_mensal = ${valor.toFixed(2)}, meta_tipo = ${tipo} WHERE id = ${req.user.id}`,
       );
-      res.json({ metaPessoal: valor });
+      res.json({ metaPessoal: valor, metaTipo: tipo });
     } catch (error) {
       console.error("Put minha meta error:", error);
       res.status(500).json({ message: "Erro ao salvar a meta" });
@@ -23123,8 +23125,11 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       // Pull meta from metas_individuais (priority) or fallback to user.metaMensal
       let metaMensal = 0;
       let metaCartao = 0;
+      // Cada meta carrega o proprio tipo. Meta antiga nasce como "producao",
+      // entao nada muda para quem ja usava.
+      let metaTipo = "producao";
       const metaIndResult = await db.execute(sql`
-        SELECT mi.meta_geral, mi.meta_cartao 
+        SELECT mi.meta_geral, mi.meta_cartao, mi.tipo_meta
         FROM metas_individuais mi
         WHERE mi.usuario_id = ${userId} AND mi.tenant_id = ${tenantId} AND mi.mes_referencia = ${mesRef}
         LIMIT 1
@@ -23134,11 +23139,31 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           parseFloat(metaIndResult.rows[0].meta_geral as string) || 0;
         metaCartao =
           parseFloat(metaIndResult.rows[0].meta_cartao as string) || 0;
+        metaTipo = (metaIndResult.rows[0].tipo_meta as string) || "producao";
       } else {
         metaMensal = user.metaMensal
           ? parseFloat(user.metaMensal as string)
           : 0;
+        metaTipo = (user as any).metaTipo || "producao";
       }
+
+      // Ganho do corretor no mes: o PREVISTO move a barra da meta de
+      // rentabilidade; o RECEBIDO aparece ao lado, porque o dinheiro entra
+      // semanas depois e a barra ficaria parada o mes inteiro.
+      const ganhoRes = await db.execute(sql`
+        SELECT
+          COALESCE(SUM(pc.comissao_repasse_valor), 0)::numeric AS previsto,
+          COALESCE(SUM(pc.comissao_repasse_valor) FILTER (
+            WHERE pc.status_comissao = 'pago' OR pc.data_pag_comissao IS NOT NULL
+          ), 0)::numeric AS recebido
+        FROM producoes_contratos pc
+        WHERE pc.vendedor_id = ${userId}
+          AND pc.tenant_id = ${tenantId}
+          AND pc.mes_referencia = ${mesRef}
+          AND pc.confirmado = true
+      `);
+      const ganhoPrevisto = parseFloat((ganhoRes.rows[0]?.previsto as string) || "0");
+      const ganhoRecebido = parseFloat((ganhoRes.rows[0]?.recebido as string) || "0");
 
       const calcDiasUteis = (start: Date, end: Date) => {
         let count = 0;
@@ -23339,16 +23364,21 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       // então projeção/saldo/% passam a ser contra a meta unificada.
       const metaUnificada = metaMensal + metaCartao;
 
+      // O que a meta mede: producao vendida ou ganho do corretor. Tudo que
+      // depende da meta (saldo, ritmo diario, projecao, %) usa este numero.
+      const realizadoMeta =
+        metaTipo === "rentabilidade" ? ganhoPrevisto : totalValor;
+
       const metaDiariaOriginal =
         diasUteisNoMes > 0 ? metaUnificada / diasUteisNoMes : 0;
-      const saldoDevedor = Math.max(0, metaUnificada - totalValor);
+      const saldoDevedor = Math.max(0, metaUnificada - realizadoMeta);
       const metaDiariaAjustada =
         diasUteisRestantes > 0 ? saldoDevedor / diasUteisRestantes : 0;
       const mediaAtual =
-        diasUteisAteHoje > 0 ? totalValor / diasUteisAteHoje : 0;
+        diasUteisAteHoje > 0 ? realizadoMeta / diasUteisAteHoje : 0;
       const projecaoMensal = mediaAtual * diasUteisNoMes;
       const percentualMeta =
-        metaUnificada > 0 ? (totalValor / metaUnificada) * 100 : 0;
+        metaUnificada > 0 ? (realizadoMeta / metaUnificada) * 100 : 0;
 
       const currentTier = getTierForValue(totalValor);
       const nextTier = getNextTierForValue(totalValor);
@@ -23519,6 +23549,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         vendedorNome: user.name,
         metaMensal,
         metaCartao,
+        metaTipo,
+        realizadoMeta: Math.round(realizadoMeta * 100) / 100,
+        ganhoPrevisto: Math.round(ganhoPrevisto * 100) / 100,
+        ganhoRecebido: Math.round(ganhoRecebido * 100) / 100,
         metaUnificada,
         deltaPercentual: Math.round(deltaPercentualV * 10) / 10,
         emAndamento: Math.round(emAndamento * 100) / 100,

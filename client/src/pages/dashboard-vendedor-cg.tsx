@@ -71,6 +71,10 @@ interface VendData {
   metaMensal: number;
   metaCartao: number;
   metaUnificada: number;
+  metaTipo?: "producao" | "rentabilidade";
+  realizadoMeta?: number;
+  ganhoPrevisto?: number;
+  ganhoRecebido?: number;
   totalNovo: number;
   totalPortabilidade: number;
   totalCartao: number;
@@ -122,7 +126,12 @@ function VendedorDashboard() {
 
   const [mm, yy] = (data.mesAno || "").split("/");
   const mesNome = MESES[parseInt(mm, 10) - 1] || "";
-  const efetivado = data.totalValor || 0;
+  // Meta de PRODUCAO mede o quanto foi vendido; a de RENTABILIDADE mede o
+  // ganho do corretor. Tudo abaixo compara com o numero certo.
+  const porGanho = data.metaTipo === "rentabilidade";
+  const efetivado = porGanho
+    ? (data.realizadoMeta ?? data.ganhoPrevisto ?? 0)
+    : (data.totalValor || 0);
   const meta = data.metaUnificada || (data.metaMensal || 0) + (data.metaCartao || 0);
   const pctMeta = meta > 0 ? Math.round((efetivado / meta) * 100) : 0;
   const falta = Math.max(0, data.saldoDevedor ?? meta - efetivado);
@@ -194,7 +203,7 @@ function VendedorDashboard() {
 
         <div style={{ display: "flex", gap: 48, flexWrap: "wrap", marginBottom: 20 }}>
           <div>
-            <div style={kpiLabel}><CheckCircle2 size={14} /> EFETIVADO NO MÊS</div>
+            <div style={kpiLabel}><CheckCircle2 size={14} /> {porGanho ? "GANHO NO MÊS" : "EFETIVADO NO MÊS"}</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
               <div style={{ ...kpiValue, fontSize: 38, letterSpacing: "-0.02em", ...num }}>{fmtCent(efetivado)}</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: t.textMuted, ...num }}>
@@ -206,7 +215,14 @@ function VendedorDashboard() {
                 </div>
               )}
             </div>
-            <div style={kpiHelper}>Meta do mês: {fmtCent(meta)}</div>
+            <div style={kpiHelper}>
+              Meta do mês: {fmtCent(meta)}{porGanho ? " · meta de ganho" : ""}
+            </div>
+            {porGanho && (
+              <div style={kpiHelper}>
+                Já recebido: {fmtCent(data.ganhoRecebido || 0)} — o restante entra conforme o banco paga.
+              </div>
+            )}
           </div>
           <div>
             <div style={kpiLabel}><Clock size={14} /> EM ANDAMENTO</div>

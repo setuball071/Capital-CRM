@@ -419,6 +419,27 @@ app.use((req, res, next) => {
           console.error("Permission templates migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — meta por PRODUCAO ou por RENTABILIDADE.
+        // Nasce sempre 'producao' para que toda meta ja existente continue
+        // significando exatamente o que significava antes.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          for (const tabela of ["metas_equipe", "metas_individuais"]) {
+            await migDb.execute(migSql`
+              ALTER TABLE ${migSql.raw(tabela)}
+              ADD COLUMN IF NOT EXISTS tipo_meta VARCHAR(20) NOT NULL DEFAULT 'producao'
+            `);
+          }
+          await migDb.execute(migSql`
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS meta_tipo VARCHAR(20) NOT NULL DEFAULT 'producao'
+          `);
+          log("Tipo de meta (producao/rentabilidade) migration OK");
+        } catch (migErr) {
+          console.error("Tipo de meta migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — pedidos_lista nasceu SEM ambiente: a tela de Filtros de
         // Base mostrava os pedidos de todos os clientes para qualquer um, com os
         // filtros usados, o volume e o valor pago. Coluna nova + preenchimento dos

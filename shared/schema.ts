@@ -275,6 +275,8 @@ export const users = pgTable("users", {
   ipsPermitidos: text("ips_permitidos"), // JSON array Ex: ["192.168.1.100", "192.168.1.101"]
   employeeId: integer("employee_id"), // References employees(id) - FK constraint exists in DB
   metaMensal: decimal("meta_mensal", { precision: 12, scale: 2 }),
+  // Tipo da meta pessoal: "producao" ou "rentabilidade"
+  metaTipo: varchar("meta_tipo", { length: 20 }).default("producao"),
   isDemo: boolean("is_demo").notNull().default(false),
   avatarUrl: text("avatar_url"),
   perfilDisc: varchar("perfil_disc", { length: 20 }),
@@ -2770,6 +2772,8 @@ export const commercialTeams = pgTable("commercial_teams", {
   }),
   ativa: boolean("ativa").default(true),
   metaMensal: decimal("meta_mensal", { precision: 12, scale: 2 }),
+  // Tipo da meta pessoal: "producao" ou "rentabilidade"
+  metaTipo: varchar("meta_tipo", { length: 20 }).default("producao"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -3273,6 +3277,8 @@ export const metasEquipe = pgTable(
       .references(() => commercialTeams.id, { onDelete: "cascade" })
       .notNull(),
     mesReferencia: varchar("mes_referencia", { length: 7 }).notNull(), // YYYY-MM
+    // "producao" = valor vendido | "rentabilidade" = ganho (comissao)
+    tipoMeta: varchar("tipo_meta", { length: 20 }).notNull().default("producao"),
     metaGeral: decimal("meta_geral", { precision: 14, scale: 2 })
       .notNull()
       .default("0"),
@@ -3312,6 +3318,8 @@ export const metasIndividuais = pgTable(
       .references(() => commercialTeams.id, { onDelete: "cascade" })
       .notNull(),
     mesReferencia: varchar("mes_referencia", { length: 7 }).notNull(), // YYYY-MM
+    // "producao" = valor vendido | "rentabilidade" = ganho (comissao)
+    tipoMeta: varchar("tipo_meta", { length: 20 }).notNull().default("producao"),
     metaGeral: decimal("meta_geral", { precision: 14, scale: 2 })
       .notNull()
       .default("0"),
