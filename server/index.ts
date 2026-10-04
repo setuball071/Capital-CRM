@@ -1195,6 +1195,19 @@ app.use((req, res, next) => {
           log(`⚠ Migração IA interna falhou (non-fatal): ${e}`);
         }
 
+        // Endereço da Anatel vem quebrado (logradouro, número, bairro). A coluna
+        // "endereco" só comporta o logradouro — sem estas duas, número e bairro
+        // se perdiam na importação.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`ALTER TABLE clientes_pessoa ADD COLUMN IF NOT EXISTS endereco_numero VARCHAR(20)`);
+          await migDb.execute(migSql`ALTER TABLE clientes_pessoa ADD COLUMN IF NOT EXISTS endereco_bairro VARCHAR(120)`);
+          log("✓ Migração endereço (numero/bairro) ok");
+        } catch (e) {
+          log(`⚠ Migração endereço falhou (non-fatal): ${e}`);
+        }
+
         // Permissões por item: telas que antes eram liberadas só por papel ganharam
         // chave própria (Contratos, Gestão Comercial, Caixa/Contas a Pagar...). Sem
         // isto, no primeiro deploy elas sumiriam de quem as usa hoje. Concede o que

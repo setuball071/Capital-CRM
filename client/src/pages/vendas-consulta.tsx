@@ -1469,9 +1469,9 @@ export default function VendasConsulta() {
                             return e && typeof e === "object" ? e : {};
                           })();
                           const logradouro = cb.endereco || lemitEnd.logradouro || "";
-                          const numero = lemitEnd.numero || "";
+                          const numero = cb.endereco_numero || cb.enderecoNumero || lemitEnd.numero || "";
                           const complemento = lemitEnd.complemento || "";
-                          const bairro = lemitEnd.bairro || "";
+                          const bairro = cb.endereco_bairro || cb.enderecoBairro || lemitEnd.bairro || "";
                           const cidade = cb.cidade || lemitEnd.cidade || cb.municipio || "";
                           const ufEnd = cb.endereco_uf || cb.enderecoUf || lemitEnd.uf || "";
                           const cep = cb.cep || lemitEnd.cep || "";
@@ -1545,8 +1545,7 @@ export default function VendasConsulta() {
                               {/* Mais informações: expande a PRÓPRIA caixa, sem modal.
                                   Só aparece quando há algo para mostrar — campo vazio
                                   não ganha linha. */}
-                              {(temEndereco || nomeMae || nomePai) && (
-                                <div className="md:col-span-2 lg:col-span-3">
+                              <div className="md:col-span-2 lg:col-span-3">
                                   <button
                                     type="button"
                                     onClick={() => setMaisInfoAberto((v) => !v)}
@@ -1564,39 +1563,46 @@ export default function VendasConsulta() {
                                   >
                                     <div className="overflow-hidden">
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-4">
-                                        {(nomeMae || nomePai) && (
-                                          <div className="space-y-1">
-                                            <p className="text-muted-foreground flex items-center gap-1">
-                                              <User className="w-4 h-4" />Filiação
-                                            </p>
-                                            {nomeMae && <p data-testid="text-nome-mae">Mãe: {nomeMae}</p>}
-                                            {nomePai && <p data-testid="text-nome-pai">Pai: {nomePai}</p>}
-                                          </div>
-                                        )}
+                                        <div className="space-y-1">
+                                          <p className="text-muted-foreground flex items-center gap-1">
+                                            <User className="w-4 h-4" />Filiação
+                                          </p>
+                                          <p data-testid="text-nome-mae">
+                                            <span className="text-muted-foreground">Mãe: </span>
+                                            {nomeMae || <span className="text-muted-foreground">Não informado</span>}
+                                          </p>
+                                          <p data-testid="text-nome-pai">
+                                            <span className="text-muted-foreground">Pai: </span>
+                                            {nomePai || <span className="text-muted-foreground">Não informado</span>}
+                                          </p>
+                                        </div>
 
-                                        {temEndereco && (
-                                          <div className="space-y-1">
-                                            <p className="text-muted-foreground flex items-center gap-1">
-                                              <MapPin className="w-4 h-4" />Endereço
-                                            </p>
-                                            {logradouro && (
+                                        <div className="space-y-1">
+                                          <p className="text-muted-foreground flex items-center gap-1">
+                                            <MapPin className="w-4 h-4" />Endereço
+                                          </p>
+                                          {temEndereco ? (
+                                            <>
                                               <p data-testid="text-endereco">
-                                                {logradouro}{numero ? `, ${numero}` : ""}{complemento ? ` — ${complemento}` : ""}
+                                                {logradouro || "Logradouro não informado"}
+                                                {numero ? `, ${numero}` : ""}
+                                                {complemento ? ` — ${complemento}` : ""}
                                               </p>
-                                            )}
-                                            {(bairro || cidade || ufEnd) && (
-                                              <p className="text-muted-foreground">
-                                                {[bairro, [cidade, ufEnd].filter(Boolean).join(" - ")].filter(Boolean).join(" · ")}
-                                              </p>
-                                            )}
-                                            {cep && <p className="text-muted-foreground">CEP {formatCep(cep)}</p>}
-                                          </div>
-                                        )}
+                                              {(bairro || cidade || ufEnd) && (
+                                                <p className="text-muted-foreground">
+                                                  {[bairro, [cidade, ufEnd].filter(Boolean).join(" - ")].filter(Boolean).join(" · ")}
+                                                </p>
+                                              )}
+                                              {cep && <p className="text-muted-foreground">CEP {formatCep(cep)}</p>}
+                                            </>
+                                          ) : (
+                                            <p className="text-muted-foreground" data-testid="text-endereco">Não informado</p>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
                                 </div>
-                              )}
                             </>
                           );
                         })()}

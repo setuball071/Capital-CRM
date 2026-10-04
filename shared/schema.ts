@@ -803,6 +803,10 @@ export const clientesPessoa = pgTable(
     cidade: varchar("cidade", { length: 150 }),
     enderecoUf: varchar("endereco_uf", { length: 10 }), // UF do endereço (separado do UF do órgão)
     cep: varchar("cep", { length: 10 }),
+    // A Anatel entrega o endereço quebrado; a coluna "endereco" guarda só o
+    // logradouro. Sem estas duas, número e bairro se perdiam na importação.
+    enderecoNumero: varchar("endereco_numero", { length: 20 }),
+    enderecoBairro: varchar("endereco_bairro", { length: 120 }),
   },
   (table) => ({
     // Chave única: CPF - uma pessoa por CPF
