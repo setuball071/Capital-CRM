@@ -1505,6 +1505,13 @@ export default function VendasConsulta() {
                           const ufEnd = cb.endereco_uf || cb.enderecoUf || lemitEnd.uf || "";
                           const cep = cb.cep || lemitEnd.cep || "";
                           const temEndereco = Boolean(logradouro || cidade || cep);
+                          // Uma linha só, do jeito que se cola num formulário de banco
+                          const enderecoCompleto = [
+                            [logradouro, numero].filter(Boolean).join(", ") + (complemento ? ` - ${complemento}` : ""),
+                            bairro,
+                            [cidade, ufEnd].filter(Boolean).join(" - "),
+                            cep ? `CEP ${formatCep(cep)}` : "",
+                          ].filter((parte) => parte && parte.trim()).join(", ");
                           const nomeMae = cb.nome_mae || cb.nomeMae || lemitEnd.nome_mae || "";
                           const nomePai = cb.nome_pai || cb.nomePai || "";
 
@@ -1596,9 +1603,22 @@ export default function VendasConsulta() {
                                           <p className="text-muted-foreground flex items-center gap-1">
                                             <User className="w-4 h-4" />Filiação
                                           </p>
-                                          <p data-testid="text-nome-mae">
-                                            <span className="text-muted-foreground">Mãe: </span>
-                                            {nomeMae || <span className="text-muted-foreground">Não informado</span>}
+                                          <p data-testid="text-nome-mae" className="flex items-start gap-1.5">
+                                            <span>
+                                              <span className="text-muted-foreground">Mãe: </span>
+                                              {nomeMae || <span className="text-muted-foreground">Não informado</span>}
+                                            </span>
+                                            {nomeMae && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleCopyPhone(nomeMae)}
+                                                className="text-muted-foreground hover:text-foreground shrink-0 mt-0.5"
+                                                title="Copiar nome da mãe"
+                                                data-testid="button-copiar-nome-mae"
+                                              >
+                                                <Copy className="h-3 w-3" />
+                                              </button>
+                                            )}
                                           </p>
                                           <p data-testid="text-nome-pai">
                                             <span className="text-muted-foreground">Pai: </span>
@@ -1609,6 +1629,17 @@ export default function VendasConsulta() {
                                         <div className="space-y-1">
                                           <p className="text-muted-foreground flex items-center gap-1">
                                             <MapPin className="w-4 h-4" />Endereço
+                                            {temEndereco && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleCopyPhone(enderecoCompleto)}
+                                                className="hover:text-foreground"
+                                                title="Copiar endereço completo"
+                                                data-testid="button-copiar-endereco"
+                                              >
+                                                <Copy className="h-3 w-3" />
+                                              </button>
+                                            )}
                                           </p>
                                           {temEndereco ? (
                                             <>
