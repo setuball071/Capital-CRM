@@ -11666,6 +11666,40 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     }
   });
 
+  // Preferencias de tela do proprio usuario (ordem das abas, etc).
+  // Ficam no banco para seguir a pessoa em qualquer computador.
+  app.get("/api/preferencias", requireAuth, async (req: any, res) => {
+    try {
+      const [linha] = (await db.execute(
+        sql`SELECT preferencias FROM users WHERE id = ${req.user.id}`,
+      )).rows as any[];
+      res.json(linha?.preferencias || {});
+    } catch (error) {
+      console.error("Get preferencias error:", error);
+      res.status(500).json({ message: "Erro ao buscar preferencias" });
+    }
+  });
+
+  app.put("/api/preferencias", requireAuth, async (req: any, res) => {
+    try {
+      const corpo = req.body;
+      if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) {
+        return res.status(400).json({ message: "Formato invalido" });
+      }
+      // Merge: mexer numa preferencia nao apaga as outras.
+      const [linha] = (await db.execute(sql`
+        UPDATE users
+        SET preferencias = COALESCE(preferencias, '{}'::jsonb) || ${JSON.stringify(corpo)}::jsonb
+        WHERE id = ${req.user.id}
+        RETURNING preferencias
+      `)).rows as any[];
+      res.json(linha?.preferencias || {});
+    } catch (error) {
+      console.error("Put preferencias error:", error);
+      res.status(500).json({ message: "Erro ao salvar preferencias" });
+    }
+  });
+
   // ===== ADMIN PEDIDOS LISTA - MASTER ONLY =====
 
   // GET /api/pedidos-lista/admin - Lista todos os pedidos com info do coordenador - MASTER ONLY

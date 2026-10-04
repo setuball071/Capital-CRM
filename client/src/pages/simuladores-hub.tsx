@@ -8,6 +8,8 @@ import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
 import { MatIcon } from "@/components/mat-icon";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 // Escuta postMessage do iframe do Simulador de Portabilidade e redireciona para o Criador de Proposta nativo
 function IframeBridge() {
@@ -72,7 +74,48 @@ export default function SimuladoresHub() {
   const { user, hasSubItemAccess } = useAuth();
   // Só as abas liberadas para o usuário. Sem permissão gravada, herda do módulo
   // (quem tem Simuladores continua vendo tudo), igual ao resto do sistema.
-  const tabsVisiveis = TABS.filter((t) => hasSubItemAccess("modulo_simulador", t.perm));
+  const tabsPermitidas = TABS.filter((t) => hasSubItemAccess("modulo_simulador", t.perm));
+
+  // Ordem das abas escolhida pelo usuario, guardada no banco para seguir ele em
+  // qualquer computador. Aba nova (ou sem ordem salva) vai para o fim, na ordem
+  // original — assim lancar um simulador novo nao bagunca quem ja organizou.
+  const queryClient = useQueryClient();
+  const { data: prefs } = useQuery<{ ordemSimuladores?: string[] }>({
+    queryKey: ["/api/preferencias"],
+  });
+  const ordemSalva = prefs?.ordemSimuladores;
+  const tabsVisiveis = (() => {
+    if (!Array.isArray(ordemSalva) || ordemSalva.length === 0) return tabsPermitidas;
+    const porId = new Map(tabsPermitidas.map((t) => [t.id, t]));
+    const ordenadas = ordemSalva.map((id) => porId.get(id)).filter(Boolean) as typeof tabsPermitidas;
+    const restantes = tabsPermitidas.filter((t) => !ordemSalva.includes(t.id));
+    return [...ordenadas, ...restantes];
+  })();
+
+  const arrastandoId = useRef<string | null>(null);
+  const arrastou = useRef(false);
+
+  const salvarOrdem = (novaOrdem: string[]) => {
+    queryClient.setQueryData(["/api/preferencias"], (antigo: any) => ({
+      ...(antigo || {}),
+      ordemSimuladores: novaOrdem,
+    }));
+    apiRequest("PUT", "/api/preferencias", { ordemSimuladores: novaOrdem }).catch(() => {
+      queryClient.invalidateQueries({ queryKey: ["/api/preferencias"] });
+    });
+  };
+
+  const soltarEm = (idDestino: string) => {
+    const idOrigem = arrastandoId.current;
+    arrastandoId.current = null;
+    if (!idOrigem || idOrigem === idDestino) return;
+    const ids = tabsVisiveis.map((t) => t.id);
+    const de = ids.indexOf(idOrigem);
+    const para = ids.indexOf(idDestino);
+    if (de < 0 || para < 0) return;
+    ids.splice(para, 0, ids.splice(de, 1)[0]);
+    salvarOrdem(ids);
+  };
   // Aba bloqueada (ou link direto com ?tab=) cai na primeira liberada; sem nenhuma
   // liberada, nenhum painel aparece.
   useEffect(() => {
@@ -153,7 +196,13 @@ export default function SimuladoresHub() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                draggable
+                onDragStart={() => { arrastandoId.current = tab.id; arrastou.current = false; }}
+                onDragOver={(e) => { e.preventDefault(); arrastou.current = true; }}
+                onDrop={(e) => { e.preventDefault(); soltarEm(tab.id); }}
+                onDragEnd={() => { arrastandoId.current = null; setTimeout(() => { arrastou.current = false; }, 0); }}
+                title="Arraste para reordenar"
+                onClick={() => { if (!arrastou.current) setActiveTab(tab.id); }}
                 style={{
                   fontFamily: "Inter, -apple-system, sans-serif",
                   fontSize: 13.5,
@@ -163,7 +212,8 @@ export default function SimuladoresHub() {
                   border: "none",
                   borderBottom: isActive ? "2px solid hsl(var(--primary))" : "2px solid transparent",
                   padding: "10px 16px",
-                  cursor: "pointer",
+                  // "grab" avisa que a aba pode ser arrastada sem precisar de texto
+                  cursor: "grab",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,

@@ -419,6 +419,20 @@ app.use((req, res, next) => {
           console.error("Permission templates migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — preferencias do usuario (ordem das abas etc).
+        // Coluna generica de proposito: a proxima preferencia nao precisa de
+        // outra migracao nem de outra coluna.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS preferencias JSONB NOT NULL DEFAULT '{}'::jsonb
+          `);
+          log("Preferencias do usuario migration OK");
+        } catch (migErr) {
+          console.error("Preferencias migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — sessao ativa do usuario no BANCO. Antes vivia so num
         // Map em memoria, que morre a cada deploy: ate ser repovoado, varias
         // sessoes simultaneas voltavam a passar.
