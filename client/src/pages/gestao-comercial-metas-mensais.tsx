@@ -22,6 +22,7 @@ interface MetaEquipe {
   mes_referencia: string;
   meta_geral: string;
   meta_cartao: string;
+  tipo_meta?: string;
 }
 
 interface MetaIndividual {
@@ -74,6 +75,9 @@ export default function MetasMensaisPage() {
   const [mesReferencia, setMesReferencia] = useState(getCurrentMonth());
   const [aba, setAba] = useState<"mensal" | "semanal">("mensal");
   const [equipeId, setEquipeId] = useState<string>("");
+  // Tipo da meta: "producao" (valor vendido) ou "rentabilidade" (ganho).
+  // Vale para a meta da equipe e para as individuais dela.
+  const [tipoMeta, setTipoMeta] = useState<"producao" | "rentabilidade">("producao");
   const [metaGeralEquipe, setMetaGeralEquipe] = useState("");
   const [metaCartaoEquipe, setMetaCartaoEquipe] = useState("");
   const [metasIndividuaisLocal, setMetasIndividuaisLocal] = useState<Record<number, { metaGeral: string; metaCartao: string }>>({});
@@ -133,9 +137,11 @@ export default function MetasMensaisPage() {
     if (metaEquipe) {
       setMetaGeralEquipe(metaEquipe.meta_geral || "0");
       setMetaCartaoEquipe(metaEquipe.meta_cartao || "0");
+      setTipoMeta(metaEquipe.tipo_meta === "rentabilidade" ? "rentabilidade" : "producao");
     } else {
       setMetaGeralEquipe("0");
       setMetaCartaoEquipe("0");
+      setTipoMeta("producao");
     }
   }, [metaEquipe]);
 
@@ -154,6 +160,7 @@ export default function MetasMensaisPage() {
         mesReferencia,
         metaGeral: parseFloat(metaGeralEquipe) || 0,
         metaCartao: parseFloat(metaCartaoEquipe) || 0,
+        tipoMeta,
       });
     },
     onSuccess: () => {
@@ -177,6 +184,7 @@ export default function MetasMensaisPage() {
         metas,
         equipeId: parseInt(equipeId),
         mesReferencia,
+        tipoMeta,
       });
     },
     onSuccess: () => {
@@ -339,6 +347,38 @@ export default function MetasMensaisPage() {
             )}
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">O que a meta mede</label>
+              {canEdit && !isMonthLocked ? (
+                <div className="grid grid-cols-2 gap-2 max-w-md">
+                  {([
+                    ["producao", "Produção", "valor vendido"],
+                    ["rentabilidade", "Rentabilidade", "ganho do corretor"],
+                  ] as const).map(([valor, titulo, nota]) => (
+                    <button
+                      key={valor}
+                      type="button"
+                      onClick={() => setTipoMeta(valor)}
+                      className={`rounded-md border p-2.5 text-left transition-colors ${
+                        tipoMeta === valor ? "border-primary bg-primary/10" : "hover:bg-muted/50"
+                      }`}
+                      data-testid={`button-tipo-meta-${valor}`}
+                    >
+                      <span className="block text-sm font-medium">{titulo}</span>
+                      <span className="block text-[11px] text-muted-foreground">{nota}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm font-semibold">
+                  {tipoMeta === "rentabilidade" ? "Rentabilidade (ganho)" : "Produção (valor vendido)"}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Vale para a meta da equipe e para as individuais dela. Mudar aqui e salvar aplica nas duas.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium flex items-center gap-1.5">

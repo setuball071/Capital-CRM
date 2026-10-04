@@ -26642,6 +26642,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
       const { equipeId, mesReferencia, metaGeral, metaCartao } = req.body;
+      // Sem tipo informado, mantem "producao" — o comportamento historico.
+      const tipoMeta =
+        req.body?.tipoMeta === "rentabilidade" ? "rentabilidade" : "producao";
 
       if (!equipeId || !mesReferencia) {
         return res
@@ -26661,11 +26664,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const mc = parseFloat(metaCartao) || 0;
 
       const result = await db.execute(sql`
-        INSERT INTO metas_equipe (tenant_id, equipe_id, mes_referencia, meta_geral, meta_cartao)
-        VALUES (${tenantId}, ${equipeId}, ${mesReferencia}, ${mg}, ${mc})
+        INSERT INTO metas_equipe (tenant_id, equipe_id, mes_referencia, meta_geral, meta_cartao, tipo_meta)
+        VALUES (${tenantId}, ${equipeId}, ${mesReferencia}, ${mg}, ${mc}, ${tipoMeta})
         ON CONFLICT (tenant_id, equipe_id, mes_referencia) DO UPDATE SET
           meta_geral = EXCLUDED.meta_geral,
-          meta_cartao = EXCLUDED.meta_cartao
+          meta_cartao = EXCLUDED.meta_cartao,
+          tipo_meta = EXCLUDED.tipo_meta
         RETURNING *
       `);
 
@@ -26890,6 +26894,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
       const { usuarioId, equipeId, mesReferencia, metaGeral, metaCartao } =
         req.body;
+      // Sem tipo informado, mantem "producao" — o comportamento historico.
+      const tipoMeta =
+        req.body?.tipoMeta === "rentabilidade" ? "rentabilidade" : "producao";
 
       if (!usuarioId || !equipeId || !mesReferencia) {
         return res.status(400).json({
@@ -26909,11 +26916,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const mc = parseFloat(metaCartao) || 0;
 
       const result = await db.execute(sql`
-        INSERT INTO metas_individuais (tenant_id, usuario_id, equipe_id, mes_referencia, meta_geral, meta_cartao)
-        VALUES (${tenantId}, ${usuarioId}, ${equipeId}, ${mesReferencia}, ${mg}, ${mc})
+        INSERT INTO metas_individuais (tenant_id, usuario_id, equipe_id, mes_referencia, meta_geral, meta_cartao, tipo_meta)
+        VALUES (${tenantId}, ${usuarioId}, ${equipeId}, ${mesReferencia}, ${mg}, ${mc}, ${tipoMeta})
         ON CONFLICT (tenant_id, usuario_id, equipe_id, mes_referencia) DO UPDATE SET
           meta_geral = EXCLUDED.meta_geral,
-          meta_cartao = EXCLUDED.meta_cartao
+          meta_cartao = EXCLUDED.meta_cartao,
+          tipo_meta = EXCLUDED.tipo_meta
         RETURNING *
       `);
 
@@ -26937,6 +26945,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
 
       const { metas, equipeId, mesReferencia } = req.body;
+      const tipoMetaLote =
+        req.body?.tipoMeta === "rentabilidade" ? "rentabilidade" : "producao";
 
       if (!Array.isArray(metas) || !equipeId || !mesReferencia) {
         return res.status(400).json({
@@ -26957,11 +26967,12 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const mg = parseFloat(meta.metaGeral) || 0;
         const mc = parseFloat(meta.metaCartao) || 0;
         const result = await db.execute(sql`
-          INSERT INTO metas_individuais (tenant_id, usuario_id, equipe_id, mes_referencia, meta_geral, meta_cartao)
-          VALUES (${tenantId}, ${meta.usuarioId}, ${equipeId}, ${mesReferencia}, ${mg}, ${mc})
+          INSERT INTO metas_individuais (tenant_id, usuario_id, equipe_id, mes_referencia, meta_geral, meta_cartao, tipo_meta)
+          VALUES (${tenantId}, ${meta.usuarioId}, ${equipeId}, ${mesReferencia}, ${mg}, ${mc}, ${meta.tipoMeta === "rentabilidade" ? "rentabilidade" : tipoMetaLote})
           ON CONFLICT (tenant_id, usuario_id, equipe_id, mes_referencia) DO UPDATE SET
             meta_geral = EXCLUDED.meta_geral,
-            meta_cartao = EXCLUDED.meta_cartao
+            meta_cartao = EXCLUDED.meta_cartao,
+            tipo_meta = EXCLUDED.tipo_meta
           RETURNING *
         `);
         results.push(result.rows[0]);
