@@ -807,6 +807,8 @@ export const clientesPessoa = pgTable(
     // logradouro. Sem estas duas, número e bairro se perdiam na importação.
     enderecoNumero: varchar("endereco_numero", { length: 20 }),
     enderecoBairro: varchar("endereco_bairro", { length: 120 }),
+    // Filiação: só a mãe. A base da Serasa não guardou nome do pai.
+    nomeMae: varchar("nome_mae", { length: 200 }),
   },
   (table) => ({
     // Chave única: CPF - uma pessoa por CPF

@@ -1203,7 +1203,8 @@ app.use((req, res, next) => {
           const { sql: migSql } = await import("drizzle-orm");
           await migDb.execute(migSql`ALTER TABLE clientes_pessoa ADD COLUMN IF NOT EXISTS endereco_numero VARCHAR(20)`);
           await migDb.execute(migSql`ALTER TABLE clientes_pessoa ADD COLUMN IF NOT EXISTS endereco_bairro VARCHAR(120)`);
-          log("✓ Migração endereço (numero/bairro) ok");
+          await migDb.execute(migSql`ALTER TABLE clientes_pessoa ADD COLUMN IF NOT EXISTS nome_mae VARCHAR(200)`);
+          log("✓ Migração endereço (numero/bairro) + filiação (nome_mae) ok");
         } catch (e) {
           log(`⚠ Migração endereço falhou (non-fatal): ${e}`);
         }
