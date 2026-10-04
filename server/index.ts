@@ -1195,6 +1195,36 @@ app.use((req, res, next) => {
           log(`⚠ Migração IA interna falhou (non-fatal): ${e}`);
         }
 
+        // Consumo de leads por ambiente e por mês. Conta tudo que é GERADO
+        // (repetido ou não), que é a regra combinada com o Fábio.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS consumo_leads (
+              id             SERIAL PRIMARY KEY,
+              tenant_id      INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              mes_referencia VARCHAR(7) NOT NULL,
+              quantidade     INTEGER NOT NULL DEFAULT 0,
+              atualizado_em  TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_consumo_leads_mes ON consumo_leads(tenant_id, mes_referencia)
+          `);
+          // Teto mensal de cada plano (jsonb limites.leadsMes)
+          for (const [nome, teto] of [["Essencial", 4000], ["Profissional", 10000], ["Elite", 50000]] as const) {
+            await migDb.execute(migSql`
+              UPDATE planos
+              SET limites = COALESCE(limites, '{}'::jsonb) || jsonb_build_object('leadsMes', ${teto})
+              WHERE nome = ${nome} AND COALESCE(limites->>'leadsMes', '') = ''
+            `);
+          }
+          log("✓ Migração consumo de leads + tetos por plano ok");
+        } catch (e) {
+          log(`⚠ Migração consumo de leads falhou (non-fatal): ${e}`);
+        }
+
         // Endereço da Anatel vem quebrado (logradouro, número, bairro). A coluna
         // "endereco" só comporta o logradouro — sem estas duas, número e bairro
         // se perdiam na importação.

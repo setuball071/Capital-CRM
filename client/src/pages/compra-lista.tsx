@@ -223,6 +223,13 @@ export default function CompraLista() {
 
   // retry: o padrão do app é não repetir, e uma falha pontual (deploy, rede)
   // deixava o filtro vazio até dar F5 — parecia que não havia situação nenhuma.
+  // Contador do mês: todo lead gerado conta, repetido ou não
+  const { data: consumo } = useQuery<{ mes: string; usados: number; limite: number | null; plano: string | null; restantes: number | null }>({
+    queryKey: ["/api/leads/consumo"],
+    refetchOnWindowFocus: true,
+    staleTime: 60_000,
+  });
+
   const { data: sitFuncOpcoes = [], isLoading: carregandoSitFunc, isError: erroSitFunc } = useQuery<string[]>({
     queryKey: ["/api/clientes/filtros/sit-func"],
     retry: 2,
@@ -407,15 +414,6 @@ export default function CompraLista() {
     criarPedidoMutation.mutate({ filtros, pacoteSelecionado: selectedPacote });
   };
   
-  const getPacoteAtivo = () => {
-    if (!simulacao) return null;
-    return selectedPacote || {
-      nomePacote: simulacao.nomePacote,
-      quantidadeMaxima: simulacao.quantidadePacote,
-      preco: simulacao.precoTotal
-    };
-  };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "concluido":
@@ -494,15 +492,6 @@ export default function CompraLista() {
     return parts.length > 0 ? parts.join(" | ") : "Sem filtros";
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  };
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div>
@@ -527,9 +516,29 @@ export default function CompraLista() {
         <TabsContent value="nova" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="w-5 h-5" />
-                Filtros
+              <CardTitle className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <Filter className="w-5 h-5" />
+                  Filtros
+                </span>
+                {consumo && (
+                  <span
+                    className="text-sm font-normal text-muted-foreground"
+                    data-testid="text-consumo-leads"
+                    title="Conta todo lead gerado no mês, repetido ou não"
+                  >
+                    Leads no mês:{" "}
+                    <strong className={consumo.limite != null && consumo.usados >= consumo.limite ? "text-destructive" : "text-foreground"}>
+                      {consumo.usados.toLocaleString("pt-BR")}
+                    </strong>
+                    {consumo.limite != null && (
+                      <>
+                        {" "}de {consumo.limite.toLocaleString("pt-BR")}
+                        {consumo.plano ? ` · plano ${consumo.plano}` : ""}
+                      </>
+                    )}
+                  </span>
+                )}
               </CardTitle>
               <CardDescription>
                 Selecione os filtros para encontrar os clientes desejados
@@ -996,87 +1005,6 @@ export default function CompraLista() {
                   </div>
                 ) : (
                   <>
-                    {/* Pacote selecionado (manual ou automático) */}
-                    {(() => {
-                      const pacoteAtivo = selectedPacote || {
-                        nomePacote: simulacao.nomePacote,
-                        quantidadeMaxima: simulacao.quantidadePacote,
-                        preco: simulacao.precoTotal
-                      };
-                      return (
-                        <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
-                          <ShoppingCart className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="font-semibold text-green-900 dark:text-green-100 text-lg">
-                                  {pacoteAtivo.nomePacote}
-                                  {selectedPacote && (
-                                    <Badge variant="secondary" className="ml-2 text-xs">Seleção manual</Badge>
-                                  )}
-                                </p>
-                                <p className="text-sm text-green-700 dark:text-green-300">
-                                  Atende até {pacoteAtivo.quantidadeMaxima.toLocaleString("pt-BR")} registros
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-                                  {formatCurrency(pacoteAtivo.preco)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Tabela de pacotes - clicáveis para seleção */}
-                    <div className="p-4 bg-muted/30 rounded-lg">
-                      <p className="text-sm font-medium mb-3">Escolha um pacote (clique para selecionar):</p>
-                      <div className="grid grid-cols-4 gap-2 text-xs">
-                        {simulacao.pacotes.map((p) => {
-                          const isSelected = selectedPacote?.nomePacote === p.nomePacote;
-                          const isAutomatic = !selectedPacote && p.nomePacote === simulacao.nomePacote;
-                          const isActive = isSelected || isAutomatic;
-                          
-                          return (
-                            <button
-                              type="button"
-                              key={p.nomePacote} 
-                              onClick={() => {
-                                if (p.nomePacote === simulacao.nomePacote) {
-                                  setSelectedPacote(null);
-                                } else {
-                                  setSelectedPacote(p);
-                                }
-                              }}
-                              className={`p-2 rounded text-center cursor-pointer transition-colors hover-elevate ${
-                                isActive
-                                  ? "bg-green-100 dark:bg-green-900/50 border-2 border-green-500" 
-                                  : "bg-background border hover:border-green-300"
-                              }`}
-                              data-testid={`button-pacote-${p.nomePacote.toLowerCase().replace(/\s+/g, '-')}`}
-                            >
-                              <p className="font-medium">{p.nomePacote}</p>
-                              <p className="text-muted-foreground">{formatCurrency(p.preco)}</p>
-                              {isAutomatic && !isSelected && (
-                                <Badge variant="outline" className="mt-1 text-[10px]">Sugerido</Badge>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {selectedPacote && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="mt-2"
-                          onClick={() => setSelectedPacote(null)}
-                        >
-                          Usar pacote sugerido
-                        </Button>
-                      )}
-                    </div>
 
                     <div className="text-sm text-muted-foreground mb-4">
                       Mostrando prévia dos primeiros {Math.min(10, simulacao.preview.length)} registros:
@@ -1145,7 +1073,7 @@ export default function CompraLista() {
                         ) : (
                           <>
                             <ShoppingCart className="w-4 h-4 mr-2" />
-                            Gerar Filtro ({simulacao.total.toLocaleString("pt-BR")} registros – {getPacoteAtivo()?.nomePacote} – {formatCurrency(getPacoteAtivo()?.preco || 0)})
+                            Gerar Filtro ({simulacao.total.toLocaleString("pt-BR")} registros)
                           </>
                         )}
                       </Button>
@@ -1186,7 +1114,6 @@ export default function CompraLista() {
                       <TableHead>ID</TableHead>
                       <TableHead>Filtros</TableHead>
                       <TableHead>Quantidade</TableHead>
-                      <TableHead>Valor Estimado</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Criado em</TableHead>
                       <TableHead>Ações</TableHead>
@@ -1212,12 +1139,6 @@ export default function CompraLista() {
                           </Tooltip>
                         </TableCell>
                         <TableCell>{pedido.quantidadeRegistros?.toLocaleString("pt-BR") || 0}</TableCell>
-                        <TableCell>
-                          {pedido.custoEstimado 
-                            ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(parseFloat(pedido.custoEstimado))
-                            : "-"
-                          }
-                        </TableCell>
                         <TableCell>{getStatusBadge(pedido.status)}</TableCell>
                         <TableCell>
                           {format(new Date(pedido.criadoEm), "dd/MM/yyyy HH:mm", { locale: ptBR })}
@@ -1361,14 +1282,6 @@ export default function CompraLista() {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Registros</p>
                   <p className="text-sm font-medium">
                     {selectedPedido.quantidadeRegistros?.toLocaleString("pt-BR") || 0}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Valor Estimado</p>
-                  <p className="text-sm font-medium">
-                    {selectedPedido.custoEstimado
-                      ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(parseFloat(selectedPedido.custoEstimado))
-                      : "-"}
                   </p>
                 </div>
                 <div className="space-y-1">

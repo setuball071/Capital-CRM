@@ -10730,6 +10730,57 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     },
   );
 
+  // ── Consumo de leads por ambiente/mês ───────────────────────────────────────
+  // Conta tudo que é GERADO, repetido ou não: é assim que o plano é vendido.
+  const mesAtual = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  async function registrarConsumoLeads(tenantId: number | null | undefined, qtd: number) {
+    if (!tenantId || !qtd || qtd <= 0) return;
+    try {
+      await db.execute(sql`
+        INSERT INTO consumo_leads (tenant_id, mes_referencia, quantidade)
+        VALUES (${tenantId}, ${mesAtual()}, ${qtd})
+        ON CONFLICT (tenant_id, mes_referencia)
+        DO UPDATE SET quantidade = consumo_leads.quantidade + ${qtd}, atualizado_em = NOW()
+      `);
+    } catch (e) {
+      // Contador nunca derruba geração de lead
+      console.error("[CONSUMO] falha ao registrar leads:", e);
+    }
+  }
+
+  // GET /api/leads/consumo - quanto já foi gerado no mês e qual o teto do plano
+  app.get("/api/leads/consumo", requireAuth, async (req: any, res) => {
+    try {
+      const tenantId = req.tenantId!;
+      const mes = mesAtual();
+      const [uso] = (await db.execute(sql`
+        SELECT quantidade FROM consumo_leads WHERE tenant_id = ${tenantId} AND mes_referencia = ${mes}
+      `)).rows as any[];
+      const [plano] = (await db.execute(sql`
+        SELECT p.nome, (p.limites->>'leadsMes')::int AS teto
+        FROM subscriptions s JOIN planos p ON p.id = s.plano_id
+        WHERE s.tenant_id = ${tenantId}
+        LIMIT 1
+      `)).rows as any[];
+      const usados = Number(uso?.quantidade || 0);
+      const teto = plano?.teto != null ? Number(plano.teto) : null;
+      return res.json({
+        mes,
+        usados,
+        limite: teto,
+        plano: plano?.nome || null,
+        restantes: teto != null ? Math.max(teto - usados, 0) : null,
+      });
+    } catch (error) {
+      console.error("Get consumo leads error:", error);
+      return res.status(500).json({ message: "Erro ao buscar consumo de leads" });
+    }
+  });
+
   // Lista de situações funcionais por ambiente — cache de 10 min (ver rota)
   const cacheSitFunc = new Map<number, { valores: string[]; em: number }>();
 
@@ -11934,6 +11985,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
       console.log(
         `[PedidoLista] Package limit: ${packageLimit}, Records to export: ${recordsToExport}`,
       );
+
+      // Exportação também consome cota: o lead saiu da base.
+      await registrarConsumoLeads(pedido.tenantId, recordsToExport);
 
       if (recordsToExport === 0) {
         console.log(
@@ -14951,6 +15005,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         }));
 
         const insertedCount = await storage.createSalesLeadsBulk(leads);
+        await registrarConsumoLeads(req.tenantId, insertedCount);
 
         // Quem não distribui equipe, trabalha a própria lista: o corretor que fez
         // o filtro recebe os leads na hora, em vez de a campanha ficar esperando
