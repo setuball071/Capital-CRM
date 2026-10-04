@@ -10730,6 +10730,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     },
   );
 
+  // Lista de situações funcionais por ambiente — cache de 10 min (ver rota)
+  const cacheSitFunc = new Map<number, { valores: string[]; em: number }>();
+
   app.get(
     "/api/clientes/filtros/sit-func",
     requireAuth,
@@ -10737,6 +10740,12 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     async (req, res) => {
       try {
         const tenantId = req.tenantId!;
+        // DISTINCT em 2 milhões de vínculos custa ~3s e a lista quase nunca muda.
+        // Guardar por 10 min tira o peso do filtro, que é aberto o tempo todo.
+        const emCache = cacheSitFunc.get(tenantId);
+        if (emCache && Date.now() - emCache.em < 10 * 60_000) {
+          return res.json(emCache.valores);
+        }
         const result = await db.execute(sql`
           SELECT DISTINCT sit_func
           FROM clientes_vinculo
@@ -10748,6 +10757,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           ORDER BY sit_func
         `);
         const valores = result.rows.map((r: any) => r.sit_func as string);
+        cacheSitFunc.set(tenantId, { valores, em: Date.now() });
         return res.json(valores);
       } catch (error) {
         console.error("Get sit-func filtros error:", error);

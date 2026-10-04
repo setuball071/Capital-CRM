@@ -221,8 +221,12 @@ export default function CompraLista() {
     queryKey: ["/api/clientes/filtros/bases"],
   });
 
-  const { data: sitFuncOpcoes = [] } = useQuery<string[]>({
+  // retry: o padrão do app é não repetir, e uma falha pontual (deploy, rede)
+  // deixava o filtro vazio até dar F5 — parecia que não havia situação nenhuma.
+  const { data: sitFuncOpcoes = [], isLoading: carregandoSitFunc, isError: erroSitFunc } = useQuery<string[]>({
     queryKey: ["/api/clientes/filtros/sit-func"],
+    retry: 2,
+    retryDelay: 1000,
   });
 
   // Nomenclaturas (RUBRICA + TIPO_CONTRATO) para traduzir códigos em nome amigável
@@ -645,9 +649,13 @@ export default function CompraLista() {
                       const mapped = v.map(val => val === "Sem situação funcional" ? "__VAZIO__" : val);
                       setFiltros({ ...filtros, sit_func: mapped.length > 0 ? mapped : undefined });
                     }}
-                    placeholder="Todas as situações"
+                    placeholder={carregandoSitFunc ? "Carregando situações..." : "Todas as situações"}
                     searchPlaceholder="Buscar situação..."
-                    emptyText="Nenhuma situação encontrada."
+                    emptyText={
+                      carregandoSitFunc ? "Carregando..."
+                        : erroSitFunc ? "Não foi possível carregar — recarregue a página."
+                        : "Nenhuma situação encontrada."
+                    }
                     data-testid="multiselect-sit-func"
                   />
                 </div>
