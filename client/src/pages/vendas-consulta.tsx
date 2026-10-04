@@ -23,7 +23,8 @@ import { Switch } from "@/components/ui/switch";
 import { 
   Loader2, Phone, MessageSquare, Mail, User, Building, Building2, CreditCard, Search,
   Landmark, Briefcase, Copy, Calendar, MapPin, Database, Calculator, Star,
-  Plus, Pencil, Trash2, Save, SkipForward, Target, History, AlertCircle, AlertTriangle, Info
+  Plus, Pencil, Trash2, Save, SkipForward, Target, History, AlertCircle, AlertTriangle, Info,
+  ChevronDown
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowLeftRight } from "lucide-react";
@@ -185,6 +186,22 @@ function formatPhone(phone: string | null | undefined): string {
   return phone;
 }
 
+// Glifo do WhatsApp — o lucide não tem marca, e o balão genérico não era
+// reconhecido de imediato na ficha.
+function IconeWhatsApp({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.53.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.05 1.02-1.05 2.49s1.08 2.89 1.23 3.09c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.71.64.72.23 1.37.2 1.89.12.58-.09 1.76-.72 2.01-1.42.25-.7.25-1.29.17-1.42-.07-.13-.27-.2-.57-.35z" />
+      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2zm0 18.01h-.01c-1.52 0-3.02-.41-4.32-1.18l-.31-.18-3.21.84.86-3.13-.2-.32a8.2 8.2 0 01-1.26-4.37c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.82 2.42a8.17 8.17 0 012.41 5.82c0 4.54-3.7 8.23-8.23 8.23z" />
+    </svg>
+  );
+}
+
+function formatCep(cep: string | null | undefined): string {
+  const limpo = String(cep || "").replace(/\D/g, "");
+  return limpo.length === 8 ? `${limpo.slice(0, 5)}-${limpo.slice(5)}` : String(cep || "");
+}
+
 function formatProperName(name: string | null | undefined): string {
   if (!name) return "";
   const prepositions = ["de", "da", "do", "das", "dos", "e"];
@@ -271,6 +288,8 @@ export default function VendasConsulta() {
   const [selectedHistoricoItem, setSelectedHistoricoItem] = useState<HistoricoFolhaItem | null>(null);
   
   const [contatosModalOpen, setContatosModalOpen] = useState(false);
+  // "Mais informações" expande a própria caixa de Dados do Cliente (filiação e endereço)
+  const [maisInfoAberto, setMaisInfoAberto] = useState(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addToPipeline, setAddToPipeline] = useState(true);
@@ -1143,21 +1162,9 @@ export default function VendasConsulta() {
               </div>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setContatosModalOpen(true)}
-                data-testid="button-painel-contato"
-              >
-                <Phone className="h-4 w-4 mr-2" />
-                Contatos
-                <Badge variant="outline" className="ml-2" data-testid="text-contatos-count">
-                  {(() => {
-                    const telCount = (consultaData?.higienizacao?.telefones?.length || 0) + phoneContacts.length;
-                    const emailCount = (consultaData?.higienizacao?.emails?.length || 0) + emailContacts.length;
-                    return `${telCount + emailCount}`;
-                  })()}
-                </Badge>
-              </Button>
+              {/* O botão "Contatos" saiu daqui: telefone e e-mail agora ficam à vista
+                  dentro de Dados do Cliente. O modal continua, aberto pelo lápis do
+                  bloco de contato, para editar e acrescentar. */}
               <Button
                 onClick={() => setDrawerOpen(true)}
                 data-testid="button-registrar-atendimento"
@@ -1399,14 +1406,9 @@ export default function VendasConsulta() {
                             {siapeDados?.uf_siape || consultaData.vinculo?.natureza || consultaData.clienteBase?.natureza || "-"}
                           </p>
                         </div>
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground">Cargo</p>
-                          <p data-testid="text-cargo">{siapeDados?.cargo || "-"}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground">Função</p>
-                          <p data-testid="text-funcao">{siapeDados?.funcao || "-"}</p>
-                        </div>
+                        {/* Cargo e Função saíram: a folha não traz cargo (coluna vazia em
+                            1,36 milhão de linhas) e função não existe em base nenhuma —
+                            eram dois traços ocupando espaço. */}
                         <div className="space-y-1">
                           <p className="text-muted-foreground">UPAG</p>
                           <p data-testid="text-upag">
@@ -1458,21 +1460,40 @@ export default function VendasConsulta() {
                             ...emailContacts.map((c) => c.value),
                           ])).filter(Boolean);
 
-                          const cb = consultaData.clienteBase || {};
-                          const logradouro = cb.endereco || "";
-                          const cidade = cb.cidade || cb.municipio || "";
-                          const ufEnd = cb.endereco_uf || cb.enderecoUf || "";
-                          const cep = cb.cep || "";
+                          const cb: any = consultaData.clienteBase || {};
+                          // O cache do Lemit guarda endereço detalhado (bairro, número);
+                          // a base própria só tem logradouro, cidade, UF e CEP (Anatel).
+                          const lemitEnd = (() => {
+                            const d = cb.lemitData || cb.lemit_data;
+                            const e = d?.enderecos?.[0] || d?.endereco;
+                            return e && typeof e === "object" ? e : {};
+                          })();
+                          const logradouro = cb.endereco || lemitEnd.logradouro || "";
+                          const numero = lemitEnd.numero || "";
+                          const complemento = lemitEnd.complemento || "";
+                          const bairro = lemitEnd.bairro || "";
+                          const cidade = cb.cidade || lemitEnd.cidade || cb.municipio || "";
+                          const ufEnd = cb.endereco_uf || cb.enderecoUf || lemitEnd.uf || "";
+                          const cep = cb.cep || lemitEnd.cep || "";
                           const temEndereco = Boolean(logradouro || cidade || cep);
-
-                          if (!telefones.length && !emails.length && !temEndereco) return null;
+                          const nomeMae = cb.nome_mae || cb.nomeMae || lemitEnd.nome_mae || "";
+                          const nomePai = cb.nome_pai || cb.nomePai || "";
 
                           return (
                             <>
-                              {telefones.length > 0 && (
-                                <div className="space-y-1 md:col-span-2 lg:col-span-2">
+                              <div className="space-y-1 md:col-span-2 lg:col-span-2">
                                   <p className="text-muted-foreground flex items-center gap-1">
                                     <Phone className="w-4 h-4" />Telefones
+                                    {/* Editar/acrescentar continua no painel de sempre */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setContatosModalOpen(true)}
+                                      className="ml-1 hover:text-foreground"
+                                      title="Gerenciar telefones, e-mails e endereço"
+                                      data-testid="button-painel-contato"
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </button>
                                   </p>
                                   <div className="flex flex-wrap gap-2">
                                     {telefones.slice(0, 6).map((t, idx) => (
@@ -1491,7 +1512,7 @@ export default function VendasConsulta() {
                                           title="Abrir conversa no WhatsApp"
                                           data-testid={`telefone-wa-${idx}`}
                                         >
-                                          <MessageSquare className="h-3.5 w-3.5" />
+                                          <IconeWhatsApp className="h-4 w-4" />
                                         </a>
                                         <button
                                           type="button"
@@ -1504,9 +1525,11 @@ export default function VendasConsulta() {
                                         </button>
                                       </span>
                                     ))}
+                                    {telefones.length === 0 && (
+                                      <span className="text-muted-foreground">Não informado</span>
+                                    )}
                                   </div>
                                 </div>
-                              )}
 
                               {emails.length > 0 && (
                                 <div className="space-y-1">
@@ -1519,16 +1542,59 @@ export default function VendasConsulta() {
                                 </div>
                               )}
 
-                              {temEndereco && (
-                                <div className="space-y-1 md:col-span-2 lg:col-span-3">
-                                  <p className="text-muted-foreground flex items-center gap-1">
-                                    <MapPin className="w-4 h-4" />Endereço
-                                  </p>
-                                  <p data-testid="text-endereco">
-                                    {[logradouro, [cidade, ufEnd].filter(Boolean).join(" - "), cep && `CEP ${cep}`]
-                                      .filter(Boolean)
-                                      .join(" · ")}
-                                  </p>
+                              {/* Mais informações: expande a PRÓPRIA caixa, sem modal.
+                                  Só aparece quando há algo para mostrar — campo vazio
+                                  não ganha linha. */}
+                              {(temEndereco || nomeMae || nomePai) && (
+                                <div className="md:col-span-2 lg:col-span-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => setMaisInfoAberto((v) => !v)}
+                                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                                    data-testid="button-mais-informacoes"
+                                  >
+                                    {maisInfoAberto ? "Menos informações" : "Mais informações"}
+                                    <ChevronDown
+                                      className={`h-4 w-4 transition-transform duration-200 ${maisInfoAberto ? "rotate-180" : ""}`}
+                                    />
+                                  </button>
+
+                                  <div
+                                    className={`grid transition-all duration-200 ease-out ${maisInfoAberto ? "grid-rows-[1fr] opacity-100 mt-3" : "grid-rows-[0fr] opacity-0"}`}
+                                  >
+                                    <div className="overflow-hidden">
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t pt-4">
+                                        {(nomeMae || nomePai) && (
+                                          <div className="space-y-1">
+                                            <p className="text-muted-foreground flex items-center gap-1">
+                                              <User className="w-4 h-4" />Filiação
+                                            </p>
+                                            {nomeMae && <p data-testid="text-nome-mae">Mãe: {nomeMae}</p>}
+                                            {nomePai && <p data-testid="text-nome-pai">Pai: {nomePai}</p>}
+                                          </div>
+                                        )}
+
+                                        {temEndereco && (
+                                          <div className="space-y-1">
+                                            <p className="text-muted-foreground flex items-center gap-1">
+                                              <MapPin className="w-4 h-4" />Endereço
+                                            </p>
+                                            {logradouro && (
+                                              <p data-testid="text-endereco">
+                                                {logradouro}{numero ? `, ${numero}` : ""}{complemento ? ` — ${complemento}` : ""}
+                                              </p>
+                                            )}
+                                            {(bairro || cidade || ufEnd) && (
+                                              <p className="text-muted-foreground">
+                                                {[bairro, [cidade, ufEnd].filter(Boolean).join(" - ")].filter(Boolean).join(" · ")}
+                                              </p>
+                                            )}
+                                            {cep && <p className="text-muted-foreground">CEP {formatCep(cep)}</p>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                               )}
                             </>
