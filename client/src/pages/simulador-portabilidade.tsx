@@ -1498,6 +1498,15 @@ export default function SimuladorPortabilidadePage() {
                         >↩</button>
                       )}
                     </div>
+                      {identidadeTravada && !fotoAtiva && (
+                      <a
+                        href="/profile"
+                        style={{ fontSize: 10.5, color: "hsl(var(--primary))", fontWeight: 600, textDecoration: "underline" }}
+                        data-testid="link-subir-foto-perfil"
+                      >
+                        Subir minha foto no Perfil
+                      </a>
+                    )}
                     {/* Toggle incluir/ocultar */}
                     <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: "hsl(var(--muted-foreground))", userSelect: "none" }}>
                       <div style={{ position: "relative", width: 32, height: 18, flexShrink: 0 }}>
@@ -1508,7 +1517,9 @@ export default function SimuladorPortabilidadePage() {
                       Exibir foto no PDF
                     </label>
                     <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))" }}>
-                      {fotoAtiva ? (consultorFotoOverride ? "Foto escolhida manualmente" : "Foto do perfil") : "Sem foto: será exibida inicial"}
+                      {identidadeTravada
+                        ? (fotoAtiva ? "Foto do seu perfil" : "Sem foto: sai a inicial do seu nome")
+                        : (fotoAtiva ? (consultorFotoOverride ? "Foto escolhida manualmente" : "Foto do perfil") : "Sem foto: será exibida inicial")}
                     </div>
                   </div>
                 </div>
