@@ -719,8 +719,15 @@ export default function VendasConsulta() {
       setAddContactOpen(false);
       setNewContact({ tipo: "phone", valor: "", label: "" });
     },
-    onError: () => {
-      toast({ title: "Erro ao salvar contato", variant: "destructive" });
+    onError: (e: any) => {
+      // Mostrar o motivo: o mais comum e contato repetido (a chave unica do banco),
+      // e "erro ao salvar" generico nao dizia nada a quem estava digitando.
+      const msg = String(e?.message || "");
+      toast({
+        title: /existe|409/i.test(msg) ? "Esse contato já está cadastrado" : "Erro ao salvar contato",
+        description: /existe|409/i.test(msg) ? undefined : msg || undefined,
+        variant: "destructive",
+      });
     },
   });
 
@@ -992,19 +999,39 @@ export default function VendasConsulta() {
       toast({ title: "Informe o valor do contato", variant: "destructive" });
       return;
     }
+
+    // WhatsApp e telefone: vira type "phone" com rotulo. Gravar como tipo
+    // proprio deixava o numero invisivel na lista (que so le "phone") e a
+    // segunda tentativa batia na chave unica (cliente+tipo+valor).
+    const ehEmail = newContact.tipo === "email";
+    const type = ehEmail ? "email" : "phone";
+    const label = newContact.label?.trim()
+      || (newContact.tipo === "whatsapp" ? "WhatsApp" : "");
+
+    let value = newContact.valor.trim();
+    if (!ehEmail) {
+      // Guarda so digitos: a tela formata na hora de mostrar.
+      const digitos = value.replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+      if (digitos.length < 10 || digitos.length > 11) {
+        toast({
+          title: "Telefone invalido",
+          description: "Use DDD + numero: 11 digitos no celular, 10 no fixo.",
+          variant: "destructive",
+        });
+        return;
+      }
+      value = digitos;
+    }
+
     if (editingContact) {
       updateContactMutation.mutate({
         id: editingContact.id,
-        type: newContact.tipo,
-        value: newContact.valor,
-        label: newContact.label || undefined,
+        type,
+        value,
+        label: label || undefined,
       });
     } else {
-      createContactMutation.mutate({
-        type: newContact.tipo,
-        value: newContact.valor,
-        label: newContact.label || undefined,
-      });
+      createContactMutation.mutate({ type, value, label: label || undefined });
     }
   };
 
@@ -1097,7 +1124,9 @@ export default function VendasConsulta() {
     );
   }
 
-  const phoneContacts = clientContacts.filter(c => c.type === "phone");
+  // "whatsapp" chegou a ser gravado como tipo proprio e esses registros ficavam
+  // invisiveis aqui. Agora WhatsApp e telefone com rotulo, mas os antigos contam.
+  const phoneContacts = clientContacts.filter(c => c.type === "phone" || c.type === "whatsapp");
   const emailContacts = clientContacts.filter(c => c.type === "email");
 
   return (
