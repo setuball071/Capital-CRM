@@ -14952,10 +14952,39 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         const insertedCount = await storage.createSalesLeadsBulk(leads);
 
+        // Quem não distribui equipe, trabalha a própria lista: o corretor que fez
+        // o filtro recebe os leads na hora, em vez de a campanha ficar esperando
+        // o master distribuir. Master e coordenação seguem distribuindo.
+        const distribuidor = req.user!.isMaster
+          || ["master", "coordenacao"].includes(req.user!.role || "");
+        let atribuidosAoCriador = 0;
+        if (!distribuidor && insertedCount > 0) {
+          try {
+            const meus = await storage.getUnassignedLeads(campanha.id, insertedCount);
+            const ordemBase = await storage.getMaxOrdemFila(req.user!.id, campanha.id);
+            atribuidosAoCriador = await inserirAssignmentsBulk(
+              meus.map((lead, i) => ({
+                leadId: lead.id,
+                userId: req.user!.id,
+                campaignId: campanha.id,
+                status: "novo",
+                ordemFila: ordemBase + i + 1,
+              })),
+            );
+            await recalcularContadoresCampanha(campanha.id);
+          } catch (e) {
+            // Não derruba a criação: a campanha existe e o master ainda pode distribuir
+            console.error("[CAMPANHA] auto-atribuição ao criador falhou:", e);
+          }
+        }
+
         return res.status(201).json({
           campanha,
           leadsImportados: insertedCount,
-          message: `Campanha criada com ${insertedCount} leads`,
+          atribuidosAoCriador,
+          message: atribuidosAoCriador > 0
+            ? `Campanha criada e ${atribuidosAoCriador} leads já estão na sua lista de atendimento`
+            : `Campanha criada com ${insertedCount} leads`,
         });
       } catch (error) {
         console.error("Create campanha from filter error:", error);
