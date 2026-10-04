@@ -1431,6 +1431,109 @@ export default function VendasConsulta() {
                             {consultaData.clienteBase?.base_tag || consultaData.folhaAtual?.competencia || "-"}
                           </Badge>
                         </div>
+
+                        {/* ── Contato e endereço à vista ──────────────────────────────
+                            Estavam escondidos atrás do botão Contatos, e o endereço nem
+                            era mostrado, apesar de vir na mesma resposta da busca. Quem
+                            atende precisa do telefone sem clicar. O modal continua para
+                            editar e acrescentar. */}
+                        {(() => {
+                          const telsBase = (consultaData.higienizacao?.telefones || []).map((t: any) => ({
+                            numero: t.telefone as string,
+                            marca: t.principal ? "principal" : (t.tipo as string | undefined),
+                          }));
+                          const telsManuais = phoneContacts.map((c) => ({
+                            numero: c.value,
+                            marca: c.label || "manual",
+                          }));
+                          const vistos = new Set<string>();
+                          const telefones = [...telsBase, ...telsManuais].filter((t) => {
+                            const chave = String(t.numero || "").replace(/\D/g, "");
+                            if (!chave || vistos.has(chave)) return false;
+                            vistos.add(chave);
+                            return true;
+                          });
+                          const emails = Array.from(new Set([
+                            ...(consultaData.higienizacao?.emails || []),
+                            ...emailContacts.map((c) => c.value),
+                          ])).filter(Boolean);
+
+                          const cb = consultaData.clienteBase || {};
+                          const logradouro = cb.endereco || "";
+                          const cidade = cb.cidade || cb.municipio || "";
+                          const ufEnd = cb.endereco_uf || cb.enderecoUf || "";
+                          const cep = cb.cep || "";
+                          const temEndereco = Boolean(logradouro || cidade || cep);
+
+                          if (!telefones.length && !emails.length && !temEndereco) return null;
+
+                          return (
+                            <>
+                              {telefones.length > 0 && (
+                                <div className="space-y-1 md:col-span-2 lg:col-span-2">
+                                  <p className="text-muted-foreground flex items-center gap-1">
+                                    <Phone className="w-4 h-4" />Telefones
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {telefones.slice(0, 6).map((t, idx) => (
+                                      <span
+                                        key={`tel-vista-${idx}`}
+                                        className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 bg-muted/40"
+                                        data-testid={`telefone-vista-${idx}`}
+                                      >
+                                        <span className="font-medium">{formatPhone(t.numero)}</span>
+                                        {t.marca === "principal" && <Star className="h-3 w-3 text-yellow-500 fill-current" />}
+                                        <a
+                                          href={`https://wa.me/55${String(t.numero).replace(/\D/g, "")}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="text-green-600 hover:text-green-700"
+                                          title="Abrir conversa no WhatsApp"
+                                          data-testid={`telefone-wa-${idx}`}
+                                        >
+                                          <MessageSquare className="h-3.5 w-3.5" />
+                                        </a>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyPhone(t.numero)}
+                                          className="text-muted-foreground hover:text-foreground"
+                                          title="Copiar"
+                                          data-testid={`telefone-copiar-${idx}`}
+                                        >
+                                          <Copy className="h-3 w-3" />
+                                        </button>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {emails.length > 0 && (
+                                <div className="space-y-1">
+                                  <p className="text-muted-foreground flex items-center gap-1">
+                                    <Mail className="w-4 h-4" />E-mail
+                                  </p>
+                                  {emails.slice(0, 3).map((e, idx) => (
+                                    <p key={`email-vista-${idx}`} className="truncate" title={e} data-testid={`email-vista-${idx}`}>{e}</p>
+                                  ))}
+                                </div>
+                              )}
+
+                              {temEndereco && (
+                                <div className="space-y-1 md:col-span-2 lg:col-span-3">
+                                  <p className="text-muted-foreground flex items-center gap-1">
+                                    <MapPin className="w-4 h-4" />Endereço
+                                  </p>
+                                  <p data-testid="text-endereco">
+                                    {[logradouro, [cidade, ufEnd].filter(Boolean).join(" - "), cep && `CEP ${cep}`]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </p>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     );
                   })()}
