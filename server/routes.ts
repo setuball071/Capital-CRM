@@ -11762,6 +11762,35 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     }
   });
 
+  // Liga/desliga a excecao de sessao simultanea de UM usuario.
+  // Rota propria para nao mexer na validacao do cadastro, que e grande e
+  // compartilhada por varios papeis.
+  app.put(
+    "/api/users/:id/sessao-simultanea",
+    requireAuth,
+    requireMaster,
+    async (req: any, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "ID invalido" });
+        const permitir = req.body?.permitir === true;
+        const [linha] = (await db.execute(sql`
+          UPDATE users SET sessao_simultanea = ${permitir}
+          WHERE id = ${id}
+          RETURNING id, name, sessao_simultanea
+        `)).rows as any[];
+        if (!linha) return res.status(404).json({ message: "Usuario nao encontrado" });
+        console.log(
+          `[SECURITY] sessao simultanea ${permitir ? "LIBERADA" : "revogada"} para userId ${id} por ${req.user?.id}`,
+        );
+        res.json({ id: linha.id, sessaoSimultanea: linha.sessao_simultanea });
+      } catch (error) {
+        console.error("Put sessao-simultanea error:", error);
+        res.status(500).json({ message: "Erro ao salvar" });
+      }
+    },
+  );
+
   // ===== ADMIN PEDIDOS LISTA - MASTER ONLY =====
 
   // GET /api/pedidos-lista/admin - Lista todos os pedidos com info do coordenador - MASTER ONLY

@@ -277,6 +277,8 @@ export const users = pgTable("users", {
   metaMensal: decimal("meta_mensal", { precision: 12, scale: 2 }),
   // Tipo da meta pessoal: "producao" ou "rentabilidade"
   metaTipo: varchar("meta_tipo", { length: 20 }).default("producao"),
+  // Excecao: pode ficar logado em mais de um dispositivo sem ser derrubado
+  sessaoSimultanea: boolean("sessao_simultanea").default(false),
   isDemo: boolean("is_demo").notNull().default(false),
   avatarUrl: text("avatar_url"),
   perfilDisc: varchar("perfil_disc", { length: 20 }),
@@ -2778,8 +2780,7 @@ export const commercialTeams = pgTable("commercial_teams", {
   }),
   ativa: boolean("ativa").default(true),
   metaMensal: decimal("meta_mensal", { precision: 12, scale: 2 }),
-  // Tipo da meta pessoal: "producao" ou "rentabilidade"
-  metaTipo: varchar("meta_tipo", { length: 20 }).default("producao"),
+
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -674,6 +674,23 @@ export default function UsersPage() {
   // Check if user has Config. Usuários permission with canEdit
   const hasConfigUsuariosEdit = permissions.find(p => p.module === 'modulo_config_usuarios')?.canEdit ?? false;
 
+  // Excecao de sessao simultanea. So master, e so onde faz sentido: por padrao
+  // o sistema derruba a sessao anterior para dificultar dividir um acesso.
+  const toggleSessaoMutation = useMutation({
+    mutationFn: async ({ id, permitir }: { id: number; permitir: boolean }) =>
+      apiRequest("PUT", `/api/users/${id}/sessao-simultanea`, { permitir }),
+    onSuccess: (_d, v) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({
+        title: v.permitir ? "Vários dispositivos liberados" : "Voltou a permitir um dispositivo",
+        description: v.permitir
+          ? "Essa pessoa pode ficar logada em mais de um lugar ao mesmo tempo. Pode levar 5 minutos para valer."
+          : "Entrar num novo dispositivo volta a derrubar o anterior.",
+      });
+    },
+    onError: () => toast({ title: "Não consegui salvar", variant: "destructive" }),
+  });
+
   const toggleUserStatus = (user: User) => {
     toggleActiveMutation.mutate({
       id: user.id,
@@ -1373,6 +1390,26 @@ export default function UsersPage() {
                             data-testid={`button-toggle-user-${user.id}`}
                           >
                             {user.isActive ? "Desativar" : "Ativar"}
+                          </Button>
+                        )}
+                        {isMaster && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              toggleSessaoMutation.mutate({
+                                id: user.id,
+                                permitir: !(user as any).sessaoSimultanea,
+                              })
+                            }
+                            title={
+                              (user as any).sessaoSimultanea
+                                ? "Hoje pode usar vários dispositivos ao mesmo tempo. Clique para voltar a um só."
+                                : "Hoje só um dispositivo por vez. Clique para liberar vários."
+                            }
+                            data-testid={`button-sessao-simultanea-${user.id}`}
+                          >
+                            {(user as any).sessaoSimultanea ? "Vários dispositivos" : "Um dispositivo"}
                           </Button>
                         )}
                         {canDeleteUser(user) && (
