@@ -10781,8 +10781,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     }
   });
 
-  // Lista de situações funcionais por ambiente — cache de 10 min (ver rota)
-  const cacheSitFunc = new Map<number, { valores: string[]; em: number }>();
+  // Lista de situações funcionais — cache de 10 min (ver rota).
+  // Vale para todos os ambientes: a base de clientes é compartilhada.
+  let cacheSitFunc: { valores: string[]; em: number } | null = null;
 
   app.get(
     "/api/clientes/filtros/sit-func",
@@ -10790,25 +10791,25 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     requireModuleAccess("modulo_base_clientes"),
     async (req, res) => {
       try {
-        const tenantId = req.tenantId!;
         // DISTINCT em 2 milhões de vínculos custa ~3s e a lista quase nunca muda.
         // Guardar por 10 min tira o peso do filtro, que é aberto o tempo todo.
-        const emCache = cacheSitFunc.get(tenantId);
-        if (emCache && Date.now() - emCache.em < 10 * 60_000) {
-          return res.json(emCache.valores);
+        if (cacheSitFunc && Date.now() - cacheSitFunc.em < 10 * 60_000) {
+          return res.json(cacheSitFunc.valores);
         }
         const result = await db.execute(sql`
           SELECT DISTINCT sit_func
           FROM clientes_vinculo
-          WHERE tenant_id = ${tenantId}
-            AND sit_func IS NOT NULL
+          WHERE sit_func IS NOT NULL
             AND TRIM(sit_func) != ''
             AND LENGTH(TRIM(sit_func)) >= 4
+            -- Código de importação ruim ("000000014 AV"): 676 variações para só
+            -- 1.582 pessoas. Enchiam a lista e ninguém filtra por isso.
+            AND TRIM(sit_func) !~ '^[0-9]'
             AND sit_func !~ '^[0-9]+(\.[0-9]+)?$'
           ORDER BY sit_func
         `);
         const valores = result.rows.map((r: any) => r.sit_func as string);
-        cacheSitFunc.set(tenantId, { valores, em: Date.now() });
+        cacheSitFunc = { valores, em: Date.now() };
         return res.json(valores);
       } catch (error) {
         console.error("Get sit-func filtros error:", error);
