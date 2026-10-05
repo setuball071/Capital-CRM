@@ -421,6 +421,21 @@ app.use((req, res, next) => {
           console.error("Permission templates migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — libera sessao simultanea para UM usuario especifico.
+        // Excecao por pessoa, nao por ambiente: desligar a trava do ambiente
+        // inteiro abriria a porta para todos os acessos dele.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS sessao_simultanea BOOLEAN NOT NULL DEFAULT false
+          `);
+          log("Sessao simultanea por usuario migration OK");
+        } catch (migErr) {
+          console.error("Sessao simultanea migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — preferencias do usuario (ordem das abas etc).
         // Coluna generica de proposito: a proxima preferencia nao precisa de
         // outra migracao nem de outra coluna.

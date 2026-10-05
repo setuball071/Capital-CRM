@@ -428,6 +428,29 @@ export async function unregisterSession(userId: number, sessionId: string): Prom
   if (atual === sessionId) await gravarSessaoAtiva(userId, null);
 }
 
+// Quem pode ficar logado em mais de um lugar. Cache de 5 min porque esta
+// pergunta entra em TODA requisicao autenticada — sem cache seria uma consulta
+// por request. Mudar a permissao demora ate 5 min para valer, ou um deploy.
+const simultaneaCache = new Map<number, { valor: boolean; ate: number }>();
+const SIMULTANEA_TTL = 5 * 60 * 1000;
+
+async function permiteSessaoSimultanea(userId: number): Promise<boolean> {
+  const agora = Date.now();
+  const emCache = simultaneaCache.get(userId);
+  if (emCache && emCache.ate > agora) return emCache.valor;
+  try {
+    const r = await db.execute(
+      sql`SELECT sessao_simultanea FROM users WHERE id = ${userId}`,
+    );
+    const valor = (r.rows[0] as any)?.sessao_simultanea === true;
+    simultaneaCache.set(userId, { valor, ate: agora + SIMULTANEA_TTL });
+    return valor;
+  } catch {
+    // Coluna ainda nao migrada ou banco fora: segue a regra normal (derruba).
+    return false;
+  }
+}
+
 /**
  * Verifica se a sessão atual foi deslocada por outro navegador.
  *
@@ -435,6 +458,9 @@ export async function unregisterSession(userId: number, sessionId: string): Prom
  * Retorna FALSE se a sessão é válida (mesmas abas ou primeiro acesso).
  */
 export async function isSessionDisplaced(userId: number, sessionId: string): Promise<boolean> {
+  // Excecao por pessoa: quem tem sessao_simultanea nunca e derrubado.
+  if (await permiteSessaoSimultanea(userId)) return false;
+
   const activeId = await lerSessaoAtiva(userId);
 
   // Nunca registrado (usuario novo ou base limpa) → registra e deixa passar
