@@ -429,11 +429,20 @@ export default function SimuladorPortabilidadePage() {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
+      // PNG, nao JPEG: JPEG nao tem transparencia, entao foto com fundo
+      // recortado saia com tarja PRETA atras do consultor no PDF.
+      // E mantem a proporcao: forcar quadrado espremia quem enviou retrato.
+      const maior = Math.max(img.naturalWidth || 1, img.naturalHeight || 1);
+      const escala = Math.min(1, 400 / maior);
+      const larg = Math.max(1, Math.round((img.naturalWidth || 200) * escala));
+      const alt = Math.max(1, Math.round((img.naturalHeight || 200) * escala));
       const canvas = document.createElement("canvas");
-      const side = Math.min(img.naturalWidth || 200, img.naturalHeight || 200, 200);
-      canvas.width = side; canvas.height = side;
+      canvas.width = larg; canvas.height = alt;
       const ctx = canvas.getContext("2d");
-      if (ctx) { ctx.drawImage(img, 0, 0, side, side); setAvatarBase64(canvas.toDataURL("image/jpeg", 0.85)); }
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, larg, alt);
+        setAvatarBase64(canvas.toDataURL("image/png"));
+      }
     };
     img.onerror = () => setAvatarBase64("");
     img.src = url;
@@ -615,7 +624,7 @@ export default function SimuladorPortabilidadePage() {
       tel: pdfConsultorTel.trim(),
     };
     // Foto do consultor: base64 se disponível e toggle ativo, senão iniciais
-    const consultorIniciais = corretor.nome.split(" ").filter(Boolean).map(n => n[0].toUpperCase()).slice(0, 2).join("");
+    const consultorIniciais = String(corretor.nome).split(" ").filter(Boolean).map((n: string) => n[0].toUpperCase()).slice(0, 2).join("");
     const consultorFotoHtml = pdfIncluirFoto
       ? (fotoAtiva
           ? `<img src="${fotoAtiva}" class="consultor-foto" alt="Foto">`

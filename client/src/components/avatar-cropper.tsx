@@ -83,7 +83,21 @@ export function AvatarCropper({
       const sy = -displayTop / scale;
       const sSize = BOX / scale;
       ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, OUT, OUT);
-      const blob: Blob | null = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.9));
+      // JPEG nao tem transparencia: foto com fundo recortado saia com tarja
+      // PRETA atras da pessoa no PDF. Quando o recorte tem pixel transparente,
+      // grava PNG; caso contrario mantem JPEG, que e bem menor.
+      let temTransparencia = false;
+      try {
+        const dados = ctx.getImageData(0, 0, OUT, OUT).data;
+        for (let i = 3; i < dados.length; i += 4) {
+          if (dados[i] < 250) { temTransparencia = true; break; }
+        }
+      } catch {
+        // Canvas "sujo" por imagem de outra origem: mantem o comportamento antigo.
+      }
+      const blob: Blob | null = temTransparencia
+        ? await new Promise((r) => canvas.toBlob(r, "image/png"))
+        : await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.9));
       if (blob) await onSave(blob);
     } finally {
       setSaving(false);

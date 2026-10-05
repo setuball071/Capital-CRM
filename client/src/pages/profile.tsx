@@ -41,7 +41,10 @@ export default function ProfilePage() {
 
   const saveAvatar = async (blob: Blob) => {
     const fd = new FormData();
-    fd.append("file", blob, "avatar.jpg");
+    // O nome segue o tipo real: o recortador manda PNG quando a foto tem fundo
+    // transparente, e o servidor valida tambem pela extensao.
+    const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+    fd.append("file", blob, `avatar.${ext}`);
     const res = await fetch("/api/profile/avatar", { method: "POST", body: fd, credentials: "include" });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
