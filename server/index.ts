@@ -287,7 +287,9 @@ app.use((req, res, next) => {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
+      // reusePort não existe no Windows (ENOTSUP) e derruba o `npm run dev` local;
+      // no Linux do Railway segue ligado como antes.
+      reusePort: process.platform !== "win32",
     },
     async () => {
       log(`serving on port ${port}`);

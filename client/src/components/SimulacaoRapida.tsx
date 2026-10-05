@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Zap, ChevronDown, ChevronUp, TrendingUp, CreditCard, Gift } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, CreditCard, Gift, Info, TrendingUp, Zap } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
@@ -64,8 +64,11 @@ function SimCard({ title, icon, accentColor, saldo, coefDefault, isLoading, test
     : null;
 
   return (
-    <Card className="bg-muted/50" data-testid={testId}>
-      <CardContent className="p-4 space-y-3">
+    <Card
+      className={temMargem ? "" : "bg-muted/40 border-dashed"}
+      data-testid={testId}
+    >
+      <CardContent className="p-[18px] space-y-3">
         <div className="flex items-center gap-2">
           <div style={{ color: accentColor }}>{icon}</div>
           <p className="text-sm font-semibold leading-tight">{title}</p>
@@ -78,13 +81,28 @@ function SimCard({ title, icon, accentColor, saldo, coefDefault, isLoading, test
             <Skeleton className="h-6 w-1/2" />
           </div>
         ) : !temMargem ? (
-          <p className="text-sm text-muted-foreground italic py-2">Margem indisponível</p>
+          /* Handoff: selo "Indisponível" e uma frase de orientação, no lugar
+             de só dizer que não tem margem. */
+          <div className="space-y-2.5 py-1">
+            <span
+              className="inline-flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-xs font-bold"
+              style={{ background: "var(--ci-neg-soft)", color: "var(--ci-neg)" }}
+            >
+              <Ban className="h-4 w-4" />
+              Indisponível
+            </span>
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              {saldoNum < 0
+                ? `Margem negativa (${formatCurrency(saldoNum)}). Avalie portabilidade ou refin dos contratos atuais.`
+                : "Sem saldo nesta margem. Avalie portabilidade ou refin dos contratos atuais."}
+            </p>
+          </div>
         ) : (
           <div className="space-y-3">
             <div>
-              <p className="text-xs text-muted-foreground">Valor Liberado</p>
+              <p className="text-[11.5px] font-semibold text-muted-foreground">Valor liberado</p>
               <p
-                className="text-2xl font-bold leading-tight"
+                className="text-[28px] font-extrabold leading-tight tracking-tight tnum"
                 style={{ color: accentColor }}
                 data-testid={`${testId}-valor`}
               >
@@ -101,7 +119,7 @@ function SimCard({ title, icon, accentColor, saldo, coefDefault, isLoading, test
                   min="0"
                   value={parcelaInput}
                   onChange={(e) => setParcelaInput(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm font-bold tnum focus:outline-none focus:ring-1 focus:ring-ring"
                   data-testid={`${testId}-parcela-input`}
                 />
               </div>
@@ -114,7 +132,7 @@ function SimCard({ title, icon, accentColor, saldo, coefDefault, isLoading, test
                   value={coefInput}
                   onChange={(e) => setCoefInput(e.target.value)}
                   placeholder={coefDefault == null ? "Digite..." : ""}
-                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm font-bold tnum focus:outline-none focus:ring-1 focus:ring-ring"
                   data-testid={`${testId}-coef-input`}
                 />
               </div>
@@ -190,8 +208,9 @@ export function SimulacaoRapida({ convenio, saldo35, saldo5cartao, saldo5benefic
               />
             </div>
 
-            <p className="text-xs text-muted-foreground mt-3 text-center">
-              Simulação estimada com base no coeficiente padrão configurado. Valores sujeitos a aprovação.
+            <p className="mt-3.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Info className="h-3.5 w-3.5" />
+              Estimativa com o coeficiente padrão configurado. Sujeito a análise de crédito.
             </p>
           </CardContent>
         </CollapsibleContent>

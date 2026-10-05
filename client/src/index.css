@@ -326,3 +326,32 @@
 ::-webkit-scrollbar{width:8px;height:8px;}
 ::-webkit-scrollbar-thumb{background:rgba(108,43,217,0.25);border-radius:8px;}
 ::-webkit-scrollbar-track{background:transparent;}
+
+/* ── Consulta Individual (handoff design_handoff_consulta) ────────────────
+   A cor da marca NAO fica fixa: sai de --primary, que o tenant-theme-provider
+   ja injeta por ambiente (white-label). --brand serve para fundo/barra/botao;
+   --brand-text serve para texto e icone (no escuro precisa clarear, senao o
+   contraste nao passa). */
+:root{
+  --brand: hsl(var(--primary));
+  --brand-soft: color-mix(in oklab, hsl(var(--primary)) 14%, hsl(var(--card)));
+  --brand-dark: color-mix(in oklab, hsl(var(--primary)) 78%, black);
+  --brand-ink: hsl(var(--primary-foreground));
+  --brand-text: hsl(var(--primary));
+  --ci-pos:#0A7A3B; --ci-pos-soft:#E8F5EE;
+  --ci-neg:#C62828; --ci-neg-soft:#FDECEA; --ci-neg-bg:#FFF7F7; --ci-neg-line:#F5C2C2;
+  --ci-warn:#9A6A00; --ci-warn-soft:#FEF6E0;
+}
+.dark{
+  --brand-text: color-mix(in oklab, hsl(var(--primary)) 55%, white);
+  --ci-pos:#4ADE80; --ci-pos-soft:rgba(74,222,128,.12);
+  --ci-neg:#F87171; --ci-neg-soft:rgba(248,113,113,.14);
+  --ci-neg-bg:rgba(248,113,113,.06); --ci-neg-line:rgba(248,113,113,.35);
+  --ci-warn:#FBBF24; --ci-warn-soft:rgba(251,191,36,.14);
+}
+/* rotulo e valor: a hierarquia do handoff (12/600 cinza, 15,5/700 forte) */
+.ci-label{font-size:12px;font-weight:600;color:hsl(var(--muted-foreground));}
+.ci-value{font-size:15.5px;font-weight:700;color:hsl(var(--foreground));font-variant-numeric:tabular-nums;}
+.ci-sub{font-size:12px;color:hsl(var(--muted-foreground));opacity:.85;}
+.tnum{font-variant-numeric:tabular-nums;}
+.ci-brand{color:var(--brand-text);}

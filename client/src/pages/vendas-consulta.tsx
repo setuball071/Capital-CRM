@@ -217,10 +217,106 @@ function formatProperName(name: string | null | undefined): string {
     .join(" ");
 }
 
-function CopyableField({ 
-  value, 
-  displayValue, 
-  testId, 
+// ── Apoio do design (design_handoff_consulta) ───────────────────────────────
+// Iniciais do avatar: primeira e última palavra do nome.
+function iniciaisDoNome(nome: string | null | undefined): string {
+  const partes = formatProperName(nome).split(" ").filter((p) => p.length > 1);
+  if (partes.length === 0) return "?";
+  const primeira = partes[0][0];
+  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : "";
+  return (primeira + ultima).toUpperCase();
+}
+
+// Monograma do banco: 2 letras, sem a palavra BANCO. Sem base de logos.
+function siglaBanco(nome: string | null | undefined): string {
+  const limpo = String(nome || "").toUpperCase().replace(/[^A-Z\s]/g, " ").trim();
+  if (!limpo) return "--";
+  if (limpo.includes("CAIXA")) return "CEF";
+  const palavras = limpo.split(/\s+/).filter((p) => p !== "BANCO" && p.length > 1);
+  if (palavras.length === 0) return limpo.slice(0, 2);
+  if (palavras.length === 1) return palavras[0].slice(0, 2);
+  return (palavras[0][0] + palavras[1][0]);
+}
+
+// Cor fixa por banco: hash do nome escolhe um dos 6 pares da paleta do handoff.
+const PALETA_BANCO = [
+  { bg: "#FDECEA", fg: "#C62828" },
+  { bg: "#E8F2FD", fg: "#1565C0" },
+  { bg: "#E8F5EE", fg: "#0A7A3B" },
+  { bg: "#FEF6E0", fg: "#9A6A00" },
+  { bg: "#F2EBFC", fg: "#6C2BD9" },
+  { bg: "#E6F7F8", fg: "#00838F" },
+];
+function corDoBanco(nome: string | null | undefined) {
+  const texto = String(nome || "");
+  let hash = 0;
+  for (let i = 0; i < texto.length; i++) hash = (hash * 31 + texto.charCodeAt(i)) >>> 0;
+  return PALETA_BANCO[hash % PALETA_BANCO.length];
+}
+
+// Código COMPE -> nome do banco. Só os que aparecem na folha do SIAPE; quando
+// não estiver na lista, a tela mostra o próprio código.
+const BANCOS_COMPE: Record<string, string> = {
+  "001": "Banco do Brasil", "033": "Santander", "041": "Banrisul", "070": "BRB",
+  "077": "Inter", "104": "Caixa Econômica Federal", "121": "Agibank", "212": "Banco Original",
+  "237": "Bradesco", "246": "ABC Brasil", "260": "Nubank", "290": "PagBank",
+  "318": "Banco BMG", "320": "China Construction Bank", "336": "C6 Bank", "341": "Itaú",
+  "356": "Banco Real", "389": "Mercantil do Brasil", "394": "Bradesco Financiamentos",
+  "422": "Safra", "604": "Banco Industrial", "623": "Banco Pan", "633": "Rendimento",
+  "637": "Sofisa", "643": "Pine", "652": "Itaú Unibanco Holding", "654": "Digimais",
+  "655": "Votorantim", "707": "Daycoval", "739": "Cetelem", "741": "Ribeirão Preto",
+  "748": "Sicredi", "755": "Bank of America", "756": "Sicoob", "003": "Banco da Amazônia",
+  "004": "Banco do Nordeste", "021": "Banestes", "047": "Banco do Estado de Sergipe",
+  "085": "Via Credi", "133": "Cresol", "136": "Unicred", "197": "Stone", "218": "BS2",
+  "243": "Banco Master", "329": "QI SCD", "335": "Banco Digio", "380": "PicPay",
+  "613": "Omni", "630": "Banco Smartbank", "746": "Modal",
+};
+function nomeDoBancoPorCodigo(codigo: string | null | undefined): string {
+  const c = String(codigo || "").replace(/\D/g, "").padStart(3, "0");
+  return BANCOS_COMPE[c] || "";
+}
+
+// Situação funcional vira status com cor: ativo verde, afastado âmbar,
+// desligado/falecido vermelho, o resto cinza.
+function corSituacao(sit: string | null | undefined): { bg: string; fg: string; ponto: string | null } {
+  const s = String(sit || "").toUpperCase();
+  if (/ATIVO|EMPREGAD|PERMANENTE|CEDIDO|EXERC|NOMEAD|CELETISTA|REQUISITAD|CONTRAT|RESIDENCIA/.test(s))
+    return { bg: "var(--ci-pos-soft)", fg: "var(--ci-pos)", ponto: "#00C853" };
+  if (/AFASTAD|LICENC|SUSPENS|CEDIDO SEM|EXCEDENTE/.test(s))
+    return { bg: "var(--ci-warn-soft)", fg: "var(--ci-warn)", ponto: null };
+  if (/DESLIG|EXONERAD|FALECID|OBITO|APOSENTAD POR INVALID|EXCLUID/.test(s))
+    return { bg: "var(--ci-neg-soft)", fg: "var(--ci-neg)", ponto: null };
+  return { bg: "hsl(var(--muted))", fg: "hsl(var(--muted-foreground))", ponto: null };
+}
+
+// Status da margem pelo handoff: saldo < 0 estourada, usada = 0 livre, resto disponível.
+function statusMargem(saldo: number, usada: number) {
+  if (saldo < 0)
+    return {
+      tag: "ESTOURADA", cor: "var(--ci-neg)", tagBg: "var(--ci-neg-soft)",
+      bg: "var(--ci-neg-bg)", borda: "var(--ci-neg-line)", barra: "var(--ci-neg)",
+    };
+  if (!usada)
+    return {
+      tag: "LIVRE", cor: "var(--ci-pos)", tagBg: "var(--ci-pos-soft)",
+      bg: "hsl(var(--card))", borda: "hsl(var(--border))", barra: "var(--brand)",
+    };
+  return {
+    tag: "DISPONÍVEL", cor: "var(--ci-pos)", tagBg: "var(--ci-pos-soft)",
+    bg: "hsl(var(--card))", borda: "hsl(var(--border))", barra: "var(--brand)",
+  };
+}
+
+// Celular é o que começa com 9 depois do DDD — só ele recebe WhatsApp.
+function ehCelular(numero: string | null | undefined): boolean {
+  const n = String(numero || "").replace(/\D/g, "");
+  return n.length === 11 && n[2] === "9";
+}
+
+function CopyableField({
+  value,
+  displayValue,
+  testId,
   className = "",
   toast,
   formatOnCopy
@@ -290,6 +386,8 @@ export default function VendasConsulta() {
   const [contatosModalOpen, setContatosModalOpen] = useState(false);
   // "Mais informações" expande a própria caixa de Dados do Cliente (filiação e endereço)
   const [maisInfoAberto, setMaisInfoAberto] = useState(false);
+  // Telefones: o handoff pede 4 à vista e o resto atrás de "+N telefones".
+  const [telefonesAbertos, setTelefonesAbertos] = useState(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addToPipeline, setAddToPipeline] = useState(true);
@@ -1133,11 +1231,19 @@ export default function VendasConsulta() {
     <div className="flex flex-col h-[calc(100vh-64px)]">
       <div className="flex-shrink-0 border-b bg-card p-4">
         <div className="container mx-auto">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl font-bold inline-flex items-center gap-2" data-testid="text-cliente-nome">
-                  {consultaData.clienteBase?.nome || "-"}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div
+              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full text-lg font-bold"
+              style={{ background: "var(--brand-soft)", color: "var(--brand-text)" }}
+              aria-hidden="true"
+              data-testid="avatar-iniciais"
+            >
+              {iniciaisDoNome(consultaData.clienteBase?.nome)}
+            </div>
+            <div className="space-y-1.5 flex-1 min-w-[280px]">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-[22px] font-extrabold tracking-tight inline-flex items-center gap-2" data-testid="text-cliente-nome">
+                  {formatProperName(consultaData.clienteBase?.nome) || "-"}
                   <CopyableField
                     value={consultaData.clienteBase?.nome}
                     displayValue=""
@@ -1157,25 +1263,41 @@ export default function VendasConsulta() {
                     </Button>
                   )}
                 </h1>
-                <Badge variant="secondary" data-testid="badge-modo">Consulta</Badge>
+                <span
+                  className="inline-flex h-6 items-center rounded-full px-2.5 text-[11.5px] font-bold tracking-wide"
+                  style={{ background: "var(--brand-soft)", color: "var(--brand-text)" }}
+                  data-testid="badge-modo"
+                >
+                  CONSULTA
+                </span>
               </div>
-              <div className="flex items-center gap-4 text-sm">
-                <span className="text-muted-foreground">CPF:</span>
-                <CopyableField
-                  value={consultaData.clienteBase?.cpf}
-                  displayValue={formatCPF(consultaData.clienteBase?.cpf)}
-                  testId="button-copy-cpf-header"
-                  className="font-mono"
-                  toast={toast}
-                />
-                <span className="text-muted-foreground">Matrícula:</span>
-                <CopyableField
-                  value={consultaData.vinculo?.matricula || consultaData.clienteBase?.matricula}
-                  displayValue={consultaData.vinculo?.matricula || consultaData.clienteBase?.matricula || "-"}
-                  testId="button-copy-matricula-header"
-                  className="font-mono"
-                  toast={toast}
-                />
+              <div className="flex items-center gap-x-5 gap-y-1.5 flex-wrap text-[13.5px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  CPF
+                  <CopyableField
+                    value={consultaData.clienteBase?.cpf}
+                    displayValue={formatCPF(consultaData.clienteBase?.cpf)}
+                    testId="button-copy-cpf-header"
+                    className="font-bold text-foreground tnum"
+                    toast={toast}
+                  />
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  Matrícula
+                  <CopyableField
+                    value={consultaData.vinculo?.matricula || consultaData.clienteBase?.matricula}
+                    displayValue={consultaData.vinculo?.matricula || consultaData.clienteBase?.matricula || "-"}
+                    testId="button-copy-matricula-header"
+                    className="font-bold text-foreground tnum"
+                    toast={toast}
+                  />
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  Órgão
+                  <b className="font-bold text-foreground" data-testid="text-orgao-header">
+                    {mapNomenclatura("ORGAO", consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod) || "-"}
+                  </b>
+                </span>
               </div>
             </div>
             {consultaData.leadId && (
@@ -1195,19 +1317,19 @@ export default function VendasConsulta() {
                   dentro de Dados do Cliente. O modal continua, aberto pelo lápis do
                   bloco de contato, para editar e acrescentar. */}
               <Button
-                onClick={() => setDrawerOpen(true)}
-                data-testid="button-registrar-atendimento"
-              >
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Registrar Atendimento
-              </Button>
-              <Button 
-                variant="outline" 
+                variant="outline"
                 onClick={() => { setConsultaData(null); setPortfolioInfo(null); setSelectedVinculoId(null); }}
                 data-testid="button-nova-busca"
               >
                 <Search className="h-4 w-4 mr-2" />
-                Nova Busca
+                Nova busca
+              </Button>
+              <Button
+                onClick={() => setDrawerOpen(true)}
+                data-testid="button-registrar-atendimento"
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Registrar atendimento
               </Button>
             </div>
           </div>
@@ -1307,9 +1429,17 @@ export default function VendasConsulta() {
 
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    Dados do Cliente
+                  <CardTitle className="text-base flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-2">
+                      <User className="h-5 w-5 ci-brand" />
+                      Dados do cliente
+                    </span>
+                    <span className="text-[12.5px] font-normal text-muted-foreground">
+                      Última base{" "}
+                      <b className="text-foreground/80" data-testid="text-ultima-base-header">
+                        {consultaData.clienteBase?.base_tag || consultaData.folhaAtual?.competencia || "-"}
+                      </b>
+                    </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1409,58 +1539,61 @@ export default function VendasConsulta() {
                     }
 
                     // ─── Layout SIAPE / padrão ───────────────────────────────
+                    const sitFuncSiape = mapNomenclatura("SIT_FUNC", consultaData.vinculo?.sitFunc || consultaData.clienteBase?.sit_func || consultaData.clienteBase?.sitFunc);
+                    const corSit = corSituacao(sitFuncSiape);
                     return (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground flex items-center gap-1"><Calendar className="w-4 h-4" />Nascimento / Idade</p>
-                          <div className="flex items-center gap-2 flex-wrap" data-testid="text-data-nascimento">
+                        <div className="space-y-1.5">
+                          <p className="ci-label flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Nascimento / idade</p>
+                          <div className="ci-value flex items-center gap-2 flex-wrap" data-testid="text-data-nascimento">
                             {renderNascimento()}
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground">Situação Funcional</p>
-                          <Badge variant="secondary" data-testid="text-sit-func">
-                            {mapNomenclatura("SIT_FUNC", consultaData.vinculo?.sitFunc || consultaData.clienteBase?.sit_func || consultaData.clienteBase?.sitFunc)}
-                          </Badge>
+                        <div className="space-y-1.5">
+                          <p className="ci-label">Situação funcional</p>
+                          <span
+                            className="inline-flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-bold"
+                            style={{ background: corSit.bg, color: corSit.fg }}
+                            data-testid="text-sit-func"
+                          >
+                            {corSit.ponto && (
+                              <span className="h-[7px] w-[7px] rounded-full" style={{ background: corSit.ponto }} />
+                            )}
+                            {sitFuncSiape || "-"}
+                          </span>
                         </div>
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground">Regime Jurídico (REJUR)</p>
-                          <p data-testid="text-rjur">
+                        <div className="space-y-1.5">
+                          <p className="ci-label">Regime jurídico (REJUR)</p>
+                          <p className="ci-value" data-testid="text-rjur">
                             {mapNomenclatura("RJUR", consultaData.vinculo?.rjur || consultaData.clienteBase?.rjur || consultaData.clienteBase?.regime_juridico)}
                           </p>
                         </div>
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground">UF</p>
-                          <p data-testid="text-uf">
+                        <div className="space-y-1.5">
+                          <p className="ci-label">UF</p>
+                          <p className="ci-value" data-testid="text-uf">
                             {siapeDados?.uf_siape || consultaData.vinculo?.natureza || consultaData.clienteBase?.natureza || "-"}
                           </p>
                         </div>
                         {/* Cargo e Função saíram: a folha não traz cargo (coluna vazia em
                             1,36 milhão de linhas) e função não existe em base nenhuma —
                             eram dois traços ocupando espaço. */}
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground">UPAG</p>
-                          <p data-testid="text-upag">
+                        <div className="space-y-1.5">
+                          <p className="ci-label">UPAG</p>
+                          <p className="ci-value" data-testid="text-upag">
                             {mapNomenclatura("UPAG", consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod)}
                           </p>
                           {(consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod) && (
-                            <p className="text-xs text-muted-foreground">Código: {consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod}</p>
+                            <p className="ci-sub">Código UPAG {consultaData.vinculo?.upag || consultaData.clienteBase?.upag || consultaData.clienteBase?.undpagadoracod}</p>
                           )}
                         </div>
-                        <div className="space-y-1 md:col-span-2">
-                          <p className="text-muted-foreground flex items-center gap-1"><Building className="w-4 h-4" />Órgão</p>
-                          <p data-testid="text-orgao">
+                        <div className="space-y-1.5 md:col-span-2">
+                          <p className="ci-label flex items-center gap-1"><Building className="w-3.5 h-3.5" />Órgão</p>
+                          <p className="ci-value" data-testid="text-orgao">
                             {mapNomenclatura("ORGAO", consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod)}
                           </p>
                           {(consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod) && (
-                            <p className="text-xs text-muted-foreground">Código: {consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod}</p>
+                            <p className="ci-sub">Código {consultaData.vinculo?.orgao || consultaData.clienteBase?.orgao || consultaData.clienteBase?.orgaocod}</p>
                           )}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground flex items-center gap-1"><Database className="w-4 h-4" />Última Base</p>
-                          <Badge variant="secondary" data-testid="text-ultima-base">
-                            {consultaData.clienteBase?.base_tag || consultaData.folhaAtual?.competencia || "-"}
-                          </Badge>
                         </div>
 
                         {/* ── Contato e endereço à vista ──────────────────────────────
@@ -1517,14 +1650,19 @@ export default function VendasConsulta() {
 
                           return (
                             <>
-                              <div className="space-y-1 md:col-span-2 lg:col-span-2">
-                                  <p className="text-muted-foreground flex items-center gap-1">
-                                    <Phone className="w-4 h-4" />Telefones
+                              <div className="space-y-2 md:col-span-2 lg:col-span-3">
+                                  <p className="ci-label flex items-center gap-2">
+                                    <Phone className="w-3.5 h-3.5" />Telefones
+                                    {telefones.length > 0 && (
+                                      <span className="rounded-full bg-muted px-1.5 py-[1px] text-[11px] font-bold">
+                                        {telefones.length}
+                                      </span>
+                                    )}
                                     {/* Editar/acrescentar continua no painel de sempre */}
                                     <button
                                       type="button"
                                       onClick={() => setContatosModalOpen(true)}
-                                      className="ml-1 hover:text-foreground"
+                                      className="hover:text-foreground"
                                       title="Gerenciar telefones, e-mails e endereço"
                                       data-testid="button-painel-contato"
                                     >
@@ -1532,24 +1670,31 @@ export default function VendasConsulta() {
                                     </button>
                                   </p>
                                   <div className="flex flex-wrap gap-2">
-                                    {telefones.slice(0, 6).map((t, idx) => (
+                                    {(telefonesAbertos ? telefones : telefones.slice(0, 4)).map((t, idx) => {
+                                      const celular = ehCelular(t.numero);
+                                      return (
                                       <span
                                         key={`tel-vista-${idx}`}
-                                        className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 bg-muted/40"
+                                        className="inline-flex h-[34px] items-center gap-2 rounded-lg bg-muted/60 pl-3 pr-2.5 text-sm font-bold tnum"
                                         data-testid={`telefone-vista-${idx}`}
                                       >
-                                        <span className="font-medium">{formatPhone(t.numero)}</span>
+                                        <span>{formatPhone(t.numero)}</span>
                                         {t.marca === "principal" && <Star className="h-3 w-3 text-yellow-500 fill-current" />}
-                                        <a
-                                          href={`https://wa.me/55${String(t.numero).replace(/\D/g, "")}`}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="text-green-600 hover:text-green-700"
-                                          title="Abrir conversa no WhatsApp"
-                                          data-testid={`telefone-wa-${idx}`}
-                                        >
-                                          <IconeWhatsApp className="h-4 w-4" />
-                                        </a>
+                                        {/* WhatsApp só faz sentido em celular; em fixo o ícone fica apagado */}
+                                        {celular ? (
+                                          <a
+                                            href={`https://wa.me/55${String(t.numero).replace(/\D/g, "")}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-green-600 hover:text-green-700"
+                                            title="Abrir conversa no WhatsApp"
+                                            data-testid={`telefone-wa-${idx}`}
+                                          >
+                                            <IconeWhatsApp className="h-4 w-4" />
+                                          </a>
+                                        ) : (
+                                          <IconeWhatsApp className="h-4 w-4 text-muted-foreground/40" />
+                                        )}
                                         <button
                                           type="button"
                                           onClick={() => handleCopyPhone(t.numero)}
@@ -1560,7 +1705,19 @@ export default function VendasConsulta() {
                                           <Copy className="h-3 w-3" />
                                         </button>
                                       </span>
-                                    ))}
+                                      );
+                                    })}
+                                    {telefones.length > 4 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setTelefonesAbertos((v) => !v)}
+                                        className="inline-flex h-[34px] items-center gap-1 rounded-lg border border-dashed px-3 text-[13px] font-semibold"
+                                        style={{ color: "var(--brand-text)" }}
+                                        data-testid="button-mais-telefones"
+                                      >
+                                        {telefonesAbertos ? "Mostrar menos" : `+${telefones.length - 4} telefones`}
+                                      </button>
+                                    )}
                                     {telefones.length === 0 && (
                                       <span className="text-muted-foreground">Não informado</span>
                                     )}
@@ -1588,7 +1745,7 @@ export default function VendasConsulta() {
                                     className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                                     data-testid="button-mais-informacoes"
                                   >
-                                    {maisInfoAberto ? "Menos informações" : "Mais informações"}
+                                    {maisInfoAberto ? "Menos informações" : "Mais informações (filiação e endereço)"}
                                     <ChevronDown
                                       className={`h-4 w-4 transition-transform duration-200 ${maisInfoAberto ? "rotate-180" : ""}`}
                                     />
@@ -1749,41 +1906,47 @@ export default function VendasConsulta() {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-4 text-sm">
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground">Banco</p>
-                          <p data-testid="text-banco">
-                            <CopyableField
-                              value={siapeDados?.banco || consultaData.clienteBase?.banco_codigo || consultaData.clienteBase?.bancoCodigo}
-                              displayValue={siapeDados?.banco || consultaData.clienteBase?.banco_nome || consultaData.clienteBase?.bancoNome || consultaData.clienteBase?.banco_codigo || "-"}
-                              testId="button-copy-banco"
-                              toast={toast}
-                            />
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground">Agência</p>
-                          <p data-testid="text-agencia">
-                            <CopyableField
-                              value={siapeDados?.agencia || consultaData.clienteBase?.agencia}
-                              displayValue={siapeDados?.agencia || consultaData.clienteBase?.agencia || "-"}
-                              testId="button-copy-agencia"
-                              toast={toast}
-                            />
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-muted-foreground">Conta</p>
-                          <p data-testid="text-conta">
-                            <CopyableField
-                              value={siapeDados?.conta || consultaData.clienteBase?.conta}
-                              displayValue={siapeDados?.conta || consultaData.clienteBase?.conta || "-"}
-                              testId="button-copy-conta"
-                              toast={toast}
-                            />
-                          </p>
-                        </div>
-                      </div>
+                      /* Uma linha só, como no handoff: selo com o código, nome do
+                         banco e, embaixo, agência e conta. */
+                      (() => {
+                        const codBanco = String(siapeDados?.banco || consultaData.clienteBase?.banco_codigo || consultaData.clienteBase?.bancoCodigo || "").trim();
+                        const nomeBanco = consultaData.clienteBase?.banco_nome || consultaData.clienteBase?.bancoNome || nomeDoBancoPorCodigo(codBanco);
+                        const agencia = siapeDados?.agencia || consultaData.clienteBase?.agencia || "";
+                        const conta = siapeDados?.conta || consultaData.clienteBase?.conta || "";
+                        const paleta = corDoBanco(nomeBanco || codBanco);
+                        return (
+                          <div className="space-y-1.5 text-sm">
+                            <div className="flex items-center gap-2" data-testid="text-banco">
+                              {codBanco && (
+                                <span
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[10.5px] font-extrabold"
+                                  style={{ background: paleta.bg, color: paleta.fg }}
+                                >
+                                  {codBanco}
+                                </span>
+                              )}
+                              <span className="text-[14.5px] font-bold">
+                                <CopyableField
+                                  value={codBanco}
+                                  displayValue={nomeBanco || codBanco || "-"}
+                                  testId="button-copy-banco"
+                                  toast={toast}
+                                />
+                              </span>
+                            </div>
+                            <p className="text-[12.5px] text-muted-foreground tnum">
+                              Ag.{" "}
+                              <b className="text-foreground/80" data-testid="text-agencia">
+                                <CopyableField value={agencia} displayValue={agencia || "-"} testId="button-copy-agencia" toast={toast} />
+                              </b>
+                              {" · "}Cc.{" "}
+                              <b className="text-foreground/80" data-testid="text-conta">
+                                <CopyableField value={conta} displayValue={conta || "-"} testId="button-copy-conta" toast={toast} />
+                              </b>
+                            </p>
+                          </div>
+                        );
+                      })()
                     )}
                   </div>
                 </div>
@@ -2006,111 +2169,75 @@ export default function VendasConsulta() {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                          <Card className="bg-muted/50" data-testid="card-margem-70">
-                            <CardContent className="p-4">
-                              <p className="text-sm font-medium mb-2">Margem 70%</p>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Bruta:</span>
-                                  {/* Margens: fonte única = D8 (extrato de consignação SIAPE) */}
-                                  <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_70)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Utilizada:</span>
-                                  <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_70)}</span>
-                                </div>
-                                <div className="flex justify-between font-medium">
-                                  <span>Saldo:</span>
-                                  <span className={(Number(consultaData.folhaAtual.margem_saldo_70 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
-                                    {formatCurrency(consultaData.folhaAtual.margem_saldo_70)}
+                        {/* Cards de margem (handoff): o SALDO é o número principal,
+                            a barra mostra quanto da bruta já foi usado e o selo diz
+                            DISPONÍVEL / LIVRE / ESTOURADA. Nunca 3+1: 4 colunas ou 2×2. */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                          {([
+                            { nome: "Margem 70%", bruta: consultaData.folhaAtual.margem_bruta_70, usada: consultaData.folhaAtual.margem_utilizada_70, saldo: consultaData.folhaAtual.margem_saldo_70, testId: "card-margem-70" },
+                            { nome: "Margem global", bruta: consultaData.folhaAtual.margem_bruta_35, usada: consultaData.folhaAtual.margem_utilizada_35, saldo: consultaData.folhaAtual.margem_saldo_35, testId: "card-margem-35" },
+                            { nome: "Margem 5%", bruta: consultaData.folhaAtual.margem_bruta_5, usada: consultaData.folhaAtual.margem_utilizada_5, saldo: consultaData.folhaAtual.margem_saldo_5, testId: "card-margem-5" },
+                            { nome: "Benefício 5%", bruta: consultaData.folhaAtual.margem_beneficio_bruta_5, usada: consultaData.folhaAtual.margem_beneficio_utilizada_5, saldo: consultaData.folhaAtual.margem_beneficio_saldo_5, testId: "card-margem-beneficio-5" },
+                          ]).map((m) => {
+                            const bruta = Number(m.bruta ?? 0);
+                            const usada = Number(m.usada ?? 0);
+                            const saldo = Number(m.saldo ?? 0);
+                            const st = statusMargem(saldo, usada);
+                            const pct = bruta > 0 ? Math.min(100, Math.round((usada / bruta) * 100)) : (usada > 0 ? 100 : 0);
+                            return (
+                              <div
+                                key={m.testId}
+                                className="rounded-xl border p-[18px] flex flex-col gap-3.5"
+                                style={{ background: st.bg, borderColor: st.borda }}
+                                data-testid={m.testId}
+                              >
+                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                  <span className="text-[13.5px] font-bold">{m.nome}</span>
+                                  <span
+                                    className="rounded-full px-2 py-[3px] text-[11px] font-bold tracking-wide"
+                                    style={{ background: st.tagBg, color: st.cor }}
+                                  >
+                                    {st.tag}
                                   </span>
                                 </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-
-                          <Card className="bg-muted/50" data-testid="card-margem-35">
-                            <CardContent className="p-4">
-                              <p className="text-sm font-medium mb-2">Margem Global</p>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Bruta:</span>
-                                  <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_35)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Utilizada:</span>
-                                  <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_35)}</span>
-                                </div>
-                                <div className="flex justify-between font-medium">
-                                  <span>Saldo:</span>
-                                  <span className={(Number(consultaData.folhaAtual.margem_saldo_35 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
-                                    {formatCurrency(consultaData.folhaAtual.margem_saldo_35)}
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-[11.5px] font-semibold text-muted-foreground">Saldo disponível</span>
+                                  <span className="text-[26px] font-extrabold tracking-tight tnum" style={{ color: st.cor }}>
+                                    {formatCurrency(m.saldo)}
                                   </span>
                                 </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-
-                          <Card className="bg-muted/50" data-testid="card-margem-5">
-                            <CardContent className="p-4">
-                              <p className="text-sm font-medium mb-2">Margem 5%</p>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Bruta:</span>
-                                  <span>{formatCurrency(consultaData.folhaAtual.margem_bruta_5)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Utilizada:</span>
-                                  <span>{formatCurrency(consultaData.folhaAtual.margem_utilizada_5)}</span>
-                                </div>
-                                <div className="flex justify-between font-medium">
-                                  <span>Saldo:</span>
-                                  <span className={(Number(consultaData.folhaAtual.margem_saldo_5 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
-                                    {formatCurrency(consultaData.folhaAtual.margem_saldo_5)}
-                                  </span>
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "hsl(var(--muted))" }}>
+                                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: st.barra }} />
+                                  </div>
+                                  <div className="flex justify-between gap-2 flex-wrap text-xs text-muted-foreground tnum">
+                                    <span>Usada <b className="text-foreground/80">{formatCurrency(m.usada)}</b></span>
+                                    <span>Bruta <b className="text-foreground/80">{formatCurrency(m.bruta)}</b></span>
+                                  </div>
                                 </div>
                               </div>
-                            </CardContent>
-                          </Card>
-
-                          <Card className="bg-muted/50" data-testid="card-margem-beneficio-5">
-                            <CardContent className="p-4">
-                              <p className="text-sm font-medium mb-2">Benefício 5%</p>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Bruta:</span>
-                                  <span>{formatCurrency(consultaData.folhaAtual.margem_beneficio_bruta_5)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Utilizada:</span>
-                                  <span>{formatCurrency(consultaData.folhaAtual.margem_beneficio_utilizada_5)}</span>
-                                </div>
-                                <div className="flex justify-between font-medium">
-                                  <span>Saldo:</span>
-                                  <span className={(Number(consultaData.folhaAtual.margem_beneficio_saldo_5 ?? 0)) >= 0 ? "text-green-600" : "text-red-600"}>
-                                    {formatCurrency(consultaData.folhaAtual.margem_beneficio_saldo_5)}
-                                  </span>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
+                            );
+                          })}
                         </div>
 
-                        <div className="mt-4 pt-4 border-t">
-                          <div className="grid grid-cols-3 gap-4 text-sm">
-                            <div className="text-center">
-                              <p className="text-muted-foreground">Total Créditos</p>
-                              <p className="font-medium text-green-600">{formatCurrency(consultaData.folhaAtual.creditos ?? consultaData.folhaAtual.salario_bruto)}</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-muted-foreground">Total Débitos</p>
-                              <p className="font-medium text-red-600">{formatCurrency(consultaData.folhaAtual.debitos ?? consultaData.folhaAtual.descontos_brutos)}</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-muted-foreground">Valor Líquido</p>
-                              <p className="font-medium">{formatCurrency(consultaData.folhaAtual.liquido ?? consultaData.folhaAtual.salario_liquido)}</p>
-                            </div>
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 rounded-xl bg-muted/50 overflow-hidden">
+                          <div className="px-[18px] py-3.5 flex flex-col gap-0.5">
+                            <span className="ci-label">Total créditos</span>
+                            <span className="text-lg font-extrabold tnum" style={{ color: "var(--ci-pos)" }}>
+                              {formatCurrency(consultaData.folhaAtual.creditos ?? consultaData.folhaAtual.salario_bruto)}
+                            </span>
+                          </div>
+                          <div className="px-[18px] py-3.5 flex flex-col gap-0.5 sm:border-l">
+                            <span className="ci-label">Total débitos</span>
+                            <span className="text-lg font-extrabold tnum" style={{ color: "var(--ci-neg)" }}>
+                              {formatCurrency(consultaData.folhaAtual.debitos ?? consultaData.folhaAtual.descontos_brutos)}
+                            </span>
+                          </div>
+                          <div className="px-[18px] py-3.5 flex flex-col gap-0.5 sm:border-l">
+                            <span className="ci-label">Valor líquido</span>
+                            <span className="text-lg font-extrabold tnum">
+                              {formatCurrency(consultaData.folhaAtual.liquido ?? consultaData.folhaAtual.salario_liquido)}
+                            </span>
                           </div>
                         </div>
                         </>
@@ -2311,13 +2438,12 @@ export default function VendasConsulta() {
                                   data-testid="checkbox-select-all"
                                 />
                               </TableHead>
-                              <TableHead>Tipo</TableHead>
-                              <TableHead>Banco</TableHead>
-                              <TableHead>Nº Contrato</TableHead>
-                              <TableHead className="text-right">Valor Parcela</TableHead>
-                              <TableHead className="text-right">Parc. Rest.</TableHead>
+                              <TableHead>Banco · tipo</TableHead>
+                              <TableHead>Nº contrato</TableHead>
+                              <TableHead className="text-right">Parcela</TableHead>
+                              <TableHead className="text-right">Parc. rest.</TableHead>
                               <TableHead className="text-center w-20">Taxa (%)</TableHead>
-                              <TableHead className="text-right">Saldo Devedor</TableHead>
+                              <TableHead className="text-right">Saldo dev.</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -2342,18 +2468,52 @@ export default function VendasConsulta() {
                                     />
                                   </TableCell>
                                   <TableCell>
-                                    <Badge variant="outline" className="capitalize text-xs">
-                                      {mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato || contrato.tipoContrato)}
-                                    </Badge>
+                                    {/* Monograma no lugar de logo: 2 letras com cor fixa por banco */}
+                                    {(() => {
+                                      const nomeBancoC = contrato.banco || contrato.BANCO_DO_EMPRESTIMO || "-";
+                                      const paletaC = corDoBanco(nomeBancoC);
+                                      return (
+                                        <div className="flex items-center gap-3 min-w-0">
+                                          <span
+                                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] text-xs font-extrabold"
+                                            style={{ background: paletaC.bg, color: paletaC.fg }}
+                                          >
+                                            {siglaBanco(nomeBancoC)}
+                                          </span>
+                                          <div className="flex flex-col gap-0.5 min-w-0">
+                                            <span className="text-sm font-bold truncate">
+                                              <CopyableField value={nomeBancoC} displayValue={nomeBancoC} testId={`button-copy-banco-contrato-${idx}`} toast={toast} />
+                                            </span>
+                                            <span className="text-[11.5px] font-semibold uppercase text-muted-foreground truncate">
+                                              {mapNomenclatura("TIPO_CONTRATO", contrato.tipo_contrato || contrato.tipoContrato)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                   </TableCell>
-                                  <TableCell className="font-medium">
-                                    <CopyableField value={contrato.banco || contrato.BANCO_DO_EMPRESTIMO} displayValue={contrato.banco || contrato.BANCO_DO_EMPRESTIMO || "-"} testId={`button-copy-banco-contrato-${idx}`} toast={toast} />
-                                  </TableCell>
-                                  <TableCell className="font-mono text-xs">
+                                  <TableCell className="text-[13px] tnum whitespace-nowrap">
                                     <CopyableField value={contrato.numero_contrato || contrato.numeroContrato} displayValue={contrato.numero_contrato || contrato.numeroContrato || "-"} testId={`button-copy-contrato-${idx}`} toast={toast} />
                                   </TableCell>
-                                  <TableCell className="text-right">{formatCurrency(valorParcela)}</TableCell>
-                                  <TableCell className="text-right">{parcelasRestantes || "-"}</TableCell>
+                                  <TableCell className="text-right text-[15px] font-extrabold tnum">{formatCurrency(valorParcela)}</TableCell>
+                                  <TableCell className="text-right">
+                                    {/* Mini barra: restantes ÷ prazo total. O prazo total não vem
+                                        na base, então o handoff manda usar 120 de referência. */}
+                                    {parcelasRestantes ? (
+                                      <div className="flex flex-col items-end gap-1.5">
+                                        <span className="text-[13.5px] font-bold tnum">{parcelasRestantes}x</span>
+                                        <div className="h-1 w-[70px] rounded-full overflow-hidden" style={{ background: "hsl(var(--muted))" }}>
+                                          <div
+                                            className="h-full rounded-full"
+                                            style={{
+                                              width: `${Math.min(100, Math.round((Number(parcelasRestantes) / Number(contrato.prazo_total || contrato.prazoTotal || 120)) * 100))}%`,
+                                              background: "var(--brand)",
+                                            }}
+                                          />
+                                        </div>
+                                      </div>
+                                    ) : "-"}
+                                  </TableCell>
                                   <TableCell>
                                     <Input type="number" step="0.01" min="0" placeholder="0.00" className="w-16 h-8 text-sm text-center"
                                       value={taxasContratos[idx] || ""}
@@ -2370,6 +2530,23 @@ export default function VendasConsulta() {
                                 </TableRow>
                               );
                             })}
+                            {/* Rodapé do handoff: total em parcelas da carteira */}
+                            <TableRow className="bg-muted/40 hover:bg-muted/40">
+                              <TableCell />
+                              <TableCell className="text-[13px] font-bold text-muted-foreground">Total em parcelas</TableCell>
+                              <TableCell />
+                              <TableCell className="text-right text-[15px] font-extrabold tnum" style={{ color: "var(--brand-text)" }} data-testid="text-total-parcelas">
+                                {formatCurrency(
+                                  consultaData.contratos.reduce(
+                                    (soma, c) => soma + parseCurrency(c.valor_parcela || c.valorParcela),
+                                    0,
+                                  ),
+                                )}
+                              </TableCell>
+                              <TableCell />
+                              <TableCell />
+                              <TableCell />
+                            </TableRow>
                           </TableBody>
                         </Table>
                       </div>
