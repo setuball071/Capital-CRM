@@ -230,7 +230,7 @@ export default function SimCriadorProposta() {
         : identidadeTravada
           ? (user?.name || "Corretor")
           : (corNome || "Corretor"),
-      corCargo: corCargo || "Consultor de Crédito",
+      corCargo: corCargo,
       corWa,
       obs,
     });

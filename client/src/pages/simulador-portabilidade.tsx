@@ -628,6 +628,15 @@ export default function SimuladorPortabilidadePage() {
         : (pdfConsultorNome.trim() || user?.name || "Consultor"),
       tel: pdfConsultorTel.trim(),
     };
+    // Cargo vazio NAO vira "Consultor": antes o padrao entrava sozinho e nao
+    // havia como tirar. Quem nunca mexeu continua com "Consultor", porque esse
+    // e o valor inicial do campo — apagar e uma escolha deliberada.
+    const cargoConsultor = pdfConsultorTitulo.trim();
+    // Sem nome, sem cargo, sem telefone e sem foto, o bloco colorido sairia
+    // vazio no documento. Melhor ele nao existir.
+    const temConsultor = Boolean(
+      (pdfIncluirNome && corretor.nome) || cargoConsultor || corretor.tel || (pdfIncluirFoto && fotoAtiva),
+    );
     // Foto do consultor: base64 se disponível e toggle ativo, senão iniciais
     const consultorIniciais = String(corretor.nome).split(" ").filter(Boolean).map((n: string) => n[0].toUpperCase()).slice(0, 2).join("");
     const consultorFotoHtml = pdfIncluirFoto
@@ -717,14 +726,14 @@ export default function SimuladorPortabilidadePage() {
     </div>
   </div>
   <div class="info-bar">
-    <div class="consultor-side">
+    ${temConsultor ? `<div class="consultor-side">
       ${consultorFotoHtml}
       <div class="consultor-info">
-        <div class="consultor-label">${escHtml(pdfConsultorTitulo.trim() || "Consultor")}</div>
+        ${cargoConsultor ? `<div class="consultor-label">${escHtml(cargoConsultor)}</div>` : ""}
         ${pdfIncluirNome ? `<div class="consultor-nome">${corretor.nome}</div>` : ""}
         ${corretor.tel ? `<div class="consultor-tel">${formatarTelefone(corretor.tel)}</div>` : ""}
       </div>
-    </div>
+    </div>` : ""}
     ${hasCliente ? `<div class="cliente-side">
       ${clienteNome ? `<div class="cli-item"><div class="cli-label">Cliente</div><div class="cli-val">${clienteNome}</div></div>` : ""}
       ${clienteCpf ? `<div class="cli-item"><div class="cli-label">CPF</div><div class="cli-val">${clienteCpf}</div></div>` : ""}
