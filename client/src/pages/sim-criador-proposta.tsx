@@ -151,6 +151,13 @@ export default function SimCriadorProposta() {
     () => localStorage.getItem("pdf_consultor_tel") ?? ""
   );
   const [obs, setObs] = useState("");
+  // Mesma regra do simulador: em ambiente de assinante o nome vem do acesso.
+  // Sem isto, esta tela era a porta de saida da trava contra compartilhamento.
+  const identidadeTravada = tenant?.interno !== true;
+  // Quem tem o proprio nome na logo nao quer ele repetido no documento.
+  const [incluirNome, setIncluirNome] = useState<boolean>(
+    () => localStorage.getItem("pdf_incluir_nome") !== "false",
+  );
 
   const [proposta, setProposta] = useState<PropostaData | null>(null);
 
@@ -216,12 +223,18 @@ export default function SimCriadorProposta() {
       convenio,
       contratos: [...contratos],
       novas: [...novas],
-      corNome: corNome || "Corretor",
+      // Nome desligado vira string vazia: o PDF e a tela ja sabem omitir campo
+      // vazio, entao nao precisa de outra bandeira atravessando os componentes.
+      corNome: !incluirNome
+        ? ""
+        : identidadeTravada
+          ? (user?.name || "Corretor")
+          : (corNome || "Corretor"),
       corCargo: corCargo || "Consultor de Crédito",
       corWa,
       obs,
     });
-  }, [nome, cpf, matricula, convenio, contratos, novas, corNome, corCargo, corWa, obs]);
+  }, [nome, cpf, matricula, convenio, contratos, novas, corNome, corCargo, corWa, obs, identidadeTravada, user?.name, incluirNome]);
 
   const limpar = () => {
     setNome(""); setCpf(""); setMatricula(""); setConvenio(""); setObs("");
@@ -385,10 +398,11 @@ export default function SimCriadorProposta() {
     // assinatura
     y += 4; doc.setDrawColor(220, 220, 220); doc.line(ml, y, W - mr, y); y += 6;
     doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
-    doc.text(proposta.corNome, ml, y + 4);
+    if (proposta.corNome) doc.text(proposta.corNome, ml, y + 4);
     doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
     const subCor = [proposta.corCargo, proposta.corWa].filter(Boolean).join(" · ");
-    doc.text(subCor, ml, y + 8.5);
+    // Sem o nome, o cargo sobe para a linha dele e nao fica buraco na assinatura.
+    doc.text(subCor, ml, proposta.corNome ? y + 8.5 : y + 4);
     if (logoBase64 && logoDims && logoDims.w > 0 && logoDims.h > 0) {
       // logo menor na assinatura — usa dimensões reais carregadas no useEffect
       const ratio2 = logoDims.w / logoDims.h;
@@ -614,9 +628,25 @@ export default function SimCriadorProposta() {
                 <label className="text-[11px] font-medium text-muted-foreground">Nome</label>
                 <input
                   className="h-9 rounded-lg border border-input bg-background px-3 text-[13px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  value={corNome} onChange={e => setCorNome(e.target.value)}
+                  value={identidadeTravada ? (user?.name || "") : corNome}
+                  onChange={e => setCorNome(e.target.value)}
+                  readOnly={identidadeTravada}
+                  title={identidadeTravada ? "O nome vem do seu acesso e não pode ser alterado" : undefined}
+                  style={identidadeTravada ? { background: "hsl(var(--muted))", cursor: "not-allowed" } : undefined}
                   placeholder="Nome do corretor"
                 />
+                <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer mt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={incluirNome}
+                    onChange={(e) => {
+                      setIncluirNome(e.target.checked);
+                      localStorage.setItem("pdf_incluir_nome", String(e.target.checked));
+                    }}
+                    data-testid="toggle-criador-incluir-nome"
+                  />
+                  Exibir meu nome no PDF
+                </label>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-medium text-muted-foreground">Cargo / Equipe</label>
@@ -838,7 +868,7 @@ function PropostaVisual({
       {/* assinatura */}
       <div className="flex items-center gap-3 px-6 py-3 border-t border-border bg-muted/20">
         <div>
-          <div className="text-[13px] font-medium text-foreground">{proposta.corNome}</div>
+          {proposta.corNome && <div className="text-[13px] font-medium text-foreground">{proposta.corNome}</div>}
           <div className="text-[11px] text-muted-foreground">
             {[proposta.corCargo, proposta.corWa].filter(Boolean).join(" · ")}
           </div>
