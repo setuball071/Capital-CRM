@@ -10781,43 +10781,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     }
   });
 
-  // ── Matriz de combinações órgão x situação funcional ───────────────────────
-  // Os filtros dependentes precisam saber, para cada situação, quais órgãos têm
-  // cliente — e vice-versa. São só ~3.500 combinações: em vez de ir ao banco a
-  // cada clique (3s por consulta), manda a matriz inteira uma vez e a tela
-  // resolve na hora.
-  let cacheCombinacoes: { linhas: any[]; em: number } | null = null;
-
-  app.get("/api/clientes/filtros/combinacoes", requireAuth, async (_req: any, res) => {
-    try {
-      if (cacheCombinacoes && Date.now() - cacheCombinacoes.em < 60 * 60_000) {
-        return res.json({ combinacoes: cacheCombinacoes.linhas, deCache: true });
-      }
-      // Sai das MESMAS tabelas que o filtro consulta (pessoa.orgaodesc e a folha
-      // mais recente). Tirar de clientes_vinculo daria combinação que o filtro
-      // depois não encontra — a tela prometeria o que a busca não entrega.
-      const r = await db.execute(sql`
-        SELECT btrim(p.orgaodesc) AS orgao, btrim(f.sit_func_no_mes) AS sit_func, count(*)::int AS qtd
-        FROM clientes_pessoa p
-        JOIN clientes_folha_ultima f ON f.pessoa_id = p.id
-        WHERE COALESCE(btrim(p.orgaodesc), '') <> ''
-          AND COALESCE(btrim(f.sit_func_no_mes), '') <> ''
-          AND btrim(f.sit_func_no_mes) !~ '^[0-9]'
-        GROUP BY 1, 2
-      `);
-      const linhas = (r.rows as any[]).map((x) => ({
-        orgao: x.orgao as string,
-        situacao: x.sit_func as string,
-        qtd: Number(x.qtd) || 0,
-      }));
-      cacheCombinacoes = { linhas, em: Date.now() };
-      return res.json({ combinacoes: linhas, deCache: false });
-    } catch (error) {
-      console.error("Get combinacoes error:", error);
-      return res.status(500).json({ message: "Erro ao buscar combinações de filtro" });
-    }
-  });
-
   // Lista de situações funcionais — cache de 10 min (ver rota).
   // Vale para todos os ambientes: a base de clientes é compartilhada.
   let cacheSitFunc: { valores: string[]; em: number } | null = null;

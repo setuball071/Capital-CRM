@@ -1363,16 +1363,7 @@ export class DbStorage implements IStorage {
       pessoaConditions.push(ilike(clientesPessoa.convenio, `%${filtros.convenio}%`));
     }
     if (filtros.orgao) {
-      // Um ou vários órgãos (os filtros dependentes marcam vários de uma vez)
-      const orgaos = Array.isArray(filtros.orgao) ? filtros.orgao : [filtros.orgao];
-      const validos = orgaos.filter((o) => o && String(o).trim());
-      if (validos.length === 1) {
-        pessoaConditions.push(ilike(clientesPessoa.orgaodesc, `%${validos[0]}%`));
-      } else if (validos.length > 1) {
-        pessoaConditions.push(
-          or(...validos.map((o) => ilike(clientesPessoa.orgaodesc, `%${o}%`))) as any,
-        );
-      }
+      pessoaConditions.push(ilike(clientesPessoa.orgaodesc, `%${filtros.orgao}%`));
     }
     if (filtros.uf) {
       pessoaConditions.push(eq(clientesPessoa.uf, filtros.uf));
@@ -1468,15 +1459,7 @@ export class DbStorage implements IStorage {
         whereConditions.push(sql`p.convenio ILIKE ${'%' + filtros.convenio + '%'}`);
       }
       if (filtros.orgao) {
-        const orgaos = (Array.isArray(filtros.orgao) ? filtros.orgao : [filtros.orgao])
-          .filter((o) => o && String(o).trim());
-        if (orgaos.length === 1) {
-          whereConditions.push(sql`p.orgaodesc ILIKE ${'%' + orgaos[0] + '%'}`);
-        } else if (orgaos.length > 1) {
-          whereConditions.push(
-            sql`(${sql.join(orgaos.map((o) => sql`p.orgaodesc ILIKE ${'%' + o + '%'}`), sql` OR `)})`,
-          );
-        }
+        whereConditions.push(sql`p.orgaodesc ILIKE ${'%' + filtros.orgao + '%'}`);
       }
       if (filtros.uf) {
         whereConditions.push(sql`p.uf = ${filtros.uf}`);
