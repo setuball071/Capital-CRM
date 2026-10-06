@@ -1214,7 +1214,10 @@ export const filtrosPedidoListaSchema = z.object({
     .optional(),
   // Filtros de pessoa
   convenio: z.string().optional(),
-  orgao: z.string().optional(),
+  // Órgão virou multi: os filtros dependentes marcam todos os órgãos compatíveis
+  // com a situação escolhida, e o usuário desmarca o que não quer. Aceita texto
+  // sozinho para não quebrar filtro salvo antes da mudança.
+  orgao: z.union([z.string(), z.array(z.string())]).optional(),
   uf: z.string().optional(),
   idade_min: z.number().optional(),
   idade_max: z.number().optional(),

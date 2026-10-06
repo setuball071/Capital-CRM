@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Combobox } from "@/components/ui/combobox";
 import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -29,11 +28,17 @@ interface BaseRef {
   contatos: boolean;
 }
 
+interface Combinacao {
+  orgao: string;
+  situacao: string;
+  qtd: number;
+}
+
 interface Filtros {
   base_tag?: string;
   base_ref?: string;
   convenio?: string;
-  orgao?: string;
+  orgao?: string | string[];
   uf?: string;
   idade_min?: number;
   idade_max?: number;
@@ -127,76 +132,6 @@ const UF_LIST = [
   "RO", "RR", "RS", "SC", "SE", "SP", "TO"
 ];
 
-interface OrgaoComboboxProps {
-  orgaosComCodigo: OrgaoComCodigo[];
-  orgaosFallback?: string[];
-  value: string | undefined;
-  onValueChange: (value: string | undefined) => void;
-  placeholder?: string;
-  searchPlaceholder?: string;
-  emptyText?: string;
-  "data-testid"?: string;
-}
-
-function OrgaoCombobox({
-  orgaosComCodigo,
-  orgaosFallback = [],
-  value,
-  onValueChange,
-  placeholder = "Selecione...",
-  searchPlaceholder = "Buscar...",
-  emptyText = "Nenhum item encontrado.",
-  "data-testid": testId,
-}: OrgaoComboboxProps) {
-  const useCodigo = orgaosComCodigo && orgaosComCodigo.length > 0;
-
-  if (!useCodigo) {
-    return (
-      <Combobox
-        options={orgaosFallback}
-        value={value}
-        onValueChange={onValueChange}
-        placeholder={placeholder}
-        searchPlaceholder={searchPlaceholder}
-        emptyText={emptyText}
-        data-testid={testId}
-      />
-    );
-  }
-
-  const nomeParaCodigo = orgaosComCodigo.reduce((acc, org) => {
-    acc[org.nome] = org.codigo;
-    return acc;
-  }, {} as Record<string, string>);
-
-  const codigoParaNome = orgaosComCodigo.reduce((acc, org) => {
-    acc[org.codigo] = org.nome;
-    return acc;
-  }, {} as Record<string, string>);
-
-  const nomes = orgaosComCodigo.map(o => o.nome).sort((a, b) => a.localeCompare(b, "pt-BR"));
-
-  const nomeExibicao = value ? (codigoParaNome[value] || value) : undefined;
-
-  return (
-    <Combobox
-      options={nomes}
-      value={nomeExibicao}
-      onValueChange={(nome) => {
-        if (nome) {
-          const codigo = nomeParaCodigo[nome] || nome;
-          onValueChange(codigo);
-        } else {
-          onValueChange(undefined);
-        }
-      }}
-      placeholder={placeholder}
-      searchPlaceholder={searchPlaceholder}
-      emptyText={emptyText}
-      data-testid={testId}
-    />
-  );
-}
 
 export default function CompraLista() {
   const { toast } = useToast();
@@ -220,6 +155,83 @@ export default function CompraLista() {
   const { data: basesDisponiveis } = useQuery<BaseRef[]>({
     queryKey: ["/api/clientes/filtros/bases"],
   });
+
+  // ── Filtros dependentes ────────────────────────────────────────────────────
+  // A matriz de combinações (órgão x situação) vem pronta do servidor, umas
+  // 3.000 linhas, e a tela resolve tudo em memória: sem ida ao banco a cada
+  // clique. "Excluídos" guarda o que o usuário DESMARCOU na mão — é o que
+  // impede o sistema de remarcar sozinho o que ele tirou de propósito.
+  const { data: dadosCombinacoes } = useQuery<{ combinacoes: Combinacao[] }>({
+    queryKey: ["/api/clientes/filtros/combinacoes"],
+    staleTime: 60 * 60 * 1000,
+  });
+  const combinacoes = dadosCombinacoes?.combinacoes || [];
+  const [orgaosExcluidos, setOrgaosExcluidos] = useState<string[]>([]);
+  const [situacoesExcluidas, setSituacoesExcluidas] = useState<string[]>([]);
+
+  const sitSelecionadas = Array.isArray(filtros.sit_func)
+    ? filtros.sit_func
+    : filtros.sit_func ? [filtros.sit_func] : [];
+  const orgaosSelecionados = Array.isArray(filtros.orgao)
+    ? filtros.orgao
+    : filtros.orgao ? [filtros.orgao] : [];
+
+  // Órgãos que têm gente nas situações escolhidas (e vice-versa). Sem escolha
+  // de um lado, o outro mostra tudo — ausência de seleção não é "tudo marcado".
+  const orgaosCompativeis = useMemo(() => {
+    if (!combinacoes.length) return null;
+    const alvo = sitSelecionadas.filter((x) => x !== "__VAZIO__");
+    const set = new Set<string>();
+    for (const c of combinacoes) {
+      if (!alvo.length || alvo.includes(c.situacao)) set.add(c.orgao);
+    }
+    return set;
+  }, [combinacoes, sitSelecionadas.join("|")]);
+
+  const situacoesCompativeis = useMemo(() => {
+    if (!combinacoes.length) return null;
+    const set = new Set<string>();
+    for (const c of combinacoes) {
+      if (!orgaosSelecionados.length || orgaosSelecionados.includes(c.orgao)) set.add(c.situacao);
+    }
+    return set;
+  }, [combinacoes, orgaosSelecionados.join("|")]);
+
+  // Quantos clientes existem nas combinações marcadas dos dois filtros.
+  const estimativaCombinacoes = useMemo(() => {
+    if (!combinacoes.length) return null;
+    if (!sitSelecionadas.length && !orgaosSelecionados.length) return null;
+    let total = 0;
+    for (const c of combinacoes) {
+      const okSit = !sitSelecionadas.length || sitSelecionadas.includes(c.situacao);
+      const okOrg = !orgaosSelecionados.length || orgaosSelecionados.includes(c.orgao);
+      if (okSit && okOrg) total += c.qtd;
+    }
+    return total;
+  }, [combinacoes, sitSelecionadas.join("|"), orgaosSelecionados.join("|")]);
+
+  // Escolheu situação -> marca sozinho os órgãos compatíveis, menos os que a
+  // pessoa já tinha desmarcado. Mexer no órgão NÃO dispara isto (ver handler).
+  const aplicarSituacoes = (novas: string[]) => {
+    setSituacoesExcluidas([]);
+    if (!novas.length) {
+      setOrgaosExcluidos([]);
+      setFiltros({ ...filtros, sit_func: undefined, orgao: undefined });
+      return;
+    }
+    const alvo = novas.filter((x) => x !== "__VAZIO__");
+    const compativeis = new Set<string>();
+    for (const c of combinacoes) if (!alvo.length || alvo.includes(c.situacao)) compativeis.add(c.orgao);
+    const marcados = Array.from(compativeis).filter((o) => !orgaosExcluidos.includes(o));
+    setFiltros({ ...filtros, sit_func: novas, orgao: marcados.length ? marcados : undefined });
+  };
+
+  // Mexeu no órgão na mão: o que sumiu da seleção vira exclusão deliberada.
+  const aplicarOrgaos = (novos: string[]) => {
+    const universo = orgaosCompativeis ? Array.from(orgaosCompativeis) : novos;
+    setOrgaosExcluidos(universo.filter((o) => !novos.includes(o)));
+    setFiltros({ ...filtros, orgao: novos.length ? novos : undefined });
+  };
 
   // A base já entra escolhida na competência mais recente. A opção "Mais
   // Recente" (sem competência) saiu: ela caía num plano de consulta que levava
@@ -530,9 +542,17 @@ export default function CompraLista() {
                   <Filter className="w-5 h-5" />
                   Filtros
                 </span>
+                <span className="text-sm font-normal text-muted-foreground">
+                  {/* Estimativa das combinações marcadas: sai da matriz, não do
+                      banco, por isso aparece na hora. O número exato continua
+                      sendo o do botão Simular. */}
+                  {estimativaCombinacoes != null && (
+                    <span className="mr-3" data-testid="text-estimativa-combinacoes">
+                      Nessas combinações: <strong className="text-foreground">{estimativaCombinacoes.toLocaleString("pt-BR")}</strong> clientes
+                    </span>
+                  )}
                 {consumo && (
                   <span
-                    className="text-sm font-normal text-muted-foreground"
                     data-testid="text-consumo-leads"
                     title="Conta todo lead gerado no mês, repetido ou não"
                   >
@@ -548,6 +568,7 @@ export default function CompraLista() {
                     )}
                   </span>
                 )}
+                </span>
               </CardTitle>
               <CardDescription>
                 Selecione os filtros para encontrar os clientes desejados
@@ -599,16 +620,34 @@ export default function CompraLista() {
 
                 <div className="space-y-2">
                   <Label htmlFor="orgao">Órgão</Label>
-                  <OrgaoCombobox
-                    orgaosComCodigo={filtrosDisponiveis?.orgaosComCodigo || []}
-                    orgaosFallback={filtrosDisponiveis?.orgaos || []}
-                    value={filtros.orgao}
-                    onValueChange={(v) => setFiltros({ ...filtros, orgao: v })}
-                    placeholder="Todos os órgãos"
-                    searchPlaceholder="Buscar órgão..."
-                    emptyText="Nenhum órgão encontrado."
-                    data-testid="combobox-orgao"
-                  />
+                  {(() => {
+                    // Opções = só os órgãos compatíveis com a situação escolhida.
+                    // Incompatível não aparece; desmarcado continua na lista,
+                    // visível para ser remarcado.
+                    const comCodigo = filtrosDisponiveis?.orgaosComCodigo || [];
+                    const rotulos = comCodigo.reduce((acc: Record<string, string>, o: OrgaoComCodigo) => {
+                      acc[o.codigo] = o.nome;
+                      return acc;
+                    }, {});
+                    const universo = comCodigo.length
+                      ? comCodigo.map((o: OrgaoComCodigo) => o.codigo)
+                      : (filtrosDisponiveis?.orgaos || []);
+                    const opcoes = orgaosCompativeis
+                      ? universo.filter((c: string) => orgaosCompativeis.has(c))
+                      : universo;
+                    return (
+                      <MultiSelectCombobox
+                        options={opcoes}
+                        value={orgaosSelecionados}
+                        onValueChange={aplicarOrgaos}
+                        getLabel={(c) => rotulos[c] || c}
+                        placeholder={sitSelecionadas.length ? "Todos os compatíveis" : "Todos os órgãos"}
+                        searchPlaceholder="Buscar órgão..."
+                        emptyText="Nenhum órgão compatível."
+                        data-testid="combobox-orgao"
+                      />
+                    );
+                  })()}
                 </div>
 
                 <div className="space-y-2">
@@ -660,11 +699,16 @@ export default function CompraLista() {
                 <div className="space-y-2">
                   <Label htmlFor="sit_func">Situação Funcional</Label>
                   <MultiSelectCombobox
-                    options={["Sem situação funcional", ...sitFuncOpcoes]}
-                    value={(Array.isArray(filtros.sit_func) ? filtros.sit_func : filtros.sit_func ? [filtros.sit_func] : []).map(v => v === "__VAZIO__" ? "Sem situação funcional" : v)}
+                    options={[
+                      "Sem situação funcional",
+                      ...(situacoesCompativeis
+                        ? sitFuncOpcoes.filter((x) => situacoesCompativeis.has(x))
+                        : sitFuncOpcoes),
+                    ]}
+                    value={sitSelecionadas.map(v => v === "__VAZIO__" ? "Sem situação funcional" : v)}
                     onValueChange={(v) => {
                       const mapped = v.map(val => val === "Sem situação funcional" ? "__VAZIO__" : val);
-                      setFiltros({ ...filtros, sit_func: mapped.length > 0 ? mapped : undefined });
+                      aplicarSituacoes(mapped);
                     }}
                     placeholder={carregandoSitFunc ? "Carregando situações..." : "Todas as situações"}
                     searchPlaceholder="Buscar situação..."
@@ -984,6 +1028,8 @@ export default function CompraLista() {
                   onClick={() => {
                     setFiltros({});
                     setSimulacao(null);
+                    setOrgaosExcluidos([]);
+                    setSituacoesExcluidas([]);
                   }}
                   data-testid="button-limpar"
                 >
