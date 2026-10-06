@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
+import { calcularIdade as calcularIdadeSemFuso, parseDataNascimento, formatDataNascimento } from "@/lib/formatters";
 import { ptBR } from "date-fns/locale";
 
 interface ConsultaResultado {
@@ -341,36 +342,16 @@ function formatDateFull(dateStr: string | null): string {
   }
 }
 
+// Sem `new Date(...)`: o servidor manda a data em UTC e o navegador em UTC-3
+// devolvia um dia a menos. Ver parseDataNascimento em lib/formatters.
 function calcularIdade(dataNascimento: string | null): number | null {
-  if (!dataNascimento) return null;
-  try {
-    const nascimento = new Date(dataNascimento);
-    const hoje = new Date();
-    let idade = hoje.getFullYear() - nascimento.getFullYear();
-    const mesAtual = hoje.getMonth();
-    const mesNascimento = nascimento.getMonth();
-    const diaAtual = hoje.getDate();
-    const diaNascimento = nascimento.getDate();
-    
-    // Ajusta se ainda não fez aniversário este ano
-    if (mesAtual < mesNascimento || (mesAtual === mesNascimento && diaAtual < diaNascimento)) {
-      idade--;
-    }
-    return idade >= 0 ? idade : null;
-  } catch {
-    return null;
-  }
+  const idade = calcularIdadeSemFuso(dataNascimento);
+  return idade != null && idade >= 0 ? idade : null;
 }
 
 function verificarAniversarioNoMes(dataNascimento: string | null): boolean {
-  if (!dataNascimento) return false;
-  try {
-    const nascimento = new Date(dataNascimento);
-    const hoje = new Date();
-    return nascimento.getMonth() === hoje.getMonth();
-  } catch {
-    return false;
-  }
+  const d = parseDataNascimento(dataNascimento);
+  return d ? d.mes === new Date().getMonth() + 1 : false;
 }
 
 function formatProperName(name: string | null | undefined): string {

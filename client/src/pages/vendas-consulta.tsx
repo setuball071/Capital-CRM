@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { calcularIdade, formatDataNascimento } from "@/lib/formatters";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { 
@@ -1450,28 +1451,20 @@ export default function VendasConsulta() {
                       {}
                     );
 
-                    // Nascimento — funciona para timestamp ISO e string DD/MM/YYYY
+                    // Nascimento — ISO ou DD/MM/YYYY, lido sem conversao de fuso.
+                    // Com `new Date(...)` a data vinha um dia a menos: o servidor
+                    // esta em UTC e o navegador em UTC-3.
                     const renderNascimento = () => {
                       const raw = consultaData.clienteBase?.data_nascimento || consultaData.clienteBase?.dataNascimento;
-                      if (!raw) return <span>-</span>;
-                      // Se vier como string DD/MM/YYYY (estadual via extras ou campo texto)
-                      let dataFormatada: string;
-                      let idade: number;
-                      const matchBR = String(raw).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-                      if (matchBR) {
-                        const [, d, m, y] = matchBR;
-                        dataFormatada = `${d}/${m}/${y}`;
-                        const hoje = new Date();
-                        idade = hoje.getFullYear() - Number(y);
-                        if (hoje.getMonth() + 1 < Number(m) || (hoje.getMonth() + 1 === Number(m) && hoje.getDate() < Number(d))) idade--;
-                      } else {
-                        const dt = new Date(raw);
-                        dataFormatada = dt.toLocaleDateString("pt-BR");
-                        const hoje = new Date();
-                        idade = hoje.getFullYear() - dt.getFullYear();
-                        if (hoje.getMonth() < dt.getMonth() || (hoje.getMonth() === dt.getMonth() && hoje.getDate() < dt.getDate())) idade--;
-                      }
-                      return <><span>{dataFormatada}</span><Badge variant="secondary">{idade} anos</Badge></>;
+                      const dataFormatada = formatDataNascimento(raw);
+                      if (dataFormatada === "-") return <span>-</span>;
+                      const idade = calcularIdade(raw);
+                      return (
+                        <>
+                          <span>{dataFormatada}</span>
+                          {idade != null && <Badge variant="secondary">{idade} anos</Badge>}
+                        </>
+                      );
                     };
 
                     if (isMaranhao) {

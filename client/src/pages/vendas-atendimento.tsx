@@ -21,6 +21,7 @@ import { PhoneClientSearch } from "@/components/PhoneClientSearch";
 import { ContatosDoCliente } from "@/components/ContatosDoCliente";
 import { SimulacaoRapida } from "@/components/SimulacaoRapida";
 import { useLocation } from "wouter";
+import { calcularIdade as calcularIdadeSemFuso, formatDataNascimento, parseDataNascimento } from "@/lib/formatters";
 import { 
   Loader2, Play, Phone, MessageSquare, Mail, User, Building, CreditCard, Save, SkipForward, 
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
@@ -868,16 +869,14 @@ export default function VendasAtendimento() {
                         {(() => {
                           const dataNasc = atendimentoAtual.clienteBase?.data_nascimento || atendimentoAtual.clienteBase?.dataNascimento;
                           if (!dataNasc) return <span>-</span>;
-                          const dataFormatada = new Date(dataNasc).toLocaleDateString("pt-BR");
-                          const hoje = new Date();
-                          const nascimento = new Date(dataNasc);
-                          let idade = hoje.getFullYear() - nascimento.getFullYear();
-                          const mesAtual = hoje.getMonth();
-                          const mesNasc = nascimento.getMonth();
-                          if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < nascimento.getDate())) {
-                            idade--;
-                          }
-                          const isAniversarianteDoMes = mesAtual === mesNasc;
+                          // Sem `new Date(...)`: servidor em UTC + navegador em
+                          // UTC-3 tiravam um dia da data.
+                          const dataFormatada = formatDataNascimento(dataNasc);
+                          const idade = calcularIdadeSemFuso(dataNasc) ?? 0;
+                          const partes = parseDataNascimento(dataNasc);
+                          const isAniversarianteDoMes = partes
+                            ? partes.mes === new Date().getMonth() + 1
+                            : false;
                           return (
                             <>
                               <span>{dataFormatada}</span>

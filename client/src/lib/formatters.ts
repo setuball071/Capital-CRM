@@ -78,3 +78,44 @@ export function parseCurrencyBR(value: unknown): number {
   const num = parseFloat(cleaned);
   return isNaN(num) ? 0 : num;
 }
+
+/**
+ * Data de nascimento sem armadilha de fuso.
+ *
+ * O servidor no Railway roda em UTC e manda `1973-03-15T00:00:00.000Z`. Como o
+ * navegador aqui esta em UTC-3, `new Date(raw).toLocaleDateString('pt-BR')`
+ * devolvia `14/03/1973` -- um dia a menos, SEMPRE. (ROBERTO FRANCISCO DE
+ * OLIVEIRA, CPF 666.637.334-00, 06/10/2026.)
+ *
+ * A saida certa e ler ano, mes e dia do proprio texto, sem criar Date e sem
+ * conversao de fuso. Aceita ISO (`1973-03-15...`) e BR (`15/03/1973`).
+ */
+export function parseDataNascimento(
+  raw: string | Date | null | undefined,
+): { dia: number; mes: number; ano: number } | null {
+  if (!raw) return null;
+  const txt = raw instanceof Date ? raw.toISOString() : String(raw);
+  const iso = txt.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return { ano: +iso[1], mes: +iso[2], dia: +iso[3] };
+  const br = txt.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return { dia: +br[1], mes: +br[2], ano: +br[3] };
+  return null;
+}
+
+/** `1973-03-15T00:00:00.000Z` ou `15/03/1973` -> `15/03/1973`. */
+export function formatDataNascimento(raw: string | Date | null | undefined): string {
+  const d = parseDataNascimento(raw);
+  if (!d) return '-';
+  return `${String(d.dia).padStart(2, '0')}/${String(d.mes).padStart(2, '0')}/${d.ano}`;
+}
+
+/** Idade em anos completos hoje, pela mesma leitura sem fuso. */
+export function calcularIdade(raw: string | Date | null | undefined): number | null {
+  const d = parseDataNascimento(raw);
+  if (!d) return null;
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - d.ano;
+  const mesHoje = hoje.getMonth() + 1;
+  if (mesHoje < d.mes || (mesHoje === d.mes && hoje.getDate() < d.dia)) idade--;
+  return idade;
+}
