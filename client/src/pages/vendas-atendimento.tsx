@@ -18,6 +18,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TagManager } from "@/components/tag-manager";
 import { PhoneClientSearch } from "@/components/PhoneClientSearch";
+import { ContatosDoCliente } from "@/components/ContatosDoCliente";
+import { SimulacaoRapida } from "@/components/SimulacaoRapida";
 import { useLocation } from "wouter";
 import { 
   Loader2, Play, Phone, MessageSquare, Mail, User, Building, CreditCard, Save, SkipForward, 
@@ -945,6 +947,19 @@ export default function VendasAtendimento() {
                         {atendimentoAtual.clienteBase?.base_tag || atendimentoAtual.folhaAtual?.competencia || "-"}
                       </Badge>
                     </div>
+
+                    {/* Mesmo componente da Consulta Individual: telefone e e-mail à
+                        vista, com WhatsApp e copiar, e filiação/endereço em "Mais
+                        informações". Antes esta tela tinha uma cópia parada no tempo. */}
+                    <ContatosDoCliente
+                      telefonesBase={atendimentoAtual.higienizacao?.telefones as any}
+                      emailsBase={atendimentoAtual.higienizacao?.emails}
+                      telefonesManuais={phoneContacts}
+                      emailsManuais={emailContacts}
+                      clienteBase={atendimentoAtual.clienteBase}
+                      onGerenciar={() => setContatosModalOpen(true)}
+                      onCopiar={handleCopyPhone}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -1132,6 +1147,17 @@ export default function VendasAtendimento() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Simulação Rápida: mesmo bloco da Consulta Individual, para dar um
+                  número ao cliente sem sair do atendimento. */}
+              {atendimentoAtual.folhaAtual && (
+                <SimulacaoRapida
+                  convenio={atendimentoAtual.clienteBase?.convenio}
+                  saldo35={atendimentoAtual.folhaAtual.margem_saldo_35 ?? atendimentoAtual.folhaAtual.margemSaldo35}
+                  saldo5beneficio={atendimentoAtual.folhaAtual.margem_beneficio_saldo_5 ?? atendimentoAtual.folhaAtual.margemBeneficioSaldo5}
+                  saldo5cartao={atendimentoAtual.folhaAtual.margem_saldo_5 ?? atendimentoAtual.folhaAtual.margemSaldo5}
+                />
+              )}
 
               {/* Contratos - Tabela Completa sem resumo */}
               <Card>
