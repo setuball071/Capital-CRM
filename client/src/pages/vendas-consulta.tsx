@@ -1166,6 +1166,22 @@ export default function VendasConsulta() {
     });
   };
 
+  // Enquanto busca, a tela avisa. Antes, mandar um CPF pela barra de cima
+  // deixava o cliente ANTERIOR na tela por alguns segundos, sem nenhum sinal de
+  // que algo estava acontecendo.
+  if (buscarMutation.isPending) {
+    const cpfBuscando = (termoBusca || cpfFromUrl || "").replace(/\D/g, "");
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+        <Loader2 className="h-9 w-9 animate-spin text-primary" />
+        <p className="text-base font-medium" data-testid="text-buscando">
+          Buscando cliente{cpfBuscando.length === 11 ? ` ${formatCPF(cpfBuscando)}` : ""}...
+        </p>
+        <p className="text-sm text-muted-foreground">Consultando folha, contratos e contatos.</p>
+      </div>
+    );
+  }
+
   if (!consultaData) {
     return (
       <div className="container mx-auto p-6 space-y-6">
