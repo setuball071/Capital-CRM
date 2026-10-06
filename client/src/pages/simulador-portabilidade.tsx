@@ -393,6 +393,10 @@ export default function SimuladorPortabilidadePage() {
   const [pdfConsultorTel, setPdfConsultorTel] = useState<string>(() => localStorage.getItem("pdf_consultor_tel") ?? "");
   const [pdfConsultorTitulo, setPdfConsultorTitulo] = useState<string>(() => localStorage.getItem("pdf_consultor_titulo") ?? "Consultor");
   const [pdfIncluirFoto, setPdfIncluirFoto] = useState<boolean>(() => localStorage.getItem("pdf_incluir_foto") !== "false");
+  // Quem tem o proprio nome na logo nao quer ele repetido logo abaixo.
+  // Esconder o proprio nome nao e o mesmo que emitir no nome de outra pessoa,
+  // entao isto nao reabre a brecha que o campo travado fechou.
+  const [pdfIncluirNome, setPdfIncluirNome] = useState<boolean>(() => localStorage.getItem("pdf_incluir_nome") !== "false");
   const [consultorDadosSalvos, setConsultorDadosSalvos] = useState(false);
   const [avatarBase64, setAvatarBase64] = useState<string>("");
   // Foto escolhida manualmente (sobrepõe avatar do perfil) — também persistida
@@ -415,12 +419,13 @@ export default function SimuladorPortabilidadePage() {
     localStorage.setItem("pdf_consultor_tel", pdfConsultorTel);
     localStorage.setItem("pdf_consultor_titulo", pdfConsultorTitulo);
     localStorage.setItem("pdf_incluir_foto", String(pdfIncluirFoto));
+    localStorage.setItem("pdf_incluir_nome", String(pdfIncluirNome));
     try { localStorage.setItem("pdf_consultor_foto", consultorFotoOverride); } catch { /* foto muito grande */ }
     // Mostra indicador "Salvo" por 2 segundos
     setConsultorDadosSalvos(true);
     const t = setTimeout(() => setConsultorDadosSalvos(false), 2000);
     return () => clearTimeout(t);
-  }, [pdfConsultorNome, pdfConsultorTel, pdfConsultorTitulo, pdfIncluirFoto, consultorFotoOverride]);
+  }, [pdfConsultorNome, pdfConsultorTel, pdfConsultorTitulo, pdfIncluirFoto, pdfIncluirNome, consultorFotoOverride]);
 
   // Carrega avatar do perfil em base64 (fallback se não houver seleção manual)
   useEffect(() => {
@@ -716,7 +721,7 @@ export default function SimuladorPortabilidadePage() {
       ${consultorFotoHtml}
       <div class="consultor-info">
         <div class="consultor-label">${escHtml(pdfConsultorTitulo.trim() || "Consultor")}</div>
-        <div class="consultor-nome">${corretor.nome}</div>
+        ${pdfIncluirNome ? `<div class="consultor-nome">${corretor.nome}</div>` : ""}
         ${corretor.tel ? `<div class="consultor-tel">${formatarTelefone(corretor.tel)}</div>` : ""}
       </div>
     </div>
@@ -789,7 +794,7 @@ export default function SimuladorPortabilidadePage() {
     const win = window.open(url, "_blank");
     if (win) win.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
     setShowPdfDialog(false);
-  }, [cronograma, user, logoBase64, fotoAtiva, pdfIncluirFoto, pdfClientName, pdfClientCpf, pdfClientConvenio, pdfConsultorNome, pdfConsultorTel, pdfConsultorTitulo]);
+  }, [cronograma, user, logoBase64, fotoAtiva, pdfIncluirFoto, pdfIncluirNome, pdfClientName, pdfClientCpf, pdfClientConvenio, pdfConsultorNome, pdfConsultorTel, pdfConsultorTitulo, identidadeTravada, tenant]);
 
   return (
     <div className="sim-portabilidade-page overflow-auto h-full">
@@ -1450,6 +1455,26 @@ export default function SimuladorPortabilidadePage() {
                 {identidadeTravada && (
                   <small style={{ fontSize: 10.5, color: "hsl(var(--muted-foreground))" }}>
                     O nome vem do seu acesso. Para emitir no nome de outra pessoa, ela precisa do próprio usuário.
+                  </small>
+                )}
+                {/* Quem tem o proprio nome na logo nao quer ele repetido no documento */}
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: "hsl(var(--muted-foreground))", userSelect: "none", marginTop: 4 }}>
+                  <div style={{ position: "relative", width: 32, height: 18, flexShrink: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={pdfIncluirNome}
+                      onChange={(e) => setPdfIncluirNome(e.target.checked)}
+                      style={{ opacity: 0, width: 0, height: 0, position: "absolute" }}
+                      data-testid="toggle-pdf-incluir-nome"
+                    />
+                    <span style={{ position: "absolute", inset: 0, borderRadius: 18, background: pdfIncluirNome ? "hsl(var(--primary))" : "hsl(var(--border))", transition: "background .2s", display: "block" }} />
+                    <span style={{ position: "absolute", top: 3, left: pdfIncluirNome ? 17 : 3, width: 12, height: 12, borderRadius: "50%", background: "#fff", transition: "left .2s", display: "block" }} />
+                  </div>
+                  Exibir meu nome no PDF
+                </label>
+                {!pdfIncluirNome && (
+                  <small style={{ fontSize: 10.5, color: "hsl(var(--muted-foreground))" }}>
+                    Útil quando a logo já traz o seu nome. A foto, o cargo e o telefone continuam saindo.
                   </small>
                 )}
               </div>
