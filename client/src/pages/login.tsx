@@ -13,13 +13,6 @@ function rgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-const FRASES = [
-  ["O melhor time de", "crédito consignado"],
-  ["Cada contrato fechado", "é uma vitória do time"],
-  ["Foco, consistência", "e resultado"],
-  ["Vamos bater a meta", "de hoje juntos"],
-];
-
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,7 +21,7 @@ export default function LoginPage() {
   const { toast } = useToast();
   // Marca do ambiente: cada cliente tem a sua. Sem logo cadastrada, mostramos o
   // nome do ambiente em texto — nunca a marca de outro cliente.
-  const { tenant, primaryColor, secondaryColor, loginBgColor, loginGradient, useLoginGradient } = useTenant();
+  const { tenant, primaryColor, secondaryColor, loginBgColor, loginGradient, useLoginGradient, welcomeText } = useTenant();
   const nomeAmbiente = tenant?.name || "Sistema";
   const logoAmbiente = tenant?.logoLoginUrl || tenant?.logoUrl || null;
   const corPrimaria = primaryColor || "#6C2BD9";
@@ -65,7 +58,6 @@ export default function LoginPage() {
         @keyframes cgOrbA { 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(30px,-40px) scale(1.12);} }
         @keyframes cgOrbB { 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(-40px,30px) scale(1.08);} }
         @keyframes cgOrbC { 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(20px,25px) scale(0.94);} }
-        @keyframes cgPhrase { 0%{opacity:0;transform:translateY(6px);} 3%{opacity:1;transform:translateY(0);} 22%{opacity:1;transform:translateY(0);} 25%{opacity:0;transform:translateY(-6px);} 100%{opacity:0;} }
         @keyframes cgFormIn { 0%{opacity:0;transform:translateX(24px);} 100%{opacity:1;transform:translateX(0);} }
       `}</style>
 
@@ -80,13 +72,13 @@ export default function LoginPage() {
           ) : (
             <div style={{ fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 24, letterSpacing: "-0.02em" }}>{nomeAmbiente}</div>
           )}
-          <div style={{ position: "relative", height: 64, width: 400, maxWidth: "90vw", margin: "0 auto" }}>
-            {FRASES.map((linhas, i) => (
-              <div key={i} style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, color: "#fff", lineHeight: 1.3, opacity: 0, animation: `cgPhrase 12s ease-in-out infinite ${i * 3}s` }}>
-                {linhas[0]}<br />{linhas[1]}
-              </div>
-            ))}
-          </div>
+          {/* Texto do ambiente, definido em Branding. Antes eram quatro frases
+              fixas no codigo que se revezavam — iguais em todo cliente. */}
+          {welcomeText && (
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#fff", lineHeight: 1.3, maxWidth: 400, margin: "0 auto" }}>
+              {welcomeText}
+            </div>
+          )}
         </div>
       </div>
 
