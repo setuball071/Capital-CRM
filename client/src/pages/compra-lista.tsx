@@ -221,6 +221,15 @@ export default function CompraLista() {
     queryKey: ["/api/clientes/filtros/bases"],
   });
 
+  // A base já entra escolhida na competência mais recente. A opção "Mais
+  // Recente" (sem competência) saiu: ela caía num plano de consulta que levava
+  // 13s por consulta e a simulação morria antes de responder.
+  useEffect(() => {
+    if (!filtros.base_ref && basesDisponiveis?.length) {
+      setFiltros((f) => (f.base_ref ? f : { ...f, base_ref: basesDisponiveis[0].ref }));
+    }
+  }, [basesDisponiveis, filtros.base_ref]);
+
   // retry: o padrão do app é não repetir, e uma falha pontual (deploy, rede)
   // deixava o filtro vazio até dar F5 — parecia que não havia situação nenhuma.
   // Contador do mês: todo lead gerado conta, repetido ou não
@@ -549,14 +558,13 @@ export default function CompraLista() {
                 <div className="space-y-2">
                   <Label htmlFor="base_ref" className="font-semibold">Base de Referência</Label>
                   <Select
-                    value={filtros.base_ref || "latest"}
-                    onValueChange={(v) => setFiltros({ ...filtros, base_ref: v === "latest" ? undefined : v })}
+                    value={filtros.base_ref || ""}
+                    onValueChange={(v) => setFiltros({ ...filtros, base_ref: v })}
                   >
                     <SelectTrigger data-testid="select-base-ref">
-                      <SelectValue placeholder="Mais Recente" />
+                      <SelectValue placeholder="Carregando competências..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="latest">Mais Recente</SelectItem>
                       {basesDisponiveis?.map((b) => (
                         <SelectItem key={b.ref} value={b.ref}>
                           {b.label}

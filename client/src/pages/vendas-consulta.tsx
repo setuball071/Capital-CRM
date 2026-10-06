@@ -363,7 +363,9 @@ export default function VendasConsulta() {
   const searchString = useSearch();
   const urlParams = new URLSearchParams(searchString);
   const cpfFromUrl = urlParams.get("cpf");
-  const hasAutoSearched = useRef(false);
+  // Guarda QUAL cpf já foi buscado, não um "já busquei uma vez": com o booleano,
+  // mandar outro CPF pela busca do topo estando na consulta não fazia nada.
+  const cpfJaBuscado = useRef<string | null>(null);
   
   const [termoBusca, setTermoBusca] = useState("");
   const [searchMode, setSearchMode] = useState<"padrao" | "telefone">("padrao");
@@ -735,10 +737,10 @@ export default function VendasConsulta() {
     },
   });
 
-  // Auto-search when cpf is passed via URL parameter
+  // Busca automática quando o CPF vem pela URL (busca do topo)
   useEffect(() => {
-    if (cpfFromUrl && !hasAutoSearched.current) {
-      hasAutoSearched.current = true;
+    if (cpfFromUrl && cpfJaBuscado.current !== cpfFromUrl) {
+      cpfJaBuscado.current = cpfFromUrl;
       setTermoBusca(cpfFromUrl);
       buscarMutation.mutate(cpfFromUrl);
     }
@@ -1318,7 +1320,12 @@ export default function VendasConsulta() {
                   bloco de contato, para editar e acrescentar. */}
               <Button
                 variant="outline"
-                onClick={() => { setConsultaData(null); setPortfolioInfo(null); setSelectedVinculoId(null); }}
+                onClick={() => {
+                  // Zera a memória do último CPF: senão, buscar o MESMO cliente
+                  // de novo pela barra de cima não faria nada.
+                  cpfJaBuscado.current = null;
+                  setConsultaData(null); setPortfolioInfo(null); setSelectedVinculoId(null);
+                }}
                 data-testid="button-nova-busca"
               >
                 <Search className="h-4 w-4 mr-2" />

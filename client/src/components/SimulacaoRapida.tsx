@@ -64,10 +64,7 @@ function SimCard({ title, icon, accentColor, saldo, coefDefault, isLoading, test
     : null;
 
   return (
-    <Card
-      className={temMargem ? "" : "bg-muted/40 border-dashed"}
-      data-testid={testId}
-    >
+    <Card data-testid={testId}>
       <CardContent className="p-[18px] space-y-3">
         <div className="flex items-center gap-2">
           <div style={{ color: accentColor }}>{icon}</div>
@@ -80,25 +77,22 @@ function SimCard({ title, icon, accentColor, saldo, coefDefault, isLoading, test
             <Skeleton className="h-6 w-3/4" />
             <Skeleton className="h-6 w-1/2" />
           </div>
-        ) : !temMargem ? (
-          /* Handoff: selo "Indisponível" e uma frase de orientação, no lugar
-             de só dizer que não tem margem. */
-          <div className="space-y-2.5 py-1">
-            <span
-              className="inline-flex h-[26px] items-center gap-1.5 rounded-md px-2.5 text-xs font-bold"
-              style={{ background: "var(--ci-neg-soft)", color: "var(--ci-neg)" }}
-            >
-              <Ban className="h-4 w-4" />
-              Indisponível
-            </span>
-            <p className="text-[13px] leading-relaxed text-muted-foreground">
-              {saldoNum < 0
-                ? `Margem negativa (${formatCurrency(saldoNum)}). Avalie portabilidade ou refin dos contratos atuais.`
-                : "Sem saldo nesta margem. Avalie portabilidade ou refin dos contratos atuais."}
-            </p>
-          </div>
         ) : (
           <div className="space-y-3">
+            {/* Sem saldo na última folha, o card AVISA mas não bloqueia: a margem
+                de hoje pode ser outra (desconto que caiu, contrato quitado) e
+                quem está com o cliente na linha sabe disso. */}
+            {!temMargem && (
+              <div className="flex items-start gap-1.5 rounded-md px-2.5 py-2"
+                   style={{ background: "var(--ci-neg-soft)", color: "var(--ci-neg)" }}>
+                <Ban className="h-4 w-4 shrink-0 mt-[1px]" />
+                <p className="text-[12.5px] leading-snug">
+                  {saldoNum < 0
+                    ? `Margem negativa na última folha (${formatCurrency(saldoNum)}). Digite a parcela que couber.`
+                    : "Sem saldo nesta margem na última folha. Digite a parcela que couber."}
+                </p>
+              </div>
+            )}
             <div>
               <p className="text-[11.5px] font-semibold text-muted-foreground">Valor liberado</p>
               <p
