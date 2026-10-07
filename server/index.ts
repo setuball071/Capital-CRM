@@ -1353,6 +1353,53 @@ app.use((req, res, next) => {
           log(`⚠ Migração consumo de leads falhou (non-fatal): ${e}`);
         }
 
+        // Agente de Listas (Jarvis que monta lista pelo Bigdata) + teto por usuário
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`ALTER TABLE users ADD COLUMN IF NOT EXISTS limite_leads_mes INTEGER`);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS consumo_leads_usuario (
+              id             SERIAL PRIMARY KEY,
+              tenant_id      INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              mes_referencia VARCHAR(7) NOT NULL,
+              quantidade     INTEGER NOT NULL DEFAULT 0,
+              atualizado_em  TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE (tenant_id, user_id, mes_referencia)
+            )
+          `);
+          // Onde o agente está (ele se registra sozinho a cada 5 min)
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS agente_listas_estado (
+              id       INTEGER PRIMARY KEY,
+              url      TEXT NOT NULL,
+              versao   TEXT,
+              modelo   TEXT,
+              visto_em TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          // Auditoria: quem conversou, quantas mensagens, no que deu
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS agente_listas_conversas (
+              id                 SERIAL PRIMARY KEY,
+              tenant_id          INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+              user_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              agente_conversa_id TEXT NOT NULL,
+              mensagens          INTEGER NOT NULL DEFAULT 0,
+              criterios          TEXT,
+              total_leads        INTEGER,
+              campanha_id        INTEGER,
+              pedido_id          INTEGER,
+              criado_em          TIMESTAMP NOT NULL DEFAULT NOW(),
+              atualizado_em      TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          log("✓ Migração agente de listas + teto por usuário ok");
+        } catch (e) {
+          log(`⚠ Migração agente de listas falhou (non-fatal): ${e}`);
+        }
+
         // Endereço da Anatel vem quebrado (logradouro, número, bairro). A coluna
         // "endereco" só comporta o logradouro — sem estas duas, número e bairro
         // se perdiam na importação.

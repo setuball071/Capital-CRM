@@ -102,6 +102,8 @@ export default function UsersPage() {
   const [selectedTenantIds, setSelectedTenantIds] = useState<number[]>([]);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
+  // Teto mensal de leads gerados (vazio = sem teto)
+  const [limiteLeadsMes, setLimiteLeadsMes] = useState<string>("");
 
   const currentUserRole = currentUser?.role as UserRole;
   const isMaster = currentUserRole === "master";
@@ -558,6 +560,7 @@ export default function UsersPage() {
     setRole(user.role as UserRole);
     setManagerId(user.managerId?.toString() || "");
     setIsDemo(user.isDemo ?? false);
+    setLimiteLeadsMes((user as any).limiteLeadsMes != null ? String((user as any).limiteLeadsMes) : "");
     setSelectedTenantIds([]);
     setIsDialogOpen(true);
   };
@@ -611,6 +614,11 @@ export default function UsersPage() {
     // Only master can set demo mode, only for vendedor role
     if (isMaster && editingUser && role === "vendedor") {
       data.isDemo = isDemo;
+    }
+    // Teto mensal de leads: so master; vazio = sem teto
+    if (isMaster && editingUser) {
+      const n = parseInt(limiteLeadsMes, 10);
+      data.limiteLeadsMes = limiteLeadsMes.trim() === "" || isNaN(n) ? null : n;
     }
 
     if (editingUser) {
@@ -957,6 +965,24 @@ export default function UsersPage() {
                           Dashboard sempre exibirá 70% da meta geral e 90% da meta de cartão
                         </span>
                       </div>
+                    </div>
+                  )}
+
+                  {isMaster && editingUser && (
+                    <div className="space-y-2">
+                      <Label htmlFor="limite-leads">Limite de leads por mês</Label>
+                      <Input
+                        id="limite-leads"
+                        type="number"
+                        min={0}
+                        placeholder="Sem limite"
+                        value={limiteLeadsMes}
+                        onChange={(e) => setLimiteLeadsMes(e.target.value)}
+                        data-testid="input-limite-leads"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Quantos leads este usuário pode gerar no mês, somando filtro e Jarvis. Vazio = sem limite.
+                      </p>
                     </div>
                   )}
 

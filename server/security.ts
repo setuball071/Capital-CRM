@@ -155,6 +155,10 @@ export function botDetection(req: Request, res: Response, next: NextFunction) {
   // (java/okhttp/etc) ou vazio, o que cairia no anti-bot abaixo. Isento.
   if (req.originalUrl.startsWith("/api/webhooks/")) return next();
 
+  // Agente de Listas (roda na máquina do Fábio) se registra servidor-a-servidor,
+  // com token próprio no header. Sem esta isenção, o fetch do Node leva 403.
+  if (req.originalUrl.startsWith("/api/agente-listas/registrar")) return next();
+
   // Lemit Worker usa chave própria — isento de detecção de bot
   if (req.headers["x-lemit-key"]) return next();
 

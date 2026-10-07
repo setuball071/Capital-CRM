@@ -553,6 +553,7 @@ import Papa from "papaparse";
 import { createNotification } from "./notification-service";
 import { registerContractRoutes } from "./contracts";
 import { registerMinhaProducaoRoutes } from "./minha-producao";
+import { registerAgenteListasRoutes, tetoLeadsUsuario, registrarConsumoUsuario } from "./agente-listas";
 import { registerFinEmpresaRoutes } from "./fin-empresa";
 import { registerPortMultibancoRoutes } from "./port-multibanco";
 import { registerSimuladorCompraRoutes } from "./simulador-compra";
@@ -840,6 +841,7 @@ const updateUserSchema = z
     managerId: z.number().int().nullable().optional(),
     isActive: z.boolean().optional(),
     isDemo: z.boolean().optional(),
+    limiteLeadsMes: z.number().int().min(0).nullable().optional(),
   })
   .strict(); // Reject extra fields
 
@@ -3835,6 +3837,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Only master can toggle demo mode
         if (currentUserRole === "master" && validatedData.isDemo !== undefined) {
           dataToUpdate.isDemo = validatedData.isDemo;
+        }
+        // Teto mensal de leads: so master define (null = sem teto)
+        if (currentUserRole === "master" && validatedData.limiteLeadsMes !== undefined) {
+          dataToUpdate.limiteLeadsMes = validatedData.limiteLeadsMes;
         }
 
         // Hash password if provided
@@ -10740,8 +10746,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   };
 
-  async function registrarConsumoLeads(tenantId: number | null | undefined, qtd: number) {
+  async function registrarConsumoLeads(tenantId: number | null | undefined, qtd: number, userId?: number | null) {
     if (!tenantId || !qtd || qtd <= 0) return;
+    if (userId) await registrarConsumoUsuario(tenantId, userId, qtd);
     try {
       await db.execute(sql`
         INSERT INTO consumo_leads (tenant_id, mes_referencia, quantidade)
@@ -10771,12 +10778,14 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
       `)).rows as any[];
       const usados = Number(uso?.quantidade || 0);
       const teto = plano?.teto != null ? Number(plano.teto) : null;
+      const usuario = await tetoLeadsUsuario(req.user!.id, tenantId);
       return res.json({
         mes,
         usados,
         limite: teto,
         plano: plano?.nome || null,
         restantes: teto != null ? Math.max(teto - usados, 0) : null,
+        usuario,
       });
     } catch (error) {
       console.error("Get consumo leads error:", error);
@@ -11855,6 +11864,13 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           return res
             .status(400)
             .json({ message: `Pedido já está com status: ${pedido.status}` });
+        }
+
+        // Lista montada pelo agente: o arquivo ja existe, nao ha o que gerar.
+        // Aprovar = liberar o download.
+        if (pedido.tipo === "exportacao_agente") {
+          await storage.updatePedidoListaStatus(id, "processado");
+          return res.json({ message: "Exportação aprovada. O arquivo já está liberado para download.", pedido: { id, status: "processado" } });
         }
 
         // Update status to "aprovado" first
@@ -15010,6 +15026,15 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const clientesLimitados = clientes.slice(0, limite);
         const totalFinal = clientesLimitados.length;
 
+        // Teto mensal do usuario (null = sem teto)
+        const tetoUsuario = await tetoLeadsUsuario(req.user!.id, req.tenantId!);
+        if (tetoUsuario.limite != null && totalFinal > (tetoUsuario.restantes ?? 0)) {
+          return res.status(403).json({
+            message: `Esta lista tem ${totalFinal.toLocaleString("pt-BR")} leads e você ainda pode gerar ${(tetoUsuario.restantes ?? 0).toLocaleString("pt-BR")} neste mês (limite ${tetoUsuario.limite.toLocaleString("pt-BR")}). Reduza o limite de leads da campanha.`,
+            teto: tetoUsuario,
+          });
+        }
+
         const campanha = await storage.createSalesCampaign({
           nome: nome.trim(),
           descricao: descricao?.trim() || null,
@@ -15038,7 +15063,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         }));
 
         const insertedCount = await storage.createSalesLeadsBulk(leads);
-        await registrarConsumoLeads(req.tenantId, insertedCount);
+        await registrarConsumoLeads(req.tenantId, insertedCount, req.user!.id);
 
         // Quem não distribui equipe, trabalha a própria lista: o corretor que fez
         // o filtro recebe os leads na hora, em vez de a campanha ficar esperando
@@ -15292,6 +15317,14 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       WHERE id = ${campaignId}
     `);
   };
+
+  registerAgenteListasRoutes(app, {
+    requireAuth,
+    requireModuleAccess,
+    inserirAssignmentsBulk,
+    recalcularContadoresCampanha,
+    registrarConsumoLeads,
+  });
 
   // POST /api/vendas/campanhas/:id/distribuir-leads - Distribuir leads para vendedor
   app.post(

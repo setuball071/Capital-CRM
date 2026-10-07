@@ -280,6 +280,8 @@ export const users = pgTable("users", {
   // Excecao: pode ficar logado em mais de um dispositivo sem ser derrubado
   sessaoSimultanea: boolean("sessao_simultanea").default(false),
   isDemo: boolean("is_demo").notNull().default(false),
+  // Teto mensal de leads gerados (filtro ou agente). NULL = sem teto.
+  limiteLeadsMes: integer("limite_leads_mes"),
   avatarUrl: text("avatar_url"),
   perfilDisc: varchar("perfil_disc", { length: 20 }),
   perfilDiscData: jsonb("perfil_disc_data"),

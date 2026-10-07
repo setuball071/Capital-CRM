@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
 import { MultiSelectCombobox } from "@/components/ui/multi-select-combobox";
+import { JarvisListas } from "@/components/JarvisListas";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -522,7 +523,10 @@ export default function CompraLista() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="nova" className="space-y-6">
+        <TabsContent value="nova">
+          {/* Formulário à esquerda, Jarvis à direita (empilha em tela estreita) */}
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px] items-start">
+          <div className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between gap-2">
@@ -1091,6 +1095,9 @@ export default function CompraLista() {
               </CardContent>
             </Card>
           )}
+          </div>
+          <JarvisListas />
+          </div>
         </TabsContent>
 
         <TabsContent value="pedidos">
