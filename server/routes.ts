@@ -6,6 +6,7 @@ import path from "path";
 import https from "https";
 import { randomBytes } from "crypto";
 import { extrairPaleta } from "./branding-ia";
+import { registerAssinaturasRoutes } from "./assinaturas";
 
 // ─── Gerador de HTML do Contracheque SIAPE ───────────────────────────────────
 function _brl(value: any): string {
@@ -1515,6 +1516,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== DASHBOARD GERENCIAL (só-Master) =====
   registerDashboardGerencialRoutes(app, requireAuth, requireMaster);
   registerConsultaClienteRoutes(app, requireAuth);
+  // Assinatura por usuario (substitui a por ambiente).
+  registerAssinaturasRoutes(app, requireAuth);
 
   // ===== DATABASE ERROR HANDLING MIDDLEWARE =====
   // Catches database connection errors and returns user-friendly messages

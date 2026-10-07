@@ -421,6 +421,94 @@ app.use((req, res, next) => {
           console.error("Permission templates migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — ASSINATURA POR USUARIO (substitui a por ambiente).
+        // Tres conceitos separados: a assinatura (plano, preco, vencimento,
+        // desconto, regras), cada cobranca mensal (com boleto e quitacao) e o
+        // registro de eventos (quem fez o que, com valor anterior e novo).
+        // As tabelas antigas (subscriptions/cobrancas) ficam intactas: cobrancas
+        // tambem atende compra de lista avulsa e nao deve misturar com mensalidade.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS assinaturas (
+              id                          SERIAL PRIMARY KEY,
+              user_id                     INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+              plano_id                    INTEGER REFERENCES planos(id),
+              status                      VARCHAR(30) NOT NULL DEFAULT 'ativa',
+              valor_mensal                NUMERIC(12,2) NOT NULL DEFAULT 0,
+              dia_vencimento              INTEGER NOT NULL DEFAULT 10,
+              data_inicio                 DATE NOT NULL DEFAULT CURRENT_DATE,
+              proximo_vencimento          DATE,
+              desconto_tipo               VARCHAR(12),
+              desconto_valor              NUMERIC(12,2),
+              desconto_inicio             DATE,
+              desconto_fim                DATE,
+              desconto_parcelas_restantes INTEGER,
+              desconto_motivo             TEXT,
+              tolerancia_dias             INTEGER NOT NULL DEFAULT 3,
+              suspensao_automatica        BOOLEAN NOT NULL DEFAULT true,
+              forma_pagamento             VARCHAR(30),
+              isenta_ate                  DATE,
+              observacoes                 TEXT,
+              criado_por                  INTEGER REFERENCES users(id),
+              created_at                  TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at                  TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS assinatura_cobrancas (
+              id                   SERIAL PRIMARY KEY,
+              assinatura_id        INTEGER NOT NULL REFERENCES assinaturas(id) ON DELETE CASCADE,
+              user_id              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              competencia          VARCHAR(7) NOT NULL,
+              valor_original       NUMERIC(12,2) NOT NULL,
+              desconto             NUMERIC(12,2) NOT NULL DEFAULT 0,
+              acrescimo            NUMERIC(12,2) NOT NULL DEFAULT 0,
+              valor_final          NUMERIC(12,2) NOT NULL,
+              emitida_em           TIMESTAMP NOT NULL DEFAULT NOW(),
+              vencimento           DATE NOT NULL,
+              status               VARCHAR(20) NOT NULL DEFAULT 'aberta',
+              pago_em              DATE,
+              valor_pago           NUMERIC(12,2),
+              forma_pagamento      VARCHAR(30),
+              boleto_arquivo       VARCHAR(500),
+              boleto_link          TEXT,
+              linha_digitavel      VARCHAR(120),
+              pix_copia_cola       TEXT,
+              comprovante_arquivo  VARCHAR(500),
+              observacoes          TEXT,
+              created_at           TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at           TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE (assinatura_id, competencia)
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS assinatura_eventos (
+              id            SERIAL PRIMARY KEY,
+              assinatura_id INTEGER REFERENCES assinaturas(id) ON DELETE CASCADE,
+              cobranca_id   INTEGER REFERENCES assinatura_cobrancas(id) ON DELETE SET NULL,
+              titular_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+              acao          VARCHAR(40) NOT NULL,
+              antes         JSONB,
+              depois        JSONB,
+              por_user_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+              criado_em     TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await migDb.execute(migSql`
+            CREATE INDEX IF NOT EXISTS idx_assinatura_cobrancas_aberta
+              ON assinatura_cobrancas (assinatura_id, status, vencimento)
+          `);
+          await migDb.execute(migSql`
+            CREATE INDEX IF NOT EXISTS idx_assinatura_eventos_assinatura
+              ON assinatura_eventos (assinatura_id, criado_em DESC)
+          `);
+          log("Assinatura por usuario migration OK");
+        } catch (migErr) {
+          console.error("Assinatura por usuario migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — libera sessao simultanea para UM usuario especifico.
         // Excecao por pessoa, nao por ambiente: desligar a trava do ambiente
         // inteiro abriria a porta para todos os acessos dele.

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { AssinaturaUsuarioDialog } from "@/components/assinatura-usuario-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -676,6 +677,9 @@ export default function UsersPage() {
 
   // Excecao de sessao simultanea. So master, e so onde faz sentido: por padrao
   // o sistema derruba a sessao anterior para dificultar dividir um acesso.
+  // Secao "Assinatura e acesso": a assinatura e da pessoa, nao do ambiente.
+  const [assinaturaDe, setAssinaturaDe] = useState<{ id: number; name: string } | null>(null);
+
   const toggleSessaoMutation = useMutation({
     mutationFn: async ({ id, permitir }: { id: number; permitir: boolean }) =>
       apiRequest("PUT", `/api/users/${id}/sessao-simultanea`, { permitir }),
@@ -1412,6 +1416,16 @@ export default function UsersPage() {
                             {(user as any).sessaoSimultanea ? "Vários dispositivos" : "Um dispositivo"}
                           </Button>
                         )}
+                        {isMaster && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAssinaturaDe({ id: user.id, name: user.name })}
+                            data-testid={`button-assinatura-${user.id}`}
+                          >
+                            Assinatura
+                          </Button>
+                        )}
                         {canDeleteUser(user) && (
                           <Button
                             variant="destructive"
@@ -1589,6 +1603,12 @@ export default function UsersPage() {
         onSave={() => {
           queryClient.invalidateQueries({ queryKey: ["/api/users"] });
         }}
+      />
+      <AssinaturaUsuarioDialog
+        userId={assinaturaDe?.id ?? null}
+        userName={assinaturaDe?.name}
+        open={assinaturaDe !== null}
+        onOpenChange={(v) => { if (!v) setAssinaturaDe(null); }}
       />
     </div>
   );
