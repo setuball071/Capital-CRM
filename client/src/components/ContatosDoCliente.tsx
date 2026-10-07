@@ -35,8 +35,23 @@ export function IconeWhatsApp({ className }: { className?: string }) {
   );
 }
 
-type TelefoneBase = { telefone: string; principal?: boolean; tipo?: string };
-type Contato = { value: string; label?: string | null };
+type TelefoneBase = {
+  telefone: string;
+  principal?: boolean;
+  tipo?: string;
+  fonte?: string | null;
+  nao_perturbe?: boolean;
+};
+type Contato = { value: string; label?: string | null; naoPerturbe?: boolean };
+
+// Fonte do numero, como o corretor ve ao passar o mouse. So existem tres:
+// o que nao vier marcado como Lemit ou Serasa aparece como Anatel.
+function nomeDaFonte(fonte: string | null | undefined): string {
+  const f = String(fonte || "").toUpperCase();
+  if (f === "LEMIT") return "Lemit";
+  if (f === "SERASA") return "Serasa";
+  return "Anatel";
+}
 
 interface Props {
   /** telefones vindos da base (higienização) */
@@ -69,10 +84,14 @@ export function ContatosDoCliente({
   const telsBase = telefonesBase.map((t) => ({
     numero: t.telefone,
     marca: t.principal ? "principal" : t.tipo,
+    fonte: nomeDaFonte(t.fonte),
+    naoPerturbe: Boolean(t.nao_perturbe),
   }));
   const telsManuais = telefonesManuais.map((c) => ({
     numero: c.value,
     marca: c.label || "manual",
+    fonte: nomeDaFonte(null),
+    naoPerturbe: Boolean(c.naoPerturbe),
   }));
   const vistos = new Set<string>();
   const telefones = [...telsBase, ...telsManuais].filter((t) => {
@@ -139,8 +158,25 @@ export function ContatosDoCliente({
               className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 bg-muted/40"
               data-testid={`telefone-vista-${idx}`}
             >
-              <span className="font-medium">{formatPhone(t.numero)}</span>
+              <span
+                className="font-medium cursor-help"
+                title={`Fonte: ${t.fonte}`}
+                data-testid={`telefone-fonte-${idx}`}
+              >
+                {formatPhone(t.numero)}
+              </span>
               {t.marca === "principal" && <Star className="h-3 w-3 text-yellow-500 fill-current" />}
+              {/* So AVISO: o numero continua clicavel e copiavel. */}
+              {t.naoPerturbe && (
+                <span
+                  className="cursor-help leading-none"
+                  title="Não me perturbe"
+                  aria-label="Não me perturbe"
+                  data-testid={`telefone-nao-perturbe-${idx}`}
+                >
+                  ❗
+                </span>
+              )}
               <a
                 href={`https://wa.me/55${String(t.numero).replace(/\D/g, "")}`}
                 target="_blank"

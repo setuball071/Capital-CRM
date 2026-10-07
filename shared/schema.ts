@@ -989,6 +989,7 @@ export const clientContacts = pgTable(
     label: varchar("label", { length: 100 }), // Etiqueta opcional (ex: "Whatsapp", "Trabalho")
     isPrimary: boolean("is_primary").default(false), // Contato principal
     isManual: boolean("is_manual").default(false), // Telefone adicionado manualmente (Hot)
+    naoPerturbe: boolean("nao_perturbe").notNull().default(false), // numero no cadastro Nao Me Perturbe (so aviso)
     createdAt: timestamp("created_at").notNull().defaultNow(),
     // Rastreabilidade para exclusão
     importRunId: integer("import_run_id"), // Link ao import que criou
@@ -1016,6 +1017,8 @@ export const clientesTelefones = pgTable(
     telefone: varchar("telefone", { length: 20 }).notNull(), // Telefone normalizado (apenas dígitos)
     tipo: varchar("tipo", { length: 20 }), // celular, fixo, whatsapp, comercial (opcional)
     principal: boolean("principal").default(false), // Telefone_1 = true, demais = false
+    fonte: varchar("fonte", { length: 20 }), // LEMIT | ANATEL | SERASA (vazio = ANATEL na tela)
+    naoPerturbe: boolean("nao_perturbe").notNull().default(false), // cadastro Nao Me Perturbe (so aviso)
     createdAt: timestamp("created_at").notNull().defaultNow(),
     importRunId: integer("import_run_id"), // Rastreabilidade
     baseTag: varchar("base_tag", { length: 100 }),

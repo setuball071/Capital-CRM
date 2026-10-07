@@ -464,6 +464,29 @@ app.use((req, res, next) => {
           console.error("Sessao ativa migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — FONTE do telefone e aviso de NAO ME PERTURBE.
+        // A ficha mostra a origem ao passar o mouse (LEMIT / ANATEL / SERASA;
+        // vazio = ANATEL) e um "!" quando o numero esta no cadastro Nao Me
+        // Perturbe. E so aviso: nada bloqueia o numero. A marcacao vem do
+        // Bigdata (Bigdata/_scripts/marcar_telefones_crm.py), que guarda a
+        // lista de 16 milhoes -- ela nao sobe inteira para nao pesar no disco.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            ALTER TABLE clientes_telefones
+              ADD COLUMN IF NOT EXISTS fonte VARCHAR(20),
+              ADD COLUMN IF NOT EXISTS nao_perturbe BOOLEAN NOT NULL DEFAULT FALSE
+          `);
+          await migDb.execute(migSql`
+            ALTER TABLE client_contacts
+              ADD COLUMN IF NOT EXISTS nao_perturbe BOOLEAN NOT NULL DEFAULT FALSE
+          `);
+          log("Telefone fonte / nao_perturbe migration OK");
+        } catch (migErr) {
+          console.error("Telefone fonte / nao_perturbe migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — meta por PRODUCAO ou por RENTABILIDADE.
         // Nasce sempre 'producao' para que toda meta ja existente continue
         // significando exatamente o que significava antes.

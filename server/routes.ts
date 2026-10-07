@@ -16567,6 +16567,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           telefone: t.telefone || "",
           tipo: t.tipo || "telefone",
           principal: t.principal,
+          fonte: t.fonte ?? null,
+          nao_perturbe: t.naoPerturbe ?? false,
           _normalized: (t.telefone || "").replace(/\D/g, ""),
         })),
         ...contatos
@@ -16575,6 +16577,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
             telefone: c.valor || "",
             tipo: "telefone",
             principal: null,
+            fonte: null,
+            nao_perturbe: (c as any).naoPerturbe ?? false,
             _normalized: (c.valor || "").replace(/\D/g, ""),
           })),
       ];
@@ -16589,6 +16593,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           telefone: t.telefone,
           tipo: t.tipo,
           principal: t.principal,
+          fonte: t.fonte,
+          nao_perturbe: t.nao_perturbe,
         }));
 
       // Deduplicate emails
@@ -17249,6 +17255,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
               telefone: t.telefone || "",
               tipo: t.tipo || "telefone",
               principal: t.principal,
+              fonte: t.fonte ?? null,
+              nao_perturbe: t.naoPerturbe ?? false,
               _normalized: (t.telefone || "").replace(/\D/g, ""),
             })),
             ...contatos
@@ -17257,6 +17265,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                 telefone: c.valor || "",
                 tipo: "telefone",
                 principal: null,
+                fonte: null,
+                nao_perturbe: (c as any).naoPerturbe ?? false,
                 _normalized: (c.valor || "").replace(/\D/g, ""),
               })),
           ];
@@ -17272,6 +17282,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
               telefone: t.telefone,
               tipo: t.tipo,
               principal: t.principal,
+              fonte: t.fonte,
+              nao_perturbe: t.nao_perturbe,
             }));
 
           // Deduplicate emails (preserve original case)
@@ -17550,6 +17562,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                 telefone: t.telefone || "",
                 tipo: t.tipo || "telefone",
                 principal: t.principal,
+                fonte: t.fonte ?? null,
+                nao_perturbe: t.naoPerturbe ?? false,
                 _normalized: (t.telefone || "").replace(/\D/g, ""),
               })),
               ...contatos
@@ -17558,6 +17572,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                   telefone: c.valor || "",
                   tipo: "telefone",
                   principal: null,
+                  fonte: null,
+                  nao_perturbe: (c as any).naoPerturbe ?? false,
                   _normalized: (c.valor || "").replace(/\D/g, ""),
                 })),
             ];
@@ -17573,6 +17589,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                 telefone: t.telefone,
                 tipo: t.tipo,
                 principal: t.principal,
+                fonte: t.fonte,
+                nao_perturbe: t.nao_perturbe,
               }));
 
             // Deduplicate emails (preserve original case)
@@ -17879,6 +17897,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                 telefone: t.telefone || "",
                 tipo: t.tipo || "telefone",
                 principal: t.principal,
+                fonte: t.fonte ?? null,
+                nao_perturbe: t.naoPerturbe ?? false,
                 _normalized: (t.telefone || "").replace(/\D/g, ""),
               })),
               ...contatos
@@ -17887,6 +17907,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                   telefone: c.valor || "",
                   tipo: "telefone",
                   principal: null,
+                  fonte: null,
+                  nao_perturbe: (c as any).naoPerturbe ?? false,
                   _normalized: (c.valor || "").replace(/\D/g, ""),
                 })),
             ];
@@ -17902,6 +17924,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
                 telefone: t.telefone,
                 tipo: t.tipo,
                 principal: t.principal,
+                fonte: t.fonte,
+                nao_perturbe: t.nao_perturbe,
               }));
 
             // Deduplicate emails (preserve original case)
