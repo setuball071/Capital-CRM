@@ -7006,6 +7006,7 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
         const { inArray } = await import("drizzle-orm");
         const results = await db
           .select({
+            id: clientesPessoa.id,
             cpf: clientesPessoa.cpf,
             nome: clientesPessoa.nome,
             dataNascimento: clientesPessoa.dataNascimento,
@@ -7025,6 +7026,54 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
 
         const byСpf = new Map(results.map((r) => [r.cpf, r]));
 
+        // Enriquecer conta no limite mensal de leads (decisão do Fábio, 08/10):
+        // conta o que volta com dados, ou seja, os CPFs encontrados na base.
+        const encontrados = results.length;
+        const tetoUsuario = await tetoLeadsUsuario(req.user!.id, req.tenantId!);
+        if (tetoUsuario.limite != null && encontrados > (tetoUsuario.restantes ?? 0)) {
+          return res.status(403).json({
+            message: `Este arquivo tem ${encontrados.toLocaleString("pt-BR")} CPFs encontrados na base e você ainda pode gerar ${(tetoUsuario.restantes ?? 0).toLocaleString("pt-BR")} leads neste mês (limite ${tetoUsuario.limite.toLocaleString("pt-BR")}). Envie um arquivo menor.`,
+            teto: tetoUsuario,
+          });
+        }
+
+        // Margem e telefone NÃO estão nas colunas *_atual / telefones_base do
+        // cadastro (ficam vazias): vêm da folha mais recente e da tabela de
+        // telefones. Órgão vem como código; traduz pelas nomenclaturas.
+        const telefonesPorPessoa = new Map<number, string[]>();
+        const folhaPorPessoa = new Map<number, any>();
+        const orgaoNome = new Map<string, string>();
+        const ids = results.map((r) => r.id);
+        for (let i = 0; i < ids.length; i += 5000) {
+          const lote = `{${ids.slice(i, i + 5000).join(",")}}`;
+          const tels = await db.execute(sql`
+            SELECT pessoa_id, telefone FROM clientes_telefones
+            WHERE pessoa_id = ANY(${lote}::int[])
+            ORDER BY pessoa_id, nao_perturbe ASC NULLS FIRST, principal DESC NULLS LAST, id
+          `);
+          for (const t of tels.rows as any[]) {
+            const lista = telefonesPorPessoa.get(t.pessoa_id) || [];
+            if (lista.length < 3 && !lista.includes(t.telefone)) lista.push(t.telefone);
+            telefonesPorPessoa.set(t.pessoa_id, lista);
+          }
+          const folhas = await db.execute(sql`
+            SELECT DISTINCT ON (pessoa_id) pessoa_id, margem_saldo_35, margem_saldo_5,
+                   margem_beneficio_saldo_5, salario_bruto, sit_func_no_mes
+            FROM clientes_folha_ultima
+            WHERE pessoa_id = ANY(${lote}::int[])
+            ORDER BY pessoa_id, margem_saldo_35 DESC NULLS LAST
+          `);
+          for (const f of folhas.rows as any[]) folhaPorPessoa.set(f.pessoa_id, f);
+        }
+        const nomes = await db.execute(sql`
+          SELECT ltrim(codigo, '0') AS codigo, nome FROM nomenclaturas
+          WHERE ativo AND categoria = 'ORGAO'
+        `);
+        for (const n of nomes.rows as any[]) if (!orgaoNome.has(n.codigo)) orgaoNome.set(n.codigo, n.nome);
+        const nomeDoOrgao = (cod: string | null) =>
+          cod ? orgaoNome.get(cod.trim().replace(/^0+/, "")) || cod : "";
+        const numero = (v: any) => (v == null || v === "" ? "" : parseFloat(String(v)));
+
         // Build output Excel
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet("Resultado");
@@ -7036,9 +7085,9 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
           { header: "Telefone 1", key: "tel1", width: 16 },
           { header: "Telefone 2", key: "tel2", width: 16 },
           { header: "Telefone 3", key: "tel3", width: 16 },
-          { header: "Margem Empréstimo", key: "margemEmprestimo", width: 20 },
-          { header: "Margem Cartão", key: "margemCartao", width: 18 },
-          { header: "Margem 5%", key: "margem5", width: 15 },
+          { header: "Margem Consignado (35%)", key: "margemEmprestimo", width: 22 },
+          { header: "Margem Cartão Crédito (5%)", key: "margemCartao", width: 24 },
+          { header: "Margem Cartão Benefício (5%)", key: "margem5", width: 26 },
           { header: "Convênio", key: "convenio", width: 20 },
           { header: "Órgão", key: "orgao", width: 25 },
           { header: "UF", key: "uf", width: 8 },
@@ -7059,7 +7108,8 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             ws.addRow({ cpf, encontrado: "Não" });
             continue;
           }
-          const tels: string[] = Array.isArray(p.telefonesBase) ? (p.telefonesBase as string[]) : [];
+          const tels = telefonesPorPessoa.get(p.id) || [];
+          const f = folhaPorPessoa.get(p.id);
           ws.addRow({
             cpf: p.cpf,
             nome: p.nome || "",
@@ -7067,20 +7117,21 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
             tel1: tels[0] || "",
             tel2: tels[1] || "",
             tel3: tels[2] || "",
-            margemEmprestimo: p.margemEmprestimoAtual ? parseFloat(String(p.margemEmprestimoAtual)) : "",
-            margemCartao: p.margemCartaoAtual ? parseFloat(String(p.margemCartaoAtual)) : "",
-            margem5: p.margem5Atual ? parseFloat(String(p.margem5Atual)) : "",
+            margemEmprestimo: numero(f?.margem_saldo_35),
+            margemCartao: numero(f?.margem_saldo_5),
+            margem5: numero(f?.margem_beneficio_saldo_5),
             convenio: p.convenio || "",
-            orgao: p.orgaodesc || "",
+            orgao: nomeDoOrgao(p.orgaodesc),
             uf: p.uf || "",
             municipio: p.municipio || "",
-            situacao: p.situacaoFuncional || "",
-            salarioBruto: p.salarioBruto ? parseFloat(String(p.salarioBruto)) : "",
+            situacao: f?.sit_func_no_mes || p.situacaoFuncional || "",
+            salarioBruto: f?.salario_bruto != null ? numero(f.salario_bruto) : numero(p.salarioBruto),
             encontrado: "Sim",
           });
         }
 
         const buffer = await wb.xlsx.writeBuffer();
+        await registrarConsumoLeads(req.tenantId, encontrados, req.user!.id);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="enriquecido_${Date.now()}.xlsx"`);
         return res.send(Buffer.from(buffer));

@@ -85,6 +85,7 @@ export default function EnriquecerBasePage() {
           <p>• CPFs na <strong>primeira coluna</strong> (com ou sem formatação)</p>
           <p>• Limite: <strong>50.000 CPFs</strong> por arquivo</p>
           <p>• A primeira linha pode ser cabeçalho — CPFs não-numéricos são ignorados</p>
+          <p>• Os CPFs encontrados na base <strong>contam no seu limite mensal de leads</strong></p>
         </CardContent>
       </Card>
 
@@ -160,7 +161,7 @@ export default function EnriquecerBasePage() {
         <CardContent className="pt-6">
           <p className="text-xs text-muted-foreground font-medium mb-2">Dados retornados por CPF:</p>
           <div className="flex flex-wrap gap-1.5">
-            {["Nome", "Data Nascimento", "Telefone 1/2/3", "Margem Empréstimo", "Margem Cartão", "Margem 5%", "Convênio", "Órgão", "UF", "Município", "Situação Funcional", "Salário Bruto"].map(d => (
+            {["Nome", "Data Nascimento", "Telefone 1/2/3", "Margem Consignado (35%)", "Margem Cartão Crédito (5%)", "Margem Cartão Benefício (5%)", "Convênio", "Órgão", "UF", "Município", "Situação Funcional", "Salário Bruto"].map(d => (
               <Badge key={d} variant="secondary" className="text-xs">{d}</Badge>
             ))}
           </div>
