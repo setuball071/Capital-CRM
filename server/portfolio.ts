@@ -1,6 +1,12 @@
 import { db } from "./storage";
 import { sql } from "drizzle-orm";
 
+// Decisão do Fábio em 07/10/2026: carteira NÃO bloqueia outro vendedor e NÃO
+// expira (nem vendido, nem importado). O código fica para religar no futuro,
+// se algum ambiente precisar — basta voltar estas chaves para true.
+export const CARTEIRA_BLOQUEIA = false;
+export const CARTEIRA_EXPIRA = false;
+
 export type PortfolioProductType =
   | "CARTAO"
   | "CONSIGNADO"
@@ -90,7 +96,7 @@ export async function addToPortfolio(
       AND expires_at > NOW()
     LIMIT 1
   `);
-  if (otherActive.rows.length > 0) {
+  if (CARTEIRA_BLOQUEIA && otherActive.rows.length > 0) {
     return { added: false, renewed: false };
   }
 
@@ -122,7 +128,7 @@ export async function checkPortfolioBlock(
       WHERE cp.tenant_id = ${tenantId}
         AND cp.cpf = ${cpfClean}
         AND cp.status = 'ATIVO'
-        AND cp.expires_at > NOW()
+        ${CARTEIRA_EXPIRA ? sql`AND cp.expires_at > NOW()` : sql``}
       ORDER BY cp.expires_at DESC
       LIMIT 1
     `);
@@ -140,6 +146,8 @@ export async function checkPortfolioBlock(
 
     return { blocked: false };
   }
+
+  if (!CARTEIRA_BLOQUEIA) return { blocked: false };
 
   // First: check if the current vendor already has an active entry for this CPF
   // (e.g. they received a transfer for one product type but another product is still with someone else)
@@ -182,6 +190,7 @@ export async function checkPortfolioBlock(
 }
 
 export async function updateExpiredPortfolios(tenantId?: number): Promise<number> {
+  if (!CARTEIRA_EXPIRA) return 0;
   let result;
   if (tenantId) {
     result = await db.execute(sql`

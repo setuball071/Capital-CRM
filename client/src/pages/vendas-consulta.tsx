@@ -1342,7 +1342,7 @@ export default function VendasConsulta() {
             {portfolioInfo && (
               <Alert className="border-amber-500/50 bg-amber-50/10" data-testid="alert-portfolio-info">
                 <AlertTitle className="text-amber-700 dark:text-amber-400 font-semibold">
-                  Na carteira de {portfolioInfo.vendorName} — expira em {new Date(portfolioInfo.expiresAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                  Na carteira de {portfolioInfo.vendorName}
                 </AlertTitle>
               </Alert>
             )}

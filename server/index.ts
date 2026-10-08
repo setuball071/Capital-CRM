@@ -1708,7 +1708,19 @@ app.use((req, res, next) => {
         log("Appointment reminder background runner started");
 
         // Portfolio cleanup: mark expired entries as EXPIRADO every 24h
-        const { updateExpiredPortfolios } = await import("./portfolio");
+        const { updateExpiredPortfolios, CARTEIRA_EXPIRA } = await import("./portfolio");
+        if (!CARTEIRA_EXPIRA) {
+          // Carteira não expira mais (07/10/2026): devolve quem já tinha expirado.
+          try {
+            const { db: cartDb } = await import("./storage");
+            const { sql: cartSql } = await import("drizzle-orm");
+            const r = await cartDb.execute(cartSql`UPDATE client_portfolio SET status = 'ATIVO' WHERE status = 'EXPIRADO'`);
+            const n = (r as any).rowCount || 0;
+            if (n > 0) log(`Carteira: ${n} entradas expiradas reativadas`);
+          } catch (err) {
+            console.error("Carteira reativação error (non-fatal):", err);
+          }
+        }
         const runPortfolioCleanup = async () => {
           try {
             const count = await updateExpiredPortfolios();

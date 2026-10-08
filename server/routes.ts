@@ -566,6 +566,7 @@ import {
   checkPortfolioBlock,
   updateExpiredPortfolios,
   mapTipoContratoToProductType,
+  CARTEIRA_BLOQUEIA,
 } from "./portfolio";
 
 // Configure multer for file uploads using memory storage (for smaller files)
@@ -15935,7 +15936,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
 
         // ── STEP 2: Bulk check portfolio blocks ──
         let blockedCpfs = new Set<string>();
-        if (uniqueCpfs.length > 0) {
+        if (CARTEIRA_BLOQUEIA && uniqueCpfs.length > 0) {
           try {
             const cpfArrayStr = toPgTextArray(uniqueCpfs);
             const blockedResult = await db.execute(sql`
@@ -16167,6 +16168,111 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
     } catch (err) {
       console.error("Minha carteira historico error:", err);
       return res.status(500).json({ message: "Erro ao buscar histórico" });
+    }
+  });
+
+  // GET /api/vendas/minha-carteira/clientes?vendorId=
+  // Tudo o que é da pessoa: o que ela VENDEU (client_portfolio) e o que ela
+  // IMPORTOU (campanhas origem carteira_pessoal), um registro por CPF+dono,
+  // com nome/órgão/convênio/margem da base de clientes.
+  // Escopo igual ao /api/portfolio: vendedor/sdr = a própria; coordenação =
+  // sua equipe; master/atendimento = o ambiente todo.
+  app.get("/api/vendas/minha-carteira/clientes", requireAuth, async (req: any, res) => {
+    try {
+      const user = req.user!;
+      const tenantId = req.tenantId!;
+      const vendorId = req.query.vendorId ? Number(req.query.vendorId) : null;
+
+      const escopo = (coluna: any) => {
+        if (user.role === "vendedor" || user.role === "sdr") {
+          const dono = user.role === "sdr" ? (user.managerId ?? -1) : user.id;
+          return sql`${coluna} = ${dono}`;
+        }
+        if (user.role === "coordenacao") {
+          return vendorId
+            ? sql`${coluna} = ${vendorId} AND ${coluna} IN (SELECT id FROM users WHERE manager_id = ${user.id})`
+            : sql`${coluna} IN (SELECT id FROM users WHERE manager_id = ${user.id})`;
+        }
+        return vendorId ? sql`${coluna} = ${vendorId}` : sql`TRUE`;
+      };
+
+      const result = await db.execute(sql`
+        WITH vend AS (
+          SELECT cp.cpf, cp.vendor_id AS dono_id,
+                 MAX(cp.id) AS portfolio_id,
+                 ARRAY_AGG(DISTINCT cp.product_type) AS produtos,
+                 MAX(cp.client_name) AS nome,
+                 MAX(cp.started_at) AS desde
+          FROM client_portfolio cp
+          WHERE cp.tenant_id = ${tenantId} AND ${escopo(sql`cp.vendor_id`)}
+          GROUP BY cp.cpf, cp.vendor_id
+        ),
+        imp AS (
+          SELECT sl.cpf, sc.created_by AS dono_id,
+                 MAX(sl.nome) AS nome,
+                 MAX(sl.telefone_1) AS telefone,
+                 MAX(sc.created_at) AS desde
+          FROM sales_campaigns sc
+          JOIN sales_lead_assignments sla ON sla.campaign_id = sc.id
+          JOIN sales_leads sl ON sl.id = sla.lead_id
+          WHERE sc.origem = 'carteira_pessoal'
+            AND sc.tenant_id = ${tenantId}
+            AND sl.cpf IS NOT NULL
+            AND ${escopo(sql`sc.created_by`)}
+          GROUP BY sl.cpf, sc.created_by
+        ),
+        todos AS (
+          SELECT COALESCE(v.cpf, i.cpf) AS cpf,
+                 COALESCE(v.dono_id, i.dono_id) AS dono_id,
+                 v.portfolio_id, v.produtos,
+                 (v.cpf IS NOT NULL) AS vendido,
+                 (i.cpf IS NOT NULL) AS importado,
+                 COALESCE(v.nome, i.nome) AS nome,
+                 i.telefone,
+                 GREATEST(v.desde, i.desde) AS desde
+          FROM vend v
+          FULL OUTER JOIN imp i ON i.cpf = v.cpf AND i.dono_id = v.dono_id
+        )
+        SELECT t.cpf, t.dono_id, u.name AS dono_nome, t.portfolio_id, t.produtos,
+               t.vendido, t.importado, t.desde,
+               COALESCE(p.nome, t.nome) AS nome,
+               COALESCE(tel.telefone, t.telefone) AS telefone,
+               COALESCE(org.nome, org.codigo) AS orgao,
+               p.convenio, p.uf,
+               f.margem_saldo_35 AS margem,
+               f.margem_saldo_5 AS margem_cartao,
+               f.margem_beneficio_saldo_5 AS margem_beneficio
+        FROM todos t
+        LEFT JOIN users u ON u.id = t.dono_id
+        LEFT JOIN clientes_pessoa p ON p.cpf = t.cpf
+        LEFT JOIN LATERAL (
+          SELECT ct.telefone FROM clientes_telefones ct
+          WHERE ct.pessoa_id = p.id
+          ORDER BY ct.nao_perturbe ASC NULLS FIRST, ct.principal DESC NULLS LAST, ct.id
+          LIMIT 1
+        ) tel ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT fu.margem_saldo_35, fu.margem_saldo_5, fu.margem_beneficio_saldo_5
+          FROM clientes_folha_ultima fu
+          WHERE fu.pessoa_id = p.id
+          ORDER BY fu.margem_saldo_35 DESC NULLS LAST
+          LIMIT 1
+        ) f ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT src.codigo,
+                 (SELECT n.nome FROM nomenclaturas n
+                   WHERE n.ativo AND n.categoria = 'ORGAO'
+                     AND ltrim(n.codigo, '0') = ltrim(src.codigo, '0')
+                   LIMIT 1) AS nome
+          FROM (SELECT COALESCE(NULLIF(btrim(p.orgaocod), ''), NULLIF(btrim(p.orgaodesc), '')) AS codigo) src
+        ) org ON TRUE
+        ORDER BY t.desde DESC NULLS LAST
+        LIMIT 20000
+      `);
+      return res.json(result.rows);
+    } catch (err) {
+      console.error("Minha carteira clientes error:", err);
+      return res.status(500).json({ message: "Erro ao carregar a carteira" });
     }
   });
 

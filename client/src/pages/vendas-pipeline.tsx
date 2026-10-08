@@ -17,10 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { 
-  Loader2, Phone, MessageSquare, User, Building, Calendar, 
+  Loader2, Phone, MessageSquare, User, Calendar, 
   Clock, ChevronRight, GripVertical, Search, Filter, X, 
-  ArrowRight, Check, Copy, ArrowLeft, Trash2, Wallet, ShieldCheck,
-  Users, BarChart2, MapPin, Landmark, Briefcase, LayoutDashboard, TrendingDown, AlertCircle, RefreshCw
+  ArrowRight, Check, Copy, ArrowLeft, Trash2, ShieldCheck,
+  Users, BarChart2, Landmark, Briefcase, LayoutDashboard, TrendingDown, AlertCircle, RefreshCw
 } from "lucide-react";
 import {
   AlertDialog,
@@ -265,15 +265,6 @@ function KanbanColumn({ marker, leads, summary, onCardClick, onDragStart, onDrag
   );
 }
 
-interface PortfolioStats {
-  total: number;
-  por_produto: Record<string, number>;
-  por_convenio: Record<string, number>;
-  por_banco: Record<string, number>;
-  por_uf: Record<string, number>;
-  por_orgao: Record<string, number>;
-}
-
 export default function VendasPipeline() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -287,8 +278,6 @@ export default function VendasPipeline() {
   
   // Check if user can view other pipelines
   const canViewOthers = user && ["master", "atendimento", "coordenacao"].includes(user.role);
-  // Only master/coordenacao see the "prazo restante" column (not atendimento)
-  const isManagerRole = user && (user.isMaster || user.role === "master" || user.role === "coordenacao");
 
   // Fetch team members for filter dropdown
   const { data: teamMembers } = useQuery<{ id: number; name: string }[]>({
@@ -322,12 +311,7 @@ export default function VendasPipeline() {
   const [tipoContato, setTipoContato] = useState<string>("ligacao");
   const [observacao, setObservacao] = useState("");
   const [motivo, setMotivo] = useState("");
-  const [activeTab, setActiveTab] = useState<"carteira" | "dashboard" | "pipeline">("pipeline");
-  const [portfolioVendorFilter, setPortfolioVendorFilter] = useState<string>("");
-  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
-  const [transferringEntry, setTransferringEntry] = useState<PortfolioEntry | null>(null);
-  const [transferToVendorId, setTransferToVendorId] = useState<string>("");
-  const [transferReason, setTransferReason] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "pipeline">("pipeline");
 
   interface PortfolioEntry {
     id: number;
@@ -352,41 +336,11 @@ export default function VendasPipeline() {
     days_remaining?: number | null;
   }
 
-  const portfolioApiUrl = portfolioVendorFilter
-    ? `/api/portfolio?vendorId=${portfolioVendorFilter}`
-    : "/api/portfolio";
-
   const { data: portfolioEntries = [], isLoading: portfolioLoading } = useQuery<PortfolioEntry[]>({
-    queryKey: ["/api/portfolio", portfolioVendorFilter],
-    queryFn: async () => {
-      const res = await fetch(portfolioApiUrl, { credentials: "include" });
-      if (!res.ok) throw new Error("Erro ao carregar carteira");
-      return res.json();
-    },
-    enabled: (activeTab === "carteira" || activeTab === "dashboard") && !viewUserId,
+    queryKey: ["/api/portfolio"],
+    enabled: activeTab === "dashboard" && !viewUserId,
   });
 
-  const { data: portfolioStats } = useQuery<PortfolioStats>({
-    queryKey: ["/api/portfolio/stats"],
-    enabled: !!isManagerRole && activeTab === "carteira" && !viewUserId,
-  });
-
-  const transferMutation = useMutation({
-    mutationFn: async (data: { portfolioId: number; toVendorId: number; reason: string }) => {
-      return apiRequest("POST", "/api/portfolio/transfer", data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/portfolio"] });
-      toast({ title: "Cliente transferido com sucesso" });
-      setTransferDialogOpen(false);
-      setTransferringEntry(null);
-      setTransferToVendorId("");
-      setTransferReason("");
-    },
-    onError: (err: Error) => {
-      toast({ title: "Erro ao transferir", description: err.message, variant: "destructive" });
-    },
-  });
   const [retornoEm, setRetornoEm] = useState("");
   const [contactId, setContactId] = useState<string>("");
   const [margemValor, setMargemValor] = useState<string>("");
@@ -741,25 +695,6 @@ export default function VendasPipeline() {
     return "secondary";
   };
 
-  const maskCpf = (cpf: string) => {
-    const digits = cpf.replace(/\D/g, "");
-    if (digits.length !== 11) return cpf;
-    return `${digits.slice(0, 3)}.***.***-${digits.slice(9)}`;
-  };
-
-  const PRODUCT_BADGE_CLASS: Record<string, string> = {
-    CARTAO: "bg-primary/10 text-primary border-primary/30 dark:bg-primary/20/30 dark:text-primary dark:border-primary",
-    CONSIGNADO: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800",
-    NOVO: "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800",
-    PORTABILIDADE: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800",
-    REFINANCIAMENTO: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800",
-  };
-
-  const daysUntilExpiry = (expiresAt: string) => {
-    const diff = new Date(expiresAt).getTime() - Date.now();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
-  };
-
   const getDaysBadgeClass = (days: number) => {
     if (days > 30) return "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800";
     if (days > 0) return "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800";
@@ -850,18 +785,6 @@ export default function VendasPipeline() {
         {!isGestorMode && !viewUserId && (
           <div className="flex gap-0 -mb-px mt-2">
             <button
-              onClick={() => setActiveTab("carteira")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
-                activeTab === "carteira"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-              data-testid="tab-carteira"
-            >
-              <Wallet className="h-4 w-4" />
-              Minha Carteira
-            </button>
-            <button
               onClick={() => setActiveTab("dashboard")}
               className={`px-4 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
                 activeTab === "dashboard"
@@ -887,261 +810,6 @@ export default function VendasPipeline() {
           </div>
         )}
       </div>
-
-      {!isGestorMode && !viewUserId && activeTab === "carteira" && (
-        <div className="flex-1 flex flex-col gap-4 p-4 overflow-hidden">
-          {canViewOthers && teamMembers && teamMembers.length > 0 && (
-            <div className="flex items-center gap-2 shrink-0">
-              <Select value={portfolioVendorFilter || "__all__"} onValueChange={(v) => setPortfolioVendorFilter(v === "__all__" ? "" : v)}>
-                <SelectTrigger className="w-56" data-testid="select-portfolio-vendor">
-                  <SelectValue placeholder="Todos os vendedores" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">Todos os vendedores</SelectItem>
-                  {teamMembers.map((m) => (
-                    <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {isManagerRole && portfolioStats && (
-            <div className="shrink-0 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" data-testid="panel-portfolio-stats">
-              <div className="rounded-md border bg-card p-3 flex flex-col gap-1">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Users className="h-3.5 w-3.5" />
-                  Total Ativo
-                </div>
-                <span className="text-2xl font-bold leading-none">{portfolioStats.total}</span>
-              </div>
-              <div className="rounded-md border bg-card p-3 flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <BarChart2 className="h-3.5 w-3.5" />
-                  Por Produto
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  {Object.entries(portfolioStats.por_produto).map(([pt, cnt]) => (
-                    <div key={pt} className="flex items-center justify-between gap-1 text-xs">
-                      <span className="text-muted-foreground truncate">{PRODUCT_LABELS[pt] || pt}</span>
-                      <span className="font-medium tabular-nums">{cnt}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-md border bg-card p-3 flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Briefcase className="h-3.5 w-3.5" />
-                  Top Convênios
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  {Object.entries(portfolioStats.por_convenio).slice(0, 5).map(([k, v]) => (
-                    <div key={k} className="flex items-center justify-between gap-1 text-xs">
-                      <span className="text-muted-foreground truncate" title={k}>{k}</span>
-                      <span className="font-medium tabular-nums">{v}</span>
-                    </div>
-                  ))}
-                  {Object.keys(portfolioStats.por_convenio).length === 0 && (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </div>
-              </div>
-              <div className="rounded-md border bg-card p-3 flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Landmark className="h-3.5 w-3.5" />
-                  Top Bancos
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  {Object.entries(portfolioStats.por_banco).slice(0, 5).map(([k, v]) => (
-                    <div key={k} className="flex items-center justify-between gap-1 text-xs">
-                      <span className="text-muted-foreground truncate" title={k}>{k}</span>
-                      <span className="font-medium tabular-nums">{v}</span>
-                    </div>
-                  ))}
-                  {Object.keys(portfolioStats.por_banco).length === 0 && (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </div>
-              </div>
-              <div className="rounded-md border bg-card p-3 flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Building className="h-3.5 w-3.5" />
-                  Top Órgãos
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  {Object.entries(portfolioStats.por_orgao).slice(0, 5).map(([k, v]) => (
-                    <div key={k} className="flex items-center justify-between gap-1 text-xs">
-                      <span className="text-muted-foreground truncate" title={k}>{k}</span>
-                      <span className="font-medium tabular-nums">{v}</span>
-                    </div>
-                  ))}
-                  {Object.keys(portfolioStats.por_orgao).length === 0 && (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </div>
-              </div>
-              <div className="rounded-md border bg-card p-3 flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5" />
-                  Top UFs
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  {Object.entries(portfolioStats.por_uf).slice(0, 5).map(([k, v]) => (
-                    <div key={k} className="flex items-center justify-between gap-1 text-xs">
-                      <span className="text-muted-foreground truncate">{k}</span>
-                      <span className="font-medium tabular-nums">{v}</span>
-                    </div>
-                  ))}
-                  {Object.keys(portfolioStats.por_uf).length === 0 && (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {portfolioLoading ? (
-            <div className="flex-1 flex items-center justify-center min-h-0">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : portfolioEntries.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center min-h-0 text-muted-foreground gap-3">
-              <Wallet className="h-10 w-10 opacity-40" />
-              <p className="text-sm">Nenhum cliente em carteira.</p>
-              <p className="text-xs">Clientes são adicionados automaticamente ao confirmar contratos.</p>
-            </div>
-          ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto rounded-md border" data-testid="table-portfolio-wrapper">
-              <table className="w-full text-sm" data-testid="table-portfolio">
-                <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
-                  <tr className="border-b">
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Nome</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">CPF</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Convênio</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Telefone</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Produto</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Status</th>
-                    {canViewOthers && (
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Vendedor</th>
-                    )}
-                    {user?.role === "vendedor" && (
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Dias sem novo negócio</th>
-                    )}
-                    {isManagerRole && (
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Prazo restante</th>
-                    )}
-                    {(user?.isMaster || user?.role === "master") && (
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground"></th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {portfolioEntries.map((entry, idx) => {
-                    const clientName = entry.client_name || entry.nome_cliente;
-                    const daysRemaining = entry.days_remaining ?? daysUntilExpiry(entry.expires_at);
-                    const daysWithoutDeal = entry.days_without_deal;
-                    const isExpired = entry.status === "EXPIRADO";
-                    const isVendedor = user?.role === "vendedor";
-                    return (
-                      <tr
-                        key={entry.id}
-                        className={`border-b last:border-0 hover-elevate ${isExpired ? "opacity-60" : ""} ${idx % 2 === 0 ? "" : "bg-muted/20"} ${isVendedor ? "cursor-pointer" : ""}`}
-                        data-testid={`row-portfolio-${entry.id}`}
-                        onClick={isVendedor ? () => navigate(`/vendas/consulta?cpf=${entry.cpf}`) : undefined}
-                      >
-                        <td className="px-4 py-3 font-medium max-w-[220px]">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="truncate" title={clientName || "—"}>{clientName || <span className="text-muted-foreground">—</span>}</span>
-                            {entry.is_recorrente && (
-                              <Badge variant="outline" className="text-[10px] shrink-0 px-1 py-0 h-auto text-primary border-primary dark:text-primary dark:border-primary flex items-center gap-0.5" data-testid={`badge-recorrente-${entry.id}`}>
-                                <RefreshCw className="h-2.5 w-2.5" />
-                                Recorrente
-                              </Badge>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs" data-testid={`text-cpf-${entry.id}`}>
-                          {maskCpf(entry.cpf)}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground max-w-[160px] truncate" title={entry.convenio || "—"}>
-                          {entry.convenio || <span>—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {entry.telefone || <span>—</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge
-                            variant="outline"
-                            className={PRODUCT_BADGE_CLASS[entry.product_type] || ""}
-                            data-testid={`badge-product-${entry.id}`}
-                          >
-                            {PRODUCT_LABELS[entry.product_type] || entry.product_type}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge
-                            variant={isExpired ? "secondary" : "default"}
-                            data-testid={`badge-status-${entry.id}`}
-                          >
-                            {isExpired ? "Expirado" : "Ativo"}
-                          </Badge>
-                        </td>
-                        {canViewOthers && (
-                          <td className="px-4 py-3 text-muted-foreground text-xs">
-                            {entry.vendor_name || "—"}
-                          </td>
-                        )}
-                        {isVendedor && (
-                          <td className="px-4 py-3 text-muted-foreground text-xs" data-testid={`text-days-deal-${entry.id}`}>
-                            {daysWithoutDeal != null
-                              ? `${daysWithoutDeal} dia${daysWithoutDeal !== 1 ? "s" : ""} sem novo negócio`
-                              : <span>—</span>}
-                          </td>
-                        )}
-                        {isManagerRole && (
-                          <td className="px-4 py-3" data-testid={`badge-days-${entry.id}`}>
-                            {isExpired ? (
-                              <Badge variant="secondary">Expirado</Badge>
-                            ) : (
-                              <Badge
-                                variant={daysRemaining > 30 ? "default" : daysRemaining > 0 ? "secondary" : "destructive"}
-                              >
-                                {daysRemaining > 0
-                                  ? `${daysRemaining} dia${daysRemaining !== 1 ? "s" : ""}`
-                                  : daysRemaining === 0
-                                    ? "Expira hoje"
-                                    : `${Math.abs(daysRemaining)} dia${Math.abs(daysRemaining) !== 1 ? "s" : ""} vencido`}
-                              </Badge>
-                            )}
-                          </td>
-                        )}
-                        {(user?.isMaster || user?.role === "master") && (
-                          <td className="px-4 py-3">
-                            {entry.status === "ATIVO" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                data-testid={`button-transfer-${entry.id}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setTransferringEntry(entry);
-                                  setTransferDialogOpen(true);
-                                }}
-                              >
-                                Transferir
-                              </Button>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
 
       {!isGestorMode && !viewUserId && activeTab === "dashboard" && (() => {
         const total = portfolioEntries.length;
@@ -1442,64 +1110,6 @@ export default function VendasPipeline() {
           </div>
         );
       })()}
-
-      <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Transferir Cliente</DialogTitle>
-          </DialogHeader>
-          {transferringEntry && (
-            <div className="space-y-4 py-2">
-              <div className="text-sm">
-                <span className="font-medium">{transferringEntry.client_name || transferringEntry.nome_cliente || maskCpf(transferringEntry.cpf)}</span>
-                <span className="text-muted-foreground ml-2">— {PRODUCT_LABELS[transferringEntry.product_type] || transferringEntry.product_type}</span>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="transfer-vendor">Vendedor destino</Label>
-                <Select value={transferToVendorId} onValueChange={setTransferToVendorId}>
-                  <SelectTrigger id="transfer-vendor" data-testid="select-transfer-vendor">
-                    <SelectValue placeholder="Selecione um vendedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(teamMembers || [])
-                      .filter((m) => m.id !== transferringEntry.vendor_id)
-                      .map((m) => (
-                        <SelectItem key={m.id} value={m.id.toString()}>{m.name}</SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="transfer-reason">Motivo (opcional)</Label>
-                <Textarea
-                  id="transfer-reason"
-                  value={transferReason}
-                  onChange={(e) => setTransferReason(e.target.value)}
-                  placeholder="Informe o motivo da transferência..."
-                  data-testid="textarea-transfer-reason"
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTransferDialogOpen(false)}>Cancelar</Button>
-            <Button
-              disabled={!transferToVendorId || transferMutation.isPending}
-              onClick={() => {
-                if (!transferringEntry || !transferToVendorId) return;
-                transferMutation.mutate({
-                  portfolioId: transferringEntry.id,
-                  toVendorId: Number(transferToVendorId),
-                  reason: transferReason,
-                });
-              }}
-              data-testid="button-confirm-transfer"
-            >
-              {transferMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar Transferência"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {(isGestorMode || viewUserId || activeTab === "pipeline") && (
       <div className="flex-1 overflow-x-auto px-8 py-6">
