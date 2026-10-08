@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+  body{margin:0;font:14px system-ui,-apple-system,sans-serif;background:#f7f7f5}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<title>Ronda de Fornecedores</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Work+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: coluna única de 560px, barra fixa no topo, cada seção da ficha num cartão */
+:root{
+  --bg:#eef0f3; --surface:#ffffff; --surface-2:#f6f7f9; --line:#d7dbe2;
+  --ink:#161a20; --muted:#5d6774; --accent:#27477f; --accent-soft:#e4ebf7;
+  --star:#9a7310; --ok:#1d7a4c; --warn:#8a6000; --no:#a33030;
+  --font-display:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
+  --font-body:'Work Sans',system-ui,-apple-system,sans-serif;
+  --r:12px;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#0f1217; --surface:#191d24; --surface-2:#212630; --line:#2e353f;
+  --ink:#e9ecf1; --muted:#9ba4b2; --accent:#8fadea; --accent-soft:#1d2736;
+  --star:#e0b341; --ok:#5cbd8b; --warn:#d9a73c; --no:#e38079;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1217; --surface:#191d24; --surface-2:#212630; --line:#2e353f;
+  --ink:#e9ecf1; --muted:#9ba4b2; --accent:#8fadea; --accent-soft:#1d2736;
+  --star:#e0b341; --ok:#5cbd8b; --warn:#d9a73c; --no:#e38079;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);line-height:1.45;margin:0}
+.wrap{max-width:560px;margin:0 auto;padding:16px;padding-block:14px 96px}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;margin:0;letter-spacing:.01em}
+
+/* barra do topo */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);
+  border-bottom:1px solid var(--line)}
+.top .inner{max-width:560px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:10px}
+.top h1{font-size:21px;line-height:1.1;text-transform:uppercase;letter-spacing:.04em;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.salvo{font-size:11px;color:var(--ok);font-weight:600;opacity:0;transition:opacity .25s}
+.salvo.on{opacity:1}
+
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:11px 14px;
+  font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:7px;justify-content:center}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .btn.primary,
+:root:not([data-theme="light"]) .btn.primary{color:#0f1217}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .btn.primary{color:#fff}}
+.btn.wide{width:100%}
+.btn.ghost{background:transparent}
+.btn.mini{padding:7px 10px;font-size:13px;border-radius:8px}
+
+/* lista de lojas */
+.toolbar{display:flex;gap:8px;margin-bottom:14px}
+.toolbar .btn{flex:1}
+.lojas{display:flex;flex-direction:column;gap:10px;list-style:none;padding:0;margin:0}
+.loja{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;
+  display:grid;grid-template-columns:1fr auto;gap:4px 10px;text-align:left;width:100%;align-items:start}
+.loja .nome{font-family:var(--font-display);font-size:19px;font-weight:700;line-height:1.15}
+.loja .sub{font-size:12.5px;color:var(--muted);grid-column:1}
+.loja .precos{grid-column:1/-1;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;
+  display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:2px}
+.loja .precos b{color:var(--ink);font-weight:600}
+.nota{font-family:var(--font-display);font-size:24px;font-weight:700;line-height:1;grid-row:span 2;
+  display:flex;align-items:baseline;gap:2px;color:var(--accent)}
+.nota small{font-size:12px;color:var(--muted);font-family:var(--font-body)}
+.pill{font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;border:1px solid;display:inline-block}
+.pill.sim{color:var(--ok);border-color:var(--ok);background:transparent}
+.pill.talvez{color:var(--warn);border-color:var(--warn)}
+.pill.nao{color:var(--no);border-color:var(--no)}
+.pill.exemplo{color:var(--muted);border-color:var(--line);background:var(--surface-2)}
+.vazio{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:22px 18px;text-align:center}
+.vazio p{color:var(--muted);font-size:13.5px;margin:6px 0 16px}
+
+/* ficha */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.card > h2{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);
+  margin-bottom:11px;display:flex;align-items:center;gap:8px}
+.card > h2 .n{color:var(--accent);font-weight:700}
+.campo{margin-bottom:12px}
+.campo:last-child{margin-bottom:0}
+.campo > label,.rot{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+.dica{font-size:12px;color:var(--muted);font-weight:400}
+input[type=text],input[type=date],textarea{width:100%;background:var(--surface-2);color:var(--ink);
+  border:1px solid var(--line);border-radius:9px;padding:11px 12px;font:inherit;font-size:15px}
+input[inputmode]{font-variant-numeric:tabular-nums}
+textarea{min-height:68px;resize:vertical}
+.linha{display:flex;gap:8px;flex-wrap:wrap}
+.linha > *{flex:1;min-width:140px}
+.prefixo{display:flex;align-items:center;gap:8px}
+.prefixo .un{font-size:13px;color:var(--muted);white-space:nowrap}
+
+/* chips e alternâncias */
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:9px 13px;
+  font-size:13.5px;font-weight:500}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+:root[data-theme="dark"] .chip[aria-pressed="true"],
+:root:not([data-theme="light"]) .chip[aria-pressed="true"]{color:#0f1217}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .chip[aria-pressed="true"]{color:#fff}}
+.seg{display:flex;gap:6px}
+.seg .chip{flex:1;text-align:center;justify-content:center}
+
+/* estrelas */
+.estrelas{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:7px 0;border-bottom:1px solid var(--line)}
+.estrelas:last-child{border-bottom:0}
+.estrelas .rot{margin:0;font-weight:500;font-size:14px}
+.stars{display:flex;gap:3px}
+.stars button{background:none;border:0;padding:4px 2px;font-size:23px;line-height:1;color:var(--line)}
+.stars button.on{color:var(--star)}
+
+/* pergunta obrigatória */
+.obrig{background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r);padding:15px}
+.obrig h2{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--accent);margin-bottom:8px}
+.obrig .q{font-size:15.5px;font-weight:500;margin:0 0 13px;font-style:italic}
+
+/* comparativo */
+.tabela-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:9px 11px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--surface)}
+thead th{font-family:var(--font-display);font-size:12px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);font-weight:600}
+tbody tr:last-child td{border-bottom:0}
+td.menor{color:var(--ok);font-weight:700}
+.legenda{font-size:12px;color:var(--muted);margin:8px 2px 0}
+
+.saida{width:100%;min-height:200px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+.aviso{font-size:12.5px;color:var(--muted);margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="inner">
+    <button class="btn mini ghost" id="voltar" hidden>&larr;</button>
+    <h1 id="titulo">Ronda de Fornecedores</h1>
+    <span class="salvo" id="salvo">salvo</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- LISTA -->
+  <section id="v-lista">
+    <div class="toolbar">
+      <button class="btn primary" id="nova">+ Nova loja</button>
+      <button class="btn" id="ir-comparar">Comparar</button>
+    </div>
+    <ul class="lojas" id="lista"></ul>
+    <div class="vazio" id="vazio" hidden>
+      <h2 style="font-size:19px">Nenhuma loja ainda</h2>
+      <p>Abra uma ficha ao entrar em cada loja. Fica tudo salvo neste celular, mesmo se você fechar a página.</p>
+      <button class="btn primary wide" id="nova-2">Começar pela primeira loja</button>
+    </div>
+    <p class="aviso">Preenchido fica guardado só neste aparelho e neste navegador. Ao terminar a ronda, use <b>Comparar &rarr; Copiar tudo</b> e mande o texto pra você mesmo no WhatsApp.</p>
+  </section>
+
+  <!-- FICHA -->
+  <section id="v-ficha" hidden></section>
+
+  <!-- COMPARATIVO -->
+  <section id="v-comparar" hidden>
+    <div class="tabela-wrap"><table id="tabela"></table></div>
+    <p class="legenda">Em verde, o menor preço de cada coluna.</p>
+    <div class="toolbar" style="margin-top:14px">
+      <button class="btn primary" id="copiar">Copiar tudo</button>
+    </div>
+    <textarea class="saida" id="saida" readonly aria-label="Resumo de todas as lojas"></textarea>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var CHAVE = "ronda-fornecedores-v1";
+
+  var MODELOS = ["Regular","Clássica","Premium","Oversized","Oversized Heavy","Plus Size"];
+  var TECIDOS = ["100% algodão","Algodão penteado","Fio 30.1"];
+  var MELHOR  = ["Regular","Premium","Oversized","Plus Size"];
+  var ESTRELAS = [["q_gola","Gola firme"],["q_tecido","Tecido / toque"],["q_costura","Costura / acabamento"],
+                  ["q_caimento","Caimento"],["q_geral","Qualidade geral"]];
+  var MARCA = [["m_sem_etiqueta","Sem etiqueta do fabricante"],["m_etiqueta_removivel","Etiqueta removível"],
+               ["m_private_label","Aceita private label"],["m_dtf","Boa para DTF"],
+               ["m_estamparia","Já fornece para estamparia"]];
+  var COMPRA = [["c_mistura_tam","Posso misturar tamanhos"],["c_mistura_cor","Posso misturar cores/modelos"],
+                ["c_pronta","Tem pronta entrega"],["c_reposicao","Linha tem reposição constante"]];
+  var PRECOS = [["p_regular","Regular"],["p_premium","Premium"],["p_oversized","Oversized"],["p_heavy","Oversized Heavy"]];
+  var TRES = [["sim","Sim"],["talvez","Talvez"],["nao","Não"]];
+
+  var dados = ler(), atual = null;
+
+  function ler(){
+    try{
+      var t = localStorage.getItem(CHAVE);
+      if(t) return JSON.parse(t);
+    }catch(e){}
+    return roteiro();
+  }
+  /* As 8 lojas do roteiro, na ordem. Endereço só onde dava para ler no print. */
+  function roteiro(){
+    return [
+      ["Borinelli Confecções Private Label",""],
+      ["Brunx Ind","R. Santa Cruz, 815 - Galpão 03"],
+      ["Omg Têxtil","R. Oswaldo Becker, 120"],
+      ["Kosman - Fábrica de Camisetas",""],
+      ["Home Lisas Ltda","R. Nova Trento, 911"],
+      ["ZIMM Fábrica e Distribuidora de Camisetas",""],
+      ["Mercadão da Lingerie","Paulinho Mais"],
+      ["JR Confecções e Atacado",""]
+    ].map(function(p, i){
+      var l = nova(); l.id = "r"+(i+1); l.nome = p[0]; l.endereco = p[1]; return l;
+    });
+  }
+  function salvar(){
+    try{ localStorage.setItem(CHAVE, JSON.stringify(dados)); piscaSalvo(); }
+    catch(e){}
+  }
+  var tSalvo;
+  function piscaSalvo(){
+    var el = document.getElementById("salvo");
+    el.classList.add("on"); clearTimeout(tSalvo);
+    tSalvo = setTimeout(function(){ el.classList.remove("on"); }, 1100);
+  }
+  function hoje(){ return new Date().toISOString().slice(0,10); }
+  function nova(){
+    return {id:"l"+Date.now()+Math.random().toString(36).slice(2,6), nome:"", cidade:"", data:hoje(),
+            modelos:[], tecido:[], melhor:[]};
+  }
+  function acha(id){ for(var i=0;i<dados.length;i++) if(dados[i].id===id) return dados[i]; return null; }
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function brl(v){ v = String(v||"").trim(); return v ? "R$ " + v : ""; }
+  function num(v){
+    var s = String(v==null?"":v).replace(/[^\d,.-]/g,"").replace(/\./g,"").replace(",",".");
+    var n = parseFloat(s); return isNaN(n) ? null : n;
+  }
+
+  /* ---------- views ---------- */
+  function mostra(qual){
+    ["lista","ficha","comparar"].forEach(function(v){
+      document.getElementById("v-"+v).hidden = (v!==qual);
+    });
+    document.getElementById("voltar").hidden = (qual==="lista");
+    document.getElementById("titulo").textContent =
+      qual==="lista" ? "Ronda de Fornecedores" : (qual==="comparar" ? "Comparativo" : (atual && atual.nome ? atual.nome : "Nova loja"));
+    window.scrollTo(0,0);
+  }
+
+  function pintaLista(){
+    var ul = document.getElementById("lista"), html = "";
+    dados.forEach(function(l){
+      var precos = PRECOS.filter(function(p){ return l[p[0]]; })
+        .map(function(p){ return p[1]+" <b>"+esc(brl(l[p[0]]))+"</b>"; }).join("");
+      html += '<li><button class="loja" data-abrir="'+l.id+'">'
+        + '<span class="nome">'+esc(l.nome || "Sem nome")+'</span>'
+        + '<span class="nota">'+(l.nota||"–")+'<small>/5</small></span>'
+        + '<span class="sub">'+esc([l.endereco, l.cidade].filter(Boolean).join(" · ") || "Toque para preencher")+'</span>'
+        + (precos ? '<span class="precos">'+precos+'</span>' : "")
+        + (l.voltar ? '<span class="precos"><span class="pill '+l.voltar+'">Voltar: '+rotulo3(l.voltar)+'</span></span>' : "")
+        + '</button></li>';
+    });
+    ul.innerHTML = html;
+    document.getElementById("vazio").hidden = dados.length > 0;
+  }
+  function rotulo3(v){ for(var i=0;i<TRES.length;i++) if(TRES[i][0]===v) return TRES[i][1]; return "–"; }
+
+  /* ---------- ficha ---------- */
+  function chips(k, opcoes, l){
+    return '<div class="chips">' + opcoes.map(function(o){
+      var on = (l[k]||[]).indexOf(o) >= 0;
+      return '<button type="button" class="chip" data-multi="'+k+'" data-v="'+esc(o)+'" aria-pressed="'+on+'">'+esc(o)+'</button>';
+    }).join("") + '</div>';
+  }
+  function toggles(defs, l){
+    return '<div class="chips">' + defs.map(function(d){
+      var on = !!l[d[0]];
+      return '<button type="button" class="chip" data-bool="'+d[0]+'" aria-pressed="'+on+'">'+esc(d[1])+'</button>';
+    }).join("") + '</div>';
+  }
+  function seg(k, l){
+    return '<div class="seg">' + TRES.map(function(t){
+      var on = l[k]===t[0];
+      return '<button type="button" class="chip" data-um="'+k+'" data-v="'+t[0]+'" aria-pressed="'+on+'">'+t[1]+'</button>';
+    }).join("") + '</div>';
+  }
+  function stars(k, rot, l){
+    var v = l[k]||0, b = "";
+    for(var i=1;i<=5;i++) b += '<button type="button" data-star="'+k+'" data-v="'+i+'" class="'+(i<=v?"on":"")+'" aria-label="'+i+' de 5">&#9733;</button>';
+    return '<div class="estrelas"><span class="rot">'+esc(rot)+'</span><span class="stars">'+b+'</span></div>';
+  }
+  function txt(k, rot, l, dica, tipo){
+    return '<div class="campo"><label for="f_'+k+'">'+esc(rot)+(dica?' <span class="dica">'+esc(dica)+'</span>':"")+'</label>'
+      + '<input id="f_'+k+'" type="'+(tipo==="date"?"date":"text")+'"'
+      + (tipo==="num"?' inputmode="decimal"':"") + ' data-k="'+k+'" value="'+esc(l[k]||"")+'"></div>';
+  }
+  function area(k, rot, l){
+    return '<div class="campo"><label for="f_'+k+'">'+esc(rot)+'</label>'
+      + '<textarea id="f_'+k+'" data-k="'+k+'">'+esc(l[k]||"")+'</textarea></div>';
+  }
+
+  function pintaFicha(){
+    var l = atual, h = "";
+    h += '<div class="card">'
+       + txt("nome","Fornecedor",l)
+       + txt("endereco","Endereço",l,"confira no mapa antes de sair")
+       + '<div class="linha">'
+       + '<div class="campo" style="margin:0">'+txt("cidade","Cidade",l).replace(/^<div class="campo">|<\/div>$/g,"")+'</div>'
+       + '<div class="campo" style="margin:0">'+txt("data","Data",l,"","date").replace(/^<div class="campo">|<\/div>$/g,"")+'</div>'
+       + '</div></div>';
+
+    h += '<div class="card"><h2><span class="n">1</span> Modelos disponíveis</h2>'+chips("modelos",MODELOS,l)+'</div>';
+
+    h += '<div class="card"><h2><span class="n">2</span> Tamanhos</h2>'
+       + txt("tamanho_ate","Vai até",l,"(ex.: GG, G3)")
+       + toggles([["t_g3","Tem G3"],["t_g4","Tem G4"],["t_tabela","Tem tabela de medidas"]], l)
+       + '</div>';
+
+    h += '<div class="card"><h2><span class="n">3</span> Tecido</h2>'+chips("tecido",TECIDOS,l)
+       + '<div class="campo" style="margin-top:11px">'+txt("tecido_outro","Outro",l).replace(/^<div class="campo">|<\/div>$/g,"")+'</div></div>';
+
+    h += '<div class="card"><h2><span class="n">4</span> Gramatura</h2><div class="linha">'
+       + '<div class="campo" style="margin:0"><label for="f_g_regular">Regular / Clássica <span class="dica">g/m²</span></label>'
+       + '<input id="f_g_regular" type="text" inputmode="decimal" data-k="g_regular" value="'+esc(l.g_regular||"")+'"></div>'
+       + '<div class="campo" style="margin:0"><label for="f_g_over">Oversized <span class="dica">g/m²</span></label>'
+       + '<input id="f_g_over" type="text" inputmode="decimal" data-k="g_over" value="'+esc(l.g_over||"")+'"></div>'
+       + '</div></div>';
+
+    h += '<div class="card"><h2><span class="n">5</span> Qualidade</h2>'
+       + ESTRELAS.map(function(e){ return stars(e[0], e[1], l); }).join("") + '</div>';
+
+    h += '<div class="card"><h2><span class="n">6</span> Para nossa marca</h2>'+toggles(MARCA,l)+'</div>';
+
+    h += '<div class="card"><h2><span class="n">7</span> Compra</h2>'
+       + '<div class="campo"><label for="f_c_minimo">Pedido mínimo para teste <span class="dica">peças</span></label>'
+       + '<input id="f_c_minimo" type="text" inputmode="numeric" data-k="c_minimo" value="'+esc(l.c_minimo||"")+'"></div>'
+       + toggles(COMPRA,l) + '</div>';
+
+    h += '<div class="card"><h2><span class="n">8</span> Preço</h2>'
+       + PRECOS.map(function(p){
+           return '<div class="campo"><label for="f_'+p[0]+'">'+p[1]+' <span class="dica">R$ por peça</span></label>'
+             + '<input id="f_'+p[0]+'" type="text" inputmode="decimal" data-k="'+p[0]+'" value="'+esc(l[p[0]]||"")+'"></div>';
+         }).join("") + '</div>';
+
+    h += '<div class="card"><h2><span class="n">9</span> Observações</h2>'
+       + area("cores","Cores que gostei",l) + area("pecas","Peças que trouxe para testar",l) + '</div>';
+
+    h += '<div class="card"><h2>Nota final</h2>'
+       + stars("nota","Fornecedor", l)
+       + '<div class="campo" style="margin-top:12px"><span class="rot">Melhor para</span>'+chips("melhor",MELHOR,l)+'</div>'
+       + '<div class="campo"><span class="rot">Vale voltar / comprar em quantidade?</span>'+seg("voltar",l)+'</div>'
+       + '</div>';
+
+    h += '<div class="obrig"><h2>Pergunta obrigatória</h2>'
+       + '<p class="q">“Se eu gostar da peça e começar a comprar regularmente, vocês conseguem manter esse mesmo modelo, tecido, medida e cor nos próximos lotes?”</p>'
+       + seg("pergunta",l)
+       + '<div class="campo" style="margin-top:12px">'+area("pergunta_obs","O que responderam",l).replace(/^<div class="campo">|<\/div>$/g,"")+'</div>'
+       + '</div>';
+
+    h += '<div class="toolbar" style="margin-top:16px">'
+       + '<button class="btn" id="copiar-um">Copiar esta loja</button>'
+       + '<button class="btn ghost" id="apagar" style="color:var(--no);border-color:var(--no);flex:0 0 auto">Apagar</button>'
+       + '</div><div id="confirma"></div>';
+
+    document.getElementById("v-ficha").innerHTML = h;
+  }
+
+  /* ---------- comparativo ---------- */
+  function pintaTabela(){
+    var t = document.getElementById("tabela");
+    if(!dados.length){ t.innerHTML = '<tbody><tr><td>Nenhuma loja preenchida ainda.</td></tr></tbody>'; return; }
+    var min = {};
+    PRECOS.forEach(function(p){
+      var vs = dados.map(function(l){ return num(l[p[0]]); }).filter(function(v){ return v!==null; });
+      if(vs.length) min[p[0]] = Math.min.apply(null, vs);
+    });
+    var h = '<thead><tr><th>Loja</th><th>Nota</th>'
+      + PRECOS.map(function(p){ return '<th>'+p[1]+'</th>'; }).join("")
+      + '<th>Voltar?</th></tr></thead><tbody>';
+    dados.forEach(function(l){
+      h += '<tr><td>'+esc(l.nome||"Sem nome")+'</td><td>'+(l.nota||"–")+'</td>'
+        + PRECOS.map(function(p){
+            var v = num(l[p[0]]);
+            var menor = (v!==null && min[p[0]]===v && dados.length>1) ? ' class="menor"' : "";
+            return '<td'+menor+'>'+(l[p[0]] ? esc(brl(l[p[0]])) : "–")+'</td>';
+          }).join("")
+        + '<td>'+rotulo3(l.voltar)+'</td></tr>';
+    });
+    t.innerHTML = h + '</tbody>';
+    document.getElementById("saida").value = dados.map(resumo).join("\n\n");
+  }
+
+  function resumo(l){
+    var li = [], sn = function(b){ return b ? "sim" : "não"; };
+    li.push((l.nome||"Sem nome").toUpperCase() + (l.data ? " ("+l.data+")" : ""));
+    if(l.endereco || l.cidade) li.push([l.endereco, l.cidade].filter(Boolean).join(" — "));
+    li.push("Nota: " + (l.nota||"–") + "/5 | Vale voltar: " + rotulo3(l.voltar));
+    if((l.modelos||[]).length) li.push("Modelos: " + l.modelos.join(", "));
+    var tam = [];
+    if(l.tamanho_ate) tam.push("vai até " + l.tamanho_ate);
+    tam.push("G3 " + sn(l.t_g3), "G4 " + sn(l.t_g4), "tabela de medidas " + sn(l.t_tabela));
+    li.push("Tamanhos: " + tam.join(", "));
+    var tec = (l.tecido||[]).slice(); if(l.tecido_outro) tec.push(l.tecido_outro);
+    if(tec.length) li.push("Tecido: " + tec.join(", "));
+    if(l.g_regular || l.g_over) li.push("Gramatura: regular " + (l.g_regular||"?") + " g/m² | oversized " + (l.g_over||"?") + " g/m²");
+    var q = ESTRELAS.filter(function(e){ return l[e[0]]; })
+      .map(function(e){ return e[1].toLowerCase() + " " + l[e[0]]; });
+    if(q.length) li.push("Qualidade: " + q.join(", "));
+    var m = MARCA.filter(function(d){ return l[d[0]]; }).map(function(d){ return d[1].toLowerCase(); });
+    if(m.length) li.push("Para a marca: " + m.join(", "));
+    var c = COMPRA.filter(function(d){ return l[d[0]]; }).map(function(d){ return d[1].toLowerCase(); });
+    li.push("Compra: mínimo " + (l.c_minimo||"?") + " peças" + (c.length ? ", " + c.join(", ") : ""));
+    var p = PRECOS.filter(function(x){ return l[x[0]]; })
+      .map(function(x){ return x[1].toLowerCase() + " " + brl(l[x[0]]); });
+    if(p.length) li.push("Preço: " + p.join(" | "));
+    if((l.melhor||[]).length) li.push("Melhor para: " + l.melhor.join(", "));
+    if(l.cores) li.push("Cores: " + l.cores);
+    if(l.pecas) li.push("Peças levadas: " + l.pecas);
+    li.push("Mantém o mesmo padrão nos próximos lotes: " + rotulo3(l.pergunta)
+      + (l.pergunta_obs ? " — " + l.pergunta_obs : ""));
+    return li.join("\n");
+  }
+
+  function copia(texto, botao){
+    var antes = botao.textContent;
+    function ok(){ botao.textContent = "Copiado"; setTimeout(function(){ botao.textContent = antes; }, 1600); }
+    try{
+      navigator.clipboard.writeText(texto).then(ok, function(){ selecionaSaida(texto, botao, antes); });
+    }catch(e){ selecionaSaida(texto, botao, antes); }
+  }
+  function selecionaSaida(texto, botao, antes){
+    var ta = document.getElementById("saida");
+    ta.value = texto; mostra("comparar"); ta.focus(); ta.select();
+    botao.textContent = antes;
+  }
+
+  /* ---------- eventos ---------- */
+  document.addEventListener("click", function(ev){
+    if(!ev.target || !ev.target.closest) return;
+    var a = ev.target.closest("[data-abrir]");
+    if(a){ atual = acha(a.getAttribute("data-abrir")); pintaFicha(); mostra("ficha"); return; }
+
+    var b = ev.target.closest("button"); if(!b) return;
+
+    if(b.id==="nova" || b.id==="nova-2"){ atual = nova(); dados.push(atual); salvar(); pintaFicha(); mostra("ficha"); return; }
+    if(b.id==="voltar"){ pintaLista(); mostra("lista"); return; }
+    if(b.id==="ir-comparar"){ pintaTabela(); mostra("comparar"); return; }
+    if(b.id==="copiar"){ copia(dados.map(resumo).join("\n\n"), b); return; }
+    if(b.id==="copiar-um"){ copia(resumo(atual), b); return; }
+
+    if(b.id==="apagar"){
+      document.getElementById("confirma").innerHTML =
+        '<div class="card" style="border-color:var(--no)"><p style="margin:0 0 11px;font-size:14px">'
+        + 'Apagar <b>'+esc(atual.nome||"esta loja")+'</b>? Não dá para desfazer.</p>'
+        + '<div class="toolbar" style="margin:0"><button class="btn" id="cancelar">Cancelar</button>'
+        + '<button class="btn primary" id="apagar-sim" style="background:var(--no);border-color:var(--no);color:#fff">Apagar</button></div></div>';
+      return;
+    }
+    if(b.id==="cancelar"){ document.getElementById("confirma").innerHTML = ""; return; }
+    if(b.id==="apagar-sim"){
+      dados = dados.filter(function(l){ return l.id !== atual.id; });
+      atual = null; salvar(); pintaLista(); mostra("lista"); return;
+    }
+
+    var k;
+    if((k = b.getAttribute("data-multi"))){
+      var lista = atual[k] || (atual[k] = []), v = b.getAttribute("data-v"), i = lista.indexOf(v);
+      if(i>=0) lista.splice(i,1); else lista.push(v);
+      b.setAttribute("aria-pressed", i<0); salvar(); return;
+    }
+    if((k = b.getAttribute("data-bool"))){
+      atual[k] = !atual[k]; b.setAttribute("aria-pressed", !!atual[k]); salvar(); return;
+    }
+    if((k = b.getAttribute("data-um"))){
+      var val = b.getAttribute("data-v");
+      atual[k] = (atual[k]===val) ? "" : val;
+      b.parentNode.querySelectorAll("[data-um]").forEach(function(o){
+        o.setAttribute("aria-pressed", o.getAttribute("data-v")===atual[k]);
+      });
+      salvar(); return;
+    }
+    if((k = b.getAttribute("data-star"))){
+      var n = +b.getAttribute("data-v");
+      atual[k] = (atual[k]===n) ? 0 : n;
+      b.parentNode.querySelectorAll("[data-star]").forEach(function(o){
+        o.classList.toggle("on", +o.getAttribute("data-v") <= (atual[k]||0));
+      });
+      if(k==="nota") document.getElementById("titulo").textContent = atual.nome || "Nova loja";
+      salvar(); return;
+    }
+  });
+
+  document.addEventListener("input", function(ev){
+    var k = ev.target.getAttribute && ev.target.getAttribute("data-k");
+    if(!k || !atual) return;
+    atual[k] = ev.target.value;
+    if(k==="nome") document.getElementById("titulo").textContent = ev.target.value || "Nova loja";
+    salvar();
+  });
+
+  pintaLista(); mostra("lista");
+})();
+</script>
+
+</body>
+</html>
