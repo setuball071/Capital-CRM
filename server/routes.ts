@@ -7025,7 +7025,6 @@ ${JSON.stringify(roteirosParaIA, null, 2)}`,
         const byСpf = new Map(results.map((r) => [r.cpf, r]));
 
         // Build output Excel
-        const ExcelJS = await import("exceljs");
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet("Resultado");
 
