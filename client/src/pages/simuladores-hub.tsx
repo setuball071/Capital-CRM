@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import SimuladorCompra from "@/pages/simulador-compra";
 import SimuladorPortabilidadePage from "@/pages/simulador-portabilidade";
 import CalculadoraRendaFixaPage from "@/pages/calculadora-renda-fixa";
+import EvolucaoDividaPage from "@/pages/evolucao-divida";
 import SimCriadorProposta from "@/pages/sim-criador-proposta";
 import SimAmortizacaoAnual from "@/pages/sim-amortizacao-anual";
 import { PropostaProvider, useProposta } from "@/contexts/proposta-context";
@@ -60,6 +61,7 @@ const TABS = [
   { id: "viabilidade-inter", label: "Viabilidade Inter", icon: "fact_check", perm: "viabilidade_inter" },
   { id: "contracheque", label: "Contracheque", icon: "description", perm: "calculadora_contracheque" },
   { id: "renda-fixa", label: "Renda Fixa", icon: "trending_up", perm: "renda_fixa" },
+  { id: "evolucao-divida", label: "Evolução de Dívida", icon: "show_chart", perm: "evolucao_divida" },
   { id: "proposta", label: "Criador de Proposta", icon: "description", perm: "criador_proposta" },
 ];
 
@@ -296,6 +298,11 @@ export default function SimuladoresHub() {
           {/* Renda Fixa — native React */}
           <div style={{ display: activeTab === "renda-fixa" ? "block" : "none", height: "100%", overflow: "auto" }}>
             <CalculadoraRendaFixaPage />
+          </div>
+
+          {/* Evolução de Dívida — native React */}
+          <div style={{ display: activeTab === "evolucao-divida" ? "block" : "none", height: "100%", overflow: "auto" }}>
+            <EvolucaoDividaPage />
           </div>
 
           {/* Contracheque — iframe */}

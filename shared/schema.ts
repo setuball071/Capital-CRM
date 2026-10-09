@@ -1882,6 +1882,7 @@ export const MODULE_SUB_ITEMS = {
     { key: "viabilidade_inter", label: "Viabilidade Inter" },
     { key: "calculadora_contracheque", label: "Cálculo de Contracheque" },
     { key: "renda_fixa", label: "Renda Fixa" },
+    { key: "evolucao_divida", label: "Evolução de Dívida" },
     { key: "criador_proposta", label: "Criador de Proposta" },
   ],
   modulo_roteiros: [
