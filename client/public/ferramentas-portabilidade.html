@@ -840,6 +840,7 @@ td { color: #111827 !important; }
           </table>
         </div>
         <div id="refimSeparadoAviso" style="margin-top:8px;font-size:12px;"></div>
+        <div id="encurtarPrazo" style="display:none;margin-top:10px;"></div>
         <div id="rMargemNegBlockSep" style="display:none;margin-top:8px;padding:10px 14px;border-radius:8px;background:#FFFBEB;border:1px solid #FDE68A;font-size:12px;"></div>
         <div id="rFinanciadoSep" style="display:none;margin-top:8px;"></div>
       </div>
@@ -5650,6 +5651,83 @@ function _toastRefim(msg, cor) {
   }, 3000);
 }
 
+const PRAZOS_ENCURTAR = [108, 96, 84, 72, 60, 48];
+
+/** Valor presente de `n` parcelas de `p` à taxa `i` ao mês. */
+function _pvParcelas(p, i, n) {
+  return i > 0 ? p * (1 - Math.pow(1 + i, -n)) / i : p * n;
+}
+
+/**
+ * Quanto custa HOJE para o contrato terminar em `alvo` meses em vez de `prazo`.
+ *
+ * É o valor presente das parcelas que saem, descontadas pela taxa do próprio
+ * contrato — exatamente o que o banco cobra numa quitação antecipada parcial
+ * reduzindo o PRAZO. Com mais de um banco, cada um entra com a sua taxa.
+ */
+function custoParaEncurtar(blocos, prazo, alvo) {
+  return blocos.reduce((a, b) =>
+    a + (_pvParcelas(b.subParcela, b.taxa, prazo) - _pvParcelas(b.subParcela, b.taxa, alvo)), 0);
+}
+
+/** O menor prazo que cabe no troco disponível. */
+function prazoComTodoOTroco(blocos, prazo, troco) {
+  let n = prazo;
+  while (n > 1 && custoParaEncurtar(blocos, prazo, n - 1) <= troco) n--;
+  return n;
+}
+
+/** A tabela de opções, embaixo do resultado por contrato. */
+function pintarEncurtarPrazo(blocos, prazo, troco) {
+  const el = document.getElementById('encurtarPrazo');
+  if (!el) return;
+  const parcelaTotal = blocos.reduce((a, b) => a + b.subParcela, 0);
+  if (!blocos.length || troco <= 0 || prazo <= 12 || parcelaTotal <= 0) { el.style.display = 'none'; return; }
+
+  const alvos = PRAZOS_ENCURTAR.filter(p => p < prazo);
+  if (!alvos.length) { el.style.display = 'none'; return; }
+
+  const comTudo = prazoComTodoOTroco(blocos, prazo, troco);
+  const linhas = alvos.map(alvo => {
+    const custo = custoParaEncurtar(blocos, prazo, alvo);
+    const sobra = troco - custo;
+    const cabe = sobra >= 0;
+    return `<tr style="${cabe ? '' : 'opacity:.6;'}">
+      <td style="padding:5px 8px;font-weight:700;">${alvo} meses</td>
+      <td style="padding:5px 8px;text-align:right;">${fmtBRL(custo)}</td>
+      <td style="padding:5px 8px;text-align:right;font-weight:700;color:${cabe ? '#16A34A' : '#EF4444'};">
+        ${cabe ? fmtBRL(sobra) : 'faltam ' + fmtBRL(-sobra)}</td>
+    </tr>`;
+  }).join('');
+
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="border:1px solid #E5E7EB;border-radius:8px;padding:10px 14px;background:#FAFAFF;">
+      <div style="font-weight:700;font-size:13px;color:var(--brand);">
+        ✂️ Encurtar o prazo com parte do troco
+        <span style="font-weight:500;font-size:11px;color:#6B7280;">
+          — troco disponível ${fmtBRL(troco)} · parcela de ${fmtBRL(parcelaTotal)} não muda</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;">
+        <thead><tr style="color:#6B7280;font-size:10px;text-transform:uppercase;letter-spacing:.5px;">
+          <th style="padding:4px 8px;text-align:left;">Terminar em</th>
+          <th style="padding:4px 8px;text-align:right;">Custo hoje</th>
+          <th style="padding:4px 8px;text-align:right;">Sobra para o cliente</th>
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      <div style="margin-top:6px;font-size:11.5px;color:#374151;">
+        Com <b>todo</b> o troco, o contrato cai para <b>${comTudo} meses</b>
+        <span style="color:#6B7280;">(custo ${fmtBRL(custoParaEncurtar(blocos, prazo, comTudo))}).</span>
+      </div>
+      <div style="margin-top:4px;font-size:11px;color:#6B7280;">
+        O custo é o valor presente das parcelas que saem, pela taxa do contrato.
+        ⚠️ Peça a amortização <b>reduzindo o prazo</b>, nunca a parcela — e faça logo:
+        cada mês de espera encarece, porque a cauda fica mais perto.
+      </div>
+    </div>`;
+}
+
 function calcRefim() {
   const nomeBanco = document.getElementById('refimBanco').value;
   const regra = regrasBancos.find(r => r.banco === nomeBanco);
@@ -5997,6 +6075,10 @@ function calcRefim() {
         <td style="padding:8px;text-align:right;font-weight:800;color:#16A34A;">${fmtBRL(totalTroco)}</td>
         <td style="padding:8px;text-align:center;font-size:11px;color:#6B7280;">${multiBanco ? 'taxas por banco' : 'Taxa: ' + fmtPct(blocos[0].taxa * 100) + '% a.m.'}</td>
       </tr>`;
+
+    // no modo separado o refin e sempre 120; leio das proprias linhas
+    const prazoRefinSep = Math.max(0, ...linhas.map(l => Number(l.prazo) || 0));
+    pintarEncurtarPrazo(blocos, prazoRefinSep, totalTroco);
 
     const avisoSep = document.getElementById('refimSeparadoAviso');
     if (avisoSep) {
