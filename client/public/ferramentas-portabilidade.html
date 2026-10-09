@@ -5652,6 +5652,15 @@ function _toastRefim(msg, cor) {
 }
 
 const PRAZOS_ENCURTAR = [108, 96, 84, 72, 60, 48];
+// nasce fechada: so interessa quando o cliente pede prazo menor do que o banco faz
+let VER_ENCURTAR = false;
+/** Guarda o que a tabela precisa para redesenhar sozinha ao abrir/fechar. */
+let _ENCURTAR_CTX = null;
+
+function alternarEncurtar() {
+  VER_ENCURTAR = !VER_ENCURTAR;
+  if (_ENCURTAR_CTX) pintarEncurtarPrazo(_ENCURTAR_CTX.blocos, _ENCURTAR_CTX.prazo, _ENCURTAR_CTX.troco);
+}
 
 /** Valor presente de `n` parcelas de `p` à taxa `i` ao mês. */
 function _pvParcelas(p, i, n) {
@@ -5681,6 +5690,7 @@ function prazoComTodoOTroco(blocos, prazo, troco) {
 function pintarEncurtarPrazo(blocos, prazo, troco) {
   const el = document.getElementById('encurtarPrazo');
   if (!el) return;
+  _ENCURTAR_CTX = { blocos, prazo, troco };
   const parcelaTotal = blocos.reduce((a, b) => a + b.subParcela, 0);
   if (!blocos.length || troco <= 0 || prazo <= 12 || parcelaTotal <= 0) { el.style.display = 'none'; return; }
 
@@ -5701,13 +5711,7 @@ function pintarEncurtarPrazo(blocos, prazo, troco) {
   }).join('');
 
   el.style.display = '';
-  el.innerHTML = `
-    <div style="border:1px solid #E5E7EB;border-radius:8px;padding:10px 14px;background:#FAFAFF;">
-      <div style="font-weight:700;font-size:13px;color:var(--brand);">
-        ✂️ Encurtar o prazo com parte do troco
-        <span style="font-weight:500;font-size:11px;color:#6B7280;">
-          — troco disponível ${fmtBRL(troco)} · parcela de ${fmtBRL(parcelaTotal)} não muda</span>
-      </div>
+  const corpo = !VER_ENCURTAR ? '' : `
       <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;">
         <thead><tr style="color:#6B7280;font-size:10px;text-transform:uppercase;letter-spacing:.5px;">
           <th style="padding:4px 8px;text-align:left;">Terminar em</th>
@@ -5724,7 +5728,19 @@ function pintarEncurtarPrazo(blocos, prazo, troco) {
         O custo é o valor presente das parcelas que saem, pela taxa do contrato.
         ⚠️ Peça a amortização <b>reduzindo o prazo</b>, nunca a parcela — e faça logo:
         cada mês de espera encarece, porque a cauda fica mais perto.
-      </div>
+      </div>`;
+
+  el.innerHTML = `
+    <div style="border:1px solid #E5E7EB;border-radius:8px;padding:10px 14px;background:#FAFAFF;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;font-size:13px;color:var(--brand);">
+        <input type="checkbox" ${VER_ENCURTAR ? 'checked' : ''} onchange="alternarEncurtar()" style="cursor:pointer;">
+        ✂️ Encurtar o prazo com parte do troco
+        <span style="font-weight:500;font-size:11px;color:#6B7280;">
+          ${VER_ENCURTAR
+            ? `— troco disponível ${fmtBRL(troco)} · parcela de ${fmtBRL(parcelaTotal)} não muda`
+            : `— marque para ver quanto custa deixar o contrato em 96, 84, 72… meses`}</span>
+      </label>
+      ${corpo}
     </div>`;
 }
 
