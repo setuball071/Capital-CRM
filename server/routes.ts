@@ -16233,6 +16233,10 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       const user = req.user!;
       const tenantId = req.tenantId!;
       const vendorId = req.query.vendorId ? Number(req.query.vendorId) : null;
+      // Importação é da PESSOA: na carteira dela, o que ela importou aparece em
+      // qualquer ambiente (ex.: Elisandra importou no Capital Go em abril e
+      // depois ganhou ambiente próprio). O histórico já não filtra ambiente.
+      const carteiraPessoal = user.role === "vendedor" || user.role === "sdr";
 
       const escopo = (coluna: any) => {
         if (user.role === "vendedor" || user.role === "sdr") {
@@ -16267,7 +16271,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           JOIN sales_lead_assignments sla ON sla.campaign_id = sc.id
           JOIN sales_leads sl ON sl.id = sla.lead_id
           WHERE sc.origem = 'carteira_pessoal'
-            AND sc.tenant_id = ${tenantId}
+            ${carteiraPessoal ? sql`` : sql`AND sc.tenant_id = ${tenantId}`}
             AND sl.cpf IS NOT NULL
             AND ${escopo(sql`sc.created_by`)}
           GROUP BY sl.cpf, sc.created_by
