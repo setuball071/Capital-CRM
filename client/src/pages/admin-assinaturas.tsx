@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CreditCard, Plus, Loader2, Search } from "lucide-react";
+import { CreditCard, Plus, Loader2, Search, RefreshCw } from "lucide-react";
 import {
   AssinaturaUsuarioDialog,
   STATUS_ASSINATURA,
@@ -59,6 +61,8 @@ export default function AdminAssinaturasPage() {
         <Resumo titulo="Suspensas" valor={contar("suspensa")} cor="text-red-600" />
         <Resumo titulo="Receita mensal prevista" valor={brl(receitaPrevista)} />
       </div>
+
+      <RotinaDiaria />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
@@ -221,5 +225,65 @@ function EscolherUsuario({ open, onOpenChange, jaAssinantes, onEscolher }: {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Última execução da rotina diária + botão para rodar agora. */
+function RotinaDiaria() {
+  const { toast } = useToast();
+  const { data: execucoes = [] } = useQuery<any[]>({ queryKey: ["/api/admin/assinaturas/rotina/execucoes"] });
+  const executar = useMutation({
+    mutationFn: async () => (await apiRequest("POST", "/api/admin/assinaturas/rotina/executar", {})).json(),
+    onSuccess: (r: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/assinaturas"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/assinaturas/rotina/execucoes"] });
+      toast({
+        title: "Rotina executada",
+        description: `${r?.geradas?.length || 0} mensalidades geradas, ${r?.mudancas?.length || 0} mudanças de situação, ${r?.avisos || 0} avisos enviados.`,
+      });
+    },
+    onError: (e: any) => toast({ title: "Erro ao executar a rotina", description: e?.message, variant: "destructive" }),
+  });
+  const ultima = execucoes[0];
+  const r = ultima?.resultado;
+  const quando = ultima ? new Date(ultima.iniciada_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : null;
+
+  return (
+    <Card>
+      <CardContent className="pt-5 space-y-2 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-medium">Rotina diária</p>
+            <p className="text-xs text-muted-foreground">
+              Todo dia depois das 6h: gera a mensalidade 5 dias antes, marca as vencidas, atualiza a situação e avisa o cliente.
+              {r?.simulacao !== false && " Suspensão em modo simulação: ninguém é bloqueado."}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => executar.mutate()} disabled={executar.isPending} data-testid="button-executar-rotina">
+            {executar.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
+            Executar agora
+          </Button>
+        </div>
+        {!ultima ? (
+          <p className="text-xs text-muted-foreground">Ainda não rodou.</p>
+        ) : ultima.erro ? (
+          <p className="text-xs text-red-600">Última execução ({quando}) falhou: {ultima.erro}</p>
+        ) : r ? (
+          <div className="text-xs text-muted-foreground space-y-0.5">
+            <p>Última execução: {quando} ({ultima.origem === "manual" ? "manual" : "automática"})</p>
+            {r.geradas?.length > 0 && <p>Geradas: {r.geradas.join(", ")}</p>}
+            {r.mudancas?.length > 0 && <p>Mudanças: {r.mudancas.join("; ")}</p>}
+            {r.semBoleto?.length > 0 && <p className="text-amber-700 dark:text-amber-400">Sem boleto ou link (cliente não avisado): {r.semBoleto.join(", ")}</p>}
+            {r.seriamSuspensos?.length > 0 && (
+              <p className="text-orange-700 dark:text-orange-400">
+                {r.simulacao ? "Seriam suspensos (simulação)" : "Suspensos"}: {r.seriamSuspensos.join(", ")}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Em execução desde {quando}.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

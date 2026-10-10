@@ -18,6 +18,7 @@ import { sql } from "drizzle-orm";
 import { db } from "./storage";
 import { saveDocument, getDocument } from "./document-storage";
 import { MODULOS_CATALOGO } from "@shared/modulos";
+import { createNotification } from "./notification-service";
 
 /** Cobrança nasce N dias antes do vencimento (decisão do Fábio, 07/10/2026). */
 export const ANTECEDENCIA_COBRANCA_DIAS = 5;
@@ -285,6 +286,47 @@ export async function minhaAssinatura(userId: number) {
   };
 }
 
+/**
+ * Cria a mensalidade de um vencimento. Usada pelo botão do master e pela
+ * rotina diária. Devolve null se a competência já existe (UNIQUE): clicar
+ * duas vezes, ou a rotina rodar duas vezes, não gera duas mensalidades.
+ */
+async function gerarCobranca(
+  a: any,
+  vencimento: string,
+  o: { acrescimo?: number; observacoes?: string | null; porUserId: number | null },
+): Promise<{ id: number; competencia: string } | null> {
+  const competencia = vencimento.slice(0, 7);
+  const original = num(a.valor_mensal);
+  const desconto = a.status === "isenta" ? original : descontoVigente(a, vencimento);
+  const acrescimo = o.acrescimo || 0;
+  const final = Math.round((original - desconto + acrescimo) * 100) / 100;
+
+  const [cob] = (await db.execute(sql`
+    INSERT INTO assinatura_cobrancas (assinatura_id, user_id, competencia, valor_original, desconto,
+      acrescimo, valor_final, vencimento, status, observacoes)
+    VALUES (${a.id}, ${a.user_id}, ${competencia}, ${original}, ${desconto}, ${acrescimo}, ${final},
+      ${vencimento}, ${a.status === "isenta" ? "isenta" : "aberta"}, ${o.observacoes || null})
+    ON CONFLICT (assinatura_id, competencia) DO NOTHING
+    RETURNING id
+  `)).rows as any[];
+  if (!cob) return null;
+
+  // Desconto por quantidade de mensalidades: esta consumiu uma.
+  if (desconto > 0 && a.status !== "isenta" && a.desconto_parcelas_restantes !== null) {
+    await db.execute(sql`
+      UPDATE assinaturas SET desconto_parcelas_restantes = GREATEST(desconto_parcelas_restantes - 1, 0)
+       WHERE id = ${a.id}
+    `);
+  }
+  await registrarEvento({ assinaturaId: a.id, cobrancaId: cob.id, titularId: a.user_id,
+    acao: "cobranca_gerada",
+    depois: { competencia, vencimento, valor_original: original, desconto, acrescimo, valor_final: final,
+      ...(o.porUserId ? {} : { origem: "rotina diária" }) },
+    porUserId: o.porUserId });
+  return { id: cob.id, competencia };
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
@@ -495,35 +537,13 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
 
       const vencimento = dataOuNull(req.body?.vencimento) || a.proximo_vencimento;
       if (!vencimento) return res.status(400).json({ message: "Defina o próximo vencimento da assinatura" });
-      const competencia = vencimento.slice(0, 7);
-      const original = num(a.valor_mensal);
-      const desconto = a.status === "isenta" ? original : descontoVigente(a, vencimento);
-      const acrescimo = Math.max(0, num(req.body?.acrescimo));
-      const final = Math.round((original - desconto + acrescimo) * 100) / 100;
-
-      // UNIQUE (assinatura_id, competencia): clicar duas vezes não gera duas mensalidades.
-      const [cob] = (await db.execute(sql`
-        INSERT INTO assinatura_cobrancas (assinatura_id, user_id, competencia, valor_original, desconto,
-          acrescimo, valor_final, vencimento, status, observacoes)
-        VALUES (${a.id}, ${a.user_id}, ${competencia}, ${original}, ${desconto}, ${acrescimo}, ${final},
-          ${vencimento}, ${a.status === "isenta" ? "isenta" : "aberta"}, ${req.body?.observacoes || null})
-        ON CONFLICT (assinatura_id, competencia) DO NOTHING
-        RETURNING id
-      `)).rows as any[];
-      if (!cob) return res.status(409).json({ message: `Já existe mensalidade da competência ${competencia}` });
-
-      // Desconto por quantidade de mensalidades: esta consumiu uma.
-      if (desconto > 0 && a.status !== "isenta" && a.desconto_parcelas_restantes !== null) {
-        await db.execute(sql`
-          UPDATE assinaturas SET desconto_parcelas_restantes = GREATEST(desconto_parcelas_restantes - 1, 0)
-           WHERE id = ${a.id}
-        `);
-      }
-      await registrarEvento({ assinaturaId: a.id, cobrancaId: cob.id, titularId: a.user_id,
-        acao: "cobranca_gerada",
-        depois: { competencia, vencimento, valor_original: original, desconto, acrescimo, valor_final: final },
-        porUserId: req.user.id });
-      res.json({ id: cob.id });
+      const r = await gerarCobranca(a, vencimento, {
+        acrescimo: Math.max(0, num(req.body?.acrescimo)),
+        observacoes: req.body?.observacoes || null,
+        porUserId: req.user.id,
+      });
+      if (!r) return res.status(409).json({ message: `Já existe mensalidade da competência ${vencimento.slice(0, 7)}` });
+      res.json({ id: r.id });
     } catch (e: any) {
       console.error("[ASSINATURAS] gerar cobranca:", e?.message);
       res.status(500).json({ message: "Erro ao gerar a mensalidade" });
@@ -558,6 +578,17 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
           observacoes = ${novo.observacoes || null}, status = ${status}, updated_at = NOW()
          WHERE id = ${id}
       `);
+      // Mensalidade isentada conta como resolvida: o vencimento anda, como no
+      // pagamento. Sem isso a rotina diária ficaria presa nesta competência.
+      if (status === "isenta" && c.status !== "isenta") {
+        const proximo = addMeses(c.vencimento, 1);
+        await db.execute(sql`
+          UPDATE assinaturas
+             SET proximo_vencimento = GREATEST(COALESCE(proximo_vencimento, ${proximo}::date), ${proximo}::date),
+                 updated_at = NOW()
+           WHERE id = ${c.assinatura_id}
+        `);
+      }
       // Mensalidade cancelada devolve a parcela de desconto que tinha consumido.
       if (status === "cancelada" && c.status !== "cancelada" && num(c.desconto) > 0) {
         await db.execute(sql`
@@ -636,6 +667,31 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
     } catch (e: any) {
       console.error("[ASSINATURAS] pagar:", e?.message);
       res.status(500).json({ message: "Erro ao confirmar o pagamento" });
+    }
+  });
+
+  // ── Rotina diária: executar agora e ver as últimas execuções ──────────────
+  app.post("/api/admin/assinaturas/rotina/executar", requireAuth, async (req: any, res) => {
+    if (!soMaster(req, res)) return;
+    try {
+      res.json(await executarRotina("manual"));
+    } catch (e: any) {
+      console.error("[ASSINATURAS] rotina manual:", e?.message);
+      res.status(500).json({ message: "Erro ao executar a rotina" });
+    }
+  });
+
+  app.get("/api/admin/assinaturas/rotina/execucoes", requireAuth, async (req: any, res) => {
+    if (!soMaster(req, res)) return;
+    try {
+      const r = await db.execute(sql`
+        SELECT id, data::text AS data, origem, iniciada_em, terminada_em, resultado, erro
+          FROM rotina_execucoes WHERE rotina = ${ROTINA} ORDER BY iniciada_em DESC LIMIT 10
+      `);
+      res.json(r.rows);
+    } catch (e: any) {
+      console.error("[ASSINATURAS] execucoes:", e?.message);
+      res.status(500).json({ message: "Erro ao listar execuções" });
     }
   });
 
@@ -724,5 +780,232 @@ export async function confirmarPagamento(p: {
     depois: { pago_em: p.pagoEm, valor_pago: num(c.valor_pago), forma: p.forma, proximo_vencimento: a?.pv },
     porUserId: p.porUserId,
   });
+  const [cc] = (await db.execute(sql`SELECT competencia FROM assinatura_cobrancas WHERE id = ${c.id}`)).rows as any[];
+  const comp = cc?.competencia ? `${cc.competencia.slice(5, 7)}/${cc.competencia.slice(0, 4)}` : "";
+  await createNotification({
+    userId: c.user_id,
+    title: "Pagamento confirmado",
+    message: `Recebemos o pagamento da sua mensalidade ${comp}. Obrigado!`,
+    type: "assinatura",
+    actionUrl: "/assinatura",
+  }).catch((e) => console.error("[ASSINATURAS] aviso de pagamento:", e?.message));
   return { ok: true, proximoVencimento: a?.pv || proximo };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROTINA DIÁRIA (etapa 3)
+//
+// Roda uma vez por dia, depois das 06:00 de Brasília. O relógio é um tick de
+// hora em hora; quem garante "uma vez por dia" é o banco (rotina_execucoes,
+// índice único por rotina+data), porque cada deploy zera o setInterval e duas
+// instâncias rodariam em dobro.
+//
+// Enquanto SUSPENSAO_ATIVA for false é SIMULAÇÃO: quem passou da tolerância
+// vai para "suspensao_programada" e aparece no resumo do master, mas nada é
+// bloqueado e o cliente não ouve falar em suspensão.
+// ═══════════════════════════════════════════════════════════════════════════
+const ROTINA = "assinaturas";
+const HORA_MINIMA_BRT = 6;
+
+/**
+ * Situação que a assinatura deveria ter hoje, olhando a mensalidade em aberto
+ * mais antiga. Cancelada, suspensa (decisão manual até a etapa 4) e isenta
+ * dentro do prazo não são tocadas pela rotina.
+ */
+export function situacaoAutomatica(
+  a: { status: string; isenta_ate?: string | null; tolerancia_dias?: number | null; suspensao_automatica?: boolean | null },
+  vencimentoAberto: string | null,
+  hoje = hojeISO(),
+  suspensaoAtiva: boolean = SUSPENSAO_ATIVA,
+): string {
+  if (a.status === "cancelada" || a.status === "suspensa") return a.status;
+  if (a.status === "isenta" && (!a.isenta_ate || a.isenta_ate >= hoje)) return "isenta";
+  if (!vencimentoAberto) return "ativa";
+  const dv = diasEntre(hoje, vencimentoAberto);
+  if (dv >= 0) return "aguardando_pagamento";
+  const tol = Number(a.tolerancia_dias ?? TOLERANCIA_PADRAO_DIAS);
+  if (-dv <= tol || a.suspensao_automatica === false) return "em_atraso";
+  return suspensaoAtiva ? "suspensa" : "suspensao_programada";
+}
+
+/** Etapa do aviso ao cliente para esta mensalidade hoje (no máximo um de cada). */
+export function etapaAviso(vencimento: string, hoje = hojeISO()): "antes" | "hoje" | "atraso" | null {
+  const dv = diasEntre(hoje, vencimento);
+  if (dv > ANTECEDENCIA_COBRANCA_DIAS) return null;
+  if (dv > 0) return "antes";
+  if (dv === 0) return "hoje";
+  return "atraso";
+}
+
+const TITULO_AVISO = {
+  antes: "Mensalidade disponível",
+  hoje: "Mensalidade vence hoje",
+  atraso: "Mensalidade em atraso",
+} as const;
+
+export async function rotinaDiariaAssinaturas(hoje = hojeISO()) {
+  const res = {
+    simulacao: !SUSPENSAO_ATIVA,
+    geradas: [] as string[],
+    vencidas: 0,
+    mudancas: [] as string[],
+    avisos: 0,
+    semBoleto: [] as string[],
+    seriamSuspensos: [] as string[],
+  };
+  const limite = addDias(hoje, ANTECEDENCIA_COBRANCA_DIAS);
+
+  // 1) Cortesia vencida volta a ser cobrada, a partir do primeiro vencimento depois dela.
+  const isentas = (await db.execute(sql`
+    SELECT ${COLS_ASSINATURA}, u.name AS nome FROM assinaturas a JOIN users u ON u.id = a.user_id
+     WHERE a.status = 'isenta' AND a.isenta_ate IS NOT NULL AND a.isenta_ate < ${hoje}::date
+  `)).rows as any[];
+  for (const a of isentas) {
+    const pv = proximaComDia(Number(a.dia_vencimento), addDias(a.isenta_ate, 1));
+    const r = await db.execute(sql`
+      UPDATE assinaturas SET status = 'ativa',
+             proximo_vencimento = GREATEST(COALESCE(proximo_vencimento, ${pv}::date), ${pv}::date),
+             updated_at = NOW()
+       WHERE id = ${a.id} AND status = 'isenta'
+    `);
+    if (!(r as any).rowCount) continue;
+    await registrarEvento({ assinaturaId: a.id, titularId: a.user_id, acao: "situacao_automatica",
+      antes: { status: "isenta", isenta_ate: a.isenta_ate }, depois: { status: "ativa", motivo: "fim da cortesia" },
+      porUserId: null });
+    res.mudancas.push(`${a.nome}: cortesia terminou`);
+  }
+
+  // 2) Gera a mensalidade de quem vence nos próximos N dias (ou já venceu sem mensalidade).
+  const aGerar = (await db.execute(sql`
+    SELECT ${COLS_ASSINATURA}, u.name AS nome FROM assinaturas a JOIN users u ON u.id = a.user_id
+     WHERE a.status NOT IN ('cancelada', 'isenta') AND a.proximo_vencimento IS NOT NULL
+       AND a.proximo_vencimento <= ${limite}::date AND u.is_active = true
+  `)).rows as any[];
+  for (const a of aGerar) {
+    const r = await gerarCobranca(a, a.proximo_vencimento, { porUserId: null });
+    if (r) res.geradas.push(`${a.nome} (${r.competencia.slice(5, 7)}/${r.competencia.slice(0, 4)})`);
+  }
+
+  // 3) Mensalidade aberta que passou do vencimento vira vencida.
+  const venc = await db.execute(sql`
+    UPDATE assinatura_cobrancas SET status = 'vencida', updated_at = NOW()
+     WHERE status = 'aberta' AND vencimento < ${hoje}::date RETURNING id
+  `);
+  res.vencidas = venc.rows.length;
+
+  // 4) Situação de cada assinatura + avisos ao cliente.
+  const todas = (await db.execute(sql`
+    SELECT ${COLS_ASSINATURA}, u.name AS nome,
+           cur.id AS cob_id, cur.vencimento::text AS cob_vencimento,
+           (cur.boleto_arquivo IS NOT NULL OR cur.boleto_link IS NOT NULL
+             OR cur.linha_digitavel IS NOT NULL OR cur.pix_copia_cola IS NOT NULL) AS cob_tem_boleto
+      FROM assinaturas a JOIN users u ON u.id = a.user_id
+      LEFT JOIN LATERAL (
+        SELECT * FROM assinatura_cobrancas c
+         WHERE c.assinatura_id = a.id AND c.status IN ('aberta', 'vencida')
+         ORDER BY c.vencimento ASC LIMIT 1
+      ) cur ON true
+     WHERE a.status <> 'cancelada'
+  `)).rows as any[];
+
+  for (const a of todas) {
+    const novo = situacaoAutomatica(a, a.cob_vencimento, hoje);
+    if (novo !== a.status) {
+      const r = await db.execute(sql`
+        UPDATE assinaturas SET status = ${novo}, updated_at = NOW() WHERE id = ${a.id} AND status = ${a.status}
+      `);
+      if ((r as any).rowCount) {
+        await registrarEvento({ assinaturaId: a.id, titularId: a.user_id, acao: "situacao_automatica",
+          antes: { status: a.status }, depois: { status: novo, vencimento: a.cob_vencimento }, porUserId: null });
+        res.mudancas.push(`${a.nome}: ${a.status} → ${novo}`);
+      }
+    }
+    if (novo === "suspensao_programada" || novo === "suspensa") res.seriamSuspensos.push(a.nome);
+    if (!a.cob_id) continue;
+
+    // Sem boleto, o aviso espera: cobrar quem não tem como pagar só ensina a
+    // ignorar o aviso. O master vê a lista no resumo.
+    if (!a.cob_tem_boleto) {
+      res.semBoleto.push(a.nome);
+      continue;
+    }
+    const etapa = etapaAviso(a.cob_vencimento, hoje);
+    if (!etapa) continue;
+    // Marca antes de enviar: se duas execuções correrem juntas, só uma ganha.
+    const marcado = await db.execute(sql`
+      INSERT INTO assinatura_avisos_enviados (assinatura_id, cobranca_id, tipo)
+      VALUES (${a.id}, ${a.cob_id}, ${etapa}) ON CONFLICT (cobranca_id, tipo) DO NOTHING RETURNING id
+    `);
+    if (!marcado.rows.length) continue;
+    const alerta = alertaAssinatura({ ...a, status: novo },
+      { vencimento: a.cob_vencimento, tem_boleto_arquivo: true }, hoje);
+    if (!alerta) continue;
+    await createNotification({ userId: a.user_id, title: TITULO_AVISO[etapa], message: alerta.texto,
+      type: "assinatura", actionUrl: "/assinatura" });
+    res.avisos++;
+  }
+
+  // 5) Resumo para o dono do SaaS, só quando há algo a fazer ou saber.
+  const linhas: string[] = [];
+  if (res.geradas.length) linhas.push(`Mensalidades geradas: ${res.geradas.join(", ")}.`);
+  if (res.semBoleto.length) linhas.push(`Sem boleto ou link (o cliente não foi avisado): ${res.semBoleto.join(", ")}.`);
+  if (res.seriamSuspensos.length) {
+    linhas.push(`${res.simulacao ? "Seriam suspensos (simulação, nada foi bloqueado)" : "Suspensos"}: ${res.seriamSuspensos.join(", ")}.`);
+  }
+  if (linhas.length) {
+    const donos = (await db.execute(sql`SELECT id FROM users WHERE is_master = true AND is_active = true`)).rows as any[];
+    for (const d of donos) {
+      await createNotification({ userId: Number(d.id), title: "Assinaturas: resumo do dia",
+        message: linhas.join(" "), type: "assinatura", actionUrl: "/admin/assinaturas" });
+    }
+  }
+  return res;
+}
+
+/**
+ * Executa e registra. "agendada" só passa uma vez por dia (índice único);
+ * "manual" sempre roda. Se a agendada falhar, a reserva do dia é apagada para
+ * a próxima hora tentar de novo (os avisos já enviados não se repetem).
+ */
+async function executarRotina(origem: "agendada" | "manual") {
+  const hoje = hojeISO();
+  const [reserva] = (await db.execute(
+    origem === "agendada"
+      ? sql`INSERT INTO rotina_execucoes (rotina, data, origem) VALUES (${ROTINA}, ${hoje}, 'agendada')
+            ON CONFLICT (rotina, data) WHERE origem = 'agendada' DO NOTHING RETURNING id`
+      : sql`INSERT INTO rotina_execucoes (rotina, data, origem) VALUES (${ROTINA}, ${hoje}, 'manual') RETURNING id`,
+  )).rows as any[];
+  if (!reserva) return null; // já rodou hoje
+  try {
+    const resultado = await rotinaDiariaAssinaturas(hoje);
+    await db.execute(sql`
+      UPDATE rotina_execucoes SET terminada_em = NOW(), resultado = ${JSON.stringify(resultado)}::jsonb
+       WHERE id = ${reserva.id}
+    `);
+    console.log(`[ASSINATURAS] rotina ${origem}: ${resultado.geradas.length} geradas, ${resultado.mudancas.length} mudanças, ${resultado.avisos} avisos`);
+    return resultado;
+  } catch (e: any) {
+    if (origem === "agendada") {
+      await db.execute(sql`DELETE FROM rotina_execucoes WHERE id = ${reserva.id}`);
+    } else {
+      await db.execute(sql`
+        UPDATE rotina_execucoes SET terminada_em = NOW(), erro = ${String(e?.message || e)} WHERE id = ${reserva.id}
+      `);
+    }
+    throw e;
+  }
+}
+
+export function startRotinaAssinaturas() {
+  const tick = async () => {
+    const horaBRT = new Date(Date.now() - 3 * 3600_000).getUTCHours();
+    if (horaBRT < HORA_MINIMA_BRT) return;
+    try {
+      await executarRotina("agendada");
+    } catch (e: any) {
+      console.error("[ASSINATURAS] rotina agendada falhou (tenta de novo na próxima hora):", e?.message);
+    }
+  };
+  setTimeout(tick, 2 * 60_000); // dá tempo das migrações do boot
+  setInterval(tick, 60 * 60_000);
 }

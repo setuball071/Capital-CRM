@@ -509,6 +509,46 @@ app.use((req, res, next) => {
           console.error("Assinatura por usuario migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — rotina diaria de assinaturas.
+        // rotina_execucoes reserva o DIA antes de rodar (UNIQUE rotina+data):
+        // setInterval sozinho nao serve, porque cada deploy zera o contador e
+        // duas instancias rodariam em dobro.
+        // assinatura_avisos_enviados: cada aviso sai uma vez por mensalidade.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS rotina_execucoes (
+              id            SERIAL PRIMARY KEY,
+              rotina        VARCHAR(60) NOT NULL,
+              data          DATE NOT NULL,
+              origem        VARCHAR(20) NOT NULL DEFAULT 'agendada',
+              iniciada_em   TIMESTAMP NOT NULL DEFAULT NOW(),
+              terminada_em  TIMESTAMP,
+              resultado     JSONB,
+              erro          TEXT
+            )
+          `);
+          // Trava so a execucao agendada: a manual (botao do master) pode repetir.
+          await migDb.execute(migSql`
+            CREATE UNIQUE INDEX IF NOT EXISTS rotina_execucoes_agendada_uq
+              ON rotina_execucoes (rotina, data) WHERE origem = 'agendada'
+          `);
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS assinatura_avisos_enviados (
+              id             SERIAL PRIMARY KEY,
+              assinatura_id  INTEGER NOT NULL REFERENCES assinaturas(id) ON DELETE CASCADE,
+              cobranca_id    INTEGER REFERENCES assinatura_cobrancas(id) ON DELETE CASCADE,
+              tipo           VARCHAR(40) NOT NULL,
+              enviado_em     TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE (cobranca_id, tipo)
+            )
+          `);
+          log("Rotina de assinaturas migration OK");
+        } catch (migErr) {
+          console.error("Rotina de assinaturas migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — libera sessao simultanea para UM usuario especifico.
         // Excecao por pessoa, nao por ambiente: desligar a trava do ambiente
         // inteiro abriria a porta para todos os acessos dele.
@@ -1706,6 +1746,11 @@ app.use((req, res, next) => {
         );
         startAppointmentReminder();
         log("Appointment reminder background runner started");
+
+        // Mensalidades: gera, vence, avisa. Uma vez por dia, travado no banco.
+        const { startRotinaAssinaturas } = await import("./assinaturas");
+        startRotinaAssinaturas();
+        log("Rotina de assinaturas started");
 
         // Portfolio cleanup: mark expired entries as EXPIRADO every 24h
         const { updateExpiredPortfolios, CARTEIRA_EXPIRA } = await import("./portfolio");
