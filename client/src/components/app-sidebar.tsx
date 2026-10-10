@@ -329,7 +329,6 @@ export function AppSidebar() {
       items: [
         { title: "Planos", url: "/admin/planos", icon: Layers, masterOnly: true },
         { title: "Assinaturas", url: "/admin/assinaturas", icon: CreditCard, masterOnly: true },
-        { title: "Minha Assinatura", url: "/assinatura", icon: CreditCard, clienteAdminOnly: true },
         { title: "Serviços & Cobrança", url: "/servicos-cobranca", icon: DollarSign, masterOnly: true },
         { title: "Ambientes", url: "/admin/tenants", icon: Building2, module: "modulo_config_usuarios", subItem: "ambientes" },
         { title: "Identidade Visual", url: "/admin/branding", icon: Palette, masterOnly: true },
@@ -643,10 +642,10 @@ export function AppSidebar() {
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
-                isActive={location === "/minha-assinatura"}
+                isActive={location === "/assinatura"}
                 data-testid="sidebar-minha-assinatura"
               >
-                <button onClick={() => setLocation("/minha-assinatura")} className="w-full">
+                <button onClick={() => setLocation("/assinatura")} className="w-full">
                   <CreditCard className="h-4 w-4" />
                   <span>Minha assinatura</span>
                 </button>

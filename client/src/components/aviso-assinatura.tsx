@@ -42,7 +42,7 @@ export function AvisoAssinatura() {
   const alerta = data?.alerta;
   if (!alerta) return null;
   // Na própria Minha assinatura a informação já está na tela.
-  if (location.startsWith("/minha-assinatura")) return null;
+  if (location.startsWith("/assinatura")) return null;
   const marca = `${hoje()}|${alerta.texto}`;
   if (alerta.nivel === "info" && oculto === marca) return null;
 
@@ -53,7 +53,7 @@ export function AvisoAssinatura() {
       <p className="flex-1">{alerta.texto}</p>
       <button
         type="button"
-        onClick={() => navigate("/minha-assinatura")}
+        onClick={() => navigate("/assinatura")}
         className="shrink-0 font-semibold underline underline-offset-2"
         data-testid="link-aviso-minha-assinatura"
       >
