@@ -175,7 +175,7 @@ const COLS_COBRANCA = sql`
   (c.boleto_arquivo IS NOT NULL) AS tem_boleto_arquivo, c.boleto_link,
   c.linha_digitavel, c.pix_copia_cola,
   (c.comprovante_arquivo IS NOT NULL) AS tem_comprovante, c.observacoes,
-  c.created_at, c.updated_at
+  c.pagamento_informado_em, c.created_at, c.updated_at
 `;
 
 /** Contagem regressiva sem número negativo nem frase ambígua. */
@@ -350,10 +350,10 @@ async function gerarCobranca(
   return { id: cob.id, competencia };
 }
 
-async function avisarDonos(title: string, message: string) {
+async function avisarDonos(title: string, message: string, actionUrl = "/admin/assinaturas") {
   const donos = (await db.execute(sql`SELECT id FROM users WHERE is_master = true AND is_active = true`)).rows as any[];
   for (const d of donos) {
-    await createNotification({ userId: Number(d.id), title, message, type: "assinatura", actionUrl: "/admin/assinaturas" });
+    await createNotification({ userId: Number(d.id), title, message, type: "assinatura", actionUrl });
   }
 }
 
@@ -386,7 +386,7 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
              FROM user_tenants ut JOIN tenants t ON t.id = ut.tenant_id
             WHERE ut.user_id = a.user_id) AS ambientes,
           cur.id AS cob_id, cur.status AS cob_status, cur.vencimento::text AS cob_vencimento,
-          cur.valor_final AS cob_valor,
+          cur.valor_final AS cob_valor, cur.pagamento_informado_em AS cob_pagamento_informado_em,
           (cur.boleto_arquivo IS NOT NULL OR cur.boleto_link IS NOT NULL
             OR cur.linha_digitavel IS NOT NULL OR cur.pix_copia_cola IS NOT NULL) AS cob_tem_boleto,
           up.pago_em::text AS ultimo_pagamento, up.valor_pago AS ultimo_valor
@@ -791,14 +791,23 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
       const [a] = (await db.execute(sql`SELECT id FROM assinaturas WHERE user_id = ${req.user.id}`)).rows as any[];
       if (!a) return res.status(404).json({ message: "Você não possui assinatura" });
       const [c] = (await db.execute(sql`
-        SELECT id, competencia FROM assinatura_cobrancas
+        SELECT id, competencia, valor_final, pagamento_informado_em FROM assinatura_cobrancas
          WHERE assinatura_id = ${a.id} AND status IN ('aberta', 'vencida') ORDER BY vencimento ASC LIMIT 1
       `)).rows as any[];
-      const comp = c ? ` ${c.competencia.slice(5, 7)}/${c.competencia.slice(0, 4)}` : "";
-      await registrarEvento({ assinaturaId: a.id, cobrancaId: c?.id ?? null, titularId: req.user.id,
+      if (!c) return res.status(404).json({ message: "Nenhuma mensalidade em aberto" });
+      // Clicar de novo não gera outro aviso: o primeiro já está na central.
+      if (c.pagamento_informado_em) return res.json({ ok: true });
+      await db.execute(sql`UPDATE assinatura_cobrancas SET pagamento_informado_em = NOW() WHERE id = ${c.id}`);
+      await registrarEvento({ assinaturaId: a.id, cobrancaId: c.id, titularId: req.user.id,
         acao: "pagamento_informado_pelo_titular", porUserId: req.user.id });
-      await avisarDonos("Assinante informou pagamento",
-        `${req.user.name} informou que pagou a mensalidade${comp}. Confira e confirme o pagamento para liberar o acesso.`);
+      const [amb] = req.tenantId
+        ? (await db.execute(sql`SELECT name FROM tenants WHERE id = ${req.tenantId}`)).rows as any[]
+        : [];
+      const comp = `${c.competencia.slice(5, 7)}/${c.competencia.slice(0, 4)}`;
+      const valor = Number(c.valor_final).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      await avisarDonos(`Pagamento informado: ${req.user.name}`,
+        `${req.user.name} (${req.user.email}${amb?.name ? `, ambiente ${amb.name}` : ""}) informou que pagou a mensalidade ${comp} de ${valor}. Confira o recebimento e confirme o pagamento para liberar o acesso.`,
+        `/admin/assinaturas?usuario=${req.user.id}`);
       res.json({ ok: true });
     } catch (e: any) {
       console.error("[ASSINATURAS] informar pagamento:", e?.message);
@@ -821,8 +830,9 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
       limparCacheBloqueio(req.user.id);
       await registrarEvento({ assinaturaId: a.id, titularId: req.user.id, acao: "cancelada_pelo_titular",
         antes: { status: a.status }, depois: { status: "cancelada", usuario: "inativado" }, porUserId: req.user.id });
-      await avisarDonos("Assinatura cancelada pelo assinante",
-        `${req.user.name} cancelou a própria assinatura. O usuário foi inativado; nada foi apagado.`);
+      await avisarDonos(`Assinatura cancelada: ${req.user.name}`,
+        `${req.user.name} (${req.user.email}) cancelou a própria assinatura. O usuário foi inativado; nada foi apagado.`,
+        `/admin/assinaturas?usuario=${req.user.id}`);
       req.session.destroy(() => res.json({ ok: true }));
     } catch (e: any) {
       console.error("[ASSINATURAS] cancelar:", e?.message);

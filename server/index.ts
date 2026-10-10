@@ -544,6 +544,10 @@ app.use((req, res, next) => {
               UNIQUE (cobranca_id, tipo)
             )
           `);
+          // "Ja paguei" do titular fica marcado na mensalidade (sinal na central).
+          await migDb.execute(migSql`
+            ALTER TABLE assinatura_cobrancas ADD COLUMN IF NOT EXISTS pagamento_informado_em TIMESTAMP
+          `);
           // Chave geral da suspensao automatica (comeca DESLIGADA = simulacao).
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS assinatura_config (

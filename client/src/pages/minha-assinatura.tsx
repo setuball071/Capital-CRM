@@ -257,7 +257,7 @@ function AcessoSuspenso({ cobranca }: { cobranca: any | null }) {
 
 function CobrancaAtual({ c, whatsapp }: { c: any; whatsapp: string | null }) {
   const { toast } = useToast();
-  const [informado, setInformado] = useState(false);
+  const [informado, setInformado] = useState(!!c.pagamento_informado_em);
   const informar = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/minha-assinatura/informar-pagamento", {}),
     onSuccess: () => setInformado(true),

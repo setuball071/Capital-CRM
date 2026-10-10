@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +24,15 @@ import {
 export default function AdminAssinaturasPage() {
   const { data: lista = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/admin/assinaturas"] });
   const [aberto, setAberto] = useState<{ id: number; name: string } | null>(null);
+  // Link da notificação (?usuario=ID) abre direto a assinatura da pessoa.
+  useEffect(() => {
+    const id = Number(new URLSearchParams(window.location.search).get("usuario"));
+    if (!id || !lista.length) return;
+    const a = lista.find((x) => x.user_id === id);
+    if (a) setAberto({ id, name: a.usuario_nome });
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [lista]);
+  const informados = lista.filter((a) => a.cob_pagamento_informado_em);
   const [escolhendo, setEscolhendo] = useState(false);
   const [filtro, setFiltro] = useState("");
 
@@ -62,6 +71,20 @@ export default function AdminAssinaturasPage() {
         <Resumo titulo="Suspensas" valor={contar("suspensa")} cor="text-red-600" />
         <Resumo titulo="Receita mensal prevista" valor={brl(receitaPrevista)} />
       </div>
+
+      {informados.length > 0 && (
+        <div className="rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900 px-4 py-3 text-sm" data-testid="pagamentos-informados">
+          <p className="font-medium">Pagamento informado, aguardando sua confirmação</p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {informados.map((a) => (
+              <Button key={a.id} size="sm" variant="outline" className="bg-transparent"
+                onClick={() => setAberto({ id: a.user_id, name: a.usuario_nome })}>
+                {a.usuario_nome} · {brl(Number(a.cob_valor))}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <RotinaDiaria />
 
@@ -134,6 +157,11 @@ export default function AdminAssinaturasPage() {
                             <div className={`text-xs ${a.cob_tem_boleto ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}>
                               {a.cob_tem_boleto ? "boleto disponível" : "sem boleto"}
                             </div>
+                            {a.cob_pagamento_informado_em && (
+                              <Badge className="bg-emerald-600 text-white border-0" title="O cliente clicou em Já paguei">
+                                Pagamento informado {new Date(a.cob_pagamento_informado_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                              </Badge>
+                            )}
                           </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">nenhuma em aberto</span>

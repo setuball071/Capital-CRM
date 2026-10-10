@@ -362,6 +362,11 @@ function Cobrancas({ assinatura, cobrancas, onMudou }: { assinatura: any; cobran
               ? <span className="text-xs text-emerald-700 dark:text-emerald-400">boleto disponível</span>
               : <span className="text-xs text-muted-foreground">sem boleto</span>}
             {c.pago_em && <span className="text-xs text-muted-foreground">pago em {dataBR(c.pago_em)}</span>}
+            {c.pagamento_informado_em && (c.status === "aberta" || c.status === "vencida") && (
+              <Badge className="bg-emerald-600 text-white border-0">
+                cliente informou pagamento em {new Date(c.pagamento_informado_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+              </Badge>
+            )}
           </button>
           {aberta === c.id && <DetalheCobranca c={c} onMudou={onMudou} />}
         </div>
