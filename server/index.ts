@@ -544,6 +544,14 @@ app.use((req, res, next) => {
               UNIQUE (cobranca_id, tipo)
             )
           `);
+          // Dados do pagador para emitir o boleto no banco (copiar e colar).
+          await migDb.execute(migSql`
+            ALTER TABLE assinaturas
+              ADD COLUMN IF NOT EXISTS pagador_nome VARCHAR(200),
+              ADD COLUMN IF NOT EXISTS pagador_documento VARCHAR(30),
+              ADD COLUMN IF NOT EXISTS pagador_email VARCHAR(200),
+              ADD COLUMN IF NOT EXISTS pagador_telefone VARCHAR(30)
+          `);
           // "Ja paguei" do titular fica marcado na mensalidade (sinal na central).
           await migDb.execute(migSql`
             ALTER TABLE assinatura_cobrancas ADD COLUMN IF NOT EXISTS pagamento_informado_em TIMESTAMP

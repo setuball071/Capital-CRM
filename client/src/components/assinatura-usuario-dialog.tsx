@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Paperclip, Download, CheckCircle2, Plus } from "lucide-react";
+import { Loader2, Paperclip, Download, CheckCircle2, Plus, Copy, Pencil } from "lucide-react";
 
 // ── formato ─────────────────────────────────────────────────────────────────
 export const brl = (v: unknown) =>
@@ -328,6 +328,97 @@ function resumo(o: Record<string, any>) {
     .join(" · ");
 }
 
+// ── Dados do pagador: preenche uma vez, copia a cada boleto ─────────────────
+const CAMPOS_PAGADOR = [
+  ["pagador_nome", "Nome / Razão social", "EC CONSIGNADO LTDA"],
+  ["pagador_documento", "CPF / CNPJ", "00.000.000/0001-00"],
+  ["pagador_email", "E-mail", "email@exemplo.com"],
+  ["pagador_telefone", "Telefone", "48 99999-9999"],
+] as const;
+
+function DadosPagador({ assinatura, onMudou }: { assinatura: any; onMudou: () => void }) {
+  const { toast } = useToast();
+  const vazio = CAMPOS_PAGADOR.every(([k]) => !assinatura[k]);
+  const [editando, setEditando] = useState(vazio);
+  const [form, setForm] = useState<Record<string, string>>(() =>
+    Object.fromEntries(CAMPOS_PAGADOR.map(([k]) => [k, assinatura[k] || ""])));
+  useEffect(() => {
+    setForm(Object.fromEntries(CAMPOS_PAGADOR.map(([k]) => [k, assinatura[k] || ""])));
+  }, [assinatura]);
+
+  const salvar = useMutation({
+    mutationFn: async () => apiRequest("PUT", `/api/admin/assinaturas/${assinatura.id}/pagador`, form),
+    onSuccess: () => { setEditando(false); onMudou(); toast({ title: "Dados do pagador salvos" }); },
+    onError: (e: any) => toast({ title: "Não consegui salvar", description: e?.message, variant: "destructive" }),
+  });
+  const copiar = async (texto: string, oque: string) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast({ title: `${oque} copiado` });
+    } catch {
+      toast({ title: "Não consegui copiar", description: "Selecione o texto e copie manualmente.", variant: "destructive" });
+    }
+  };
+  const tudo = CAMPOS_PAGADOR.filter(([k]) => assinatura[k]).map(([k, r]) => `${r}: ${assinatura[k]}`).join("\n");
+
+  return (
+    <div className="rounded-md border p-3 space-y-2" data-testid="dados-pagador">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">Dados para o boleto</p>
+        {!editando && (
+          <div className="flex gap-1">
+            {tudo && (
+              <Button size="sm" variant="ghost" onClick={() => copiar(tudo, "Dados")}>
+                <Copy className="h-3.5 w-3.5 mr-1" /> Copiar tudo
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => setEditando(true)} data-testid="button-editar-pagador">
+              <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {editando ? (
+        <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {CAMPOS_PAGADOR.map(([k, rotulo, exemplo]) => (
+              <Campo key={k} rotulo={rotulo}>
+                <Input value={form[k]} placeholder={exemplo} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))}
+                  data-testid={`input-${k}`} />
+              </Campo>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            {!vazio && <Button size="sm" variant="ghost" onClick={() => setEditando(false)}>Cancelar</Button>}
+            <Button size="sm" onClick={() => salvar.mutate()} disabled={salvar.isPending} data-testid="button-salvar-pagador">
+              {salvar.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              Salvar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+          {CAMPOS_PAGADOR.map(([k, rotulo]) => (
+            <div key={k} className="flex items-center gap-1 min-w-0">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] text-muted-foreground">{rotulo}</p>
+                <p className="text-sm truncate">{assinatura[k] || <span className="text-muted-foreground">não informado</span>}</p>
+              </div>
+              {assinatura[k] && (
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title={`Copiar ${rotulo}`}
+                  onClick={() => copiar(assinatura[k], rotulo)}>
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Mensalidades ────────────────────────────────────────────────────────────
 function Cobrancas({ assinatura, cobrancas, onMudou }: { assinatura: any; cobrancas: any[]; onMudou: () => void }) {
   const { toast } = useToast();
@@ -341,6 +432,7 @@ function Cobrancas({ assinatura, cobrancas, onMudou }: { assinatura: any; cobran
 
   return (
     <div className="space-y-3">
+      <DadosPagador assinatura={assinatura} onMudou={onMudou} />
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Próximo vencimento: <b className="text-foreground">{dataBR(assinatura.proximo_vencimento)}</b>

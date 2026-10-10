@@ -166,7 +166,8 @@ const COLS_ASSINATURA = sql`
   a.desconto_tipo, a.desconto_valor, a.desconto_inicio::text AS desconto_inicio,
   a.desconto_fim::text AS desconto_fim, a.desconto_parcelas_restantes, a.desconto_motivo,
   a.tolerancia_dias, a.suspensao_automatica, a.forma_pagamento,
-  a.isenta_ate::text AS isenta_ate, a.observacoes, a.created_at, a.updated_at
+  a.isenta_ate::text AS isenta_ate, a.observacoes, a.created_at, a.updated_at,
+  a.pagador_nome, a.pagador_documento, a.pagador_email, a.pagador_telefone
 `;
 const COLS_COBRANCA = sql`
   c.id, c.assinatura_id, c.user_id, c.competencia, c.valor_original, c.desconto,
@@ -554,6 +555,37 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
     } catch (e: any) {
       console.error("[ASSINATURAS] salvar:", e?.message);
       res.status(500).json({ message: "Erro ao salvar a assinatura" });
+    }
+  });
+
+  // ── Dados do pagador (para emitir o boleto no site do banco) ──────────────
+  app.put("/api/admin/assinaturas/:id/pagador", requireAuth, async (req: any, res) => {
+    if (!soMaster(req, res)) return;
+    try {
+      const id = parseInt(req.params.id);
+      const [a] = (await db.execute(sql`SELECT ${COLS_ASSINATURA} FROM assinaturas a WHERE a.id = ${id}`)).rows as any[];
+      if (!a) return res.status(404).json({ message: "Assinatura não encontrada" });
+      const limpa = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
+      const novo = {
+        pagador_nome: limpa(req.body?.pagador_nome, 200),
+        pagador_documento: limpa(req.body?.pagador_documento, 30),
+        pagador_email: limpa(req.body?.pagador_email, 200),
+        pagador_telefone: limpa(req.body?.pagador_telefone, 30),
+      };
+      await db.execute(sql`
+        UPDATE assinaturas SET pagador_nome = ${novo.pagador_nome}, pagador_documento = ${novo.pagador_documento},
+               pagador_email = ${novo.pagador_email}, pagador_telefone = ${novo.pagador_telefone}, updated_at = NOW()
+         WHERE id = ${id}
+      `);
+      const { a: antes, d: depois, mudou } = diferenca(a, novo);
+      if (mudou) {
+        await registrarEvento({ assinaturaId: id, titularId: a.user_id, acao: "pagador_alterado",
+          antes, depois, porUserId: req.user.id });
+      }
+      res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[ASSINATURAS] pagador:", e?.message);
+      res.status(500).json({ message: "Erro ao salvar os dados do pagador" });
     }
   });
 
