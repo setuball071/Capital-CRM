@@ -245,7 +245,7 @@ function RotinaDiaria() {
     },
     onError: (e: any) => toast({ title: "Erro ao executar a rotina", description: e?.message, variant: "destructive" }),
   });
-  const { data: config } = useQuery<{ suspensaoAtiva: boolean; alteradoEm: string | null; alteradoPor: string | null }>({
+  const { data: config } = useQuery<{ suspensaoAtiva: boolean; alteradoEm: string | null; alteradoPor: string | null; whatsappSuporte: string | null }>({
     queryKey: ["/api/admin/assinaturas/config"],
   });
   const alternar = useMutation({
@@ -258,6 +258,16 @@ function RotinaDiaria() {
           ? "Vale a partir da próxima execução da rotina (ou clique em Executar agora)."
           : "Volta ao modo simulação. Quem já está suspenso continua até pagar ou você reativar.",
       });
+    },
+    onError: (e: any) => toast({ title: "Erro ao salvar", description: e?.message, variant: "destructive" }),
+  });
+  const [whats, setWhats] = useState<string | null>(null);
+  const salvarWhats = useMutation({
+    mutationFn: async () => (await apiRequest("PUT", "/api/admin/assinaturas/config", { whatsappSuporte: whats ?? "" })).json(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/assinaturas/config"] });
+      setWhats(null);
+      toast({ title: "WhatsApp de suporte salvo" });
     },
     onError: (e: any) => toast({ title: "Erro ao salvar", description: e?.message, variant: "destructive" }),
   });
@@ -304,6 +314,23 @@ function RotinaDiaria() {
             </span>
           </span>
         </label>
+        <div className="flex flex-wrap items-end gap-2 rounded-md border px-3 py-2">
+          <div className="flex-1 min-w-[220px]">
+            <p className="font-medium">WhatsApp para comprovantes</p>
+            <p className="text-xs text-muted-foreground">Aparece em Minha assinatura depois que o cliente clica em "Já paguei". Com DDI e DDD, ex.: 5548999998888.</p>
+          </div>
+          <Input
+            className="w-48"
+            inputMode="tel"
+            placeholder="55 DDD número"
+            value={whats ?? config?.whatsappSuporte ?? ""}
+            onChange={(e) => setWhats(e.target.value)}
+            data-testid="input-whatsapp-suporte"
+          />
+          <Button size="sm" variant="outline" disabled={whats === null || salvarWhats.isPending} onClick={() => salvarWhats.mutate()}>
+            Salvar
+          </Button>
+        </div>
         {!ultima ? (
           <p className="text-xs text-muted-foreground">Ainda não rodou.</p>
         ) : ultima.erro ? (

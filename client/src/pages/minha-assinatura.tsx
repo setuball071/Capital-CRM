@@ -1,9 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard, Download, Copy, ExternalLink, Loader2, CheckCircle2 } from "lucide-react";
+import { CreditCard, Download, Copy, ExternalLink, Loader2, CheckCircle2, Lock, MessageCircle } from "lucide-react";
 import { STATUS_ASSINATURA, STATUS_COBRANCA, brl, dataBR } from "@/components/assinatura-usuario-dialog";
 
 type Dados = {
@@ -24,6 +30,7 @@ type Dados = {
   historico: any[];
   prazo: { texto: string | null; diasVencimento: number | null; diasSuspensao: number | null };
   alerta: { nivel: string; texto: string } | null;
+  whatsappSuporte: string | null;
 } | null;
 
 const FORMA: Record<string, string> = {
@@ -57,8 +64,9 @@ export default function MinhaAssinaturaPage() {
     );
   }
 
-  const { assinatura: a, cobrancaAtual: c, historico, prazo, alerta } = data;
+  const { assinatura: a, cobrancaAtual: c, historico, prazo, alerta, whatsappSuporte } = data;
   const st = STATUS_ASSINATURA[a.status];
+  const suspensa = a.status === "suspensa";
 
   return (
     <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6 max-w-5xl">
@@ -67,7 +75,9 @@ export default function MinhaAssinaturaPage() {
         <p className="text-sm text-muted-foreground">Plano, mensalidades e boletos da sua conta.</p>
       </div>
 
-      {alerta && (
+      {suspensa ? (
+        <AcessoSuspenso temCobranca={!!c} />
+      ) : alerta && (
         <div className={`rounded-md border px-4 py-3 text-sm ${COR_ALERTA[alerta.nivel] || ""}`} data-testid="alerta-minha-assinatura">
           {alerta.texto}
         </div>
@@ -106,13 +116,13 @@ export default function MinhaAssinaturaPage() {
       </Card>
 
       {/* Cobrança atual */}
-      <Card>
+      <Card id="mensalidade-aberta">
         <CardHeader className="pb-3"><CardTitle className="text-base">Mensalidade em aberto</CardTitle></CardHeader>
         <CardContent>
           {!c ? (
             <p className="text-sm text-muted-foreground">Nenhuma mensalidade em aberto no momento.</p>
           ) : (
-            <CobrancaAtual c={c} />
+            <CobrancaAtual c={c} whatsapp={whatsappSuporte} />
           )}
         </CardContent>
       </Card>
@@ -174,8 +184,79 @@ function Info({ rotulo, valor, nota, destaque }: { rotulo: string; valor: string
   );
 }
 
-function CobrancaAtual({ c }: { c: any }) {
+/** Acesso suspenso: só dá para pagar ou cancelar. */
+function AcessoSuspenso({ temCobranca }: { temCobranca: boolean }) {
   const { toast } = useToast();
+  const [confirmando, setConfirmando] = useState(false);
+  const cancelar = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/minha-assinatura/cancelar", { confirmar: true }),
+    onSuccess: () => { window.location.href = "/login"; },
+    onError: (e: any) => toast({ title: "Não foi possível cancelar", description: e?.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="rounded-md border border-red-300 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200 dark:border-red-900 p-4 space-y-3" data-testid="acesso-suspenso">
+      <div className="flex items-start gap-3">
+        <Lock className="h-5 w-5 mt-0.5 shrink-0" />
+        <div className="text-sm space-y-1">
+          <p className="font-semibold">Seu acesso está suspenso</p>
+          <p>
+            A mensalidade está em aberto e o prazo de tolerância terminou. Para voltar a usar o sistema, pague a
+            mensalidade abaixo. Se preferir não continuar, você pode cancelar a assinatura.
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 pl-8">
+        {temCobranca && (
+          <Button size="sm" onClick={() => document.getElementById("mensalidade-aberta")?.scrollIntoView({ behavior: "smooth" })}
+            data-testid="button-pagar-agora">
+            Pagar agora
+          </Button>
+        )}
+        <Button size="sm" variant="outline" className="bg-transparent" onClick={() => setConfirmando(true)} data-testid="button-cancelar-assinatura">
+          Cancelar assinatura
+        </Button>
+      </div>
+
+      <AlertDialog open={confirmando} onOpenChange={setConfirmando}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar sua assinatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Seu acesso ao sistema será encerrado agora e você sairá da sua conta. Seus dados não são apagados:
+              para voltar, fale com a nossa equipe.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelar.isPending}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={cancelar.isPending}
+              onClick={(e) => { e.preventDefault(); cancelar.mutate(); }}
+              data-testid="button-confirmar-cancelamento"
+            >
+              {cancelar.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              Sim, cancelar assinatura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function CobrancaAtual({ c, whatsapp }: { c: any; whatsapp: string | null }) {
+  const { toast } = useToast();
+  const [informado, setInformado] = useState(false);
+  const informar = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/minha-assinatura/informar-pagamento", {}),
+    onSuccess: () => setInformado(true),
+    onError: (e: any) => toast({ title: "Não foi possível enviar o aviso", description: e?.message, variant: "destructive" }),
+  });
+  const competencia = `${c.competencia.slice(5, 7)}/${c.competencia.slice(0, 4)}`;
+  const linkWhats = whatsapp
+    ? `https://wa.me/${whatsapp}?text=${encodeURIComponent(`Olá! Segue o comprovante da minha mensalidade ${competencia}.`)}`
+    : null;
   const copiar = async (texto: string, oque: string) => {
     try {
       await navigator.clipboard.writeText(texto);
@@ -231,13 +312,30 @@ function CobrancaAtual({ c }: { c: any }) {
         </div>
       )}
 
-      <div className="flex items-start gap-2 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-        <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
-        <p>
-          Já pagou? A confirmação é feita pela nossa equipe e o acesso é atualizado assim que o pagamento for
-          identificado. Se precisar, envie o comprovante pelo suporte.
-        </p>
-      </div>
+      {!informado ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 p-3">
+          <p className="flex-1 text-xs text-muted-foreground min-w-[200px]">
+            Já pagou? Avise a nossa equipe para conferirmos o pagamento.
+          </p>
+          <Button size="sm" variant="outline" onClick={() => informar.mutate()} disabled={informar.isPending} data-testid="button-ja-paguei">
+            {informar.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
+            Já paguei
+          </Button>
+        </div>
+      ) : (
+        <div className="rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900 p-3 space-y-2" data-testid="pagamento-informado">
+          <p className="font-medium">Recebemos o seu aviso.</p>
+          <p className="text-xs">
+            O pagamento será verificado em até 24 horas e o acesso é liberado assim que for confirmado.
+            {linkWhats ? " Para liberação imediata, envie o comprovante pelo nosso WhatsApp." : ""}
+          </p>
+          {linkWhats && (
+            <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <a href={linkWhats} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4 mr-1.5" />Enviar comprovante pelo WhatsApp</a>
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

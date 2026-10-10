@@ -253,6 +253,15 @@ export function alertaAssinatura(
     texto: `${vencida} O prazo de tolerância terminou e o acesso pode ser suspenso.${fraseBoleto}` };
 }
 
+/** WhatsApp de suporte que aparece em Minha assinatura (só dígitos, com DDI). */
+async function whatsappSuporte(): Promise<string | null> {
+  const [r] = (await db.execute(sql`
+    SELECT valor FROM assinatura_config WHERE chave = 'whatsapp_suporte'
+  `)).rows as any[];
+  const n = typeof r?.valor === "string" ? r.valor.replace(/\D/g, "") : "";
+  return n.length >= 10 ? n : null;
+}
+
 /** Tudo que a tela Minha assinatura precisa, só do próprio usuário. */
 export async function minhaAssinatura(userId: number) {
   const [a] = (await db.execute(sql`
@@ -296,6 +305,7 @@ export async function minhaAssinatura(userId: number) {
     historico: cobrancas.filter((c) => c.id !== atual?.id),
     prazo: situacaoPrazo(venc, Number(a.tolerancia_dias ?? TOLERANCIA_PADRAO_DIAS), hoje),
     alerta: alertaAssinatura(a, atual, hoje, await suspensaoAtiva()),
+    whatsappSuporte: await whatsappSuporte(),
   };
 }
 
@@ -338,6 +348,13 @@ async function gerarCobranca(
       ...(o.porUserId ? {} : { origem: "rotina diária" }) },
     porUserId: o.porUserId });
   return { id: cob.id, competencia };
+}
+
+async function avisarDonos(title: string, message: string) {
+  const donos = (await db.execute(sql`SELECT id FROM users WHERE is_master = true AND is_active = true`)).rows as any[];
+  for (const d of donos) {
+    await createNotification({ userId: Number(d.id), title, message, type: "assinatura", actionUrl: "/admin/assinaturas" });
+  }
 }
 
 const upload = multer({
@@ -693,7 +710,10 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
           FROM assinatura_config c LEFT JOIN users u ON u.id = c.updated_by
          WHERE c.chave = 'suspensao_automatica_ativa'
       `)).rows as any[];
-      res.json({ suspensaoAtiva: r?.valor === true, alteradoEm: r?.updated_at || null, alteradoPor: r?.por_nome || null });
+      res.json({
+        suspensaoAtiva: r?.valor === true, alteradoEm: r?.updated_at || null, alteradoPor: r?.por_nome || null,
+        whatsappSuporte: await whatsappSuporte(),
+      });
     } catch (e: any) {
       console.error("[ASSINATURAS] config:", e?.message);
       res.status(500).json({ message: "Erro ao ler a configuração" });
@@ -703,15 +723,26 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
   app.put("/api/admin/assinaturas/config", requireAuth, async (req: any, res) => {
     if (!soMaster(req, res)) return;
     try {
-      const ligar = req.body?.suspensaoAtiva === true;
-      await db.execute(sql`
-        INSERT INTO assinatura_config (chave, valor, updated_at, updated_by)
-        VALUES ('suspensao_automatica_ativa', ${JSON.stringify(ligar)}::jsonb, NOW(), ${req.user.id})
-        ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = NOW(), updated_by = EXCLUDED.updated_by
-      `);
-      suspensaoCache = null;
-      console.log(`[ASSINATURAS] suspensão automática ${ligar ? "LIGADA" : "desligada"} por ${req.user.id}`);
-      res.json({ suspensaoAtiva: ligar });
+      if (typeof req.body?.whatsappSuporte === "string") {
+        const n = req.body.whatsappSuporte.replace(/\D/g, "");
+        if (n && n.length < 10) return res.status(400).json({ message: "WhatsApp inválido: use DDI + DDD + número" });
+        await db.execute(sql`
+          INSERT INTO assinatura_config (chave, valor, updated_at, updated_by)
+          VALUES ('whatsapp_suporte', ${JSON.stringify(n || null)}::jsonb, NOW(), ${req.user.id})
+          ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+        `);
+      }
+      if (typeof req.body?.suspensaoAtiva === "boolean") {
+        const ligar = req.body.suspensaoAtiva;
+        await db.execute(sql`
+          INSERT INTO assinatura_config (chave, valor, updated_at, updated_by)
+          VALUES ('suspensao_automatica_ativa', ${JSON.stringify(ligar)}::jsonb, NOW(), ${req.user.id})
+          ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+        `);
+        suspensaoCache = null;
+        console.log(`[ASSINATURAS] suspensão automática ${ligar ? "LIGADA" : "desligada"} por ${req.user.id}`);
+      }
+      res.json({ suspensaoAtiva: await suspensaoAtiva(), whatsappSuporte: await whatsappSuporte() });
     } catch (e: any) {
       console.error("[ASSINATURAS] config salvar:", e?.message);
       res.status(500).json({ message: "Erro ao salvar a configuração" });
@@ -750,6 +781,52 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
     } catch (e: any) {
       console.error("[ASSINATURAS] minha:", e?.message);
       res.status(500).json({ message: "Erro ao buscar sua assinatura" });
+    }
+  });
+
+  // ── "Já paguei": avisa o master. NÃO muda situação nenhuma: quem libera é
+  // a confirmação do pagamento (master agora, webhook depois).
+  app.post("/api/minha-assinatura/informar-pagamento", requireAuth, async (req: any, res) => {
+    try {
+      const [a] = (await db.execute(sql`SELECT id FROM assinaturas WHERE user_id = ${req.user.id}`)).rows as any[];
+      if (!a) return res.status(404).json({ message: "Você não possui assinatura" });
+      const [c] = (await db.execute(sql`
+        SELECT id, competencia FROM assinatura_cobrancas
+         WHERE assinatura_id = ${a.id} AND status IN ('aberta', 'vencida') ORDER BY vencimento ASC LIMIT 1
+      `)).rows as any[];
+      const comp = c ? ` ${c.competencia.slice(5, 7)}/${c.competencia.slice(0, 4)}` : "";
+      await registrarEvento({ assinaturaId: a.id, cobrancaId: c?.id ?? null, titularId: req.user.id,
+        acao: "pagamento_informado_pelo_titular", porUserId: req.user.id });
+      await avisarDonos("Assinante informou pagamento",
+        `${req.user.name} informou que pagou a mensalidade${comp}. Confira e confirme o pagamento para liberar o acesso.`);
+      res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[ASSINATURAS] informar pagamento:", e?.message);
+      res.status(500).json({ message: "Erro ao registrar o aviso" });
+    }
+  });
+
+  // ── Cancelamento pelo próprio assinante: nada é apagado. A assinatura fica
+  // "cancelada", o usuário fica inativo e a sessão termina.
+  app.post("/api/minha-assinatura/cancelar", requireAuth, async (req: any, res) => {
+    try {
+      if (req.user.isMaster) return res.status(400).json({ message: "Conta master não pode ser cancelada por aqui" });
+      if (req.body?.confirmar !== true) return res.status(400).json({ message: "Confirmação obrigatória" });
+      const [a] = (await db.execute(sql`
+        SELECT id, status FROM assinaturas WHERE user_id = ${req.user.id} AND status <> 'cancelada'
+      `)).rows as any[];
+      if (!a) return res.status(404).json({ message: "Nenhuma assinatura ativa para cancelar" });
+      await db.execute(sql`UPDATE assinaturas SET status = 'cancelada', updated_at = NOW() WHERE id = ${a.id}`);
+      await db.execute(sql`UPDATE users SET is_active = false WHERE id = ${req.user.id}`);
+      limparCacheBloqueio(req.user.id);
+      await registrarEvento({ assinaturaId: a.id, titularId: req.user.id, acao: "cancelada_pelo_titular",
+        antes: { status: a.status }, depois: { status: "cancelada", usuario: "inativado" }, porUserId: req.user.id });
+      await avisarDonos("Assinatura cancelada pelo assinante",
+        `${req.user.name} cancelou a própria assinatura. O usuário foi inativado; nada foi apagado.`);
+      req.session.destroy(() => res.json({ ok: true }));
+    } catch (e: any) {
+      console.error("[ASSINATURAS] cancelar:", e?.message);
+      res.status(500).json({ message: "Erro ao cancelar a assinatura" });
     }
   });
 
