@@ -30,6 +30,11 @@ async function throwIfResNotOk(res: Response) {
       // Not JSON, ignore
     }
     
+    // Assinatura suspensa: o servidor barra quase tudo; leva para onde dá para regularizar.
+    if (res.status === 403 && (data as any)?.code === "ASSINATURA_SUSPENSA"
+      && !window.location.pathname.startsWith("/assinatura")) {
+      window.location.assign("/assinatura");
+    }
     throw new ApiError(res.status, res.statusText, data);
   }
 }

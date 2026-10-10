@@ -23,11 +23,22 @@ import { createNotification } from "./notification-service";
 /** Cobrança nasce N dias antes do vencimento (decisão do Fábio, 07/10/2026). */
 export const ANTECEDENCIA_COBRANCA_DIAS = 5;
 /**
- * O bloqueio por falta de pagamento só passa a valer na etapa 4. Enquanto isto
- * for false, o aviso ao cliente NÃO fala em suspensão: prometer um bloqueio que
- * o sistema não executa ensina o cliente a ignorar o aviso.
+ * Chave geral da suspensão AUTOMÁTICA, ligada pelo master na central (tabela
+ * assinatura_config). Desligada = simulação: a rotina só marca "suspensão
+ * programada" e o aviso ao cliente NÃO fala em suspensão, porque prometer um
+ * bloqueio que não acontece ensina o cliente a ignorar o aviso.
+ * A suspensão MANUAL (master escolhe "Suspensa") bloqueia sempre.
  */
-export const SUSPENSAO_ATIVA = false;
+let suspensaoCache: { valor: boolean; ate: number } | null = null;
+export async function suspensaoAtiva(): Promise<boolean> {
+  if (suspensaoCache && suspensaoCache.ate > Date.now()) return suspensaoCache.valor;
+  const [r] = (await db.execute(sql`
+    SELECT valor FROM assinatura_config WHERE chave = 'suspensao_automatica_ativa'
+  `)).rows as any[];
+  const valor = r?.valor === true;
+  suspensaoCache = { valor, ate: Date.now() + 60_000 };
+  return valor;
+}
 
 /** Dias de atraso tolerados antes de suspender (padrão; ajustável por assinatura). */
 export const TOLERANCIA_PADRAO_DIAS = 3;
@@ -194,7 +205,9 @@ export type AlertaAssinatura = {
  * Aviso que aparece no topo de toda tela do assinante. Frases curtas e
  * objetivas, sem contagem negativa. Sem travessão: é texto de cliente.
  */
-export function alertaAssinatura(a: any, cobranca: any | null, hoje = hojeISO()): AlertaAssinatura | null {
+export function alertaAssinatura(
+  a: any, cobranca: any | null, hoje = hojeISO(), suspensaoLigada = false,
+): AlertaAssinatura | null {
   if (!a || a.status === "cancelada") return null;
   const temBoleto = !!(cobranca && (cobranca.tem_boleto_arquivo || cobranca.boleto_link
     || cobranca.linha_digitavel || cobranca.pix_copia_cola));
@@ -229,7 +242,7 @@ export function alertaAssinatura(a: any, cobranca: any | null, hoje = hojeISO())
 
   const atraso = -dv;
   const vencida = `Sua mensalidade está vencida há ${atraso} ${atraso === 1 ? "dia" : "dias"}.`;
-  if (a.suspensao_automatica === false || !SUSPENSAO_ATIVA) {
+  if (a.suspensao_automatica === false || !suspensaoLigada) {
     return { ...base, nivel: "urgente", texto: `${vencida}${fraseBoleto}` };
   }
   if (ds > 0) {
@@ -282,7 +295,7 @@ export async function minhaAssinatura(userId: number) {
     cobrancaAtual: atual,
     historico: cobrancas.filter((c) => c.id !== atual?.id),
     prazo: situacaoPrazo(venc, Number(a.tolerancia_dias ?? TOLERANCIA_PADRAO_DIAS), hoje),
-    alerta: alertaAssinatura(a, atual, hoje),
+    alerta: alertaAssinatura(a, atual, hoje, await suspensaoAtiva()),
   };
 }
 
@@ -519,6 +532,7 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
           }
         }
       }
+      limparCacheBloqueio(userId);
       res.json({ id: salva.id });
     } catch (e: any) {
       console.error("[ASSINATURAS] salvar:", e?.message);
@@ -670,6 +684,40 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
     }
   });
 
+  // ── Chave geral da suspensão automática ───────────────────────────────────
+  app.get("/api/admin/assinaturas/config", requireAuth, async (req: any, res) => {
+    if (!soMaster(req, res)) return;
+    try {
+      const [r] = (await db.execute(sql`
+        SELECT c.valor, c.updated_at, u.name AS por_nome
+          FROM assinatura_config c LEFT JOIN users u ON u.id = c.updated_by
+         WHERE c.chave = 'suspensao_automatica_ativa'
+      `)).rows as any[];
+      res.json({ suspensaoAtiva: r?.valor === true, alteradoEm: r?.updated_at || null, alteradoPor: r?.por_nome || null });
+    } catch (e: any) {
+      console.error("[ASSINATURAS] config:", e?.message);
+      res.status(500).json({ message: "Erro ao ler a configuração" });
+    }
+  });
+
+  app.put("/api/admin/assinaturas/config", requireAuth, async (req: any, res) => {
+    if (!soMaster(req, res)) return;
+    try {
+      const ligar = req.body?.suspensaoAtiva === true;
+      await db.execute(sql`
+        INSERT INTO assinatura_config (chave, valor, updated_at, updated_by)
+        VALUES ('suspensao_automatica_ativa', ${JSON.stringify(ligar)}::jsonb, NOW(), ${req.user.id})
+        ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = NOW(), updated_by = EXCLUDED.updated_by
+      `);
+      suspensaoCache = null;
+      console.log(`[ASSINATURAS] suspensão automática ${ligar ? "LIGADA" : "desligada"} por ${req.user.id}`);
+      res.json({ suspensaoAtiva: ligar });
+    } catch (e: any) {
+      console.error("[ASSINATURAS] config salvar:", e?.message);
+      res.status(500).json({ message: "Erro ao salvar a configuração" });
+    }
+  });
+
   // ── Rotina diária: executar agora e ver as últimas execuções ──────────────
   app.post("/api/admin/assinaturas/rotina/executar", requireAuth, async (req: any, res) => {
     if (!soMaster(req, res)) return;
@@ -774,6 +822,7 @@ export async function confirmarPagamento(p: {
      WHERE id = ${c.assinatura_id}
   `);
   const [a] = (await db.execute(sql`SELECT proximo_vencimento::text AS pv FROM assinaturas WHERE id = ${c.assinatura_id}`)).rows as any[];
+  limparCacheBloqueio(c.user_id);
 
   await registrarEvento({
     assinaturaId: c.assinatura_id, cobrancaId: c.id, titularId: c.user_id, acao: "pagamento_confirmado",
@@ -800,7 +849,7 @@ export async function confirmarPagamento(p: {
 // índice único por rotina+data), porque cada deploy zera o setInterval e duas
 // instâncias rodariam em dobro.
 //
-// Enquanto SUSPENSAO_ATIVA for false é SIMULAÇÃO: quem passou da tolerância
+// Enquanto a chave geral estiver desligada é SIMULAÇÃO: quem passou da tolerância
 // vai para "suspensao_programada" e aparece no resumo do master, mas nada é
 // bloqueado e o cliente não ouve falar em suspensão.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -816,7 +865,7 @@ export function situacaoAutomatica(
   a: { status: string; isenta_ate?: string | null; tolerancia_dias?: number | null; suspensao_automatica?: boolean | null },
   vencimentoAberto: string | null,
   hoje = hojeISO(),
-  suspensaoAtiva: boolean = SUSPENSAO_ATIVA,
+  ligada = false,
 ): string {
   if (a.status === "cancelada" || a.status === "suspensa") return a.status;
   if (a.status === "isenta" && (!a.isenta_ate || a.isenta_ate >= hoje)) return "isenta";
@@ -825,7 +874,7 @@ export function situacaoAutomatica(
   if (dv >= 0) return "aguardando_pagamento";
   const tol = Number(a.tolerancia_dias ?? TOLERANCIA_PADRAO_DIAS);
   if (-dv <= tol || a.suspensao_automatica === false) return "em_atraso";
-  return suspensaoAtiva ? "suspensa" : "suspensao_programada";
+  return ligada ? "suspensa" : "suspensao_programada";
 }
 
 /** Etapa do aviso ao cliente para esta mensalidade hoje (no máximo um de cada). */
@@ -844,8 +893,10 @@ const TITULO_AVISO = {
 } as const;
 
 export async function rotinaDiariaAssinaturas(hoje = hojeISO()) {
+  suspensaoCache = null;
+  const ligada = await suspensaoAtiva();
   const res = {
-    simulacao: !SUSPENSAO_ATIVA,
+    simulacao: !ligada,
     geradas: [] as string[],
     vencidas: 0,
     mudancas: [] as string[],
@@ -909,7 +960,7 @@ export async function rotinaDiariaAssinaturas(hoje = hojeISO()) {
   `)).rows as any[];
 
   for (const a of todas) {
-    const novo = situacaoAutomatica(a, a.cob_vencimento, hoje);
+    const novo = situacaoAutomatica(a, a.cob_vencimento, hoje, ligada);
     if (novo !== a.status) {
       const r = await db.execute(sql`
         UPDATE assinaturas SET status = ${novo}, updated_at = NOW() WHERE id = ${a.id} AND status = ${a.status}
@@ -938,12 +989,14 @@ export async function rotinaDiariaAssinaturas(hoje = hojeISO()) {
     `);
     if (!marcado.rows.length) continue;
     const alerta = alertaAssinatura({ ...a, status: novo },
-      { vencimento: a.cob_vencimento, tem_boleto_arquivo: true }, hoje);
+      { vencimento: a.cob_vencimento, tem_boleto_arquivo: true }, hoje, ligada);
     if (!alerta) continue;
     await createNotification({ userId: a.user_id, title: TITULO_AVISO[etapa], message: alerta.texto,
       type: "assinatura", actionUrl: "/assinatura" });
     res.avisos++;
   }
+
+  limparCacheBloqueio();
 
   // 5) Resumo para o dono do SaaS, só quando há algo a fazer ou saber.
   const linhas: string[] = [];
@@ -1009,3 +1062,39 @@ export function startRotinaAssinaturas() {
   setTimeout(tick, 2 * 60_000); // dá tempo das migrações do boot
   setInterval(tick, 60 * 60_000);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BLOQUEIO NO SERVIDOR (etapa 4)
+//
+// Chamado pelo requireAuth em toda rota autenticada. Quem está com a
+// assinatura "suspensa" só alcança o necessário para regularizar: entrar e
+// sair, Minha assinatura, os próprios boletos, notificações e a aparência do
+// ambiente. Master nunca é bloqueado; quem não tem assinatura também não.
+// ═══════════════════════════════════════════════════════════════════════════
+const cacheBloqueio = new Map<number, { suspenso: boolean; ate: number }>();
+
+export function limparCacheBloqueio(userId?: number) {
+  if (userId === undefined) cacheBloqueio.clear();
+  else cacheBloqueio.delete(userId);
+}
+
+export async function usuarioSuspenso(userId: number): Promise<boolean> {
+  const c = cacheBloqueio.get(userId);
+  if (c && c.ate > Date.now()) return c.suspenso;
+  const [r] = (await db.execute(sql`SELECT status FROM assinaturas WHERE user_id = ${userId}`)).rows as any[];
+  const suspenso = r?.status === "suspensa";
+  cacheBloqueio.set(userId, { suspenso, ate: Date.now() + 60_000 });
+  return suspenso;
+}
+
+const LIVRE_SEMPRE = ["/api/auth/", "/api/minha-assinatura", "/api/cobrancas/", "/api/notifications"];
+const LIVRE_SO_LEITURA = ["/api/tenant", "/api/branding", "/api/preferencias"];
+
+export function rotaLiberadaParaSuspenso(metodo: string, url: string): boolean {
+  const caminho = url.split("?")[0];
+  if (LIVRE_SEMPRE.some((p) => caminho.startsWith(p))) return true;
+  return metodo === "GET" && LIVRE_SO_LEITURA.some((p) => caminho.startsWith(p));
+}
+
+export const MENSAGEM_SUSPENSO =
+  "Seu acesso está suspenso por mensalidade em aberto. Acesse Minha assinatura para consultar o boleto e regularizar.";

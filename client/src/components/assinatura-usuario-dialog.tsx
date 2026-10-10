@@ -189,7 +189,7 @@ export function AssinaturaUsuarioDialog({
                     ))}
                   </select>
                 </Campo>
-                <Campo rotulo="Situação">
+                <Campo rotulo="Situação" nota={form.status === "suspensa" ? "Bloqueia o acesso desta pessoa assim que salvar." : undefined}>
                   <select className={sel} value={form.status} onChange={(e) => set("status", e.target.value)} data-testid="select-situacao">
                     {Object.entries(STATUS_ASSINATURA).map(([k, v]) => <option key={k} value={k}>{v.rotulo}</option>)}
                   </select>

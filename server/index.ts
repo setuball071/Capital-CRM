@@ -544,6 +544,15 @@ app.use((req, res, next) => {
               UNIQUE (cobranca_id, tipo)
             )
           `);
+          // Chave geral da suspensao automatica (comeca DESLIGADA = simulacao).
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS assinatura_config (
+              chave       VARCHAR(60) PRIMARY KEY,
+              valor       JSONB,
+              updated_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_by  INTEGER
+            )
+          `);
           log("Rotina de assinaturas migration OK");
         } catch (migErr) {
           console.error("Rotina de assinaturas migration error (non-fatal):", migErr);

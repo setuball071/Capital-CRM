@@ -6,7 +6,7 @@ import path from "path";
 import https from "https";
 import { randomBytes } from "crypto";
 import { extrairPaleta } from "./branding-ia";
-import { registerAssinaturasRoutes } from "./assinaturas";
+import { registerAssinaturasRoutes, usuarioSuspenso, rotaLiberadaParaSuspenso, MENSAGEM_SUSPENSO } from "./assinaturas";
 
 // ─── Gerador de HTML do Contracheque SIAPE ───────────────────────────────────
 function _brl(value: any): string {
@@ -906,6 +906,18 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
     if (utResult.rows.length > 0) {
       req.tenantId = utResult.rows[0].tenant_id as number;
       req.session.tenantId = req.tenantId;
+    }
+  }
+
+  // Assinatura suspensa: só o necessário para regularizar (ver assinaturas.ts).
+  // Erro na consulta deixa passar: falha nossa não pode trancar quem pagou.
+  if (!user.isMaster && !rotaLiberadaParaSuspenso(req.method, req.originalUrl)) {
+    try {
+      if (await usuarioSuspenso(user.id)) {
+        return res.status(403).json({ message: MENSAGEM_SUSPENSO, code: "ASSINATURA_SUSPENSA" });
+      }
+    } catch (e: any) {
+      console.error("[ASSINATURAS] checagem de bloqueio falhou (liberado):", e?.message);
     }
   }
 

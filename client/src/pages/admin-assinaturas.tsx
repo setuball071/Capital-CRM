@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CreditCard, Plus, Loader2, Search, RefreshCw } from "lucide-react";
 import {
@@ -244,6 +245,28 @@ function RotinaDiaria() {
     },
     onError: (e: any) => toast({ title: "Erro ao executar a rotina", description: e?.message, variant: "destructive" }),
   });
+  const { data: config } = useQuery<{ suspensaoAtiva: boolean; alteradoEm: string | null; alteradoPor: string | null }>({
+    queryKey: ["/api/admin/assinaturas/config"],
+  });
+  const alternar = useMutation({
+    mutationFn: async (ligar: boolean) => (await apiRequest("PUT", "/api/admin/assinaturas/config", { suspensaoAtiva: ligar })).json(),
+    onSuccess: (r: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/assinaturas/config"] });
+      toast({
+        title: r?.suspensaoAtiva ? "Suspensão automática ligada" : "Suspensão automática desligada",
+        description: r?.suspensaoAtiva
+          ? "Vale a partir da próxima execução da rotina (ou clique em Executar agora)."
+          : "Volta ao modo simulação. Quem já está suspenso continua até pagar ou você reativar.",
+      });
+    },
+    onError: (e: any) => toast({ title: "Erro ao salvar", description: e?.message, variant: "destructive" }),
+  });
+  const pedirLigar = (ligar: boolean) => {
+    if (ligar && !window.confirm(
+      "Ligar a suspensão automática?\n\nQuem passar da tolerância sem pagar perde o acesso ao sistema e só vê Minha assinatura até o pagamento ser confirmado.",
+    )) return;
+    alternar.mutate(ligar);
+  };
   const ultima = execucoes[0];
   const r = ultima?.resultado;
   const quando = ultima ? new Date(ultima.iniciada_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : null;
@@ -256,7 +279,7 @@ function RotinaDiaria() {
             <p className="font-medium">Rotina diária</p>
             <p className="text-xs text-muted-foreground">
               Todo dia depois das 6h: gera a mensalidade 5 dias antes, marca as vencidas, atualiza a situação e avisa o cliente.
-              {r?.simulacao !== false && " Suspensão em modo simulação: ninguém é bloqueado."}
+              {!config?.suspensaoAtiva && " Suspensão em modo simulação: ninguém é bloqueado automaticamente."}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => executar.mutate()} disabled={executar.isPending} data-testid="button-executar-rotina">
@@ -264,6 +287,23 @@ function RotinaDiaria() {
             Executar agora
           </Button>
         </div>
+        <label className="flex items-center gap-3 rounded-md border px-3 py-2">
+          <Switch
+            checked={!!config?.suspensaoAtiva}
+            disabled={!config || alternar.isPending}
+            onCheckedChange={pedirLigar}
+            data-testid="switch-suspensao-automatica"
+          />
+          <span>
+            <span className="font-medium">Suspensão automática {config?.suspensaoAtiva ? "ligada" : "desligada (simulação)"}</span>
+            <span className="block text-xs text-muted-foreground">
+              {config?.suspensaoAtiva
+                ? "Passou da tolerância sem pagar, o acesso é bloqueado até o pagamento ser confirmado."
+                : "Quem passar da tolerância aparece como \"Suspensão programada\", sem bloqueio. Suspender alguém à mão (Situação: Suspensa) bloqueia na hora."}
+              {config?.alteradoPor && ` Alterado por ${config.alteradoPor}.`}
+            </span>
+          </span>
+        </label>
         {!ultima ? (
           <p className="text-xs text-muted-foreground">Ainda não rodou.</p>
         ) : ultima.erro ? (

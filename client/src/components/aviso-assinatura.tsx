@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AlertTriangle, Clock, Info, Lock, X } from "lucide-react";
@@ -40,6 +40,12 @@ export function AvisoAssinatura() {
   const [oculto, setOculto] = useState(lerOculto);
 
   const alerta = data?.alerta;
+  const suspenso = alerta?.nivel === "suspenso";
+  // Acesso suspenso: o servidor já barra as outras telas, então leva direto
+  // para Minha assinatura em vez de deixar a pessoa diante de telas vazias.
+  useEffect(() => {
+    if (suspenso && !location.startsWith("/assinatura")) navigate("/assinatura");
+  }, [suspenso, location, navigate]);
   if (!alerta) return null;
   // Na própria Minha assinatura a informação já está na tela.
   if (location.startsWith("/assinatura")) return null;
