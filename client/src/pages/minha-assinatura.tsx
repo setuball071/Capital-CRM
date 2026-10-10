@@ -1,297 +1,243 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PLAN_LABELS } from "@shared/schema";
-import {
-  CreditCard,
-  CheckCircle,
-  XCircle,
-  PauseCircle,
-  RefreshCw,
-  Calendar,
-  Mail,
-  Package,
-  Receipt,
-} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { CreditCard, Download, Copy, ExternalLink, Loader2, CheckCircle2 } from "lucide-react";
+import { STATUS_ASSINATURA, STATUS_COBRANCA, brl, dataBR } from "@/components/assinatura-usuario-dialog";
 
-function cicloSufixo(ciclo: string | null | undefined) {
-  return ciclo === "anual" ? "/ano" : "/mês";
-}
+type Dados = {
+  assinatura: {
+    plano: string | null;
+    status: string;
+    valor_mensal: number;
+    desconto: number;
+    valor_final: number;
+    desconto_motivo: string | null;
+    proximo_vencimento: string | null;
+    forma_pagamento: string | null;
+    tolerancia_dias: number;
+    isenta_ate: string | null;
+    recursos: string[];
+  };
+  cobrancaAtual: any | null;
+  historico: any[];
+  prazo: { texto: string | null; diasVencimento: number | null; diasSuspensao: number | null };
+  alerta: { nivel: string; texto: string } | null;
+} | null;
 
-function formatPlanoValor(valor: number | null | undefined, ciclo?: string | null) {
-  if (valor == null) return "—";
-  if (Number(valor) === 0) return "Grátis";
-  return Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + cicloSufixo(ciclo);
-}
-
-const PLAN_FEATURES: Record<string, string[]> = {
-  trial: ["Acesso completo por 7 dias", "Sem necessidade de cartão"],
-  basico: ["Consulta individual avulsa", "Lista: até 500 nomes/mês", "Dados: margem, banco, matrícula", "Simulação de crédito", "1 usuário"],
-  profissional: ["Tudo do Básico", "Lista: até 1.000 nomes/mês", "Contracheque SIAPE completo", "Telefones atualizados", "Pipeline CRM", "Agenda e Follow-up", "1 usuário"],
-  expert: ["Tudo do Profissional", "Lista: até 5.000 nomes/mês", "Campanhas automáticas", "Relatórios de produção", "Roteiros de abordagem (IA)", "Suporte prioritário", "1 usuário"],
-  enterprise: ["Múltiplos usuários", "Volume customizado", "SLA garantido", "Treinamento da equipe", "Gerente de conta dedicado"],
+const FORMA: Record<string, string> = {
+  boleto: "Boleto", pix: "Pix", transferencia: "Transferência", cartao: "Cartão", dinheiro: "Dinheiro",
 };
 
-const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any; color: string }> = {
-  trial: { label: "Trial ativo", variant: "secondary", icon: RefreshCw, color: "text-yellow-600" },
-  active: { label: "Ativa", variant: "default", icon: CheckCircle, color: "text-green-600" },
-  suspended: { label: "Suspensa", variant: "destructive", icon: PauseCircle, color: "text-red-600" },
-  cancelled: { label: "Cancelada", variant: "outline", icon: XCircle, color: "text-muted-foreground" },
+const COR_ALERTA: Record<string, string> = {
+  info: "border-sky-300 bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200 dark:border-sky-900",
+  aviso: "border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900",
+  urgente: "border-orange-300 bg-orange-50 text-orange-900 dark:bg-orange-950/40 dark:text-orange-200 dark:border-orange-900",
+  suspenso: "border-red-300 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200 dark:border-red-900",
 };
 
-function formatDate(d: string | null) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
-}
-
-function daysLeft(d: string | null) {
-  if (!d) return null;
-  const diff = Math.ceil((new Date(d).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  return diff;
-}
-
+/**
+ * Área do próprio assinante. Só mostra a assinatura de quem está logado: a
+ * rota não recebe id, então trocar número na URL não leva a outra pessoa.
+ */
 export default function MinhaAssinaturaPage() {
-  const { data: sub, isLoading } = useQuery<any>({
-    queryKey: ["/api/subscription"],
-  });
+  const { data, isLoading } = useQuery<Dados>({ queryKey: ["/api/minha-assinatura"] });
 
   if (isLoading) {
+    return <div className="flex-1 flex items-center justify-center p-10"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  }
+
+  if (!data) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[300px]">
-        <div className="text-muted-foreground">Carregando...</div>
+      <div className="flex-1 overflow-auto p-4 md:p-6">
+        <h1 className="text-2xl font-bold flex items-center gap-2"><CreditCard className="h-6 w-6" /> Minha assinatura</h1>
+        <p className="text-sm text-muted-foreground mt-2">Você não possui uma assinatura própria. Seu acesso segue normalmente.</p>
       </div>
     );
   }
 
-  if (!sub) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <Card>
-          <CardContent className="pt-8 pb-8 text-center space-y-3">
-            <CreditCard className="h-12 w-12 text-muted-foreground mx-auto" />
-            <h2 className="text-lg font-semibold">Sem assinatura ativa</h2>
-            <p className="text-muted-foreground text-sm">
-              Entre em contato com o suporte para contratar um plano.
-            </p>
-            <a
-              href="mailto:contato@sistemacapital.com.br"
-              className="inline-flex items-center gap-2 text-primary text-sm font-medium hover:underline"
-            >
-              <Mail className="h-4 w-4" />
-              contato@sistemacapital.com.br
-            </a>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const statusCfg = STATUS_CONFIG[sub.status] || STATUS_CONFIG.trial;
-  const Icon = statusCfg.icon;
-  const trialLeft = sub.status === "trial" ? daysLeft(sub.trial_ends_at) : null;
-  const periodLeft = sub.status === "active" ? daysLeft(sub.current_period_end) : null;
-  const features = PLAN_FEATURES[sub.plan] || [];
-  const lastPayment = sub.payment_history?.length > 0
-    ? sub.payment_history[sub.payment_history.length - 1]
-    : null;
+  const { assinatura: a, cobrancaAtual: c, historico, prazo, alerta } = data;
+  const st = STATUS_ASSINATURA[a.status];
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <CreditCard className="h-6 w-6 text-primary" />
-          Minha Assinatura
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Detalhes do seu plano atual
+        <h1 className="text-2xl font-bold flex items-center gap-2"><CreditCard className="h-6 w-6" /> Minha assinatura</h1>
+        <p className="text-sm text-muted-foreground">Plano, mensalidades e boletos da sua conta.</p>
+      </div>
+
+      {alerta && (
+        <div className={`rounded-md border px-4 py-3 text-sm ${COR_ALERTA[alerta.nivel] || ""}`} data-testid="alerta-minha-assinatura">
+          {alerta.texto}
+        </div>
+      )}
+
+      {/* Resumo */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-3">
+            Plano {a.plano || "—"}
+            {st && <Badge className={`${st.classe} border-0`}>{st.rotulo}</Badge>}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <Info rotulo="Valor normal" valor={brl(a.valor_mensal)} />
+            <Info rotulo="Desconto" valor={a.desconto > 0 ? brl(a.desconto) : "—"} nota={a.desconto_motivo || undefined} />
+            <Info rotulo="Valor da mensalidade" valor={brl(a.valor_final)} destaque />
+            <Info
+              rotulo={a.status === "isenta" ? "Cortesia até" : "Próximo vencimento"}
+              valor={dataBR(a.status === "isenta" ? a.isenta_ate : (c?.vencimento || a.proximo_vencimento))}
+              nota={a.status !== "isenta" && a.status !== "cancelada" ? prazo?.texto || undefined : undefined}
+            />
+            <Info rotulo="Forma de pagamento" valor={(a.forma_pagamento && FORMA[a.forma_pagamento]) || "—"} />
+            <Info rotulo="Tolerância após o vencimento" valor={`${a.tolerancia_dias} ${a.tolerancia_dias === 1 ? "dia" : "dias"}`} />
+          </div>
+          {a.recursos.length > 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">Incluído no seu plano</p>
+              <div className="flex flex-wrap gap-1.5">
+                {a.recursos.map((r) => <Badge key={r} variant="secondary">{r}</Badge>)}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Cobrança atual */}
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Mensalidade em aberto</CardTitle></CardHeader>
+        <CardContent>
+          {!c ? (
+            <p className="text-sm text-muted-foreground">Nenhuma mensalidade em aberto no momento.</p>
+          ) : (
+            <CobrancaAtual c={c} />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Histórico */}
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Histórico financeiro</CardTitle></CardHeader>
+        <CardContent className="overflow-x-auto">
+          {historico.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Ainda não há mensalidades anteriores.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground border-b">
+                  <th className="py-2 pr-3">Competência</th>
+                  <th className="py-2 pr-3">Vencimento</th>
+                  <th className="py-2 pr-3 text-right">Valor</th>
+                  <th className="py-2 pr-3">Situação</th>
+                  <th className="py-2 pr-3">Pago em</th>
+                  <th className="py-2">Documentos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historico.map((h) => (
+                  <tr key={h.id} className="border-b last:border-0">
+                    <td className="py-2 pr-3">{h.competencia.slice(5, 7)}/{h.competencia.slice(0, 4)}</td>
+                    <td className="py-2 pr-3">{dataBR(h.vencimento)}</td>
+                    <td className="py-2 pr-3 text-right whitespace-nowrap">
+                      {brl(h.valor_final)}
+                      {Number(h.desconto) > 0 && <span className="block text-xs text-muted-foreground">desconto {brl(h.desconto)}</span>}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Badge className={`${STATUS_COBRANCA[h.status]?.classe} border-0`}>{STATUS_COBRANCA[h.status]?.rotulo || h.status}</Badge>
+                    </td>
+                    <td className="py-2 pr-3">{dataBR(h.pago_em)}</td>
+                    <td className="py-2 space-x-3 whitespace-nowrap">
+                      {h.tem_boleto_arquivo && <a className="text-primary underline" href={`/api/cobrancas/${h.id}/arquivo/boleto`} target="_blank" rel="noreferrer">boleto</a>}
+                      {h.tem_comprovante && <a className="text-primary underline" href={`/api/cobrancas/${h.id}/arquivo/comprovante`} target="_blank" rel="noreferrer">comprovante</a>}
+                      {!h.tem_boleto_arquivo && !h.tem_comprovante && <span className="text-muted-foreground">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Info({ rotulo, valor, nota, destaque }: { rotulo: string; valor: string; nota?: string; destaque?: boolean }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{rotulo}</p>
+      <p className={destaque ? "text-lg font-bold" : "font-medium"}>{valor}</p>
+      {nota && <p className="text-xs text-muted-foreground mt-0.5">{nota}</p>}
+    </div>
+  );
+}
+
+function CobrancaAtual({ c }: { c: any }) {
+  const { toast } = useToast();
+  const copiar = async (texto: string, oque: string) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast({ title: `${oque} copiado` });
+    } catch {
+      toast({ title: "Não consegui copiar", description: "Selecione o texto e copie manualmente.", variant: "destructive" });
+    }
+  };
+  const temAlgum = c.tem_boleto_arquivo || c.boleto_link || c.linha_digitavel || c.pix_copia_cola;
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <span>Competência <b>{c.competencia.slice(5, 7)}/{c.competencia.slice(0, 4)}</b></span>
+        <span>Vencimento <b>{dataBR(c.vencimento)}</b></span>
+        <span>Valor <b>{brl(c.valor_final)}</b>{Number(c.desconto) > 0 && <span className="text-muted-foreground"> (de {brl(c.valor_original)})</span>}</span>
+        <Badge className={`${STATUS_COBRANCA[c.status]?.classe} border-0`}>{STATUS_COBRANCA[c.status]?.rotulo}</Badge>
+      </div>
+
+      {!temAlgum && (
+        <p className="text-muted-foreground">O boleto desta mensalidade ainda não foi disponibilizado. Ele aparecerá aqui assim que estiver pronto.</p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {c.tem_boleto_arquivo && (
+          <Button asChild size="sm" data-testid="button-baixar-boleto">
+            <a href={`/api/cobrancas/${c.id}/arquivo/boleto`} target="_blank" rel="noreferrer"><Download className="h-4 w-4 mr-1.5" />Baixar boleto</a>
+          </Button>
+        )}
+        {c.boleto_link && (
+          <Button asChild size="sm" variant="outline">
+            <a href={c.boleto_link} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4 mr-1.5" />Abrir link de pagamento</a>
+          </Button>
+        )}
+      </div>
+
+      {c.linha_digitavel && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">Linha digitável</p>
+          <div className="flex gap-2 items-center">
+            <code className="flex-1 rounded border bg-muted/40 px-2 py-1.5 text-xs break-all">{c.linha_digitavel}</code>
+            <Button size="sm" variant="outline" onClick={() => copiar(c.linha_digitavel, "Linha digitável")}><Copy className="h-4 w-4" /></Button>
+          </div>
+        </div>
+      )}
+      {c.pix_copia_cola && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">Pix copia e cola</p>
+          <div className="flex gap-2 items-center">
+            <code className="flex-1 rounded border bg-muted/40 px-2 py-1.5 text-xs break-all">{c.pix_copia_cola}</code>
+            <Button size="sm" variant="outline" onClick={() => copiar(c.pix_copia_cola, "Código Pix")}><Copy className="h-4 w-4" /></Button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-start gap-2 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+        <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+        <p>
+          Já pagou? A confirmação é feita pela nossa equipe e o acesso é atualizado assim que o pagamento for
+          identificado. Se precisar, envie o comprovante pelo suporte.
         </p>
       </div>
-
-      {/* Status principal */}
-      <Card className={sub.status === "suspended" ? "border-red-300" : sub.status === "active" ? "border-green-300" : ""}>
-        <CardContent className="pt-6 pb-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-bold" data-testid="text-plano-nome">{sub.plano_nome || (PLAN_LABELS as Record<string, string>)[sub.plan] || sub.plan}</span>
-                <Badge variant={statusCfg.variant} className="gap-1 text-sm">
-                  <Icon className="h-3.5 w-3.5" />
-                  {statusCfg.label}
-                </Badge>
-              </div>
-              <div className="text-muted-foreground text-sm" data-testid="text-plano-valor">{formatPlanoValor(sub.plano_valor, sub.plano_ciclo)}</div>
-            </div>
-
-            <div className="space-y-1 text-right">
-              {sub.status === "trial" && trialLeft !== null && (
-                <div className={`text-sm font-semibold ${trialLeft <= 2 ? "text-red-600" : "text-yellow-600"}`}>
-                  {trialLeft <= 0 ? "Trial expirado" : `${trialLeft} dias de trial restantes`}
-                </div>
-              )}
-              {sub.status === "active" && periodLeft !== null && (
-                <div className={`text-sm ${periodLeft <= 5 ? "text-orange-500" : "text-muted-foreground"}`}>
-                  Renova em {formatDate(sub.current_period_end)}
-                </div>
-              )}
-              {sub.status === "suspended" && (
-                <div className="text-sm text-red-600 font-medium">
-                  Acesso suspenso — entre em contato
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Datas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
-              <Calendar className="h-4 w-4" />
-              Período atual
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm space-y-1">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Início</span>
-              <span className="font-medium">{formatDate(sub.current_period_start)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Fim</span>
-              <span className="font-medium">{formatDate(sub.current_period_end)}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
-              <RefreshCw className="h-4 w-4" />
-              Trial
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Expira em</span>
-              <span className="font-medium">{formatDate(sub.trial_ends_at)}</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Funcionalidades do plano */}
-      {features.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">O que está incluído no seu plano</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {features.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
-                  <span>{f}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Serviços inclusos no plano */}
-      {sub.servicos_inclusos?.length > 0 && (
-        <Card data-testid="card-servicos-inclusos">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Package className="h-4 w-4 text-primary" />
-              Serviços inclusos no seu plano
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {sub.servicos_inclusos.map((s: any, i: number) => (
-                <li key={i} className="flex items-start gap-2 text-sm" data-testid={`servico-incluso-${i}`}>
-                  <CheckCircle className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
-                  <span>{s.produto}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Adicionais contratados */}
-      {sub.adicionais?.length > 0 && (
-        <Card data-testid="card-adicionais">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Package className="h-4 w-4 text-primary" />
-              Adicionais contratados
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {sub.adicionais.map((a: any) => (
-                <li key={a.id} className="flex items-center justify-between text-sm" data-testid={`adicional-${a.id}`}>
-                  <span className="font-medium">{a.produto ?? "Serviço"}</span>
-                  <span className="text-muted-foreground text-xs">Contratado em {formatDate(a.created_at)}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Última fatura */}
-      {lastPayment && (
-        <Card data-testid="card-ultima-fatura">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-primary" />
-              Última fatura
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">{formatDate(lastPayment.date)}</span>
-              <span className="font-medium">
-                {typeof lastPayment.amount === "number"
-                  ? lastPayment.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-                  : "—"}
-              </span>
-              {lastPayment.invoiceUrl && (
-                <a
-                  href={lastPayment.invoiceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary font-medium hover:underline"
-                  data-testid="link-ver-fatura"
-                >
-                  Ver fatura
-                </a>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Contato */}
-      <Card className="bg-primary/5 border-primary/20">
-        <CardContent className="pt-4 pb-4">
-          <p className="text-sm text-muted-foreground">
-            Deseja fazer upgrade, cancelar ou tem dúvidas sobre sua assinatura?
-          </p>
-          <a
-            href="mailto:contato@sistemacapital.com.br"
-            className="inline-flex items-center gap-2 text-primary text-sm font-medium hover:underline mt-1"
-          >
-            <Mail className="h-4 w-4" />
-            contato@sistemacapital.com.br
-          </a>
-        </CardContent>
-      </Card>
     </div>
   );
 }

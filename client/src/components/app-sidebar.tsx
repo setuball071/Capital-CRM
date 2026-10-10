@@ -178,6 +178,9 @@ export function AppSidebar() {
     financeiro: false,
   });
 
+  // So quem tem assinatura propria ve o atalho "Minha assinatura".
+  const { data: minhaAss } = useQuery<any>({ queryKey: ["/api/minha-assinatura"], staleTime: 60_000 });
+
   const { data: feedbackUnread } = useQuery<{ count: number }>({
     queryKey: ["/api/feedbacks/unread-count"],
     refetchInterval: 60000,
@@ -632,6 +635,20 @@ export function AppSidebar() {
                 <button onClick={() => setLocation("/hub")} className="w-full">
                   <FlaskConical className="h-4 w-4" />
                   <span>Layout Beta</span>
+                </button>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          {minhaAss && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={location === "/minha-assinatura"}
+                data-testid="sidebar-minha-assinatura"
+              >
+                <button onClick={() => setLocation("/minha-assinatura")} className="w-full">
+                  <CreditCard className="h-4 w-4" />
+                  <span>Minha assinatura</span>
                 </button>
               </SidebarMenuButton>
             </SidebarMenuItem>

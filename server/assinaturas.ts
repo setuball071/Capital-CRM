@@ -17,9 +17,17 @@ import multer from "multer";
 import { sql } from "drizzle-orm";
 import { db } from "./storage";
 import { saveDocument, getDocument } from "./document-storage";
+import { MODULOS_CATALOGO } from "@shared/modulos";
 
 /** Cobrança nasce N dias antes do vencimento (decisão do Fábio, 07/10/2026). */
 export const ANTECEDENCIA_COBRANCA_DIAS = 5;
+/**
+ * O bloqueio por falta de pagamento só passa a valer na etapa 4. Enquanto isto
+ * for false, o aviso ao cliente NÃO fala em suspensão: prometer um bloqueio que
+ * o sistema não executa ensina o cliente a ignorar o aviso.
+ */
+export const SUSPENSAO_ATIVA = false;
+
 /** Dias de atraso tolerados antes de suspender (padrão; ajustável por assinatura). */
 export const TOLERANCIA_PADRAO_DIAS = 3;
 
@@ -171,6 +179,110 @@ export function situacaoPrazo(vencimento: string | null, tolerancia: number, hoj
   else if (ds > 0) texto = `Vencida há ${-dv} ${-dv === 1 ? "dia" : "dias"} · suspensão em ${ds} ${ds === 1 ? "dia" : "dias"}`;
   else texto = "Prazo de tolerância encerrado";
   return { diasVencimento: dv, diasSuspensao: ds, suspensaoEm, texto };
+}
+
+// ── O que o próprio assinante vê ────────────────────────────────────────────
+export type AlertaAssinatura = {
+  nivel: "info" | "aviso" | "urgente" | "suspenso";
+  texto: string;
+  diasVencimento: number | null;
+  diasSuspensao: number | null;
+};
+
+/**
+ * Aviso que aparece no topo de toda tela do assinante. Frases curtas e
+ * objetivas, sem contagem negativa. Sem travessão: é texto de cliente.
+ */
+export function alertaAssinatura(a: any, cobranca: any | null, hoje = hojeISO()): AlertaAssinatura | null {
+  if (!a || a.status === "cancelada") return null;
+  const temBoleto = !!(cobranca && (cobranca.tem_boleto_arquivo || cobranca.boleto_link
+    || cobranca.linha_digitavel || cobranca.pix_copia_cola));
+  const fraseBoleto = temBoleto
+    ? " O boleto já está disponível em Minha assinatura."
+    : " O boleto ainda não foi disponibilizado.";
+
+  if (a.status === "isenta") {
+    if (!a.isenta_ate) return null;
+    const d = diasEntre(hoje, a.isenta_ate);
+    if (d < 0 || d > ANTECEDENCIA_COBRANCA_DIAS) return null;
+    return { nivel: "info", diasVencimento: d, diasSuspensao: null,
+      texto: d === 0 ? "Sua cortesia termina hoje." : `Sua cortesia termina em ${d} ${d === 1 ? "dia" : "dias"}.` };
+  }
+  if (a.status === "suspensa") {
+    return { nivel: "suspenso", diasVencimento: null, diasSuspensao: 0,
+      texto: "Seu acesso foi temporariamente suspenso devido à mensalidade em aberto. Acesse Minha assinatura para consultar o boleto e regularizar." };
+  }
+
+  const venc = cobranca?.vencimento || a.proximo_vencimento;
+  if (!venc) return null;
+  const tol = Number(a.tolerancia_dias ?? TOLERANCIA_PADRAO_DIAS);
+  const p = situacaoPrazo(venc, tol, hoje);
+  const dv = p.diasVencimento as number;
+  const ds = p.diasSuspensao as number;
+  const base = { diasVencimento: dv, diasSuspensao: ds };
+
+  if (dv > ANTECEDENCIA_COBRANCA_DIAS) return null;
+  if (dv > 1) return { ...base, nivel: "info", texto: `Sua mensalidade vence em ${dv} dias.${fraseBoleto}` };
+  if (dv === 1) return { ...base, nivel: "info", texto: `Sua mensalidade vence amanhã.${fraseBoleto}` };
+  if (dv === 0) return { ...base, nivel: "aviso", texto: `Sua mensalidade vence hoje.${fraseBoleto}` };
+
+  const atraso = -dv;
+  const vencida = `Sua mensalidade está vencida há ${atraso} ${atraso === 1 ? "dia" : "dias"}.`;
+  if (a.suspensao_automatica === false || !SUSPENSAO_ATIVA) {
+    return { ...base, nivel: "urgente", texto: `${vencida}${fraseBoleto}` };
+  }
+  if (ds > 0) {
+    return { ...base, nivel: "urgente",
+      texto: `${vencida} ${ds === 1 ? "Falta 1 dia" : `Faltam ${ds} dias`} para a suspensão do acesso.${fraseBoleto}` };
+  }
+  return { ...base, nivel: "urgente",
+    texto: `${vencida} O prazo de tolerância terminou e o acesso pode ser suspenso.${fraseBoleto}` };
+}
+
+/** Tudo que a tela Minha assinatura precisa, só do próprio usuário. */
+export async function minhaAssinatura(userId: number) {
+  const [a] = (await db.execute(sql`
+    SELECT ${COLS_ASSINATURA}, pl.nome AS plano_nome
+      FROM assinaturas a LEFT JOIN planos pl ON pl.id = a.plano_id
+     WHERE a.user_id = ${userId}
+  `)).rows as any[];
+  if (!a) return null;
+
+  const cobrancas = (await db.execute(sql`
+    SELECT ${COLS_COBRANCA} FROM assinatura_cobrancas c
+     WHERE c.assinatura_id = ${a.id} ORDER BY c.vencimento DESC
+  `)).rows as any[];
+  // Cobrança atual = a mais antiga ainda em aberto; é a que precisa ser paga primeiro.
+  const emAberto = cobrancas.filter((c) => c.status === "aberta" || c.status === "vencida");
+  const atual = emAberto.length ? emAberto[emAberto.length - 1] : null;
+
+  const modulos = a.plano_id
+    ? ((await db.execute(sql`SELECT modulo_key FROM plano_modulos WHERE plano_id = ${a.plano_id}`)).rows as any[])
+        .map((m) => MODULOS_CATALOGO.find((x) => x.key === m.modulo_key)?.nome || m.modulo_key)
+    : [];
+
+  const hoje = hojeISO();
+  const venc = atual?.vencimento || a.proximo_vencimento;
+  const desconto = descontoVigente(a, venc || hoje);
+  return {
+    assinatura: {
+      plano: a.plano_nome,
+      status: a.status,
+      valor_mensal: num(a.valor_mensal),
+      desconto,
+      valor_final: Math.round((num(a.valor_mensal) - desconto) * 100) / 100,
+      desconto_motivo: desconto > 0 ? a.desconto_motivo : null,
+      proximo_vencimento: a.proximo_vencimento,
+      forma_pagamento: a.forma_pagamento,
+      tolerancia_dias: a.tolerancia_dias,
+      isenta_ate: a.isenta_ate,
+      recursos: modulos,
+    },
+    cobrancaAtual: atual,
+    historico: cobrancas.filter((c) => c.id !== atual?.id),
+    prazo: situacaoPrazo(venc, Number(a.tolerancia_dias ?? TOLERANCIA_PADRAO_DIAS), hoje),
+    alerta: alertaAssinatura(a, atual, hoje),
+  };
 }
 
 const upload = multer({
@@ -524,6 +636,16 @@ export function registerAssinaturasRoutes(app: Express, requireAuth: any) {
     } catch (e: any) {
       console.error("[ASSINATURAS] pagar:", e?.message);
       res.status(500).json({ message: "Erro ao confirmar o pagamento" });
+    }
+  });
+
+  // ── Minha assinatura: só a do próprio usuário, nunca por id na URL ────────
+  app.get("/api/minha-assinatura", requireAuth, async (req: any, res) => {
+    try {
+      res.json(await minhaAssinatura(req.user.id));
+    } catch (e: any) {
+      console.error("[ASSINATURAS] minha:", e?.message);
+      res.status(500).json({ message: "Erro ao buscar sua assinatura" });
     }
   });
 

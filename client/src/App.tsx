@@ -93,6 +93,7 @@ import AdminAssinaturasPage from "@/pages/admin-assinaturas";
 import AdminPlanosPage from "@/pages/admin-planos";
 import AdminConsultasBasePage from "@/pages/admin-consultas-base";
 import MinhaAssinaturaPage from "@/pages/minha-assinatura";
+import { AvisoAssinatura } from "@/components/aviso-assinatura";
 import HubBetaPage from "@/pages/hub-beta";
 import { Loader2, BarChart3, Settings } from "lucide-react";
 import SolicitacoesBoletoPage from "@/pages/SolicitacoesBoleto";
@@ -404,6 +405,8 @@ function Router() {
               <NotificationBell />
             </div>
           </header>
+          {/* Vencimento proximo, atraso e suspensao, em toda tela do assinante */}
+          <AvisoAssinatura />
           <main className="flex-1 overflow-auto">
             <Switch>
               <Route path="/">
