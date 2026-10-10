@@ -76,7 +76,7 @@ export default function MinhaAssinaturaPage() {
       </div>
 
       {suspensa ? (
-        <AcessoSuspenso temCobranca={!!c} />
+        <AcessoSuspenso cobranca={c} />
       ) : alerta && (
         <div className={`rounded-md border px-4 py-3 text-sm ${COR_ALERTA[alerta.nivel] || ""}`} data-testid="alerta-minha-assinatura">
           {alerta.texto}
@@ -185,7 +185,7 @@ function Info({ rotulo, valor, nota, destaque }: { rotulo: string; valor: string
 }
 
 /** Acesso suspenso: só dá para pagar ou cancelar. */
-function AcessoSuspenso({ temCobranca }: { temCobranca: boolean }) {
+function AcessoSuspenso({ cobranca }: { cobranca: any | null }) {
   const { toast } = useToast();
   const [confirmando, setConfirmando] = useState(false);
   const cancelar = useMutation({
@@ -207,12 +207,22 @@ function AcessoSuspenso({ temCobranca }: { temCobranca: boolean }) {
         </div>
       </div>
       <div className="flex flex-wrap gap-2 pl-8">
-        {temCobranca && (
+        {/* Pagar agora abre direto o meio de pagamento: link primeiro, depois o
+            boleto anexado; sem nenhum dos dois, leva até a mensalidade (linha/Pix). */}
+        {cobranca?.boleto_link ? (
+          <Button asChild size="sm" data-testid="button-pagar-agora">
+            <a href={cobranca.boleto_link} target="_blank" rel="noreferrer">Pagar agora</a>
+          </Button>
+        ) : cobranca?.tem_boleto_arquivo ? (
+          <Button asChild size="sm" data-testid="button-pagar-agora">
+            <a href={`/api/cobrancas/${cobranca.id}/arquivo/boleto`} target="_blank" rel="noreferrer">Pagar agora</a>
+          </Button>
+        ) : cobranca ? (
           <Button size="sm" onClick={() => document.getElementById("mensalidade-aberta")?.scrollIntoView({ behavior: "smooth" })}
             data-testid="button-pagar-agora">
             Pagar agora
           </Button>
-        )}
+        ) : null}
         <Button size="sm" variant="outline" className="bg-transparent" onClick={() => setConfirmando(true)} data-testid="button-cancelar-assinatura">
           Cancelar assinatura
         </Button>
