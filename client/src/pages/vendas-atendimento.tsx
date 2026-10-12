@@ -36,7 +36,7 @@ import {
   Loader2, Play, Phone, MessageSquare, Mail, User, Building, CreditCard, Save, SkipForward, 
   Landmark, Briefcase, Copy, Tag, Plus, X, Check, Calendar, ChevronUp, ChevronDown, MapPin,
   Users, Clock, CheckCircle, ShoppingCart, Trash2, Star, Pencil, Cake, Database, Calculator,
-  LogOut
+  LogOut, GripVertical
 } from "lucide-react";
 import { 
   LEAD_STATUS, 
@@ -339,18 +339,36 @@ export default function VendasAtendimento() {
     },
   });
 
-  const moverLista = (index: number, direcao: -1 | 1) => {
-    if (!campanhasDisponiveis) return;
-    const ids = campanhasDisponiveis.map((c) => c.id);
-    const alvo = index + direcao;
-    if (alvo < 0 || alvo >= ids.length) return;
-    [ids[index], ids[alvo]] = [ids[alvo], ids[index]];
-    queryClient.setQueryData(
-      ["/api/vendas/atendimento/campanhas-disponiveis"],
-      ids.map((id) => campanhasDisponiveis.find((c) => c.id === id)!),
-    );
-    ordemMutation.mutate(ids);
+  // Arrastar pela alça de pontinhos: reordena na tela enquanto arrasta e
+  // salva a ordem quando solta.
+  const [arrastandoId, setArrastandoId] = useState<number | null>(null);
+  const [alcaPresa, setAlcaPresa] = useState(false);
+
+  const reordenarAoPassar = (sobreId: number) => {
+    if (!campanhasDisponiveis || arrastandoId == null || arrastandoId === sobreId) return;
+    const lista = [...campanhasDisponiveis];
+    const de = lista.findIndex((c) => c.id === arrastandoId);
+    const para = lista.findIndex((c) => c.id === sobreId);
+    if (de < 0 || para < 0) return;
+    const [item] = lista.splice(de, 1);
+    lista.splice(para, 0, item);
+    queryClient.setQueryData(["/api/vendas/atendimento/campanhas-disponiveis"], lista);
   };
+
+  const soltarLista = () => {
+    if (arrastandoId != null && campanhasDisponiveis) {
+      ordemMutation.mutate(campanhasDisponiveis.map((c) => c.id));
+    }
+    setArrastandoId(null);
+    setAlcaPresa(false);
+  };
+
+  useEffect(() => {
+    if (!alcaPresa) return;
+    const soltar = () => setAlcaPresa(false);
+    window.addEventListener("mouseup", soltar);
+    return () => window.removeEventListener("mouseup", soltar);
+  }, [alcaPresa]);
 
   const excluirListaMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -714,31 +732,37 @@ export default function VendasAtendimento() {
             {campanhasDisponiveis && campanhasDisponiveis.length > 0 ? (
               <div className="space-y-4 w-full max-w-md">
                 <div className="grid gap-2">
-                  {campanhasDisponiveis.map((camp, index) => (
-                    <div key={camp.id} className="flex items-stretch gap-1.5">
-                      <div className="flex flex-col justify-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-6"
-                          onClick={() => moverLista(index, -1)}
-                          disabled={index === 0 || ordemMutation.isPending}
-                          title="Subir na fila"
-                          data-testid={`button-subir-campanha-${camp.id}`}
-                        >
-                          <ChevronUp className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-6"
-                          onClick={() => moverLista(index, 1)}
-                          disabled={index === campanhasDisponiveis.length - 1 || ordemMutation.isPending}
-                          title="Descer na fila"
-                          data-testid={`button-descer-campanha-${camp.id}`}
-                        >
-                          <ChevronDown className="h-4 w-4" />
-                        </Button>
+                  {campanhasDisponiveis.map((camp) => (
+                    <div
+                      key={camp.id}
+                      className={`flex items-stretch gap-1.5 rounded-md transition-opacity ${
+                        arrastandoId === camp.id ? "opacity-40" : ""
+                      }`}
+                      draggable={alcaPresa}
+                      onDragStart={(e) => {
+                        if (!alcaPresa) {
+                          e.preventDefault();
+                          return;
+                        }
+                        e.dataTransfer.effectAllowed = "move";
+                        setArrastandoId(camp.id);
+                      }}
+                      onDragOver={(e) => {
+                        if (arrastandoId == null) return;
+                        e.preventDefault();
+                        reordenarAoPassar(camp.id);
+                      }}
+                      onDrop={(e) => e.preventDefault()}
+                      onDragEnd={soltarLista}
+                    >
+                      <div
+                        className="flex items-center px-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                        onMouseDown={() => setAlcaPresa(true)}
+                        onMouseUp={() => setAlcaPresa(false)}
+                        title="Segure e arraste para mudar a ordem da fila"
+                        data-testid={`handle-arrastar-campanha-${camp.id}`}
+                      >
+                        <GripVertical className="h-5 w-5" />
                       </div>
                       <Button
                         variant="outline"
