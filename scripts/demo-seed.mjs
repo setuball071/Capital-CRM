@@ -223,8 +223,8 @@ try {
   for (const mes of ["2026-09", "2026-10"]) {
     await c.query(`INSERT INTO metas_equipe (tenant_id, equipe_id, mes_referencia, meta_geral, meta_cartao, tipo_meta)
                    VALUES ($1, $2, $3, 300000, 30000, 'producao')`, [TENANT, eq.id, mes]);
-    await c.query(`INSERT INTO metas_individuais (tenant_id, usuario_id, equipe_id, mes_referencia, meta_geral, meta_cartao, tipo_meta)
-                   VALUES ($1, $2, $3, $4, 250000, 25000, 'producao')`, [TENANT, USUARIO, eq.id, mes]);
+    // Sem meta individual do gestor de propósito: com ela, o botão "Definir
+    // minha meta" some da Minha Produção (a do gestor manda) e não dá para gravar.
   }
 
   // ── agenda: retorno de cada lead "aguardando retorno" ─────────────────────

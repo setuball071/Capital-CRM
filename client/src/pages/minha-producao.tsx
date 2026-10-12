@@ -268,6 +268,17 @@ export default function MinhaProducaoPage() {
               {meta.metaPessoal > 0 ? `Meta: ${BRL(meta.metaPessoal)}` : "Definir minha meta"}
             </Button>
           )}
+          {/* Com meta do gestor no mês, ela manda: mostra qual é, sem deixar editar. */}
+          {meta && meta.metaDoGestor !== null && (
+            <div
+              className="flex items-center gap-1.5 rounded-md border px-3 h-9 text-sm text-muted-foreground"
+              title="Seu gestor definiu a meta deste mês. Para mudar, fale com ele."
+              data-testid="meta-do-gestor"
+            >
+              <Target className="h-4 w-4" />
+              Meta do gestor: <span className="font-medium text-foreground">{BRL(meta.metaDoGestor)}</span>
+            </div>
+          )}
           <Input type="month" value={mes} onChange={(e) => setMes(e.target.value || mesAtual())} className="w-40" data-testid="input-mes" />
           <Button onClick={abrirNovo} data-testid="button-novo-registro">
             <Plus className="h-4 w-4 mr-1.5" /> Novo registro
