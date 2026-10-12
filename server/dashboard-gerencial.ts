@@ -263,7 +263,7 @@ export function registerDashboardGerencialRoutes(
               COUNT(*) AS qtd
             FROM vendedor_contratos
             WHERE tenant_id = ${tenantId}
-              AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+              AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} AND COALESCE(status,'vendida') NOT IN ('cancelada','estornada') ${filtrosOf}
           `),
         ]);
         const pr: any = prodR.rows[0] || {};
@@ -422,7 +422,7 @@ export function registerDashboardGerencialRoutes(
                        COUNT(*), COALESCE(SUM(valor_contrato), 0)
                 FROM vendedor_contratos
                 WHERE tenant_id = ${tenantId}
-                  AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+                  AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} AND COALESCE(status,'vendida') NOT IN ('cancelada','estornada') ${filtrosOf}
                 GROUP BY 1
               ) u GROUP BY k
             )
@@ -466,7 +466,7 @@ export function registerDashboardGerencialRoutes(
               AND mes_referencia IN (${inVals(meses)}) ${filtrosOf}
             UNION ALL
             SELECT COUNT(*), COALESCE(SUM(valor_contrato), 0) FROM vendedor_contratos
-            WHERE tenant_id = ${tenantId} AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+            WHERE tenant_id = ${tenantId} AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} AND COALESCE(status,'vendida') NOT IN ('cancelada','estornada') ${filtrosOf}
           ) u
         `);
         const ct: any = cadTotR.rows[0] || {};
@@ -652,7 +652,7 @@ export function registerDashboardGerencialRoutes(
                    COALESCE(SUM(valor_contrato),0) AS valor, COUNT(*) AS qtd
             FROM vendedor_contratos
             WHERE tenant_id = ${tenantId}
-              AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} ${filtrosOf}
+              AND data_contrato::date BETWEEN ${inicioStr} AND ${fimStr} AND COALESCE(status,'vendida') NOT IN ('cancelada','estornada') ${filtrosOf}
               AND LOWER(COALESCE(tipo_operacao,'')) LIKE '%port%'
             GROUP BY 1
           `),
@@ -854,7 +854,7 @@ export function registerDashboardGerencialRoutes(
               WHERE tenant_id=${tenantId} AND confirmado=true AND comissao_repasse_valor>0
                 AND mes_referencia IN (${inVals(ms)}) ${buildFiltrosOficialSql(req.query)}`),
             db.execute(sql`SELECT COALESCE(SUM(valor_contrato),0) AS v FROM vendedor_contratos
-              WHERE tenant_id=${tenantId} AND data_contrato::date BETWEEN ${ini} AND ${f} ${buildFiltrosOficialSql(req.query)}`),
+              WHERE tenant_id=${tenantId} AND data_contrato::date BETWEEN ${ini} AND ${f} AND COALESCE(status,'vendida') NOT IN ('cancelada','estornada') ${buildFiltrosOficialSql(req.query)}`),
           ]);
           return (Number(a.rows[0]?.v) || 0) + (Number(b.rows[0]?.v) || 0);
         };
@@ -894,7 +894,7 @@ export function registerDashboardGerencialRoutes(
               FROM vendedor_contratos vc
               ${vendJoin}
               WHERE vc.tenant_id=${tenantId}
-                AND vc.data_contrato::date BETWEEN ${ini} AND ${f} ${buildFiltrosOficialSql(req.query, "vc.")}
+                AND vc.data_contrato::date BETWEEN ${ini} AND ${f} AND COALESCE(vc.status,'vendida') NOT IN ('cancelada','estornada') ${buildFiltrosOficialSql(req.query, "vc.")}
             )
             SELECT COALESCE(NULLIF(btrim(chave),''),'Não informado') AS chave, SUM(valor) AS valor
             FROM un GROUP BY 1
@@ -1132,7 +1132,7 @@ export function registerDashboardGerencialRoutes(
             lpad(regexp_replace(COALESCE(vc.cliente_cpf,''),'[^0-9]','','g'),11,'0') AS cpf
           FROM vendedor_contratos vc LEFT JOIN users u ON u.id = vc.vendedor_id
           WHERE vc.tenant_id=${tenantId}
-            AND vc.data_contrato::date BETWEEN ${ini} AND ${f} ${buildFiltrosOficialSql(req.query, "vc.")}
+            AND vc.data_contrato::date BETWEEN ${ini} AND ${f} AND COALESCE(vc.status,'vendida') NOT IN ('cancelada','estornada') ${buildFiltrosOficialSql(req.query, "vc.")}
         `;
 
         // expressão do código de órgão (na base, o código pode estar em orgaodesc)

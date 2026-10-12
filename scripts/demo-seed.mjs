@@ -9,11 +9,11 @@
 // DDD 00 (não existe): clicar no WhatsApp durante a gravação não chama ninguém.
 //
 // Uma história só, para as telas baterem entre si:
-//   lead VENDIDO  -> proposta PAGO -> contrato na produção oficial -> Minha Produção
+//   lead VENDIDO  -> proposta PAGO -> venda na Minha Produção (que alimenta o painel)
 //   lead PROPOSTA_ENVIADA -> proposta em andamento (sem produção ainda)
 //   lead SEM_INTERESSE    -> proposta CANCELADA (+ venda cancelada na Minha Produção)
 //   lead AGUARDANDO_RETORNO -> retorno marcado na agenda
-//   clientes de carteira (fora da campanha) -> produção paga
+//   clientes de carteira (fora da campanha) -> venda na Minha Produção
 import "dotenv/config";
 import pg from "pg";
 
@@ -73,6 +73,8 @@ const fmtCpf = (s) => `${s.slice(0, 3)}.${s.slice(3, 6)}.${s.slice(6, 9)}-${s.sl
 const telDigitos = (i) => `0090000${String(1000 + i).slice(-4)}`;
 const telFmt = (i) => `(00) 90000-${String(1000 + i).slice(-4)}`;
 const dia = (iso, n) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+// Fim de semana vai para a segunda: o gráfico do painel só mostra dias úteis.
+const diaUtil = (iso) => { let d = iso; while ([0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())) d = dia(d, 1); return d; };
 const br = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 const HOJE = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
 
@@ -122,9 +124,9 @@ const VENDAS = [
   const perc = tipo === "CARTAO" ? 6 : 3;
   const dataPag = `${v.mes}-${String(v.diaPag).padStart(2, "0")}`;
   return { ...v, nome, cpf, tel, tipo, valor, perc, comissao: Math.round(valor * perc) / 100,
-    // Venda até 8 dias antes do pagamento, mas no MESMO mês: a Minha Produção
-    // agrupa pela data da venda e o painel pelo mês do pagamento.
-    banco: pick(BANCOS), dataPag, dataVenda: dia(dataPag, -Math.min(8, v.diaPag - 1)) };
+    // Venda 2 dias antes do pagamento, no mesmo mês (o painel e a Minha
+    // Produção agrupam pela data da venda).
+    banco: pick(BANCOS), dataPag, dataVenda: diaUtil(dia(dataPag, -Math.min(2, v.diaPag - 1))) };
 });
 
 await c.query("BEGIN");
@@ -181,21 +183,9 @@ try {
   const valorCancelado = entre(9000, 30000);
   await proposta(12, "CANCELADA", "NOVO", valorCancelado, "SAFRA", new Date(Date.now() - 6 * 86400000), null);
 
-  // ── produção oficial (painel / dashboard) ─────────────────────────────────
-  let n = 0;
-  for (const v of VENDAS) {
-    n++;
-    await c.query(
-      `INSERT INTO producoes_contratos (tenant_id, contrato_id, nome_cliente, cpf_cliente, banco, tipo_contrato,
-         nome_corretor, status, data_pagamento, valor_base, valor_bruto, is_cartao, mes_referencia, confirmado,
-         convenio, prazo, vendedor_id, vendedor_nome, comissao_repasse_perc, comissao_repasse_valor,
-         comissao_empresa_perc, comissao_empresa_valor, status_comissao, telefone_cliente, proposal_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'PAGO',$8,$9,$9,$10,$11,true,'SIAPE',$12,$13,$7,$14,$15,$14,$15,$16,$17,$18)`,
-      [TENANT, `DEMO-${String(n).padStart(4, "0")}`, v.nome, fmtCpf(v.cpf), v.banco, v.tipo, VENDEDOR_NOME,
-        br(v.dataPag), v.valor, v.tipo === "CARTAO", v.mes, v.tipo === "CARTAO" ? "84" : "96", USUARIO,
-        v.perc, v.comissao, v.mes === "2026-09" ? "Pago" : "Aguardando", telFmt(v.tel), v.proposalId ?? null]);
-  }
-
+  // ── produção: SÓ na Minha Produção ────────────────────────────────────────
+  // O painel do vendedor SOMA produção oficial + Minha Produção. Pôr a mesma
+  // venda nas duas contaria em dobro, então o Demo usa só a Minha Produção.
   // ── Minha Produção (controle do vendedor): as mesmas vendas ───────────────
   await c.query(`INSERT INTO minha_producao_parceiros (tenant_id, vendedor_id, nome) VALUES ($1, $2, $3)`,
     [TENANT, USUARIO, PARCEIRO]);
@@ -250,8 +240,8 @@ try {
   const set = VENDAS.filter((v) => v.mes === "2026-09"), out = VENDAS.filter((v) => v.mes === "2026-10");
   const soma = (a) => a.reduce((s, v) => s + v.valor, 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   console.log(`Demo criado: ${LEADS.length} leads, ${5 + FASES_EM_ANDAMENTO.length + 1} propostas,`);
-  console.log(`  produção set/26: ${set.length} contratos ${soma(set)} | out/26: ${out.length} contratos ${soma(out)}`);
-  console.log(`  Minha Produção: as mesmas ${VENDAS.length} vendas + 1 cancelada; agenda: 4 retornos`);
+  console.log(`  Minha Produção set/26: ${set.length} contratos ${soma(set)} | out/26: ${out.length} contratos ${soma(out)}`);
+  console.log(`  + 1 venda cancelada (fora dos totais); agenda: 4 retornos`);
 } catch (e) {
   await c.query("ROLLBACK");
   throw e;
