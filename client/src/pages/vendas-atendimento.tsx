@@ -16,6 +16,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { TagManager } from "@/components/tag-manager";
 import { PhoneClientSearch } from "@/components/PhoneClientSearch";
 import { ContatosDoCliente } from "@/components/ContatosDoCliente";
@@ -306,8 +316,65 @@ export default function VendasAtendimento() {
     queryKey: ["/api/vendas/atendimento/resumo"],
   });
 
-  const { data: campanhasDisponiveis } = useQuery<{ id: number; nome: string; leadsPendentes: number }[]>({
+  const { data: campanhasDisponiveis } = useQuery<{
+    id: number;
+    nome: string;
+    leadsPendentes: number;
+    total: number;
+    percentualTrabalhado: number;
+    propria: boolean;
+  }[]>({
     queryKey: ["/api/vendas/atendimento/campanhas-disponiveis"],
+  });
+
+  const [listaExcluindo, setListaExcluindo] = useState<{ id: number; nome: string; propria: boolean } | null>(null);
+
+  const ordemMutation = useMutation({
+    mutationFn: async (ids: number[]) => apiRequest("PUT", "/api/vendas/atendimento/ordem-campanhas", { ids }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/campanhas-disponiveis"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erro ao salvar a ordem", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const moverLista = (index: number, direcao: -1 | 1) => {
+    if (!campanhasDisponiveis) return;
+    const ids = campanhasDisponiveis.map((c) => c.id);
+    const alvo = index + direcao;
+    if (alvo < 0 || alvo >= ids.length) return;
+    [ids[index], ids[alvo]] = [ids[alvo], ids[index]];
+    queryClient.setQueryData(
+      ["/api/vendas/atendimento/campanhas-disponiveis"],
+      ids.map((id) => campanhasDisponiveis.find((c) => c.id === id)!),
+    );
+    ordemMutation.mutate(ids);
+  };
+
+  const excluirListaMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("DELETE", `/api/vendas/atendimento/campanhas/${id}`);
+      return res.json() as Promise<{ removidos: number; tipo: "propria" | "distribuida" }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/campanhas-disponiveis"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendas/atendimento/resumo"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendas/minha-carteira/clientes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vendas/minha-carteira/historico"] });
+      toast({
+        title: "Lista excluída",
+        description:
+          data.tipo === "propria"
+            ? `${data.removidos} clientes ainda não atendidos foram apagados.`
+            : `${data.removidos} clientes ainda não atendidos voltaram para a campanha.`,
+      });
+      setListaExcluindo(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erro ao excluir a lista", description: err.message, variant: "destructive" });
+    },
   });
 
   // Nomenclaturas para De-Para de códigos - usa endpoint com cache no backend
@@ -647,18 +714,66 @@ export default function VendasAtendimento() {
             {campanhasDisponiveis && campanhasDisponiveis.length > 0 ? (
               <div className="space-y-4 w-full max-w-md">
                 <div className="grid gap-2">
-                  {campanhasDisponiveis.map((camp) => (
-                    <Button
-                      key={camp.id}
-                      variant="outline"
-                      className="w-full justify-between"
-                      onClick={() => proximoMutation.mutate(camp.id)}
-                      disabled={proximoMutation.isPending || camp.leadsPendentes === 0}
-                      data-testid={`button-campanha-${camp.id}`}
-                    >
-                      <span>{camp.nome}</span>
-                      <Badge variant="secondary">{camp.leadsPendentes} pendentes</Badge>
-                    </Button>
+                  {campanhasDisponiveis.map((camp, index) => (
+                    <div key={camp.id} className="flex items-stretch gap-1.5">
+                      <div className="flex flex-col justify-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-6"
+                          onClick={() => moverLista(index, -1)}
+                          disabled={index === 0 || ordemMutation.isPending}
+                          title="Subir na fila"
+                          data-testid={`button-subir-campanha-${camp.id}`}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-6"
+                          onClick={() => moverLista(index, 1)}
+                          disabled={index === campanhasDisponiveis.length - 1 || ordemMutation.isPending}
+                          title="Descer na fila"
+                          data-testid={`button-descer-campanha-${camp.id}`}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="flex-1 h-auto py-2 flex-col items-stretch gap-1.5 min-w-0"
+                        onClick={() => proximoMutation.mutate(camp.id)}
+                        disabled={proximoMutation.isPending || camp.leadsPendentes === 0}
+                        data-testid={`button-campanha-${camp.id}`}
+                      >
+                        <div className="flex items-center justify-between gap-2 w-full">
+                          <span className="truncate text-left">{camp.nome}</span>
+                          <Badge variant="secondary" className="shrink-0">{camp.leadsPendentes} pendentes</Badge>
+                        </div>
+                        <div className="flex items-center gap-2 w-full">
+                          <div className="h-1.5 flex-1 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary rounded-full"
+                              style={{ width: `${camp.percentualTrabalhado}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] text-muted-foreground font-normal tabular-nums shrink-0">
+                            {camp.percentualTrabalhado}% trabalhado
+                          </span>
+                        </div>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="self-center text-muted-foreground hover:text-destructive"
+                        onClick={() => setListaExcluindo({ id: camp.id, nome: camp.nome, propria: camp.propria })}
+                        title="Excluir lista"
+                        data-testid={`button-excluir-campanha-${camp.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   ))}
                 </div>
                 <Separator />
@@ -673,6 +788,32 @@ export default function VendasAtendimento() {
                   <Play className="h-5 w-5 mr-2" />
                   Iniciar / Próximo Cliente
                 </Button>
+                <AlertDialog open={!!listaExcluindo} onOpenChange={(o) => !o && setListaExcluindo(null)}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir a lista "{listaExcluindo?.nome}"?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {listaExcluindo?.propria
+                          ? "Os clientes que você ainda não atendeu serão apagados desta importação e somem da sua fila, do Pipeline e de Meus Clientes. Quem você já trabalhou continua com todo o histórico."
+                          : "Os clientes que você ainda não atendeu saem da sua fila e voltam para a campanha, para o gestor redistribuir. Quem você já trabalhou continua com você, com todo o histórico."}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        disabled={excluirListaMutation.isPending}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (listaExcluindo) excluirListaMutation.mutate(listaExcluindo.id);
+                        }}
+                        data-testid="button-confirmar-excluir-lista"
+                      >
+                        {excluirListaMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir lista"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             ) : (
               <Button

@@ -1434,6 +1434,16 @@ app.use((req, res, next) => {
               UNIQUE (tenant_id, user_id, mes_referencia)
             )
           `);
+          // Atendimento: ordem das listas por usuário e listas que ele tirou da tela
+          await migDb.execute(migSql`
+            CREATE TABLE IF NOT EXISTS atendimento_ordem_campanhas (
+              user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              campaign_id INTEGER NOT NULL REFERENCES sales_campaigns(id) ON DELETE CASCADE,
+              posicao     INTEGER,
+              oculta      BOOLEAN NOT NULL DEFAULT FALSE,
+              PRIMARY KEY (user_id, campaign_id)
+            )
+          `);
           // Onde o agente está (ele se registra sozinho a cada 5 min)
           await migDb.execute(migSql`
             CREATE TABLE IF NOT EXISTS agente_listas_estado (

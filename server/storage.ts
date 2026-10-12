@@ -2777,12 +2777,18 @@ export class DbStorage implements IStorage {
   }
   
   async getNextAssignment(userId: number, campaignId?: number): Promise<SalesLeadAssignment | undefined> {
+    // Sem campanha escolhida: segue a ordem de listas que o usuário definiu na
+    // tela de Atendimento (atendimento_ordem_campanhas); sem ordem, como antes.
     let query = db.select().from(salesLeadAssignments)
       .where(and(
         eq(salesLeadAssignments.userId, userId),
         eq(salesLeadAssignments.status, "novo")
       ))
-      .orderBy(sql`${salesLeadAssignments.ordemFila} ASC`)
+      .orderBy(
+        sql`(SELECT o.posicao FROM atendimento_ordem_campanhas o
+             WHERE o.user_id = ${userId} AND o.campaign_id = ${salesLeadAssignments.campaignId}) ASC NULLS LAST`,
+        sql`${salesLeadAssignments.ordemFila} ASC`,
+      )
       .limit(1);
     
     if (campaignId) {

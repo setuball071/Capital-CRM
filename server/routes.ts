@@ -541,7 +541,7 @@ import {
   apiKeys,
   type ApiKey,
 } from "@shared/schema";
-import { eq, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
+import { eq, ne, asc, desc, and, or, sql, inArray, not } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import multer from "multer";
 import { saveDocument, getDocument, deleteDocument } from "./document-storage";
@@ -16203,6 +16203,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           and(
             eq(salesCampaigns.createdBy, userId),
             eq(salesCampaigns.origem, "carteira_pessoal"),
+            ne(salesCampaigns.status, "encerrada"),
           ),
         )
         .orderBy(desc(salesCampaigns.createdAt))
@@ -16283,6 +16284,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           JOIN sales_lead_assignments sla ON sla.campaign_id = sc.id
           JOIN sales_leads sl ON sl.id = sla.lead_id
           WHERE sc.origem = 'carteira_pessoal'
+            AND sc.status <> 'encerrada'
             ${carteiraPessoal ? sql`` : sql`AND sc.tenant_id = ${tenantId}`}
             AND sl.cpf IS NOT NULL
             AND ${escopo(sql`sc.created_by`)}
@@ -17954,26 +17956,35 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       try {
         const userId = req.user!.id;
 
-        // Get campaigns where user has assignments
-        const assignments = await storage.getAssignmentsByUser(userId);
-        const campaignIds = [...new Set(assignments.map((a) => a.campaignId))];
+        // Uma linha por lista do usuário: pendentes, % trabalhado (tudo que saiu
+        // de "novo"), posição escolhida por ele e se a lista é importação dele
+        // (aí "excluir" apaga de vez). Lista que ele tirou da tela só volta se
+        // o gestor mandar lead novo nela.
+        const result = await db.execute(sql`
+          SELECT sc.id, sc.nome,
+                 (sc.origem = 'carteira_pessoal' AND sc.created_by = ${userId}) AS propria,
+                 COUNT(*)::int AS total,
+                 COUNT(*) FILTER (WHERE sla.status = 'novo')::int AS novos,
+                 COUNT(*) FILTER (WHERE sla.status IN ('novo', 'em_atendimento'))::int AS pendentes,
+                 o.posicao, COALESCE(o.oculta, FALSE) AS oculta
+          FROM sales_lead_assignments sla
+          JOIN sales_campaigns sc ON sc.id = sla.campaign_id
+          LEFT JOIN atendimento_ordem_campanhas o ON o.user_id = ${userId} AND o.campaign_id = sc.id
+          WHERE sla.user_id = ${userId} AND sc.status = 'ativa'
+          GROUP BY sc.id, sc.nome, sc.origem, sc.created_by, o.posicao, o.oculta
+          ORDER BY o.posicao ASC NULLS LAST, sc.id ASC
+        `);
 
-        const campanhas = [];
-        for (const id of campaignIds) {
-          const campanha = await storage.getSalesCampaign(id);
-          if (campanha && campanha.status === "ativa") {
-            const leadsPendentes = assignments.filter(
-              (a) =>
-                a.campaignId === id &&
-                ["novo", "em_atendimento"].includes(a.status),
-            ).length;
-            campanhas.push({
-              id: campanha.id,
-              nome: campanha.nome,
-              leadsPendentes,
-            });
-          }
-        }
+        const campanhas = (result.rows as any[])
+          .filter((r) => !r.oculta || r.novos > 0)
+          .map((r) => ({
+            id: r.id,
+            nome: r.nome,
+            leadsPendentes: r.pendentes,
+            total: r.total,
+            percentualTrabalhado: r.total > 0 ? Math.round(((r.total - r.novos) / r.total) * 100) : 0,
+            propria: !!r.propria,
+          }));
 
         return res.json(campanhas);
       } catch (error) {
@@ -17982,6 +17993,99 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       }
     },
   );
+
+  // PUT /api/vendas/atendimento/ordem-campanhas  { ids: number[] }
+  // Ordem das listas do usuário; o "Próximo Cliente" segue essa ordem.
+  app.put("/api/vendas/atendimento/ordem-campanhas", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const ids: number[] = Array.isArray(req.body?.ids)
+        ? req.body.ids.map((x: any) => Number(x)).filter((x: number) => Number.isInteger(x) && x > 0)
+        : [];
+      if (ids.length === 0) return res.status(400).json({ message: "Informe a ordem das listas" });
+
+      // Só listas em que o usuário tem lead
+      const minhas = await db.execute(sql`
+        SELECT DISTINCT campaign_id FROM sales_lead_assignments WHERE user_id = ${userId}
+      `);
+      const permitidas = new Set((minhas.rows as any[]).map((r) => Number(r.campaign_id)));
+
+      let posicao = 1;
+      for (const id of ids) {
+        if (!permitidas.has(id)) continue;
+        await db.execute(sql`
+          INSERT INTO atendimento_ordem_campanhas (user_id, campaign_id, posicao)
+          VALUES (${userId}, ${id}, ${posicao})
+          ON CONFLICT (user_id, campaign_id) DO UPDATE SET posicao = ${posicao}
+        `);
+        posicao++;
+      }
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error("Ordem campanhas error:", error);
+      return res.status(500).json({ message: "Erro ao salvar a ordem" });
+    }
+  });
+
+  // DELETE /api/vendas/atendimento/campanhas/:id
+  // Tira a lista da fila do usuário. Só mexe no que ainda está "novo": quem já
+  // foi trabalhado (em atendimento, vendido, retorno, anotações) fica intacto.
+  // - Importação dele (Minha Carteira): os novos são apagados de vez; se não
+  //   sobrar nada, a campanha some; se sobrar trabalhado, ela é encerrada.
+  // - Lista distribuída pelo gestor: os novos voltam como disponíveis na
+  //   campanha para redistribuir; a campanha continua para os outros.
+  app.delete("/api/vendas/atendimento/campanhas/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const campaignId = parseInt(req.params.id);
+      if (!Number.isInteger(campaignId)) return res.status(400).json({ message: "Lista inválida" });
+
+      const [campanha] = (await db.execute(sql`
+        SELECT id, origem, created_by FROM sales_campaigns WHERE id = ${campaignId}
+      `)).rows as any[];
+      if (!campanha) return res.status(404).json({ message: "Lista não encontrada" });
+
+      const [temLead] = (await db.execute(sql`
+        SELECT 1 FROM sales_lead_assignments WHERE campaign_id = ${campaignId} AND user_id = ${userId} LIMIT 1
+      `)).rows as any[];
+      if (!temLead) return res.status(404).json({ message: "Essa lista não está na sua fila" });
+
+      const propria = campanha.origem === "carteira_pessoal" && Number(campanha.created_by) === userId;
+
+      if (propria) {
+        const apagados = await db.execute(sql`
+          DELETE FROM sales_leads WHERE id IN (
+            SELECT lead_id FROM sales_lead_assignments
+            WHERE campaign_id = ${campaignId} AND user_id = ${userId} AND status = 'novo'
+          )
+        `);
+        const [resto] = (await db.execute(sql`
+          SELECT COUNT(*)::int AS n FROM sales_lead_assignments WHERE campaign_id = ${campaignId}
+        `)).rows as any[];
+        if (Number(resto?.n || 0) === 0) {
+          await db.execute(sql`DELETE FROM sales_campaigns WHERE id = ${campaignId}`);
+        } else {
+          await db.execute(sql`UPDATE sales_campaigns SET status = 'encerrada', updated_at = NOW() WHERE id = ${campaignId}`);
+        }
+        return res.json({ ok: true, removidos: (apagados as any).rowCount || 0, tipo: "propria" });
+      }
+
+      const devolvidos = await db.execute(sql`
+        DELETE FROM sales_lead_assignments
+        WHERE campaign_id = ${campaignId} AND user_id = ${userId} AND status = 'novo'
+      `);
+      await recalcularContadoresCampanha(campaignId);
+      await db.execute(sql`
+        INSERT INTO atendimento_ordem_campanhas (user_id, campaign_id, oculta)
+        VALUES (${userId}, ${campaignId}, TRUE)
+        ON CONFLICT (user_id, campaign_id) DO UPDATE SET oculta = TRUE
+      `);
+      return res.json({ ok: true, removidos: (devolvidos as any).rowCount || 0, tipo: "distribuida" });
+    } catch (error) {
+      console.error("Excluir lista atendimento error:", error);
+      return res.status(500).json({ message: "Erro ao excluir a lista" });
+    }
+  });
 
   // GET /api/vendas/atendimento/:assignmentId - Detalhes do atendimento atual
   app.get(
