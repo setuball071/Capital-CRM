@@ -544,6 +544,10 @@ app.use((req, res, next) => {
               UNIQUE (cobranca_id, tipo)
             )
           `);
+          // Material de apoio visivel em todos os ambientes (tutorial oficial).
+          await migDb.execute(migSql`
+            ALTER TABLE materials ADD COLUMN IF NOT EXISTS global BOOLEAN NOT NULL DEFAULT false
+          `);
           // Dados do pagador para emitir o boleto no banco (copiar e colar).
           await migDb.execute(migSql`
             ALTER TABLE assinaturas

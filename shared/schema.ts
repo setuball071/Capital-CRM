@@ -3581,6 +3581,8 @@ export const materials = pgTable("materials", {
   storageKey: text("storage_key"), // chave no Storage quando o material é um arquivo enviado
   fileName: text("file_name"),
   tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  // true = aparece em TODOS os ambientes (tutorial oficial). Só o master do SaaS marca.
+  global: boolean("global").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   createdBy: integer("created_by").references(() => users.id),
 });

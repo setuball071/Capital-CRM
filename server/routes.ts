@@ -29230,14 +29230,16 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const tenantId = req.tenantId!;
         const category = req.query.category as string | undefined;
         let query;
+        // Os do próprio ambiente + os oficiais (global), que todo ambiente vê.
+        const visivel = or(eq(materials.tenantId, tenantId), eq(materials.global, true));
         if (category) {
           query = await db.select().from(materials)
-            .where(and(eq(materials.tenantId, tenantId), eq(materials.category, category)))
-            .orderBy(desc(materials.createdAt));
+            .where(and(visivel, eq(materials.category, category)))
+            .orderBy(desc(materials.global), desc(materials.createdAt));
         } else {
           query = await db.select().from(materials)
-            .where(eq(materials.tenantId, tenantId))
-            .orderBy(desc(materials.createdAt));
+            .where(visivel)
+            .orderBy(desc(materials.global), desc(materials.createdAt));
         }
         res.json(query);
       } catch (error) {
@@ -29265,6 +29267,8 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
         const [created] = await db.insert(materials).values({
           ...parsed,
           url: parsed.url?.trim() || null,
+          // Só o master do SaaS publica para todos os ambientes.
+          global: req.user!.isMaster ? parsed.global === true : false,
           tenantId: req.tenantId!,
           createdBy: req.user!.id,
         }).returning();
@@ -29312,7 +29316,7 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
       try {
         const id = parseInt(req.params.id);
         const [item] = await db.select().from(materials)
-          .where(and(eq(materials.id, id), eq(materials.tenantId, req.tenantId!)));
+          .where(and(eq(materials.id, id), or(eq(materials.tenantId, req.tenantId!), eq(materials.global, true))));
         if (!item || !item.storageKey) return res.status(404).json({ message: "Arquivo não encontrado" });
         const { buffer, contentType } = await getDocument(item.storageKey);
         const ext = (item.fileName || item.storageKey).split(".").pop()?.toLowerCase() || "";
@@ -29355,6 +29359,9 @@ Lembre-se: Este feedback será usado pelo gestor para acompanhar o desenvolvimen
           .where(and(eq(materials.id, id), eq(materials.tenantId, req.tenantId!)));
         if (!item) {
           return res.status(404).json({ message: "Material não encontrado" });
+        }
+        if (item.global && !req.user!.isMaster) {
+          return res.status(403).json({ message: "Material oficial: só o master pode remover" });
         }
         if (item.storageKey) await deleteDocument(item.storageKey).catch(() => {});
         await db.delete(materials).where(eq(materials.id, id));

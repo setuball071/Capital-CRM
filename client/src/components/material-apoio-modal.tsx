@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { CriativosGallery } from "@/components/criativos-gallery";
+import { BotaoAbrirMaterial, SeloOficial } from "@/components/material-abrir";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -256,6 +257,7 @@ export function MaterialApoioModal({ aberto, categoria, onClose }: Props) {
                   <Card key={mat.id} className="p-3 flex flex-col gap-2" data-testid={`modal-card-${mat.id}`}>
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="font-semibold text-sm truncate flex-1">{mat.title}</h3>
+                      <SeloOficial mat={mat} />
                       <div
                         className="flex-shrink-0 w-7 h-7 rounded flex items-center justify-center"
                         style={{ backgroundColor: typeCfg.bg }}
@@ -267,17 +269,8 @@ export function MaterialApoioModal({ aberto, categoria, onClose }: Props) {
                       <p className="text-xs text-muted-foreground line-clamp-2">{mat.description}</p>
                     )}
                     <div className="flex items-center gap-2 mt-auto pt-1">
-                      <Button
-                        size="sm"
-                        className="flex-1"
-                        style={{ background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)/0.72))" }}
-                        onClick={() => window.open((mat as any).storageKey ? `/api/materials/${mat.id}/file` : mat.url || "", "_blank")}
-                        data-testid={`modal-open-${mat.id}`}
-                      >
-                        <ExternalLink className="h-3 w-3 mr-1" />
-                        Abrir
-                      </Button>
-                      {canManage && (
+                      <BotaoAbrirMaterial mat={mat} testId={`modal-open-${mat.id}`} />
+                      {canManage && (!(mat as any).global || user?.isMaster) && (
                         <Button
                           size="icon"
                           variant="ghost"

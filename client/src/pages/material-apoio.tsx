@@ -39,6 +39,8 @@ import {
   Loader2,
 } from "lucide-react";
 import type { Material } from "@shared/schema";
+import { BotaoAbrirMaterial, SeloOficial } from "@/components/material-abrir";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const CATEGORIES = [
   { key: "criativos", label: "Criativos", icon: Smartphone, color: "#E91E63" },
@@ -72,6 +74,7 @@ export default function MaterialApoioPage() {
     type: "pdf",
     url: "",
     description: "",
+    global: false,
   });
   const [materialFile, setMaterialFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -96,7 +99,7 @@ export default function MaterialApoioPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/materials"] });
       setDialogOpen(false);
-      setFormData({ title: "", category: "tabelas", type: "pdf", url: "", description: "" });
+      setFormData({ title: "", category: "tabelas", type: "pdf", url: "", description: "", global: false });
       setMaterialFile(null);
       toast({ title: "Material adicionado" });
     },
@@ -230,13 +233,16 @@ export default function MaterialApoioPage() {
                     <h3 className="font-semibold text-sm truncate" data-testid={`text-title-${mat.id}`}>
                       {mat.title}
                     </h3>
-                    <Badge
-                      variant="secondary"
-                      className="mt-1.5 text-[10px]"
-                      style={{ backgroundColor: `${catMeta.color}15`, color: catMeta.color }}
-                    >
-                      {catMeta.label}
-                    </Badge>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px]"
+                        style={{ backgroundColor: `${catMeta.color}15`, color: catMeta.color }}
+                      >
+                        {catMeta.label}
+                      </Badge>
+                      <SeloOficial mat={mat} />
+                    </div>
                   </div>
                   <div
                     className="flex-shrink-0 w-9 h-9 rounded-md flex items-center justify-center"
@@ -253,17 +259,8 @@ export default function MaterialApoioPage() {
                 )}
 
                 <div className="flex items-center gap-2 mt-auto pt-1">
-                  <Button
-                    size="sm"
-                    className="flex-1"
-                    style={{ background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)/0.72))" }}
-                    onClick={() => window.open((mat as any).storageKey ? `/api/materials/${mat.id}/file` : mat.url || "", "_blank")}
-                    data-testid={`button-open-${mat.id}`}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                    Abrir
-                  </Button>
-                  {canManage && (
+                  <BotaoAbrirMaterial mat={mat} testId={`button-open-${mat.id}`} />
+                  {canManage && (!mat.global || user?.isMaster) && (
                     <Button
                       size="icon"
                       variant="ghost"
@@ -353,7 +350,7 @@ export default function MaterialApoioPage() {
               <Input
                 value={formData.url}
                 onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                placeholder="https://drive.google.com/..."
+                placeholder="Link do YouTube, Drive ou site"
                 disabled={!!materialFile}
                 data-testid="input-material-url"
               />
@@ -368,6 +365,22 @@ export default function MaterialApoioPage() {
                 data-testid="input-material-description"
               />
             </div>
+            {user?.isMaster && (
+              <label className="flex items-start gap-2 rounded-md border p-3 text-sm cursor-pointer">
+                <Checkbox
+                  checked={formData.global}
+                  onCheckedChange={(v) => setFormData({ ...formData, global: v === true })}
+                  data-testid="checkbox-material-global"
+                />
+                <span>
+                  <span className="font-medium">Mostrar em todos os ambientes</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Vira material oficial: todos os ambientes veem, só você edita e remove.
+                    Não use vídeo com dados de clientes reais.
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} data-testid="button-cancel-material">
