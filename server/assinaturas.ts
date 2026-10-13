@@ -180,6 +180,9 @@ const COLS_COBRANCA = sql`
 `;
 
 /** Contagem regressiva sem número negativo nem frase ambígua. */
+/** "2026-10-14" -> "14/10" */
+const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
 export function situacaoPrazo(vencimento: string | null, tolerancia: number, hoje = hojeISO()) {
   if (!vencimento) return { diasVencimento: null, diasSuspensao: null, texto: null as string | null };
   const dv = diasEntre(hoje, vencimento);
@@ -189,7 +192,8 @@ export function situacaoPrazo(vencimento: string | null, tolerancia: number, hoj
   if (dv > 1) texto = `Vence em ${dv} dias`;
   else if (dv === 1) texto = "Vence amanhã";
   else if (dv === 0) texto = "Vence hoje";
-  else if (ds > 0) texto = `Vencida há ${-dv} ${-dv === 1 ? "dia" : "dias"} · suspensão em ${ds} ${ds === 1 ? "dia" : "dias"}`;
+  // Com data: "suspensão em 2 dias" deixava dúvida se o dia da tolerância contava.
+  else if (ds > 0) texto = `Vencida há ${-dv} ${-dv === 1 ? "dia" : "dias"} · tolerância até ${dataCurta(addDias(suspensaoEm, -1))} · bloqueio em ${dataCurta(suspensaoEm)}`;
   else texto = "Prazo de tolerância encerrado";
   return { diasVencimento: dv, diasSuspensao: ds, suspensaoEm, texto };
 }
@@ -248,7 +252,7 @@ export function alertaAssinatura(
   }
   if (ds > 0) {
     return { ...base, nivel: "urgente",
-      texto: `${vencida} ${ds === 1 ? "Falta 1 dia" : `Faltam ${ds} dias`} para a suspensão do acesso.${fraseBoleto}` };
+      texto: `${vencida} Você pode pagar até ${dataCurta(addDias(p.suspensaoEm as string, -1))}; sem o pagamento confirmado, o acesso é suspenso em ${dataCurta(p.suspensaoEm as string)}.${fraseBoleto}` };
   }
   return { ...base, nivel: "urgente",
     texto: `${vencida} O prazo de tolerância terminou e o acesso pode ser suspenso.${fraseBoleto}` };
