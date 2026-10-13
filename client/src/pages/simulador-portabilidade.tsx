@@ -548,6 +548,46 @@ export default function SimuladorPortabilidadePage() {
     if (rPrazoRef.current) rPrazoRef.current.value = String(prazo);
   }, [calcMode]);
 
+  /**
+   * Operação vinda do Simulador de Portabilidade ("Levar para Amortização").
+   *
+   * ⚠️ IOF: aqui a tela aplica o percentual sobre o CONTRATO INTEIRO, porque o
+   * caso dela é contrato novo. Na portabilidade o IOF incide só sobre o TROCO
+   * (no caso real: 3,10% do troco = 0,41% do contrato). Por isso o simulador
+   * manda o financiado JÁ FECHADO e o campo de IOF fica em ZERO — o imposto já
+   * está dentro do saldo. Espalhar o percentual aqui inflaria o contrato.
+   */
+  const [vindoDaPort, setVindoDaPort] = useState<
+    { financiado: number; iof: number; troco: number; bancos: string[] } | null
+  >(null);
+
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type !== "CAPITAL_CRM_AMORTIZAR" || !event.data?.payload) return;
+      const p = event.data.payload;
+      const parcela = Number(p.parcela) || 0;
+      const prazo = Number(p.prazo) || 0;
+      const financiado = Number(p.financiado) || 0;
+      if (!parcela || !prazo || !financiado) return;
+
+      setCalcMode("parcela");
+      // um tique para o modo "parcela" já estar valendo quando o calcLeft rodar
+      setTimeout(() => {
+        if (lMargemRef.current) lMargemRef.current.value = String(parcela);
+        if (lPrazoRef.current) lPrazoRef.current.value = String(prazo);
+        if (lCoefRef.current) lCoefRef.current.value = String(parcela / financiado);
+        if (lIofRef.current) lIofRef.current.value = "0";   // já está dentro do financiado
+        setVindoDaPort({
+          financiado, iof: Number(p.iof) || 0, troco: Number(p.troco) || 0,
+          bancos: Array.isArray(p.bancos) ? p.bancos : [],
+        });
+        calcLeft();
+      }, 0);
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [calcLeft]);
+
   // Antecipação pelo valor do cliente — recalcula ao digitar, sem precisar clicar em Calcular
   const lAnt = leftState ? calcAntecipacao(leftState.margem, leftState.taxa, leftState.prazo, parseValorBR(lCliente), leftState.saldo) : null;
   const rAnt = rightState ? calcAntecipacao(rightState.margem, rightState.taxa, rightState.prazo, parseValorBR(rCliente), rightState.saldo) : null;
@@ -961,6 +1001,21 @@ export default function SimuladorPortabilidadePage() {
                 <input type="text" value={lCliente} onChange={e => setLCliente(e.target.value)} placeholder="Ex: 5.000,00" data-testid="input-left-cliente" />
               </div>
             </div>
+            {vindoDaPort && (
+              <div
+                style={{ margin: "6px 0 10px", padding: "8px 10px", borderRadius: 8, fontSize: 12,
+                         background: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1E40AF" }}
+                data-testid="aviso-veio-da-port">
+                Vem da <b>portabilidade</b>
+                {vindoDaPort.bancos.length ? ` (${vindoDaPort.bancos.join(", ")})` : ""}.
+                O valor já inclui o IOF de <b>{fmtR(vindoDaPort.iof)}</b>, cobrado só sobre o troco
+                de {fmtR(vindoDaPort.troco)} — por isso o campo de IOF está zerado.
+                <div style={{ marginTop: 4, color: "#1E3A8A" }}>
+                  ⚠️ Mexer no prazo ou na parcela aqui recalcula como contrato novo, e aí o valor
+                  deixa de representar a portabilidade.
+                </div>
+              </div>
+            )}
             <button className="btn-sim btn-sim-left" onClick={calcLeft} data-testid="button-calc-left">
               Calcular Contrato Novo
             </button>

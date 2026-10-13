@@ -856,6 +856,10 @@ td { color: #111827 !important; }
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         Salvar para Digitação
       </button>
+      <button id="btnLevarAmortizacao" onclick="levarParaAmortizacao()" style="display:none;width:100%;padding:12px;font-size:13px;background:#fff;border:2px solid #0EA5E9;color:#0EA5E9;border-radius:8px;cursor:pointer;font-weight:700;align-items:center;justify-content:center;gap:8px;font-family:inherit;"
+        title="Leva a operação calculada (soma de todos os bancos) para a aba Amortização, para estudar aportes mensais">
+        📉 Levar para Amortização
+      </button>
       <button onclick="salvarCotacao()" style="width:100%;padding:10px;font-size:13px;background:#fff;border:2px solid #10B981;color:#10B981;border-radius:8px;cursor:pointer;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;margin-top:6px;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         Salvar Cotação
@@ -5854,6 +5858,10 @@ function calcRefim() {
     if (!validarUnif(trocoBruto, parcelaTotal, trocoLiquido)) return;
     renderResultadoRefim(saldoPortado, trocoBruto, iof, encargos, trocoLiquido, parcelaTotal, prazo, taxaRefim * 100, valorBruto, somaParcelasOrig, valorSeguro, (Number(regra.seguro) || 0));
     mostrarCoberturaMargem(margemNeg, somaParcelasOrig, parcelaTotal, 'rMargemNegBlock');
+    guardarOperacaoParaAmortizar({
+      parcela: parcelaTotal, prazo, financiado: saldoPortado + trocoBruto + (valorSeguro || 0),
+      iof, troco: trocoLiquido, saldo: saldoPortado, bancos: [regra.banco],
+    });
 
   } else {
     // ── MODO SEPARADO — cada contrato no seu prazo restante ──
@@ -6095,6 +6103,11 @@ function calcRefim() {
     // no modo separado o refin e sempre 120; leio das proprias linhas
     const prazoRefinSep = Math.max(0, ...linhas.map(l => Number(l.prazo) || 0));
     pintarEncurtarPrazo(blocos, prazoRefinSep, totalTroco);
+    guardarOperacaoParaAmortizar({
+      parcela: totalParcela, prazo: prazoRefinSep, financiado: totalFinanciado,
+      iof: totalIOF, troco: totalTroco, saldo: totalSaldo,
+      bancos: blocos.map(b => b.banco),
+    });
 
     const avisoSep = document.getElementById('refimSeparadoAviso');
     if (avisoSep) {
@@ -6793,6 +6806,33 @@ function _buildPropostaPayload() {
 
 /** Leva cliente e contratos para a aba Viabilidade Inter já preenchida — a conta
  *  de lá continua sendo a do Inter; aqui só evita redigitar tudo de novo. */
+// ═══════════════════════════════════════════════════════════════════════
+//  PONTE PARA A AMORTIZAÇÃO
+//
+//  ⚠️ O IOF vai DENTRO do financiado, e o percentual vai ZERO.
+//  Na portabilidade o IOF incide só sobre o TROCO (no caso do BB: 3,10% do
+//  troco, que é 0,41% do contrato). A tela de amortização aplica o percentual
+//  sobre o contrato INTEIRO, porque lá é contrato novo. Mandar "3,10" faria
+//  ela inflar o financiado em dezenas de milhares de reais.
+// ═══════════════════════════════════════════════════════════════════════
+let _operacaoParaAmortizar = null;
+
+function guardarOperacaoParaAmortizar(op) {
+  _operacaoParaAmortizar = (op && op.parcela > 0 && op.prazo > 0 && op.financiado > 0) ? op : null;
+  const btn = document.getElementById('btnLevarAmortizacao');
+  if (btn) btn.style.display = _operacaoParaAmortizar ? '' : 'none';
+}
+
+function levarParaAmortizacao() {
+  const op = _operacaoParaAmortizar;
+  if (!op) { alert('Calcule a portabilidade antes de levar para a amortização.'); return; }
+  try {
+    window.parent.postMessage({ type: 'CAPITAL_CRM_AMORTIZAR', payload: op }, '*');
+  } catch (e) {
+    alert('Não consegui abrir a Amortização daqui.');
+  }
+}
+
 function enviarParaInter() {
   const lista = (contratos || []);
   if (!lista.length) { alert('Adicione ou importe os contratos antes de validar no Inter.'); return; }

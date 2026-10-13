@@ -131,6 +131,17 @@ export default function SimuladoresHub() {
 
   const navigateToProposta = useCallback(() => setActiveTab("proposta"), []);
 
+  // "Levar para Amortização": o simulador manda a operação calculada. Aqui só
+  // trocamos de aba — a página da Amortização é React na MESMA janela e escuta
+  // a mensagem sozinha, então não precisa de repasse por iframe.
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === "CAPITAL_CRM_AMORTIZAR" && event.data?.payload) setActiveTab("amortizacao");
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
   // "Validar no Inter": o simulador manda cliente + contratos, abrimos a aba e repassamos
   useEffect(() => {
     const handler = (event: MessageEvent) => {
