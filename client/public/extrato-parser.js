@@ -54,7 +54,8 @@ function extrairMargemENome(texto, items, rotate) {
 
     // Nome: linha do cabeçalho "... CPF MATRÍCULA NOME" (nome em maiúsculas no fim)
     if (!nome) {
-      const m = /(\d{3}\.\d{3}\.\d{3}-\d{2})\s+\d+\s+([A-ZÀ-ÜÇ][A-ZÀ-ÜÇ'\s.]{4,})\s*$/.exec(l);
+      // a matrícula pode vir com barra (1071670/2185628) ou ponto: só \d+ perdia o nome
+      const m = /(\d{3}\.\d{3}\.\d{3}-\d{2})\s+[\d/.\-]+\s+([A-ZÀ-ÜÇ][A-ZÀ-ÜÇ'\s.]{4,})\s*$/.exec(l);
       if (m) nome = m[2].trim().replace(/\s{2,}/g, ' ');
     }
 
@@ -74,8 +75,12 @@ function extrairMargemENome(texto, items, rotate) {
     }
 
     // Bloco utilizadas: 3 valores na sequência Facultativa · Cartão · Cartão Benefício
-    // (podem estar 1-3 linhas abaixo do rótulo, misturados com a nota de rodapé)
-    if (utilFacult === null && /Utilizada\s+Facultativa/i.test(l)) {
+    // (podem estar 1-3 linhas abaixo do rótulo, misturados com a nota de rodapé).
+    // O SIAPE emite esse bloco com dois rótulos diferentes: "Utilizada
+    // Facultativa..." e "Total Facultativas / Total Cartão / Total Cartão de
+    // Benefício". Só o primeiro era reconhecido, e no segundo formato a margem
+    // saía nula — a tela não avisava nem quando estava NEGATIVA.
+    if (utilFacult === null && /Utilizada\s+Facultativa|Total\s+Facultativ/i.test(l)) {
       for (let j = i; j <= i + 3 && j < linhas.length; j++) {
         const vals = money(linhas[j]);
         if (vals.length >= 3) {
@@ -102,7 +107,7 @@ function extrairMargemENome(texto, items, rotate) {
            brutaCartao, brutaCartaoBenef, margem, margemCartao, margemCartaoBenef };
 }
 
-function extrairContratos(texto, items) {
+function extrairContratos(texto, items, rotate) {
   // ── BANCO MAP ──────────────────────────────────────────────────────
   const BANCO_MAP = [
     ['BCO BRAS','Banco do Brasil'],['INBURSA','Inbursa'],
@@ -162,15 +167,11 @@ function extrairContratos(texto, items) {
   }
 
   if (items && items.length) {
-    const rows = {};
-    for (const it of items) {
-      if (!it || !it.str) continue;
-      const key = Math.round(it.y / 2); // agrupa por altura (tolerância de 2px)
-      (rows[key] = rows[key] || []).push(it);
-    }
+    // Usa o MESMO agrupador da margem: ele respeita a rotação da página.
+    // Agrupar por Y num extrato paisagem (rotate 90) junta coluna, não linha —
+    // foi assim que o contrato do Inbursa sumiu no extrato de 12/10/2026.
     const out = [];
-    for (const k of Object.keys(rows)) {
-      const line = rows[k].slice().sort((a, b) => a.x - b.x).map((i) => i.str).join(' ');
+    for (const line of _linhasPorY(items, rotate || 0)) {
       const c = parseRowLinha(line);
       if (c) out.push(c);
     }

@@ -976,7 +976,7 @@ async function importarPDF(event) {
       buscarCotacoes();
       conferirUpag();
     }
-    const achados = extrairContratos(texto, items) || [];
+    const achados = extrairContratos(texto, items, rotate) || [];
     if (!achados.length) {
       status.style.color = 'var(--red)';
       status.textContent = 'Nenhum contrato reconhecido neste extrato.';

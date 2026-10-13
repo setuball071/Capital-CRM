@@ -1785,7 +1785,7 @@ async function importarPDFFile(file) {
     mostrarMargemExtrato(infoExtrato);
 
     // Processa usando itens com coordenadas (mais preciso para PDFs em colunas)
-    const contratosDetectados = extrairContratos(textoCompleto, window._pdfItems);
+    const contratosDetectados = extrairContratos(textoCompleto, window._pdfItems, window._pdfRotate);
     
     if (contratosDetectados.length === 0) {
       statusDiv.style.color = '#EF4444';
