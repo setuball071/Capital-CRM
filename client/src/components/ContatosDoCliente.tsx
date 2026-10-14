@@ -170,12 +170,12 @@ export function ContatosDoCliente({
             </button>
           )}
         </p>
-        {/* Um numero por linha: cada aviso fica preso ao numero certo */}
-        <div className="flex flex-col items-start gap-1.5">
+        {/* Grade de caixinhas do mesmo tamanho: o aviso fica dentro da caixinha do numero */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
           {telefones.slice(0, 6).map((t, idx) => (
             <span
               key={`tel-vista-${idx}`}
-              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 ${t.naoPerturbe ? CLASSE_LINHA_NAO_PERTURBE : "bg-muted/40"}`}
+              className={`flex items-center gap-1.5 rounded-md border px-2 py-1.5 ${t.naoPerturbe ? CLASSE_LINHA_NAO_PERTURBE : "bg-muted/40"}`}
               data-testid={`telefone-vista-${idx}`}
             >
               <span
@@ -187,6 +187,7 @@ export function ContatosDoCliente({
               </span>
               {t.marca === "principal" && <Star className="h-3 w-3 text-yellow-500 fill-current" />}
               {t.naoPerturbe && <EtiquetaNaoPerturbe />}
+              <span className="flex-1" />
               <a
                 href={`https://wa.me/55${String(t.numero).replace(/\D/g, "")}`}
                 target="_blank"

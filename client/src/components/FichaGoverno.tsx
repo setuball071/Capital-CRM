@@ -69,6 +69,7 @@ export function corSituacaoGov(s: string | null | undefined): string {
 function nomeFonte(fonte: string | null, base: string): string {
   if (fonte === "BASE") return `Base ${base.replace("-", " ")}`;
   if (fonte === "SERASA" || fonte === "LEMIT") return fonte === "LEMIT" ? "Lemit" : "Serasa";
+  if (fonte === "MANUAL") return "Cadastro manual";
   return "Anatel";
 }
 
@@ -160,17 +161,18 @@ export function ContatosGoverno({ contatos, base }: { contatos: GovContato[]; ba
   }
   return (
     <div className="space-y-2">
-      {/* Um numero por linha: cada aviso fica preso ao numero certo */}
-      <div className="flex flex-col items-start gap-1.5">
+      {/* Grade de caixinhas do mesmo tamanho: o aviso fica dentro da caixinha do numero */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {telefones.map((t, i) => (
           <div key={t.valor}
-            className={`inline-flex items-center gap-1.5 text-sm rounded-md border px-2 py-1 ${t.nao_perturbe ? CLASSE_LINHA_NAO_PERTURBE : "bg-muted/40"}`}
+            className={`flex items-center gap-1.5 text-sm rounded-md border px-2 py-1.5 ${t.nao_perturbe ? CLASSE_LINHA_NAO_PERTURBE : "bg-muted/40"}`}
             data-testid={`gov-telefone-${i}`}>
             <span className="font-medium cursor-help" title={`Fonte: ${nomeFonte(t.fonte, base)}`}>
               {formatPhone(t.valor)}
             </span>
             {!t.celular && <span className="text-xs text-muted-foreground">fixo</span>}
             {t.nao_perturbe && <EtiquetaNaoPerturbe />}
+            <span className="flex-1" />
             {t.celular && (
               <a href={`https://wa.me/55${t.valor}`} target="_blank" rel="noreferrer"
                 className="text-green-600 hover:text-green-700" title="Abrir conversa no WhatsApp">
