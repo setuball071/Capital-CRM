@@ -9,7 +9,7 @@ import { Landmark, Copy, Mail, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { formatPhone, IconeWhatsApp } from "@/components/ContatosDoCliente";
+import { formatPhone, IconeWhatsApp, EtiquetaNaoPerturbe, CLASSE_LINHA_NAO_PERTURBE } from "@/components/ContatosDoCliente";
 
 export type GovVinculo = {
   cpf: string;
@@ -160,17 +160,17 @@ export function ContatosGoverno({ contatos, base }: { contatos: GovContato[]; ba
   }
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-x-5 gap-y-2">
+      {/* Um numero por linha: cada aviso fica preso ao numero certo */}
+      <div className="flex flex-col items-start gap-1.5">
         {telefones.map((t, i) => (
-          <div key={t.valor} className="flex items-center gap-1.5 text-sm" data-testid={`gov-telefone-${i}`}>
+          <div key={t.valor}
+            className={`inline-flex items-center gap-1.5 text-sm rounded-md border px-2 py-1 ${t.nao_perturbe ? CLASSE_LINHA_NAO_PERTURBE : "bg-muted/40"}`}
+            data-testid={`gov-telefone-${i}`}>
             <span className="font-medium cursor-help" title={`Fonte: ${nomeFonte(t.fonte, base)}`}>
               {formatPhone(t.valor)}
             </span>
             {!t.celular && <span className="text-xs text-muted-foreground">fixo</span>}
-            {/* Só AVISO: o número continua clicável e copiável. */}
-            {t.nao_perturbe && (
-              <span className="cursor-help leading-none" title="Não me perturbe" aria-label="Não me perturbe">❗</span>
-            )}
+            {t.nao_perturbe && <EtiquetaNaoPerturbe />}
             {t.celular && (
               <a href={`https://wa.me/55${t.valor}`} target="_blank" rel="noreferrer"
                 className="text-green-600 hover:text-green-700" title="Abrir conversa no WhatsApp">

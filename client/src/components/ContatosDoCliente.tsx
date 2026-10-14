@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Phone, Mail, MapPin, User, Star, Copy, Pencil, ChevronDown } from "lucide-react";
+import { Phone, PhoneOff, Mail, MapPin, User, Star, Copy, Pencil, ChevronDown } from "lucide-react";
 
 /**
  * Contatos e endereço do cliente, à vista dentro do card "Dados do cliente".
@@ -32,6 +32,25 @@ export function IconeWhatsApp({ className }: { className?: string }) {
       <path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.53.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.05 1.02-1.05 2.49s1.08 2.89 1.23 3.09c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.71.64.72.23 1.37.2 1.89.12.58-.09 1.76-.72 2.01-1.42.25-.7.25-1.29.17-1.42-.07-.13-.27-.2-.57-.35z" />
       <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.46 1.32 4.96L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2zm0 18.01h-.01c-1.52 0-3.02-.41-4.32-1.18l-.31-.18-3.21.84.86-3.13-.2-.32a8.2 8.2 0 01-1.26-4.37c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.82 2.42a8.17 8.17 0 012.41 5.82c0 4.54-3.7 8.23-8.23 8.23z" />
     </svg>
+  );
+}
+
+// Aviso de NAO ME PERTURBE colado no proprio numero (fundo amarelo + texto).
+// Antes era um "!" solto entre dois numeros: nao dava para saber de qual era.
+// E so AVISO: o numero continua clicavel e copiavel.
+export const CLASSE_LINHA_NAO_PERTURBE =
+  "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200";
+
+export function EtiquetaNaoPerturbe() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-800 dark:text-amber-300 cursor-help"
+      title="Este número está no cadastro Não Me Perturbe"
+      data-testid="etiqueta-nao-perturbe"
+    >
+      <PhoneOff className="h-3 w-3" />
+      Não perturbe
+    </span>
   );
 }
 
@@ -151,11 +170,12 @@ export function ContatosDoCliente({
             </button>
           )}
         </p>
-        <div className="flex flex-wrap gap-2">
+        {/* Um numero por linha: cada aviso fica preso ao numero certo */}
+        <div className="flex flex-col items-start gap-1.5">
           {telefones.slice(0, 6).map((t, idx) => (
             <span
               key={`tel-vista-${idx}`}
-              className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 bg-muted/40"
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 ${t.naoPerturbe ? CLASSE_LINHA_NAO_PERTURBE : "bg-muted/40"}`}
               data-testid={`telefone-vista-${idx}`}
             >
               <span
@@ -166,17 +186,7 @@ export function ContatosDoCliente({
                 {formatPhone(t.numero)}
               </span>
               {t.marca === "principal" && <Star className="h-3 w-3 text-yellow-500 fill-current" />}
-              {/* So AVISO: o numero continua clicavel e copiavel. */}
-              {t.naoPerturbe && (
-                <span
-                  className="cursor-help leading-none"
-                  title="Não me perturbe"
-                  aria-label="Não me perturbe"
-                  data-testid={`telefone-nao-perturbe-${idx}`}
-                >
-                  ❗
-                </span>
-              )}
+              {t.naoPerturbe && <EtiquetaNaoPerturbe />}
               <a
                 href={`https://wa.me/55${String(t.numero).replace(/\D/g, "")}`}
                 target="_blank"
