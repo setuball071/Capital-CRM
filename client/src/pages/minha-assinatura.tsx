@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { CreditCard, Download, Copy, ExternalLink, Loader2, CheckCircle2, Lock, MessageCircle } from "lucide-react";
 import { STATUS_ASSINATURA, STATUS_COBRANCA, brl, dataBR } from "@/components/assinatura-usuario-dialog";
+import { intensidadeAviso } from "@/components/aviso-assinatura";
 
 type Dados = {
   assinatura: {
@@ -37,12 +38,6 @@ const FORMA: Record<string, string> = {
   boleto: "Boleto", pix: "Pix", transferencia: "Transferência", cartao: "Cartão", dinheiro: "Dinheiro",
 };
 
-const COR_ALERTA: Record<string, string> = {
-  info: "border-sky-300 bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200 dark:border-sky-900",
-  aviso: "border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900",
-  urgente: "border-orange-300 bg-orange-50 text-orange-900 dark:bg-orange-950/40 dark:text-orange-200 dark:border-orange-900",
-  suspenso: "border-red-300 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-200 dark:border-red-900",
-};
 
 /**
  * Área do próprio assinante. Só mostra a assinatura de quem está logado: a
@@ -78,7 +73,7 @@ export default function MinhaAssinaturaPage() {
       {suspensa ? (
         <AcessoSuspenso cobranca={c} />
       ) : alerta && (
-        <div className={`rounded-md border px-4 py-3 text-sm ${COR_ALERTA[alerta.nivel] || ""}`} data-testid="alerta-minha-assinatura">
+        <div className={`rounded-md border px-4 py-3 text-sm ${intensidadeAviso(alerta as any).classe} ${intensidadeAviso(alerta as any).forte ? "font-semibold" : ""}`} data-testid="alerta-minha-assinatura">
           {alerta.texto}
         </div>
       )}
@@ -210,13 +205,9 @@ function AcessoSuspenso({ cobranca }: { cobranca: any | null }) {
         {/* Pagar agora abre direto o meio de pagamento: link primeiro, depois o
             boleto anexado; sem nenhum dos dois, leva até a mensalidade (linha/Pix). */}
         {cobranca?.boleto_link ? (
-          <Button asChild size="sm" data-testid="button-pagar-agora">
-            <a href={cobranca.boleto_link} target="_blank" rel="noreferrer">Pagar agora</a>
-          </Button>
+          <BotaoPagar href={cobranca.boleto_link} testId="button-pagar-agora">Pagar agora</BotaoPagar>
         ) : cobranca?.tem_boleto_arquivo ? (
-          <Button asChild size="sm" data-testid="button-pagar-agora">
-            <a href={`/api/cobrancas/${cobranca.id}/arquivo/boleto`} target="_blank" rel="noreferrer">Pagar agora</a>
-          </Button>
+          <BotaoPagar href={`/api/cobrancas/${cobranca.id}/arquivo/boleto`} testId="button-pagar-agora">Pagar agora</BotaoPagar>
         ) : cobranca ? (
           <Button size="sm" onClick={() => document.getElementById("mensalidade-aberta")?.scrollIntoView({ behavior: "smooth" })}
             data-testid="button-pagar-agora">
@@ -290,17 +281,23 @@ function CobrancaAtual({ c, whatsapp }: { c: any; whatsapp: string | null }) {
         <p className="text-muted-foreground">O boleto desta mensalidade ainda não foi disponibilizado. Ele aparecerá aqui assim que estiver pronto.</p>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {c.tem_boleto_arquivo && (
-          <Button asChild size="sm" data-testid="button-baixar-boleto">
+      <div className="flex flex-wrap gap-3">
+        {/* O link é o caminho principal: destaque fixo. O boleto em arquivo vira
+            o principal só quando não há link. */}
+        {c.boleto_link && (
+          <BotaoPagar href={c.boleto_link} testId="button-link-pagamento">
+            <ExternalLink className="h-4 w-4 mr-2" />Pagar pelo link de pagamento
+          </BotaoPagar>
+        )}
+        {c.tem_boleto_arquivo && (c.boleto_link ? (
+          <Button asChild variant="outline" data-testid="button-baixar-boleto">
             <a href={`/api/cobrancas/${c.id}/arquivo/boleto`} target="_blank" rel="noreferrer"><Download className="h-4 w-4 mr-1.5" />Baixar boleto</a>
           </Button>
-        )}
-        {c.boleto_link && (
-          <Button asChild size="sm" variant="outline">
-            <a href={c.boleto_link} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4 mr-1.5" />Abrir link de pagamento</a>
-          </Button>
-        )}
+        ) : (
+          <BotaoPagar href={`/api/cobrancas/${c.id}/arquivo/boleto`} testId="button-baixar-boleto">
+            <Download className="h-4 w-4 mr-2" />Baixar boleto
+          </BotaoPagar>
+        ))}
       </div>
 
       {c.linha_digitavel && (
@@ -347,5 +344,30 @@ function CobrancaAtual({ c, whatsapp }: { c: any; whatsapp: string | null }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Botão de pagar: azul fixo com letra branca em QUALQUER tema ou marca do
+ * ambiente (cor em estilo inline, não em variável do tema), com um anel
+ * pulsando em volta. Quem pede menos movimento no sistema não vê o pulso.
+ */
+function BotaoPagar({ href, testId, children }: { href: string; testId?: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      data-testid={testId}
+      className="relative inline-flex items-center justify-center rounded-md px-5 h-11 text-sm font-semibold shadow-md transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+      style={{ backgroundColor: "#1d4ed8", color: "#ffffff" }}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-0 rounded-md motion-safe:animate-ping"
+        style={{ backgroundColor: "#3b82f6", opacity: 0.35, animationDuration: "1.8s" }}
+      />
+      <span className="relative inline-flex items-center">{children}</span>
+    </a>
   );
 }

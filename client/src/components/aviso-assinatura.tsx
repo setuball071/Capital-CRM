@@ -6,13 +6,43 @@ import { AlertTriangle, Clock, Info, Lock, X } from "lucide-react";
 type Alerta = {
   nivel: "info" | "aviso" | "urgente" | "suspenso";
   texto: string;
+  diasVencimento?: number | null;
+  diasSuspensao?: number | null;
 };
 
-const ESTILO: Record<Alerta["nivel"], { classe: string; Icone: typeof Info }> = {
-  info: { classe: "bg-sky-50 text-sky-900 border-sky-200 dark:bg-sky-950/40 dark:text-sky-200 dark:border-sky-900", Icone: Info },
-  aviso: { classe: "bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900", Icone: Clock },
-  urgente: { classe: "bg-orange-50 text-orange-900 border-orange-300 dark:bg-orange-950/40 dark:text-orange-200 dark:border-orange-900", Icone: AlertTriangle },
-  suspenso: { classe: "bg-red-50 text-red-900 border-red-300 dark:bg-red-950/40 dark:text-red-200 dark:border-red-900", Icone: Lock },
+/**
+ * Mesma regra do contador CIP da portabilidade: quanto mais perto do prazo,
+ * mais forte o destaque. Degraus por dias até o vencimento e, depois de
+ * vencida, por dias até o bloqueio. O último dia antes do bloqueio pisca.
+ */
+export function intensidadeAviso(a: Alerta): { classe: string; forte: boolean; piscar: boolean } {
+  if (a.nivel === "suspenso") {
+    return { classe: "bg-red-600 text-white border-red-700", forte: true, piscar: false };
+  }
+  const dv = a.diasVencimento ?? null;
+  const ds = a.diasSuspensao ?? null;
+  if (dv !== null && dv >= 3) {
+    return { classe: "bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-950/30 dark:text-amber-200 dark:border-amber-900", forte: false, piscar: false };
+  }
+  if (dv !== null && dv >= 1) {
+    return { classe: "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-900/40 dark:text-amber-100 dark:border-amber-800", forte: false, piscar: false };
+  }
+  if (dv === 0) {
+    return { classe: "bg-amber-300 text-amber-950 border-amber-400 dark:bg-amber-600/60 dark:text-amber-50 dark:border-amber-600", forte: true, piscar: false };
+  }
+  // Vencida: conta até o bloqueio.
+  if (ds !== null && ds > 2) {
+    return { classe: "bg-orange-100 text-orange-900 border-orange-300 dark:bg-orange-900/40 dark:text-orange-100 dark:border-orange-800", forte: true, piscar: false };
+  }
+  if (ds !== null && ds === 2) {
+    return { classe: "bg-orange-300 text-orange-950 border-orange-400 dark:bg-orange-600/60 dark:text-orange-50 dark:border-orange-600", forte: true, piscar: false };
+  }
+  // Último dia para pagar (ou tolerância já encerrada).
+  return { classe: "bg-red-500 text-white border-red-600", forte: true, piscar: true };
+}
+
+const ICONE: Record<Alerta["nivel"], typeof Info> = {
+  info: Info, aviso: Clock, urgente: AlertTriangle, suspenso: Lock,
 };
 
 // Só o aviso "info" (vence em X dias) pode ser dispensado, e só até o dia
@@ -52,11 +82,12 @@ export function AvisoAssinatura() {
   const marca = `${hoje()}|${alerta.texto}`;
   if (alerta.nivel === "info" && oculto === marca) return null;
 
-  const { classe, Icone } = ESTILO[alerta.nivel];
+  const Icone = ICONE[alerta.nivel];
+  const { classe, forte, piscar } = intensidadeAviso(alerta);
   return (
-    <div className={`flex items-start gap-3 border-b px-6 py-2.5 text-sm ${classe}`} role="status" data-testid="aviso-assinatura">
+    <div className={`flex items-start gap-3 border-b px-6 py-2.5 text-sm ${classe} ${piscar ? "motion-safe:animate-pulse" : ""}`} role="status" data-testid="aviso-assinatura">
       <Icone className="h-4 w-4 mt-0.5 shrink-0" />
-      <p className="flex-1">{alerta.texto}</p>
+      <p className={`flex-1 ${forte ? "font-semibold" : ""}`}>{alerta.texto}</p>
       <button
         type="button"
         onClick={() => navigate("/assinatura")}
