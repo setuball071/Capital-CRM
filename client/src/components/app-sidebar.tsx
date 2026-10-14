@@ -60,6 +60,7 @@ const MS_ITEM: Record<string, string> = {
   // Vendas (exato do design)
   "Pipeline": "view_kanban",
   "Consulta Individual": "person_search",
+  "Consulta Governo": "account_balance",
   "Lista Manual": "list_alt",
   "Tags": "sell",
   "Agenda": "calendar_month",
@@ -137,6 +138,8 @@ interface MenuSection {
     tenantFeature?: string;
     clienteAdminOnly?: boolean;
     tenantModule?: string;
+    // Só aparece para quem tem alguma base de governo liberada (ver server/bases-governo.ts)
+    govBases?: boolean;
   }[];
 }
 
@@ -193,6 +196,7 @@ export function AppSidebar() {
     refetchInterval: 60000,
   });
   const pendingCount = pendingData?.count || 0;
+  const { data: basesGoverno } = useQuery<{ codigo: string }[]>({ queryKey: ["/api/bases-governo/minhas"] });
   const prevPendingRef = useRef<number | null>(null);
   useEffect(() => {
     if (pendingData == null) return;
@@ -219,7 +223,8 @@ export function AppSidebar() {
     solicitar_boleto: !!tenant,
   };
 
-  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; rolesAllowed?: string[]; tenantFeature?: string; clienteAdminOnly?: boolean; tenantModule?: string }): boolean => {
+  const canShowMenuItem = (item: { url: string; masterOnly?: boolean; module?: string; subItem?: string; roleOnly?: string; rolesAllowed?: string[]; tenantFeature?: string; clienteAdminOnly?: boolean; tenantModule?: string; govBases?: boolean }): boolean => {
+    if (item.govBases && !(basesGoverno?.length)) return false;
     // Só o admin do CLIENTE (role master, sem isMaster) em ambiente pagante (não-interno).
     // Some para o dono do SaaS, para ambientes internos e para os demais papéis.
     if (item.clienteAdminOnly) {
@@ -269,6 +274,7 @@ export function AppSidebar() {
       items: [
         { title: "Pipeline", url: "/vendas/pipeline", icon: Kanban, module: "modulo_alpha", subItem: "pipeline" },
         { title: "Consulta Individual", url: "/vendas/consulta", icon: Search, module: "modulo_alpha", subItem: "consulta" },
+        { title: "Consulta Governo", url: "/vendas/consulta-governo", icon: Landmark, module: "modulo_alpha", subItem: "consulta", govBases: true },
         { title: "Lista Manual", url: "/vendas/atendimento", icon: Headphones, module: "modulo_alpha", subItem: "atendimento" },
         { title: "Tags", url: "/vendas/etiquetas", icon: Tag, module: "modulo_alpha", subItem: "etiquetas" },
         { title: "Agenda", url: "/vendas/agenda", icon: Calendar, module: "modulo_alpha", subItem: "agenda" },

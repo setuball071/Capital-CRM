@@ -263,6 +263,7 @@ export default function AdminTenantsPage() {
   const [provisionedInfo, setProvisionedInfo] = useState<{ nome: string; adminEmail: string } | null>(null);
   const [fichaTenantId, setFichaTenantId] = useState<number | null>(null);
   const [modulosDraft, setModulosDraft] = useState<Record<string, boolean>>({});
+  const [basesDraft, setBasesDraft] = useState<Record<string, boolean>>({});
   const [tenantToSoftDelete, setTenantToSoftDelete] = useState<Tenant | null>(null);
   const [tenantToHardDelete, setTenantToHardDelete] = useState<Tenant | null>(null);
   const [hardDeleteConfirm, setHardDeleteConfirm] = useState("");
@@ -321,6 +322,18 @@ export default function AdminTenantsPage() {
       setModulosDraft(Object.fromEntries(ficha.modulos.map((m) => [m.key, m.ativo])));
     }
   }, [ficha]);
+
+  // Bases de governo compradas: quais este ambiente pode consultar (SIAPE é de todos)
+  const { data: basesAmbiente } = useQuery<{ codigo: string; nome: string; total_servidores: number; liberada: boolean }[]>({
+    queryKey: ["/api/admin/tenants", fichaTenantId, "bases"],
+    enabled: fichaTenantId !== null,
+  });
+
+  useEffect(() => {
+    if (basesAmbiente) {
+      setBasesDraft(Object.fromEntries(basesAmbiente.map((b) => [b.codigo, b.liberada])));
+    }
+  }, [basesAmbiente]);
 
   const createTenantMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -504,6 +517,21 @@ export default function AdminTenantsPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Erro ao salvar módulos", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const saveBasesMutation = useMutation({
+    mutationFn: async () => {
+      const bases = Object.entries(basesDraft).filter(([, v]) => v).map(([k]) => k);
+      return apiRequest("PUT", `/api/admin/tenants/${fichaTenantId}/bases`, { bases });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants", fichaTenantId, "bases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bases-governo/minhas"] });
+      toast({ title: "Bases salvas com sucesso" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro ao salvar bases", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1892,6 +1920,46 @@ export default function AdminTenantsPage() {
                   >
                     {saveModulosMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Salvar módulos
+                  </Button>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">Bases de governo</h3>
+                    <p className="text-xs text-muted-foreground">
+                      SIAPE é de todos. Estas só aparecem para o ambiente marcado (e para o master).
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {(basesAmbiente || []).map((b) => (
+                      <div key={b.codigo} className="flex items-center justify-between gap-2">
+                        <Label htmlFor={`base-${b.codigo}`} className="text-sm font-normal">
+                          {b.nome}
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            ({Number(b.total_servidores || 0).toLocaleString("pt-BR")} servidores)
+                          </span>
+                        </Label>
+                        <Switch
+                          id={`base-${b.codigo}`}
+                          checked={basesDraft[b.codigo] ?? b.liberada}
+                          onCheckedChange={(checked) =>
+                            setBasesDraft((prev) => ({ ...prev, [b.codigo]: checked }))
+                          }
+                          data-testid={`switch-base-${b.codigo}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => saveBasesMutation.mutate()}
+                    disabled={saveBasesMutation.isPending || !basesAmbiente}
+                    data-testid="button-salvar-bases"
+                  >
+                    {saveBasesMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Salvar bases
                   </Button>
                 </div>
               </div>

@@ -31,6 +31,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowLeftRight } from "lucide-react";
 import { PhoneClientSearch } from "@/components/PhoneClientSearch";
 import { ContatosDoCliente, formatPhone, formatCep, IconeWhatsApp } from "@/components/ContatosDoCliente";
+import { QuadroGovernoConsulta } from "@/components/FichaGoverno";
 
 const TIPOS_CONTATO_CONSULTA = ["ligacao", "whatsapp", "outro"] as const;
 type TipoContatoConsulta = typeof TIPOS_CONTATO_CONSULTA[number];
@@ -1728,6 +1729,9 @@ export default function VendasConsulta() {
               })()}
                 </CardContent>
               </Card>
+
+              {/* Base de governo comprada: só aparece para o ambiente liberado e o master */}
+              <QuadroGovernoConsulta cpf={consultaData.clienteBase?.cpf} />
 
               <Card>
                 <CardHeader className="pb-3">

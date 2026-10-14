@@ -47,6 +47,7 @@ import VendasPipelinePage from "@/pages/vendas-pipeline";
 import VendasGestaoPipelinePage from "@/pages/vendas-gestao-pipeline";
 import VendasImportarHigienizadosPage from "@/pages/vendas-importar-higienizados";
 import VendasConsultaPage from "@/pages/vendas-consulta";
+import ConsultaGovernoPage from "@/pages/consulta-governo";
 import VendasEtiquetasPage from "@/pages/vendas-etiquetas";
 import NotaPromissoriaPage from "@/pages/nota-promissoria";
 import AdminTenantsPage from "@/pages/admin-tenants";
@@ -525,6 +526,9 @@ function Router() {
               </Route>
               <Route path="/vendas/consulta">
                 {() => <ModuleRoute component={VendasConsultaPage} module="modulo_alpha" subItem="consulta" />}
+              </Route>
+              <Route path="/vendas/consulta-governo">
+                {() => <ModuleRoute component={ConsultaGovernoPage} module="modulo_alpha" subItem="consulta" />}
               </Route>
               <Route path="/admin/tenants">
                 {() => <MasterRoute component={AdminTenantsPage} />}

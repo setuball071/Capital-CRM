@@ -13,6 +13,7 @@ const MAP: Record<string, [string, string]> = {
   "/solicitacoes-boleto": ["Operacional", "Solicitar Boleto"],
   "/vendas/pipeline": ["Vendas", "Pipeline"],
   "/vendas/consulta": ["Vendas", "Consulta Individual"],
+  "/vendas/consulta-governo": ["Vendas", "Consulta Governo"],
   "/consulta-cliente": ["Vendas", "Perfil do cliente"],
   "/vendas/gestao-pipeline": ["Vendas", "Gestão Pipeline"],
   "/vendas/minha-carteira": ["Vendas", "Minha Carteira"],

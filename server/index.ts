@@ -640,6 +640,27 @@ app.use((req, res, next) => {
           console.error("Telefone fonte / nao_perturbe migration error (non-fatal):", migErr);
         }
 
+        // Auto-migrations — BASES DE GOVERNO compradas por assinantes. Ficam fora
+        // da base global de clientes: cada base so abre para os ambientes de
+        // tenant_bases e para o master (rotas em server/bases-governo.ts).
+        // Espelho em migrations/bases-governo.sql.
+        try {
+          const { db: migDb } = await import("./storage");
+          const { sql: migSql } = await import("drizzle-orm");
+          const { BASES_GOVERNO_SQL } = await import("./bases-governo-schema");
+          const comandos = BASES_GOVERNO_SQL
+            .replace(/--.*$/gm, "")
+            .split(";")
+            .map((c) => c.trim())
+            .filter(Boolean);
+          for (const comando of comandos) {
+            await migDb.execute(migSql.raw(comando));
+          }
+          log("Bases de governo migration OK");
+        } catch (migErr) {
+          console.error("Bases de governo migration error (non-fatal):", migErr);
+        }
+
         // Auto-migrations — meta por PRODUCAO ou por RENTABILIDADE.
         // Nasce sempre 'producao' para que toda meta ja existente continue
         // significando exatamente o que significava antes.

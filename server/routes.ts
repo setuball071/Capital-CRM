@@ -556,6 +556,7 @@ import { registerMinhaProducaoRoutes } from "./minha-producao";
 import { registerAgenteListasRoutes, tetoLeadsUsuario, registrarConsumoUsuario } from "./agente-listas";
 import { registerFinEmpresaRoutes } from "./fin-empresa";
 import { registerPortMultibancoRoutes } from "./port-multibanco";
+import { registerBasesGovernoRoutes } from "./bases-governo";
 import { registerSimuladorCompraRoutes } from "./simulador-compra";
 import { registerOcrRoutes } from "./ocr";
 import { registerAssistenteRoutes } from "./assistente";
@@ -31490,6 +31491,8 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   // ===== FINANCEIRO EMPRESARIAL (caixa, contas a pagar, planejamento) =====
   registerFinEmpresaRoutes(app, requireAuth);
   registerPortMultibancoRoutes(app, requireAuth);
+  // Bases de governo compradas por assinantes: so o ambiente liberado e o master
+  registerBasesGovernoRoutes(app, requireAuth, requireModuleAccess, requireMaster);
   registerSimuladorCompraRoutes(app, requireAuth);
 
   // ===== OCR DE DOCUMENTOS =====
