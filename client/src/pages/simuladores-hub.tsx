@@ -173,7 +173,7 @@ export default function SimuladoresHub() {
     if (!user) return;
     try {
       frame?.contentWindow?.postMessage(
-        { type: 'CAPITAL_CRM_ROLE', isMaster, userId: String(user.id), userEmail: user.email },
+        { type: 'CAPITAL_CRM_ROLE', isMaster, podeGerirRegras: Boolean((user as any).podeGerirCatalogo), userId: String(user.id), userEmail: user.email },
         '*',
       );
     } catch { /* ignore */ }

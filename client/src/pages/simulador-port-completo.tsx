@@ -31,7 +31,7 @@ export default function SimuladorPortCompletoPage() {
       win.postMessage({ type: "CAPITAL_CRM_THEME", theme }, "*");
       if (user) {
         win.postMessage(
-          { type: "CAPITAL_CRM_ROLE", isMaster, userId: String(user.id), userEmail: user.email },
+          { type: "CAPITAL_CRM_ROLE", isMaster, podeGerirRegras: Boolean((user as any).podeGerirCatalogo), userId: String(user.id), userEmail: user.email },
           "*",
         );
       }

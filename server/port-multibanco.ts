@@ -22,6 +22,7 @@ import {
 import { MODELOS } from "../shared/portability/modelos";
 import { registrarConsultaCliente } from "./consulta-cliente-log";
 import { normalizarOperacao } from "../shared/portability/refin";
+import { podeGerirCatalogo } from "./assinaturas";
 
 /** JSON com chaves ordenadas: o mesmo conteúdo sempre dá o mesmo hash. */
 function jsonEstavel(v: unknown): string {
@@ -34,7 +35,6 @@ function jsonEstavel(v: unknown): string {
 }
 const hashRegras = (r: unknown) => createHash("sha256").update(jsonEstavel(r)).digest("hex");
 
-const isMaster = (req: any) => Boolean(req.user?.isMaster || req.user?.role === "master");
 const soDigitos = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 
 export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
@@ -43,8 +43,9 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
     if (!t) { res.status(400).json({ message: "Tenant não identificado" }); return null; }
     return t;
   };
-  const exigeMaster = (req: any, res: any) => {
-    if (isMaster(req)) return true;
+  // Master do SaaS ou titular de assinatura no próprio ambiente (ver assinaturas.ts).
+  const exigeMaster = async (req: any, res: any) => {
+    if (await podeGerirCatalogo(req)) return true;
     res.status(403).json({ message: "Só o master acessa o cadastro de bancos e regras" });
     return false;
   };
@@ -172,7 +173,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
 
   app.get("/api/port/bancos", requireAuth, async (req: any, res) => {
     try {
-      if (!exigeMaster(req, res)) return;
+      if (!(await exigeMaster(req, res))) return;
       const tenantId = tenantDe(req, res); if (!tenantId) return;
       const convenio = String(req.query.convenio || "SIAPE");
       const { bancos, regras = [], excecoes = [] } = await carregarParaAnalise(tenantId, convenio, false);
@@ -205,7 +206,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
 
   app.get("/api/port/bancos/:id/regras", requireAuth, async (req: any, res) => {
     try {
-      if (!exigeMaster(req, res)) return;
+      if (!(await exigeMaster(req, res))) return;
       const tenantId = tenantDe(req, res); if (!tenantId) return;
       const r = await db.execute(sql`
         SELECT rs.id, rs.convenio, rs.hash, rs.fonte_descricao, rs.vigencia_inicio, rs.vigencia_fim,
@@ -370,7 +371,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
 
   app.post("/api/port/bancos", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const tenantId = tenantDe(req, res); if (!tenantId || !(await exigeMaster(req, res))) return;
       const nome = String(req.body?.nome || "").trim();
       if (!nome) return res.status(400).json({ message: "Informe o nome do banco" });
       const r = await db.execute(sql`
@@ -388,7 +389,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
 
   app.patch("/api/port/bancos/:id", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const tenantId = tenantDe(req, res); if (!tenantId || !(await exigeMaster(req, res))) return;
       const b = req.body || {};
       // desligar guarda o porquê e a data; religar limpa os dois
       const mexeAtivo = typeof b.ativo === "boolean";
@@ -436,7 +437,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
    *  branco — nenhum ambiente herda a comissão de outro. */
   app.put("/api/port/bancos/:id/comissao", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const tenantId = tenantDe(req, res); if (!tenantId || !(await exigeMaster(req, res))) return;
       const bankId = Number(req.params.id);
       const convenio = String(req.body?.convenio || "SIAPE");
       const existe = (await db.execute(sql`
@@ -497,7 +498,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
 
   app.post("/api/port/bancos/:id/regras", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const tenantId = tenantDe(req, res); if (!tenantId || !(await exigeMaster(req, res))) return;
       const { convenio, regras, fonteDescricao } = req.body || {};
       if (!convenio || !regras || typeof regras !== "object") return res.status(400).json({ message: "Informe convênio e regras" });
       const soltos = (regras.origens?.lista || []).map((o: any) => o.origem).filter((n: string) => !normalizarOrigem(n));
@@ -515,7 +516,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
 
   app.post("/api/port/bancos/:id/excecoes", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const tenantId = tenantDe(req, res); if (!tenantId || !(await exigeMaster(req, res))) return;
       const { convenio, parametros, motivo } = req.body || {};
       if (!convenio || !parametros?.origem) return res.status(400).json({ message: "Informe convênio e banco de origem" });
       // o nome tem que resolver para um banco conhecido — foi assim que a "BRB Financeira"
@@ -539,7 +540,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
 
   app.delete("/api/port/excecoes/:id", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const tenantId = tenantDe(req, res); if (!tenantId || !(await exigeMaster(req, res))) return;
       const r = await db.execute(sql`
         UPDATE port_rule_exceptions SET ativo = FALSE, desativado_em = NOW(), desativado_por = ${req.user?.id ?? null}
         WHERE id = ${Number(req.params.id)} AND ativo = TRUE
@@ -557,7 +558,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
   /** Um clique: cria o banco se faltar, grava a regra do modelo e as exceções sugeridas. */
   app.post("/api/port/importar-modelo", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const tenantId = tenantDe(req, res); if (!tenantId || !(await exigeMaster(req, res))) return;
       const modelo = MODELOS.find(m => m.id === req.body?.modeloId);
       if (!modelo) return res.status(404).json({ message: "Modelo não encontrado" });
       const userId = req.user?.id ?? null;
@@ -623,7 +624,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
         bancosDesligados: desligados.map(d => ({ banco: d.nome, motivo: d.inativo_motivo, desde: d.inativo_em })),
       };
       // corretor NUNCA vê a comissão da empresa: sai daqui, não só da tela
-      res.json(isMaster(req) ? { ...resp, comissaoVisivel: true }
+      res.json((await podeGerirCatalogo(req)) ? { ...resp, comissaoVisivel: true }
         : { ...resp, resultado: semComissao(resp.resultado), comissaoVisivel: false });
     } catch (err: any) {
       console.error("[PORT] POST simular:", err);
@@ -656,7 +657,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
         RETURNING id, criado_em
       `);
       res.json({ id: (r.rows[0] as any).id, criadoEm: (r.rows[0] as any).criado_em,
-        resultado: isMaster(req) ? resultado : semComissao(resultado) });
+        resultado: (await podeGerirCatalogo(req)) ? resultado : semComissao(resultado) });
     } catch (err: any) {
       console.error("[PORT] POST analise:", err);
       res.status(500).json({ message: "Erro ao registrar a análise" });
@@ -685,7 +686,7 @@ export function registerPortMultibancoRoutes(app: Express, requireAuth: any) {
 
   app.get("/api/port/analises/:id", requireAuth, async (req: any, res) => {
     try {
-      if (!exigeMaster(req, res)) return;   // o registro guarda regras e comissão
+      if (!(await exigeMaster(req, res))) return;   // o registro guarda regras e comissão
       const tenantId = tenantDe(req, res); if (!tenantId) return;
       const r = await db.execute(sql`
         SELECT * FROM port_analyses WHERE id = ${Number(req.params.id)} AND tenant_id = ${tenantId}

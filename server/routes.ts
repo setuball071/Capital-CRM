@@ -6,7 +6,7 @@ import path from "path";
 import https from "https";
 import { randomBytes } from "crypto";
 import { extrairPaleta } from "./branding-ia";
-import { registerAssinaturasRoutes, usuarioSuspenso, rotaLiberadaParaSuspenso, MENSAGEM_SUSPENSO } from "./assinaturas";
+import { registerAssinaturasRoutes, usuarioSuspenso, rotaLiberadaParaSuspenso, MENSAGEM_SUSPENSO, podeGerirCatalogo } from "./assinaturas";
 
 // ─── Gerador de HTML do Contracheque SIAPE ───────────────────────────────────
 function _brl(value: any): string {
@@ -2616,7 +2616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     return res.json({
-      user: { ...userWithoutPassword, vendedorResponsavel },
+      user: { ...userWithoutPassword, vendedorResponsavel, podeGerirCatalogo: await podeGerirCatalogo(req) },
       permissions: permissionsMap,
     });
   });
@@ -30446,7 +30446,8 @@ Retorne APENAS um JSON válido com exatamente estas 3 chaves:
   app.put("/api/portability-bank-rules", requireAuth, async (req: any, res) => {
     try {
       const user = req.user!;
-      if (!user.isMaster && user.role !== "master") {
+      // Master ou titular de assinatura: as regras são do próprio ambiente.
+      if (!(await podeGerirCatalogo(req))) {
         return res.status(403).json({ message: "Acesso restrito ao administrador master" });
       }
       const tenantId = req.tenantId!;

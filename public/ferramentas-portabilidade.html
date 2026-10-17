@@ -4810,7 +4810,8 @@ function _applyMasterUI() {
 // ── Listener da role enviada pelo CRM pai via postMessage ──
 window.addEventListener('message', function(event) {
   if (event.data && event.data.type === 'CAPITAL_CRM_ROLE') {
-    _isMaster = Boolean(event.data.isMaster);
+    // podeGerirRegras: titular de assinatura cuida das regras do próprio ambiente.
+    _isMaster = Boolean(event.data.isMaster || event.data.podeGerirRegras);
     _applyMasterUI();
   }
 });

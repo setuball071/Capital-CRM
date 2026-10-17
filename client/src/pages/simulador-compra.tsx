@@ -36,7 +36,8 @@ type Ordem = "padrao" | "banco" | "bruto" | "liberado" | "comissao";
 
 export default function SimuladorCompra() {
   const { user } = useAuth();
-  const master = Boolean(user?.isMaster || user?.role === "master");
+  // Master ou titular de assinatura (as tabelas são do próprio ambiente).
+  const master = Boolean(user?.isMaster || user?.role === "master" || (user as any)?.podeGerirCatalogo);
   const [tabelas, setTabelas] = useState<TabelaApi[]>([]);
   const [podeVerCom, setVerCom] = useState(false);
   // master tirando print para o operacional: esconde percentual e comissão (só a tela)

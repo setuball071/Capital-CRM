@@ -1221,3 +1221,33 @@ export function rotaLiberadaParaSuspenso(metodo: string, url: string): boolean {
 
 export const MENSAGEM_SUSPENSO =
   "Seu acesso está suspenso por mensalidade em aberto. Acesse Minha assinatura para consultar o boleto e regularizar.";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QUEM CADASTRA BANCOS, REGRAS E TABELAS DO PRÓPRIO AMBIENTE
+//
+// Regras de portabilidade, bancos do multibanco e tabelas do Simulador de
+// Compra são gravadas POR AMBIENTE. Além do master, o titular de assinatura
+// própria (não cancelada nem suspensa) cuida das do ambiente dele. Ambiente
+// interno (Capital Go) fica de fora: lá o catálogo é o do dono e serve de
+// base para todos os outros.
+// ═══════════════════════════════════════════════════════════════════════════
+const cacheCatalogo = new Map<string, { pode: boolean; ate: number }>();
+
+export async function podeGerirCatalogo(req: any): Promise<boolean> {
+  const u = req.user;
+  if (!u) return false;
+  if (u.isMaster || u.role === "master") return true;
+  const tenantId = req.tenantId;
+  if (!tenantId) return false;
+  const chave = `${u.id}:${tenantId}`;
+  const c = cacheCatalogo.get(chave);
+  if (c && c.ate > Date.now()) return c.pode;
+  const [r] = (await db.execute(sql`
+    SELECT
+      (SELECT interno FROM tenants WHERE id = ${tenantId}) AS interno,
+      (SELECT status FROM assinaturas WHERE user_id = ${u.id}) AS status
+  `)).rows as any[];
+  const pode = r?.interno === false && !!r?.status && !["cancelada", "suspensa"].includes(r.status);
+  cacheCatalogo.set(chave, { pode, ate: Date.now() + 60_000 });
+  return pode;
+}

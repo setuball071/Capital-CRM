@@ -29,7 +29,8 @@ const cardCls = "rounded-xl border border-border bg-card p-4";
 
 export default function PortBancosRegras() {
   const { user } = useAuth();
-  const master = Boolean(user?.isMaster || user?.role === "master");
+  // Master ou titular de assinatura (bancos e regras do próprio ambiente).
+  const master = Boolean(user?.isMaster || user?.role === "master" || (user as any)?.podeGerirCatalogo);
   const [bancos, setBancos] = useState<BancoApi[]>([]);
   const convenio = "SIAPE";
 

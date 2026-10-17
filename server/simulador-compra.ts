@@ -10,8 +10,8 @@ import type { Express } from "express";
 import { sql } from "drizzle-orm";
 import { db } from "./storage";
 import { TABELAS_PLANILHA } from "../shared/compra/calculo";
+import { podeGerirCatalogo } from "./assinaturas";
 
-const isMaster = (req: any) => Boolean(req.user?.isMaster || req.user?.role === "master");
 
 /** número vindo da tela: aceita 0,0428 / 0.0428; vazio = null */
 function numero(v: unknown): number | null {
@@ -46,8 +46,9 @@ export function registerSimuladorCompraRoutes(app: Express, requireAuth: any) {
     if (!t) { res.status(400).json({ message: "Tenant não identificado" }); return null; }
     return t;
   };
-  const exigeMaster = (req: any, res: any) => {
-    if (isMaster(req)) return true;
+  // Master do SaaS ou titular de assinatura no próprio ambiente (ver assinaturas.ts).
+  const exigeMaster = async (req: any, res: any) => {
+    if (await podeGerirCatalogo(req)) return true;
     res.status(403).json({ message: "Só o master cadastra tabelas" });
     return false;
   };
@@ -56,7 +57,7 @@ export function registerSimuladorCompraRoutes(app: Express, requireAuth: any) {
   app.get("/api/compra/tabelas", requireAuth, async (req: any, res) => {
     try {
       const tenantId = tenantDe(req, res); if (!tenantId) return;
-      const master = isMaster(req);
+      const master = await podeGerirCatalogo(req);
       const todas = master && req.query.todas === "1";
       const r = await db.execute(sql`
         SELECT * FROM compra_tabelas
@@ -72,7 +73,7 @@ export function registerSimuladorCompraRoutes(app: Express, requireAuth: any) {
 
   app.post("/api/compra/tabelas", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const tenantId = tenantDe(req, res); if (!tenantId || !(await exigeMaster(req, res))) return;
       const v = validar(req.body); if (!v.ok) return res.status(400).json({ message: v.msg });
       const { banco, convenio, nome, coeficiente, percentual, prazo } = v.t;
       const r = await db.execute(sql`
@@ -89,7 +90,7 @@ export function registerSimuladorCompraRoutes(app: Express, requireAuth: any) {
 
   app.patch("/api/compra/tabelas/:id", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const tenantId = tenantDe(req, res); if (!tenantId || !(await exigeMaster(req, res))) return;
       const id = Number(req.params.id);
       // só troca ativo/inativo
       if (Object.keys(req.body || {}).length === 1 && typeof req.body.ativo === "boolean") {
@@ -118,7 +119,7 @@ export function registerSimuladorCompraRoutes(app: Express, requireAuth: any) {
   /** Cadastra as 15 tabelas da planilha; pula as que já existem (mesmo banco e coeficiente). */
   app.post("/api/compra/tabelas/importar-planilha", requireAuth, async (req: any, res) => {
     try {
-      const tenantId = tenantDe(req, res); if (!tenantId || !exigeMaster(req, res)) return;
+      const tenantId = tenantDe(req, res); if (!tenantId || !(await exigeMaster(req, res))) return;
       const existentes = (await db.execute(sql`
         SELECT convenio, lower(banco) AS banco, coeficiente FROM compra_tabelas WHERE tenant_id = ${tenantId}
       `)).rows as any[];
