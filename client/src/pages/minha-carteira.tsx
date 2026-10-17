@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from "react";
+import * as XLSX from "xlsx";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -36,6 +37,7 @@ import {
   Search,
   Wallet,
   ExternalLink,
+  Download,
 } from "lucide-react";
 
 interface HistoricoItem {
@@ -244,6 +246,24 @@ function MeusClientes({
   const totalImportados = clientes.filter((c) => c.importado).length;
   const visiveis = filtrados.slice(0, limite);
 
+  // Exporta o que está no filtro (todas as linhas, não só as já carregadas na tela).
+  const exportar = () => {
+    const linhas = filtrados.map((c) => ({
+      Nome: c.nome || "",
+      CPF: fmtCpf(c.cpf),
+      Telefone: c.telefone ? fmtTelefone(c.telefone) : "",
+      "Órgão": c.orgao || "",
+      "Convênio": c.convenio || "",
+      Margem: num(c.margem) ?? "",
+      Origem: [c.vendido && "Vendido", c.importado && "Importado"].filter(Boolean).join(" e "),
+    }));
+    const ws = XLSX.utils.json_to_sheet(linhas);
+    ws["!cols"] = [{ wch: 38 }, { wch: 16 }, { wch: 17 }, { wch: 45 }, { wch: 12 }, { wch: 14 }, { wch: 20 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Minha carteira");
+    XLSX.writeFile(wb, `minha-carteira-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const statsCards: { titulo: string; dados: Record<string, number>; rotulos?: Record<string, string> }[] = stats
     ? [
         { titulo: "Vendidos por produto", dados: stats.por_produto, rotulos: PRODUCT_LABELS },
@@ -349,10 +369,18 @@ function MeusClientes({
         </Select>
       </div>
 
-      <p className="text-xs text-muted-foreground" data-testid="text-carteira-contagem">
-        {clientes.length} clientes · {totalVendidos} vendidos · {totalImportados} importados
-        {filtrados.length !== clientes.length && ` · ${filtrados.length} no filtro`}
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground" data-testid="text-carteira-contagem">
+          {clientes.length} clientes · {totalVendidos} vendidos · {totalImportados} importados
+          {filtrados.length !== clientes.length && ` · ${filtrados.length} no filtro`}
+        </p>
+        {filtrados.length > 0 && (
+          <Button size="sm" variant="outline" onClick={exportar} data-testid="button-exportar-carteira">
+            <Download className="h-4 w-4 mr-1.5" />
+            Exportar {filtrados.length === clientes.length ? "" : `${filtrados.length} `}para Excel
+          </Button>
+        )}
+      </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
